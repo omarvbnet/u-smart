@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -164,12 +164,31 @@ async function main() {
   ]
 
   for (const service of services) {
+    const { translations, ...base } = service as typeof service & { translations?: Record<string, unknown> };
+    const translationsJson = translations && Object.keys(translations).length > 0 ? (translations as Prisma.InputJsonValue) : undefined;
     await prisma.service.upsert({
       where: { slug: service.slug },
-      update: { title: service.title, description: service.description, content: service.content, icon: service.icon, features: service.features, category: service.category, priceRange: service.priceRange, duration: service.duration, featured: service.featured, translations: (service as any).translations },
-      create: service
-    })
-    console.log(`✅ Service: ${service.title}`)
+      update: {
+        title: service.title,
+        description: service.description,
+        content: service.content ?? null,
+        icon: service.icon,
+        features: service.features,
+        category: service.category,
+        priceRange: service.priceRange ?? null,
+        duration: service.duration ?? null,
+        featured: service.featured,
+        ...(translationsJson && { translations: translationsJson }),
+      },
+      create: {
+        ...base,
+        content: base.content ?? null,
+        priceRange: base.priceRange ?? null,
+        duration: base.duration ?? null,
+        ...(translationsJson && { translations: translationsJson }),
+      },
+    });
+    console.log(`✅ Service: ${service.title}`);
   }
 
   console.log('🎉 Seeding completed!')

@@ -475,7 +475,7 @@ type CareerItem = {
 
 type HeroData = {
   statistics: StatItem[];
-  featuredProjects: { id: string; title: string; description: string | null; category: string; imageUrl: string | null; client: { name: string; logo: string | null } | null }[];
+  featuredProjects: { id: string; slug?: string | null; title: string; description: string | null; category: string; imageUrl: string | null; client: { name: string; logo: string | null } | null }[];
   solutions: { id: string; slug?: string; title: string; description: string | null; icon: string | null; link: string | null }[];
   clients: { id: string; name: string; logo: string | null; industry: string | null }[];
   careers: CareerItem[];
