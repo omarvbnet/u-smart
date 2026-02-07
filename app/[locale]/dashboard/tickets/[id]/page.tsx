@@ -52,8 +52,10 @@ type TicketDetail = {
 
 export default function TicketDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const t = useTranslations('Index');
   const ticketContentRef = useRef<HTMLDivElement>(null);
+  const fromQc = searchParams.get('from') === 'qc';
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareUrl, setShareUrl] = useState<string>('');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
