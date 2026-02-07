@@ -1,0 +1,468 @@
+{
+  "Navbar": {
+    "language": "Language",
+    "home": "Home",
+    "services": "Services",
+    "projects": "Projects",
+    "industry": "Industry",
+    "development": "Development",
+    "training": "Training",
+    "careers": "Careers",
+    "contact": "Contact",
+    "cta": "Start Project",
+    "solutions": "Solutions",
+    "about": "About",
+    "blog": "Blog",
+    "login": "Login",
+    "signup": "Sign Up",
+    "dashboard": "Dashboard"
+  },
+  "Index": {
+    "serviceTechnologies": {
+      "title": "Systems & Technologies We Use",
+      "intro": "We deploy industry-leading protocols for smart home automation. Below are the main systems we use, with a brief description and their advantages and disadvantages.",
+      "advantagesLabel": "Advantages",
+      "disadvantagesLabel": "Disadvantages",
+      "knx": {
+        "name": "KNX",
+        "description": "KNX is an open standard for home and building automation. It uses a dedicated twisted-pair bus for lighting, heating, security, and energy management. It is widely used in Europe and is known for reliability and interoperability between manufacturers.",
+        "advantages": ["Open standard; many compatible devices and brands", "Very reliable and stable; used in commercial and residential", "Wired bus reduces wireless interference and is secure", "Scalable from small homes to large buildings", "Long product lifecycle and backward compatible"],
+        "disadvantages": ["Installation requires wiring; best planned during construction", "Higher initial cost than wireless-only systems", "Requires certified installers for optimal design"]
+      },
+      "buspro": {
+        "name": "Buspro",
+        "description": "Buspro is a proprietary wireless and wired automation system by Nice. It supports lighting, climate, security, and AV control. It is known for flexibility and integration with Nice's range of products including gates and automation.",
+        "advantages": ["Wireless and wired options; flexible for retrofits", "Good integration with Nice gate and motorization products", "User-friendly configuration and support", "Suitable for residential and villa projects"],
+        "disadvantages": ["Proprietary ecosystem; less third-party choice than KNX", "Mainly associated with one manufacturer (Nice)"]
+      },
+      "zigbee": {
+        "name": "Zigbee",
+        "description": "Zigbee is a wireless mesh protocol used in smart homes and IoT. It enables low-power devices (sensors, switches, bulbs) to form a self-healing mesh network. It is popular for lighting, sensors, and integration with voice assistants and hubs.",
+        "advantages": ["Wireless; easy to add devices without new wiring", "Low power consumption; battery devices last long", "Mesh network extends range and reliability", "Wide ecosystem; many brands (Philips Hue, IKEA, etc.)", "Often lower cost per device"],
+        "disadvantages": ["Multiple hubs/bridges possible; interoperability can vary", "Less suited for mission-critical or high-security applications than wired", "Signal can be affected by physical obstacles"]
+      }
+    },
+    "programmingTechnologies": {
+      "title": "Technologies & Stacks We Use",
+      "intro": "We build scalable, secure software with modern technologies. Below are the main technologies and databases we specialize in.",
+      "nodejs": {
+        "name": "Node.js",
+        "description": "Node.js is a JavaScript runtime built on Chrome's V8 engine. Ideal for real-time applications, APIs, and full-stack JavaScript development. High performance, event-driven, and extensive npm ecosystem."
+      },
+      "flutter": {
+        "name": "Flutter / Dart",
+        "description": "Flutter uses Dart to build beautiful cross-platform mobile and web apps from a single codebase. Fast development, native performance, and expressive UI with hot reload."
+      },
+      "python": {
+        "name": "Python",
+        "description": "Python excels in data science, AI/ML, automation, and backend development. Clear syntax, rich libraries, and strong community support. Perfect for rapid prototyping and production systems."
+      },
+      "mysql": {
+        "name": "MySQL",
+        "description": "MySQL is a robust relational database with ACID compliance. Widely used for web apps, e-commerce, and enterprise systems. Excellent performance, replication, and tooling."
+      },
+      "postgresql": {
+        "name": "PostgreSQL",
+        "description": "PostgreSQL is a powerful open-source relational database. Advanced features: JSON support, full-text search, extensions. Ideal for complex queries and data integrity."
+      },
+      "nosql": {
+        "name": "NoSQL",
+        "description": "NoSQL databases (MongoDB, Redis, etc.) offer flexible schemas and horizontal scaling. Best for high-throughput, document stores, caching, and real-time analytics."
+      }
+    },
+    "enterpriseNetworkingTechnologies": {
+      "title": "Techniques & Features We Offer",
+      "intro": "Our team has more than 12 years of experience and holds special certifications from FOA (Fiber Optic Association). We design and maintain your networks with a dedicated system for tracking and monitoring our team's performance. Choose the SLA that fits your needs and benefit from transparent delivery. Below are the techniques and features we offer.",
+      "fiber": {
+        "name": "Fiber Optics",
+        "description": "High-capacity fiber optic cabling for ultra-fast data transmission. We design, install, and maintain fiber networks for enterprise and data centers with minimal signal loss and maximum reliability."
+      },
+      "cable_systemization": {
+        "name": "Cable Systemization",
+        "description": "Professional cable management and organization. Structured cabling systems with proper labeling, routing, and documentation for easy maintenance and future scalability."
+      },
+      "closures": {
+        "name": "Closures & Enclosures",
+        "description": "Fusion splice closures and distribution closures for protecting fiber connections. Weatherproof enclosures suitable for outdoor and indoor installations with proper sealing."
+      },
+      "splice": {
+        "name": "Fusion Splice",
+        "description": "Precision fusion splicing for fiber optic joints. Low-loss splicing with certified equipment, OTDR testing, and documentation for each splice point."
+      },
+      "qgis": {
+        "name": "QGIS & GIS Mapping",
+        "description": "Geographic Information System mapping for network planning. Route analysis, duct mapping, and as-built documentation using QGIS and industry-standard GIS tools."
+      },
+      "asbuilt_design": {
+        "name": "As-Built & Design",
+        "description": "Update your as-built documentation or design smoothly. We provide accurate CAD/GIS deliverables, revision tracking, and seamless handover documentation."
+      },
+      "maintenance": {
+        "name": "Maintenance",
+        "description": "Professional network maintenance and support with excellent service. Our FOA-certified team provides proactive monitoring, preventive maintenance, quick troubleshooting, and SLA-backed response. Keep your fiber and cabling infrastructure running at peak performance."
+      }
+    },
+    "qualityControlTechnologies": {
+      "title": "Quality Control & Supervision Services",
+      "intro": "We provide comprehensive quality assurance, inspection, and supervision services to ensure your projects meet the highest standards. Our certified team delivers rigorous oversight across every phase, from on-site inspection to compliance tracking.",
+      "inspection": {
+        "name": "Inspection",
+        "description": "Thorough on-site and off-site inspections to verify compliance with specifications, standards, and best practices. We document findings with detailed reports and photographic evidence for full traceability.",
+        "highlights": ["Detailed compliance reports", "Photographic documentation", "Full traceability", "Standards verification"]
+      },
+      "supervision": {
+        "name": "Supervision",
+        "description": "Professional project supervision with qualified engineers on-site. We oversee execution quality, progress, and contractor performance to ensure deliverables meet your requirements and timeline.",
+        "highlights": ["On-site engineers", "Progress monitoring", "Contractor oversight", "Timeline adherence"]
+      },
+      "hse": {
+        "name": "HSE (Health, Safety & Environment)",
+        "description": "Health, Safety and Environmental management to protect workers and the environment. Risk assessments, safety audits, environmental compliance checks, and incident investigation with corrective action plans.",
+        "highlights": ["Risk assessments", "Safety audits", "Environmental compliance", "Incident investigation"]
+      },
+      "investigation": {
+        "name": "Investigation",
+        "description": "Root cause analysis and technical investigation of defects, failures, or non-conformities. We deliver clear findings, recommendations, and remedial plans to prevent recurrence.",
+        "highlights": ["Root cause analysis", "Technical findings", "Remedial plans", "Recurrence prevention"]
+      },
+      "tracking": {
+        "name": "Tracking",
+        "description": "Real-time tracking and reporting of quality metrics, inspection status, and compliance. Dashboards and periodic reports keep you informed of project quality performance at every stage.",
+        "highlights": ["Real-time dashboards", "Periodic reports", "Compliance status", "Quality metrics"]
+      },
+      "ctaDescription": "Request quality control & supervision services. Create a dashboard to submit requests and track progress through our admin system."
+    },
+    "serviceDetail": {
+      "backToServices": "Back to services",
+      "backToHome": "Back to home",
+      "serviceNotFound": "Service not found",
+      "failedToLoad": "Failed to load",
+      "features": "Features",
+      "relatedProjects": "Related projects ({count})",
+      "noProjectsInCategory": "No projects in this category yet.",
+      "clientLabel": "Client",
+      "projectStatus": {
+        "PLANNING": "Planning",
+        "IN_PROGRESS": "In Progress",
+        "COMPLETED": "Completed",
+        "ON_HOLD": "On Hold"
+      },
+      "priceRange": { "Custom": "Custom" },
+      "duration": { "Ongoing": "Ongoing" }
+    },
+    "visitorRequestForm": {
+      "title": "Request a quote",
+      "ctaDescription": "Tell us your building type, location and preferred technique. We'll get back to you shortly.",
+      "nameLabel": "Name",
+      "namePlaceholder": "Your name",
+      "companyLabel": "Company",
+      "companyPlaceholder": "Company name (optional)",
+      "buildingTypeLabel": "Building type",
+      "phoneLabel": "Phone",
+      "provinceLabel": "Province",
+      "techniqueLabel": "Technique",
+      "submitButton": "Submit request",
+      "close": "Close",
+      "successMessage": "Request sent successfully. We will contact you soon.",
+      "errorMessage": "Failed to send. Please try again.",
+      "buildingTypes": { "home": "Home", "villa": "Villa", "hotel": "Hotel", "complex": "Complex", "other": "Other" },
+      "techniques": { "knx": "KNX", "buspro": "Buspro", "zigbee": "Zigbee" },
+      "programmingTechniques": { "nodejs": "Node.js", "flutter": "Flutter/Dart", "python": "Python", "mysql": "MySQL", "postgresql": "PostgreSQL", "nosql": "NoSQL" },
+      "ctaDescriptionProgramming": "Tell us your preferred technology and project requirements. We'll get back to you shortly.",
+      "techniquesLabel": "Select techniques / features",
+      "techniquesRequired": "Please select at least one technique or feature.",
+      "enterpriseTechniques": { "fiber": "Fiber Optics", "cable_systemization": "Cable Systemization", "closures": "Closures & Enclosures", "splice": "Fusion Splice", "qgis": "QGIS & GIS", "asbuilt_design": "As-Built & Design", "maintenance": "Maintenance" },
+      "qualityControlTechniques": { "inspection": "Inspection", "supervision": "Supervision", "hse": "HSE", "investigation": "Investigation", "tracking": "Tracking" },
+      "ctaDescriptionEnterprise": "Select your needed techniques and tell us your requirements. We'll design and maintain your networks with SLA-backed delivery."
+    },
+    "companyRequest": {
+      "createDashboard": "Create dashboard",
+      "companyName": "Company name",
+      "companyNamePlaceholder": "Your company name",
+      "pocName": "POC name",
+      "pocNamePlaceholder": "Point of contact name",
+      "pocPhone": "POC phone number",
+      "certificateOptional": "Company certificate or license (optional)",
+      "certificatePlaceholder": "Upload or paste URL",
+      "submit": "Submit request",
+      "submitSuccess": "Request submitted. We will review and create your dashboard.",
+      "requiredFields": "Company name, POC name, and POC phone are required."
+    },
+    "ticketForm": {
+      "title": "Add Ticket",
+      "submitButton": "Add Ticket",
+      "siteName": "Site name",
+      "siteNamePlaceholder": "e.g. Building A",
+      "siteCoordinator": "Site coordinator",
+      "siteCoordinatorPlaceholder": "Coordinator name",
+      "siteLocations": "Site locations",
+      "siteLocationsPlaceholder": "e.g. Building A, Floor 2",
+      "slaHours": "SLA (hours)",
+      "techniqueLabel": "Technique",
+      "successMessage": "Ticket created successfully.",
+      "saveCredentials": "Save these credentials to track your ticket:",
+      "username": "Username",
+      "password": "Password",
+      "goToDashboard": "Go to dashboard",
+      "dashboardLoginTitle": "Track your ticket",
+      "dashboardLoginSubtitle": "Sign in with your ticket credentials",
+      "loginButton": "Sign in",
+      "loginFailed": "Invalid username or password",
+      "backToHome": "Back to home",
+      "myTickets": "My tickets",
+      "welcome": "Welcome",
+      "logout": "Log out",
+      "noTickets": "No tickets yet.",
+      "addTicket": "Add ticket",
+      "dashboardButton": "Dashboard",
+      "alreadyLoggedInMessage": "You're already logged in. Press the Dashboard button to create a new ticket if you need.",
+      "otpStepTitle": "Verify your phone",
+      "otpSendButton": "Send OTP",
+      "otpVerifyButton": "Verify",
+      "otpCodePlaceholder": "Enter 6-digit code",
+      "otpSent": "Code sent to your phone.",
+      "otpInvalid": "Invalid or expired code.",
+      "navPending": "Pending",
+      "navCompleted": "Completed",
+      "navStatistics": "Statistics",
+      "navCompanyInfo": "Company info",
+      "updateAccount": "Update account",
+      "updateUserInfo": "Update user info",
+      "updateAccountHint": "Set your username, password, name, phone and company. These will be used when you create tickets.",
+      "newUsername": "New username",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "passwordMismatch": "Passwords do not match",
+      "passwordMinLength": "Password must be at least 6 characters",
+      "accountUpdated": "Account updated successfully.",
+      "updateFailed": "Update failed. Try again.",
+      "saveAccount": "Save changes",
+      "ticket": "Ticket",
+      "status": {
+        "PENDING": "Pending",
+        "ON_SITE": "We on site",
+        "IN_PROGRESS": "In Progress",
+        "COMPLETED": "Completed"
+      },
+      "completedAt": "Completed at",
+      "totalDelay": "Total delay",
+      "statusTimeline": "Status timeline",
+      "companyCertification": "Company certification",
+      "viewCertification": "View certification",
+      "attachCertification": "Attach certification",
+      "certificationUploaded": "Certification uploaded.",
+      "uploadFailed": "Upload failed.",
+      "accountSuspended": "Your account is suspended. Contact support.",
+      "accountBlocked": "Your account is blocked. Contact support.",
+      "navSites": "Sites",
+      "addSite": "Add new site",
+      "editSite": "Edit site",
+      "updateSite": "Update site",
+      "openTicket": "Open ticket",
+      "siteId": "Site ID",
+      "siteIdPlaceholder": "e.g. SITE-001",
+      "siteLocation": "Site location",
+      "siteLocationPlaceholder": "e.g. Building A, Floor 2",
+      "province": "Province",
+      "selectProvince": "Select province",
+      "siteRequired": "Site ID, location, and province are required",
+      "siteCreated": "Site created successfully",
+      "siteUpdated": "Site updated successfully",
+      "siteError": "Failed to save site",
+      "noSites": "No sites yet. Add your first site to get started.",
+      "filterBySiteId": "Filter by Site ID",
+      "selectFromSites": "Select from saved sites",
+      "typeNewSite": "Or type new site",
+      "designSpecifications": "Design & specifications",
+      "designSpecificationsPlaceholder": "Describe design, specs, or inspection requirements...",
+      "attachFiles": "Attach files",
+      "addFile": "Add file (image/PDF)",
+      "uploading": "Uploading...",
+      "confirmDeleteSite": "Are you sure you want to delete this site?",
+      "slaChart": "SLA overview",
+      "withinSla": "Within SLA",
+      "outOfSla": "Out of SLA",
+      "filterByDate": "Date",
+      "filterFrom": "From",
+      "filterTo": "To",
+      "filterBySite": "Site",
+      "filterPlaceholder": "All sites"
+    },
+    "hero": {
+      "subtitle": "Next-Gen Digital Solutions",
+      "title": "U-SMART",
+      "description": "We deliver cutting-edge technology solutions for smart homes, networking, and custom software development. Our expertise drives digital transformation across industries.",
+      "ctaPrimary": "View Projects",
+      "ctaSecondary": "Explore Solutions"
+    },
+    "services": {
+      "subtitle": "Our Expertise",
+      "title": "Services",
+      "tagline": "Comprehensive technology solutions tailored to your needs.",
+      "smartHomes": {
+        "title": "Smart Homes",
+        "desc": "Complete home automation and IoT solutions for modern living."
+      },
+      "networking": {
+        "title": "Networking",
+        "desc": "Robust and secure network infrastructure for businesses and homes."
+      },
+      "appDevelopment": {
+        "title": "App Development",
+        "desc": "Custom mobile and web applications for iOS, Android, and web platforms."
+      },
+      "quality": {
+        "title": "Quality Assurance",
+        "desc": "Rigorous testing and quality control for flawless performance."
+      }
+    },
+    "industry": {
+      "subtitle": "Industry Impact",
+      "title": "Transforming Industries",
+      "quality": {
+        "title": "Unmatched Quality",
+        "desc": "We adhere to the highest standards of quality and precision in every project."
+      },
+      "energy": {
+        "title": "Energy Efficiency",
+        "desc": "Our solutions are designed to optimize energy consumption and reduce costs."
+      }
+    },
+    "development": {
+      "subtitle": "Development",
+      "title": "Custom Development",
+      "tagline": "Tailored software solutions that grow with your business.",
+      "custom": {
+        "title": "Custom Software",
+        "desc": "Bespoke software solutions designed to meet your unique business requirements."
+      },
+      "automation": {
+        "title": "Automation",
+        "desc": "Streamline operations with intelligent automation and AI-powered tools."
+      },
+      "cloud": {
+        "title": "Cloud Solutions",
+        "desc": "Scalable and secure cloud infrastructure for your critical applications."
+      }
+    },
+    "training": {
+      "subtitle": "Training",
+      "title": "Professional Training",
+      "desc": "Empower your team with our specialized training programs in the latest technologies.",
+      "button": "Explore Training",
+      "backToHome": "Back to Home",
+      "requestsCount": "training requests",
+      "defaultBrief": "Professional training for this service.",
+      "browseIntro": "Browse our training servers below. Each service offers hands-on labs, certification paths, and mentorship.",
+      "noServices": "No training services available yet.",
+      "requestButton": "Request Training",
+      "requestModalTitle": "Request Training",
+      "requestSubmitted": "Request submitted",
+      "requestSubmittedDesc": "We will contact you shortly to discuss your training needs.",
+      "close": "Close",
+      "formName": "Name *",
+      "formNamePlaceholder": "Your full name",
+      "formEmail": "Email *",
+      "formEmailPlaceholder": "you@company.com",
+      "formPhone": "Phone *",
+      "formPhonePlaceholder": "+964...",
+      "formCompany": "Company",
+      "formCompanyPlaceholder": "Your company",
+      "formBudget": "Budget / Notes",
+      "formBudgetPlaceholder": "Budget or special requirements",
+      "formMessage": "Message",
+      "formMessagePlaceholder": "Tell us about your training goals...",
+      "submitting": "Submitting...",
+      "submitRequest": "Submit Request",
+      "submitError": "Failed to submit request"
+    },
+    "careers": {
+      "subtitle": "Join Our Team",
+      "title": "Careers",
+      "tagline": "Be part of a team that's shaping the future of technology.",
+      "jobs": [
+        {
+          "title": "Frontend Developer",
+          "description": "Build responsive and interactive user interfaces using React and Next.js.",
+          "type": "Full-time",
+          "department": "Engineering",
+          "location": "Remote"
+        },
+        {
+          "title": "Network Engineer",
+          "description": "Design and implement secure network solutions for enterprise clients.",
+          "type": "Full-time",
+          "department": "Infrastructure",
+          "location": "Dubai, UAE"
+        },
+        {
+          "title": "IoT Specialist",
+          "description": "Develop and deploy innovative Internet of Things solutions for smart environments.",
+          "type": "Full-time",
+          "department": "Innovation",
+          "location": "Istanbul, Turkey"
+        },
+        {
+          "title": "Training Coordinator",
+          "description": "Organize and oversee technical training programs for clients and partners.",
+          "type": "Full-time",
+          "department": "Education",
+          "location": "Erbil, Iraq"
+        }
+      ],
+      "apply": "Apply Now",
+      "button": "View All Positions",
+      "backToHome": "Back to Careers",
+      "noJobs": "No open positions at the moment.",
+      "jobTypes": {
+        "FULL_TIME": "Full-time",
+        "PART_TIME": "Part-time",
+        "CONTRACT": "Contract",
+        "INTERNSHIP": "Internship",
+        "REMOTE": "Remote"
+      }
+    },
+    "footer": {
+      "links": "Quick Links",
+      "contact": "Contact Us",
+      "newsletter": "Newsletter",
+      "newsletterDesc": "Subscribe to our newsletter for the latest updates.",
+      "newsletterPlaceholder": "Your email",
+      "subscribe": "Subscribe",
+      "copyright": "© 2024 U-SMART. All rights reserved.",
+      "status": "All systems operational",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "cookies": "Cookie Policy"
+    },
+    "clients": "Clients",
+    "projects": "Projects",
+    "uptime": "Uptime",
+    "exploreMore": "Explore More",
+    "handsOnLabs": "Hands-on Labs",
+    "certification": "Certification",
+    "mentorship": "Mentorship",
+    "realProjects": "Real Projects",
+    "learnMore": "Learn More",
+    "getStarted": "Get Started",
+    "readMore": "Read More",
+    "viewAll": "View All",
+    "seeMore": "See More",
+    "contactUs": "Contact Us",
+    "sendMessage": "Send Message",
+    "download": "Download",
+    "loading": "Loading",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info",
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort"
+  }
+}

@@ -1,0 +1,504 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Hero statistics (editable from admin)
+model Statistic {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Int
+  label     String
+  suffix    String?
+  icon      String?
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("statistics")
+}
+
+// نموذج المستخدم
+model User {
+    id            String    @id @default(cuid())
+    email         String    @unique
+    name          String?
+    password      String
+    role          Role      @default(USER)
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    projects      Project[]
+    services      Service[]
+    testimonials  Testimonial[]
+    @@map("users")
+  }
+  
+  // نموذج المشروع (translations: { "ar": { "title", "description", "content" }, ... })
+  model Project {
+    id           String   @id @default(cuid())
+    title        String
+    slug         String   @unique
+    description  String
+    content      String?
+    translations Json?    // { "ar": { "title", "description", "content" }, "en", "ku", "tr" }
+    category    String
+    tags        String[]
+    technologies String[]
+    client      String?
+    year        Int
+    duration    String?
+    budget      String?
+    featured    Boolean   @default(false)
+    status      ProjectStatus @default(COMPLETED)
+    imageUrl    String?
+    gallery     String[]
+    liveUrl     String?
+    githubUrl   String?
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    userId      String
+    user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+    @@map("projects")
+  }
+  
+  // نموذج الخدمة (translations: { "ar": { "title": "", "description": "" }, "en": { ... }, ... })
+  model Service {
+    id            String    @id @default(cuid())
+    title         String
+    slug          String    @unique
+    description   String
+    content       String?
+    icon          String
+    features      String[]
+    category      String
+    priceRange    String?
+    duration      String?
+    featured      Boolean   @default(false)
+    imageUrl      String?
+    translations  Json?     // { "ar": { "title", "description" }, "en": { ... }, "ku": { ... }, "tr": { ... } }
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    userId        String
+    user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    testimonials  Testimonial[]
+
+    @@map("services")
+  }
+  
+  // نموذج العملاء
+  model Client {
+    id          String    @id @default(cuid())
+    name        String
+    logo        String
+    website     String?
+    industry    String?
+    testimonial String?
+    featured    Boolean   @default(false)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+  
+    @@map("clients")
+  }
+  
+  // نموذج الشهادات
+  model Testimonial {
+    id          String    @id @default(cuid())
+    content     String
+    author      String
+    position    String
+    company     String?
+    rating      Int       @default(5)
+    imageUrl    String?
+    featured    Boolean   @default(false)
+    serviceId   String?
+    service     Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+    userId      String
+    user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+  
+    @@map("testimonials")
+  }
+  
+  // نموذج الوظائف (translations: { "ar": { "title", "description" }, "en", "ku", "tr" })
+  model Career {
+    id          String    @id @default(cuid())
+    title       String
+    slug        String    @unique
+    description String
+    translations Json?
+    requirements String[]
+    benefits    String[]
+    department  String
+    location    String
+    jobType     JobType
+    experience  String
+    salaryRange String?
+    remote      Boolean   @default(false)
+    featured    Boolean   @default(false)
+    status      JobStatus @default(OPEN)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    applications Application[]
+  
+    @@map("careers")
+  }
+  
+  // نموذج التقديم على الوظائف
+  model Application {
+    id          String    @id @default(cuid())
+    name        String
+    email       String
+    phone       String
+    coverLetter String?
+    resumeUrl   String
+    status      ApplicationStatus @default(PENDING)
+    careerId    String
+    career      Career    @relation(fields: [careerId], references: [id], onDelete: Cascade)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+  
+    @@map("applications")
+  }
+  
+  // نموذج جهات الاتصال
+  model Contact {
+    id          String    @id @default(cuid())
+    name        String
+    email       String
+    phone       String?
+    subject     String
+    message     String
+    status      ContactStatus @default(NEW)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+  
+    @@map("contacts")
+  }
+  
+  // نموذج الاشتراك في النشرة البريدية
+  model Subscriber {
+    id          String    @id @default(cuid())
+    email       String    @unique
+    name        String?
+    active      Boolean   @default(true)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    @@map("subscribers")
+  }
+
+  // Teams (technical & engineers) for ticket assignment
+  model Team {
+    id          String   @id @default(cuid())
+    name        String
+    leaderId    String
+    leader      Employee @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+    members     TeamMember[]
+    tickets     VisitorRequest[]
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    @@map("teams")
+  }
+
+  model TeamMember {
+    id         String   @id @default(cuid())
+    teamId     String
+    team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+    employeeId String
+    employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+    role       String   // TECHNICAL | ENGINEER
+    createdAt  DateTime @default(now())
+    @@unique([teamId, employeeId])
+    @@map("team_members")
+  }
+
+  // طلبات الزوار (Smart Home Automation / Programming)
+  model VisitorRequest {
+    id              String         @id @default(cuid())
+    buildingType    String?        // home, villa, hotel, complex, other (null for programming)
+    phone           String
+    province        String
+    technique       String         // knx, buspro, zigbee | maintenance, fiber, etc.
+    name            String?
+    company         String?
+    email           String?
+    serviceSlug     String         @default("smart-home-automation")
+    // Enterprise networking ticket fields
+    siteName        String?
+    siteCoordinator String?
+    slaHours        Int?
+    status          TicketStatus   @default(PENDING)
+    completedAt     DateTime?
+    assignedTeamId String?
+    assignedTeam   Team?          @relation(fields: [assignedTeamId], references: [id], onDelete: SetNull)
+    assignedAt      DateTime?
+    maintenanceDescription String?  // description of maintenance work done (when completed)
+    beforeImageUrls Json?          // before images (when IN_PROGRESS+)
+    finishingImageUrls     Json?   // after / finishing site photos
+    requesterId     String?
+    requester       TicketRequester? @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+    statusLogs      TicketStatusLog[]
+    createdAt       DateTime       @default(now())
+    updatedAt       DateTime       @updatedAt
+
+    @@map("visitor_requests")
+  }
+
+  // Timeline of status changes for each ticket (dashboard)
+  model TicketStatusLog {
+    id                String         @id @default(cuid())
+    visitorRequestId  String
+    visitorRequest    VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
+    status            TicketStatus
+    createdAt         DateTime       @default(now())
+
+    @@index([visitorRequestId])
+    @@map("ticket_status_logs")
+  }
+
+  // Ticket requester accounts (each linked to one service: enterprise-networking OR quality-control-supervision)
+  model TicketRequester {
+    id                       String            @id @default(cuid())
+    username                 String            @unique
+    passwordHash             String
+    name                     String?
+    email                    String?
+    phone                    String
+    company                  String?
+    companyCertificationUrl  String?           // uploaded file path/URL
+    serviceSlug              String            @default("enterprise-networking")  // which dashboard: enterprise-networking | quality-control-supervision
+    status                   RequesterStatus   @default(ACTIVE)
+    hasUpdatedCredentials    Boolean           @default(false)
+    createdAt                DateTime          @default(now())
+    updatedAt                DateTime          @updatedAt
+    tickets                  VisitorRequest[]
+    sites                    Site[]
+    companyProfile           Company?          // when created from company request
+
+    @@map("ticket_requesters")
+  }
+
+  // Company dashboard request (from service page: enterprise-networking OR quality-control-supervision)
+  model CompanyRequest {
+    id             String               @id @default(cuid())
+    companyName    String
+    pocName        String               // Point of Contact name
+    pocPhone       String
+    certificateUrl String?              // optional company certificate/license
+    serviceSlug    String               @default("enterprise-networking")  // which dashboard to create
+    status         CompanyRequestStatus @default(PENDING)
+    createdAt      DateTime             @default(now())
+    updatedAt      DateTime             @updatedAt
+
+    @@map("company_requests")
+  }
+
+  enum CompanyRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+  }
+
+  // Approved company (linked to a dashboard account for one service type)
+  model Company {
+    id              String            @id @default(cuid())
+    companyName     String
+    pocName         String
+    pocPhone        String
+    certificateUrl  String?
+    serviceSlug     String            @default("enterprise-networking")  // enterprise-networking | quality-control-supervision
+    status          CompanyStatus     @default(ACTIVE)
+    requesterId     String            @unique
+    requester       TicketRequester   @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+    createdAt       DateTime          @default(now())
+    updatedAt       DateTime          @updatedAt
+
+    @@map("companies")
+  }
+
+  enum CompanyStatus {
+    ACTIVE
+    SUSPENDED
+    BLOCKED
+  }
+
+  // Sites managed by requesters (for quick ticket creation)
+  model Site {
+    id                String            @id @default(cuid())
+    siteId            String            // user-defined site identifier
+    location          String            // site location/address
+    province          String            // province in Iraq
+    requesterId       String
+    requester         TicketRequester   @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+    createdAt         DateTime          @default(now())
+    updatedAt         DateTime          @updatedAt
+
+    @@unique([requesterId, siteId])
+    @@index([requesterId])
+    @@map("sites")
+  }
+
+  enum RequesterStatus {
+    ACTIVE
+    SUSPENDED
+    BLOCKED
+  }
+
+  enum TicketStatus {
+    PENDING
+    ON_SITE
+    IN_PROGRESS
+    COMPLETED
+  }
+
+  // Phone OTP for ticket submission (visitors)
+  model PhoneOtp {
+    id        String   @id @default(cuid())
+    phone     String
+    code      String
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    @@index([phone, expiresAt])
+    @@map("phone_otps")
+  }
+
+  // Notifications: new ticket (admin), status changed (requester)
+  model Notification {
+    id          String   @id @default(cuid())
+    type        String   // 'new_ticket' | 'status_changed'
+    title       String
+    message     String
+    ticketId    String?
+    requesterId String?
+    forAdmin    Boolean  @default(false)
+    read        Boolean  @default(false)
+    createdAt   DateTime @default(now())
+
+    @@map("notifications")
+  }
+
+  // Employees (admin-managed: technicians, engineers, etc.)
+  model Employee {
+    id               String              @id @default(cuid())
+    fullName         String
+    phone            String
+    jobTitle         String?
+    department       String              // service title (from services dropdown)
+    grade            EmployeeGrade
+    education        String?
+    specialized      EmployeeSpecialized
+    ledTeams         Team[]              @relation("TeamLeader")
+    teamMemberships  TeamMember[]
+    createdAt        DateTime            @default(now())
+    updatedAt        DateTime            @updatedAt
+
+    @@map("employees")
+  }
+
+  enum EmployeeGrade {
+    TECHNICIAN_C
+    TECHNICIAN_B
+    TECHNICIAN_A
+    ENGINEER
+    SUPERVISOR
+    TEAM_LEADER
+    SECTION_HEAD
+    MANAGER
+  }
+
+  enum EmployeeSpecialized {
+    ELECTRICAL_TECHNICIAN
+    TELECOM_TECHNICIAN
+    FIBER_TECHNICIAN
+    ENGINEER
+  }
+
+  // الأنواع المحددة
+  enum Role {
+    ADMIN
+    EDITOR
+    USER
+    TECHNICAL
+    ENGINEER
+  }
+  
+  enum ProjectStatus {
+    PLANNING
+    IN_PROGRESS
+    COMPLETED
+    ON_HOLD
+  }
+  
+  enum JobType {
+    FULL_TIME
+    PART_TIME
+    CONTRACT
+    INTERNSHIP
+    REMOTE
+  }
+  
+  enum JobStatus {
+    OPEN
+    CLOSED
+    FILLED
+  }
+  
+  enum ApplicationStatus {
+    PENDING
+    REVIEWED
+    INTERVIEW
+    ACCEPTED
+    REJECTED
+  }
+  
+  enum ContactStatus {
+    NEW
+    IN_PROGRESS
+    RESOLVED
+    SPAM
+  }
+
+  // Inspection checklist templates (admin-generated, used in QC tickets)
+  model InspectionChecklist {
+    id        String   @id @default(cuid())
+    name      String   // e.g. "Site Safety Inspection"
+    items     Json     // [{ "id": "uuid", "label": "Item 1" }, ...]
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("inspection_checklists")
+  }
+
+  // Training requests (from Explore Training page)
+  model TrainingRequest {
+    id               String                 @id @default(cuid())
+    serviceSlug      String
+    serviceTitle     String
+    serviceDesc      String?                // brief description
+    requesterName    String
+    requesterEmail   String
+    requesterPhone   String
+    company          String?
+    message          String?
+    budget           String?                // optional budget/notes
+    status           TrainingRequestStatus  @default(PENDING)
+    createdAt        DateTime               @default(now())
+    updatedAt        DateTime               @updatedAt
+
+    @@index([status])
+    @@map("training_requests")
+  }
+
+  enum TrainingRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+  }
