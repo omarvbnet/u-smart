@@ -168,6 +168,7 @@ export default function QualityControlDashboardPage() {
       technique: 'inspection',
       phone: user?.phone || '',
       province: site.province,
+      designSpecifications: '',
     });
     setSelectedSiteId(site.siteId);
     setTicketFormOpen(true);
