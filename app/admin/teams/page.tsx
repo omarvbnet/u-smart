@@ -22,7 +22,7 @@ export default function AdminTeamsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createLeaderId, setCreateLeaderId] = useState('');
-  const [createMembers, setCreateMembers] = useState<{ userId: string; role: string }[]>([]);
+  const [createMembers, setCreateMembers] = useState<{ employeeId: string; role: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
