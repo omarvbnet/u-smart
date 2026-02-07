@@ -13,13 +13,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, user: null });
   }
 
-  let requester: { id: string; username: string; name: string | null; phone: string; company?: string | null; companyCertificationUrl?: string | null; status?: string; hasUpdatedCredentials?: boolean; serviceSlug?: string } | null = null;
-  // Use only fields that exist in all schema versions to avoid "Unknown field" errors
+  type RequesterRow = { id: string; username: string; name: string | null; phone: string; company: string | null; serviceSlug: string };
+  let requester: RequesterRow | null = null;
   try {
-    requester = await prisma.ticketRequester.findUnique({
+    const row = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
       select: { id: true, username: true, name: true, phone: true, company: true, serviceSlug: true },
-    }) as typeof requester;
+    });
+    requester = row as RequesterRow | null;
   } catch {
     return NextResponse.json({ success: false, user: null });
   }

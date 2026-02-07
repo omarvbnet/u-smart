@@ -98,9 +98,10 @@ export async function GET(
       /* ignore */
     }
 
-    const statusTimeline =
+    type TimelineEntry = { status: string; createdAt: Date | string };
+    const statusTimeline: TimelineEntry[] =
       logs.length > 0
-        ? logs.map((e) => ({ status: e.status, createdAt: e.createdAt }))
+        ? logs.map((e: TimelineEntry) => ({ status: e.status, createdAt: e.createdAt }))
         : [{ status: status as string, createdAt: row.createdAt }];
 
     const maintenanceDescription = (row as any).maintenanceDescription ?? null;
@@ -127,7 +128,7 @@ export async function GET(
         status,
         createdAt: row.createdAt,
         completedAt,
-        statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
+        statusTimeline: statusTimeline.map((e: TimelineEntry) => ({ status: e.status, createdAt: e.createdAt })),
         maintenanceDescription,
         beforeImageUrls,
         finishingImageUrls,

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = prisma as {
+    const db = prisma as unknown as {
       phoneOtp?: {
         findFirst: (args: {
           where: { phone: string; code: string; expiresAt: { gt: Date } };

@@ -36,8 +36,9 @@ export async function GET(req: NextRequest) {
     });
 
     // Get ticket counts per service for each site
+    type SiteRow = { id: string; siteId: string; location: string; province: string; createdAt: Date; updatedAt: Date };
     const sitesWithCounts = await Promise.all(
-      sites.map(async (site) => {
+      (sites as SiteRow[]).map(async (site) => {
         const [qualityControlCount, enterpriseCount] = await Promise.all([
           prisma.visitorRequest.count({
             where: {

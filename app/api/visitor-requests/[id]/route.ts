@@ -115,7 +115,7 @@ export async function PATCH(
     let companyPayload: string | undefined;
     if (existing?.company && typeof existing.company === 'string') {
       try {
-        const parsed = JSON.parse(existingTicket.company) as Record<string, unknown>;
+        const parsed = JSON.parse(existing.company) as Record<string, unknown>;
         if (parsed._ticket) {
           if (status) parsed.status = status;
           if (status === 'COMPLETED') {
@@ -179,7 +179,7 @@ export async function PATCH(
         data: updateData as Parameters<typeof prisma.visitorRequest.update>[0]['data'],
         include: { requester: true, assignedTeam: { include: { leader: { select: { id: true, fullName: true, phone: true } } } } },
       });
-      const db = prisma as { ticketStatusLog?: { create: (args: { data: { visitorRequestId: string; status: string } }) => Promise<unknown> } };
+      const db = prisma as unknown as { ticketStatusLog?: { create: (args: { data: { visitorRequestId: string; status: string } }) => Promise<unknown> } };
       if (status && db.ticketStatusLog?.create) {
         await db.ticketStatusLog.create({
           data: { visitorRequestId: id, status: status as 'PENDING' | 'ON_SITE' | 'IN_PROGRESS' | 'COMPLETED' },

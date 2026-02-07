@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     try {
-      const db = prisma as { phoneOtp?: { create: (args: { data: { phone: string; code: string; expiresAt: Date } }) => Promise<unknown> } };
+      const db = prisma as unknown as { phoneOtp?: { create: (args: { data: { phone: string; code: string; expiresAt: Date } }) => Promise<unknown> } };
       if (db.phoneOtp?.create) {
         await db.phoneOtp.create({
           data: { phone, code, expiresAt },
