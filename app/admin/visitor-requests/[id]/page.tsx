@@ -50,7 +50,7 @@ export default function VisitorRequestDetailPage() {
   const [inspectionChecklistVal, setInspectionChecklistVal] = useState<Array<{ id: string; label: string; checked: boolean; comment?: string; weight?: 'minor' | 'major' }>>([]);
   const [savingInspection, setSavingInspection] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
-  const [checklistTemplates, setChecklistTemplates] = useState<Array<{ id: string; name: string; items: { id: string; label: string }[] }>>([]);
+  const [checklistTemplates, setChecklistTemplates] = useState<Array<{ id: string; name: string; items: { id: string; label: string; weight?: string }[] }>>([]);
 
   useEffect(() => {
     if (!id) return;
