@@ -84,7 +84,7 @@ export default function AdminLoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@usmart.com"
+                placeholder="Enter your email"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
                 autoComplete="email"
@@ -116,11 +116,6 @@ export default function AdminLoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Test account: <strong>admin@usmart.com</strong> / <strong>Admin@123</strong>
-            <br />
-            <span className="text-xs">Run <code className="bg-gray-100 px-1 rounded">npm run seed</code> if needed.</span>
-          </p>
         </div>
 
         <p className="mt-6 text-center">
