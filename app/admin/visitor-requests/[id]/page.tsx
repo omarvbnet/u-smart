@@ -536,7 +536,7 @@ export default function VisitorRequestDetailPage() {
                       if (template && template.items.length > 0) {
                         setInspectionChecklistVal((prev) => [
                           ...prev,
-                          ...template.items.map((it) => ({ id: `${it.id}-${Date.now()}`, label: it.label, checked: false, weight: it.weight || 'minor' })),
+                          ...template.items.map((it) => ({ id: `${it.id}-${Date.now()}`, label: it.label, checked: false, weight: (it.weight === 'major' ? 'major' : 'minor') as 'minor' | 'major' })),
                         ]);
                       }
                     }}
