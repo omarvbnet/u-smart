@@ -488,6 +488,38 @@ export default function ProfessionalHomePage() {
   const { scrollYProgress } = useScroll();
   const [heroData, setHeroData] = useState<HeroData | null>(null);
   const [heroDataLoading, setHeroDataLoading] = useState(true);
+  const [subscribeEmail, setSubscribeEmail] = useState("");
+  const [subscribeLoading, setSubscribeLoading] = useState(false);
+  const [subscribeMessage, setSubscribeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = subscribeEmail.trim();
+    if (!email) {
+      setSubscribeMessage({ type: "error", text: t("footer.subscribeErrorRequired") });
+      return;
+    }
+    setSubscribeLoading(true);
+    setSubscribeMessage(null);
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSubscribeEmail("");
+        setSubscribeMessage({ type: "success", text: t("footer.subscribeSuccess") });
+      } else {
+        setSubscribeMessage({ type: "error", text: data.message || t("footer.subscribeError") });
+      }
+    } catch {
+      setSubscribeMessage({ type: "error", text: t("footer.subscribeError") });
+    } finally {
+      setSubscribeLoading(false);
+    }
+  };
 
   useEffect(() => {
     setHeroDataLoading(true);
@@ -1107,16 +1139,29 @@ export default function ProfessionalHomePage() {
                 <p className="text-gray-400 text-sm">
                   {t("footer.newsletterDesc")}
                 </p>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="email"
+                    value={subscribeEmail}
+                    onChange={(e) => setSubscribeEmail(e.target.value)}
                     placeholder={t("footer.newsletterPlaceholder")}
-                    className="flex-1 min-w-0 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
+                    disabled={subscribeLoading}
+                    className="flex-1 min-w-0 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all disabled:opacity-60"
+                    aria-label={t("footer.newsletterPlaceholder")}
                   />
-                  <button className="px-5 py-3 min-h-[48px] bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-blue-500/20 touch-manipulation shrink-0">
-                    {t("footer.subscribe")}
+                  <button
+                    type="submit"
+                    disabled={subscribeLoading}
+                    className="px-5 py-3 min-h-[48px] bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-blue-500/20 touch-manipulation shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {subscribeLoading ? t("footer.subscribing") : t("footer.subscribe")}
                   </button>
-                </div>
+                </form>
+                {subscribeMessage && (
+                  <p className={`text-sm ${subscribeMessage.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
+                    {subscribeMessage.text}
+                  </p>
+                )}
               </div>
             </div>
           </div>

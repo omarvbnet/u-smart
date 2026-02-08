@@ -13,8 +13,15 @@ const prisma = new PrismaClient();
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    const onlySlugsParam = searchParams.get('onlySlugs')?.trim() || '';
     const excludeSlug = searchParams.get('excludeSlug')?.trim() || '';
-    const where = excludeSlug ? { serviceSlug: { not: excludeSlug } } : {};
+    let where: { serviceSlug?: { in?: string[]; not?: string } } = {};
+    if (onlySlugsParam) {
+      const slugs = onlySlugsParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+      if (slugs.length > 0) where = { serviceSlug: { in: slugs } };
+    } else if (excludeSlug) {
+      where = { serviceSlug: { not: excludeSlug } };
+    }
     const list = await prisma.visitorRequest.findMany({
       where,
       orderBy: { createdAt: 'desc' },

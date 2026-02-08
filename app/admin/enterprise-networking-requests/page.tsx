@@ -21,7 +21,7 @@ type VisitorRequest = {
   createdAt: string;
 };
 
-export default function VisitorRequestsAdminPage() {
+export default function EnterpriseNetworkingRequestsAdminPage() {
   const [list, setList] = useState<VisitorRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -30,7 +30,7 @@ export default function VisitorRequestsAdminPage() {
 
   const loadPendingCount = async () => {
     try {
-      const res = await fetch('/api/notifications/count?type=pending_visitor_tickets');
+      const res = await fetch('/api/notifications/count?type=pending_tickets');
       const data = await res.json();
       if (data.success && typeof data.count === 'number') setPendingCount(data.count);
     } catch {
@@ -61,7 +61,7 @@ export default function VisitorRequestsAdminPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/visitor-requests?onlySlugs=smart-home-automation,custom-software,programming');
+      const res = await fetch('/api/visitor-requests?onlySlugs=enterprise-networking');
       const data = await res.json();
       if (data.success && data.requests) setList(data.requests);
     } catch (e) {
@@ -133,7 +133,7 @@ export default function VisitorRequestsAdminPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">Visitor Requests (Smart Home & Programming)</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Enterprise Networking Requests</h1>
           {pendingCount > 0 && (
             <span className="px-2.5 py-0.5 text-sm font-medium rounded-full bg-amber-100 text-amber-800">
               {pendingCount} pending
@@ -175,7 +175,7 @@ export default function VisitorRequestsAdminPage() {
         <div className="py-12 text-center text-gray-500">Loading...</div>
       ) : list.length === 0 ? (
         <div className="py-12 text-center text-gray-500 rounded-lg border border-gray-200 bg-gray-50">
-          No visitor requests yet.
+          No enterprise networking requests yet.
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -201,32 +201,42 @@ export default function VisitorRequestsAdminPage() {
               {list.map((r) => {
                 const { siteName, siteCoordinator, slaHours, displayCompany } = parseTicketData(r);
                 return (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.createdAt)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.serviceSlug}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{siteName ?? '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{siteCoordinator ?? '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{slaHours != null ? slaHours : '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{r.buildingType && r.buildingType !== 'n/a' ? r.buildingType : '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{r.phone}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{r.province}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{r.technique}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{displayCompany ?? '—'}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className="text-gray-500">—</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <Link
-                      href={`/admin/visitor-requests/${r.id}`}
-                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      <EyeIcon className="w-4 h-4" />
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              );
+                  <tr key={r.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.createdAt)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{r.serviceSlug}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{siteName ?? '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{siteCoordinator ?? '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{slaHours != null ? slaHours : '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{r.buildingType && r.buildingType !== 'n/a' ? r.buildingType : '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{r.phone}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{r.province}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{r.technique}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{r.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{displayCompany ?? '—'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <select
+                        value={r.status ?? 'PENDING'}
+                        onChange={(e) => updateStatus(r.id, e.target.value)}
+                        disabled={updatingId === r.id || (r.status ?? '').toString().toUpperCase() === 'COMPLETED'}
+                        className="text-sm border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <option value="PENDING">Pending</option>
+                        <option value="ON_SITE">We on site</option>
+                        <option value="IN_PROGRESS">In Progress</option>
+                        <option value="COMPLETED">Completed</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <Link
+                        href={`/admin/visitor-requests/${r.id}`}
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        <EyeIcon className="w-4 h-4" />
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                );
               })}
             </tbody>
           </table>

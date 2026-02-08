@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { notifySubscribers } from '@/lib/notify-subscribers';
 
 function slugify(text: string) {
   return text
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
         userId: admin.id,
       },
     });
+    notifySubscribers('service', service).catch((err) => console.error('Notify subscribers:', err));
     return NextResponse.json({ success: true, service });
   } catch (error) {
     console.error('POST /api/services:', error);

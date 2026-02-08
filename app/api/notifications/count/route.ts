@@ -8,7 +8,20 @@ export async function GET(req: NextRequest) {
       try {
         const count = await prisma.visitorRequest.count({
           where: {
-            serviceSlug: { in: ['enterprise-networking'] },
+            serviceSlug: 'enterprise-networking',
+            status: 'PENDING',
+          },
+        });
+        return NextResponse.json({ success: true, count });
+      } catch {
+        return NextResponse.json({ success: true, count: 0 });
+      }
+    }
+    if (type === 'pending_visitor_tickets') {
+      try {
+        const count = await prisma.visitorRequest.count({
+          where: {
+            serviceSlug: { in: ['smart-home-automation', 'custom-software', 'programming'] },
             status: 'PENDING',
           },
         });

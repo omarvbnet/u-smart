@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getLocalizedProject, isValidLocaleProject } from '@/lib/project-i18n';
+import { notifySubscribers } from '@/lib/notify-subscribers';
 
 function slugify(text: string) {
   return text
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
         userId: admin.id,
       },
     });
+    notifySubscribers('project', project).catch((err) => console.error('Notify subscribers:', err));
     return NextResponse.json({ success: true, project });
   } catch (error) {
     console.error('POST /api/projects:', error);

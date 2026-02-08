@@ -19,6 +19,7 @@ import {
   Building,
   TicketCheck,
   UserCircle,
+  Network,
 } from 'lucide-react';
 
 const links = [
@@ -28,7 +29,8 @@ const links = [
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/careers', label: 'Careers', icon: Briefcase },
   { href: '/admin/applications', label: 'Applications', icon: FileText },
-  { href: '/admin/visitor-requests', label: 'Visitors', icon: FileText },
+  { href: '/admin/visitor-requests', label: 'Visitors', icon: FileText, badgeType: 'pending_visitor' as const },
+  { href: '/admin/enterprise-networking-requests', label: 'Enterprise Networking', icon: Network, badgeType: 'pending_enterprise' as const },
   { href: '/admin/quality-requests', label: 'Quality Requests', icon: ClipboardCheck, badgeType: 'pending_qc' as const },
   { href: '/admin/training-requests', label: 'Training', icon: GraduationCap, badgeType: 'pending_training' as const },
   { href: '/admin/checklists', label: 'Checklists', icon: CheckSquare },
@@ -42,22 +44,26 @@ const links = [
 
 export default function AdminNav() {
   const pathname = usePathname();
-  const [pendingCount, setPendingCount] = useState(0);
+  const [visitorPendingCount, setVisitorPendingCount] = useState(0);
+  const [enterprisePendingCount, setEnterprisePendingCount] = useState(0);
   const [qcPendingCount, setQcPendingCount] = useState(0);
   const [trainingPendingCount, setTrainingPendingCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [res, qcRes, trainingRes] = await Promise.all([
+        const [visitorRes, enterpriseRes, qcRes, trainingRes] = await Promise.all([
+          fetch('/api/notifications/count?type=pending_visitor_tickets'),
           fetch('/api/notifications/count?type=pending_tickets'),
           fetch('/api/notifications/count?type=pending_qc_tickets'),
           fetch('/api/notifications/count?type=pending_training_requests'),
         ]);
-        const data = await res.json();
+        const visitorData = await visitorRes.json();
+        const enterpriseData = await enterpriseRes.json();
         const qcData = await qcRes.json();
         const trainingData = await trainingRes.json();
-        if (data.success && typeof data.count === 'number') setPendingCount(data.count);
+        if (visitorData.success && typeof visitorData.count === 'number') setVisitorPendingCount(visitorData.count);
+        if (enterpriseData.success && typeof enterpriseData.count === 'number') setEnterprisePendingCount(enterpriseData.count);
         if (qcData.success && typeof qcData.count === 'number') setQcPendingCount(qcData.count);
         if (trainingData.success && typeof trainingData.count === 'number') setTrainingPendingCount(trainingData.count);
       } catch {
@@ -77,12 +83,15 @@ export default function AdminNav() {
             ? pathname === '/admin'
             : pathname.startsWith(href);
         const showBadge =
-          (href === '/admin/visitor-requests' && pendingCount > 0) ||
+          (href === '/admin/visitor-requests' && badgeType === 'pending_visitor' && visitorPendingCount > 0) ||
+          (href === '/admin/enterprise-networking-requests' && badgeType === 'pending_enterprise' && enterprisePendingCount > 0) ||
           (href === '/admin/quality-requests' && badgeType === 'pending_qc' && qcPendingCount > 0) ||
           (href === '/admin/training-requests' && badgeType === 'pending_training' && trainingPendingCount > 0);
         const badgeCount =
+          href === '/admin/visitor-requests' ? visitorPendingCount :
+          href === '/admin/enterprise-networking-requests' ? enterprisePendingCount :
           href === '/admin/quality-requests' ? qcPendingCount :
-          href === '/admin/training-requests' ? trainingPendingCount : pendingCount;
+          href === '/admin/training-requests' ? trainingPendingCount : 0;
         return (
           <Link
             key={href}

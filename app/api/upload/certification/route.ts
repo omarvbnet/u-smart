@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { NextRequest, NextResponse } from 'next/server';
+import { uploadFile } from '@/lib/upload';
 import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -31,13 +31,7 @@ export async function POST(req: NextRequest) {
 
     const ext = path.extname(file.name) || (file.type === 'application/pdf' ? '.pdf' : '.jpg');
     const safeName = `${payload.requesterId}-${Date.now()}${ext}`;
-    const dir = path.join(process.cwd(), 'public', 'uploads', 'certifications');
-    await mkdir(dir, { recursive: true });
-    const filePath = path.join(dir, safeName);
-    const bytes = await file.arrayBuffer();
-    await writeFile(filePath, Buffer.from(bytes));
-
-    const url = `/uploads/certifications/${safeName}`;
+    const { url } = await uploadFile({ file, folder: 'certifications', prefix: 'cert', safeName });
     return NextResponse.json({ success: true, url });
   } catch (err) {
     console.error('POST /api/upload/certification:', err);
