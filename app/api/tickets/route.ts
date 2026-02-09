@@ -287,6 +287,8 @@ export async function GET(req: NextRequest) {
     const requesterServiceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
 
     const { searchParams } = new URL(req.url);
+    const doExport = searchParams.get('export') === '1';
+    const exportFormat = (searchParams.get('format') || 'json').toLowerCase();
     const from = searchParams.get('from'); // YYYY-MM-DD
     const to = searchParams.get('to');     // YYYY-MM-DD
     const siteNameParam = searchParams.get('siteName')?.trim() || undefined;
@@ -300,18 +302,20 @@ export async function GET(req: NextRequest) {
       requesterId: payload.requesterId,
       serviceSlug: filterServiceSlug,
     };
-    if (from) {
-      const d = new Date(from);
-      d.setHours(0, 0, 0, 0);
-      where.createdAt = { ...(where.createdAt as object), gte: d };
-    }
-    if (to) {
-      const d = new Date(to);
-      d.setHours(23, 59, 59, 999);
-      where.createdAt = { ...(where.createdAt as object), lte: d };
-    }
-    if (siteNameParam) {
-      where.OR = [{ company: { contains: siteNameParam } }];
+    if (!doExport) {
+      if (from) {
+        const d = new Date(from);
+        d.setHours(0, 0, 0, 0);
+        where.createdAt = { ...(where.createdAt as object), gte: d };
+      }
+      if (to) {
+        const d = new Date(to);
+        d.setHours(23, 59, 59, 999);
+        where.createdAt = { ...(where.createdAt as object), lte: d };
+      }
+      if (siteNameParam) {
+        where.OR = [{ company: { contains: siteNameParam } }];
+      }
     }
 
     const rows = await prisma.visitorRequest.findMany({
@@ -400,10 +404,37 @@ export async function GET(req: NextRequest) {
     });
 
     // If filtering by siteName, keep only tickets whose siteName matches (we filtered by OR on DB but company contains is loose)
-    type TicketRow = { id: string; siteName: string | null; siteCoordinator: string | null; slaHours: number | null; technique: string; status: string; createdAt: Date; completedAt: string | null };
-    const filtered = siteNameParam
+    type TicketRow = { id: string; siteName: string | null; siteCoordinator: string | null; slaHours: number | null; technique: string; status: string; createdAt: Date; completedAt: string | null; designSpecifications?: string | null; attachmentUrls?: string[]; inspectionResult?: string | null; statusTimeline?: { status: string; createdAt: Date }[] };
+    const filtered = siteNameParam && !doExport
       ? tickets.filter((t: TicketRow) => t.siteName?.toLowerCase().includes(siteNameParam.toLowerCase()))
       : tickets;
+
+    if (doExport) {
+      const slugLabel = filterServiceSlug === 'quality-control-supervision' ? 'quality' : 'network';
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `dashboard-${slugLabel}-export-${dateStr}.${exportFormat === 'csv' ? 'csv' : 'json'}`;
+      if (exportFormat === 'csv') {
+        const headers = ['id', 'siteName', 'siteCoordinator', 'technique', 'status', 'createdAt', 'completedAt', 'slaHours', 'inspectionResult'];
+        const escape = (v: unknown) => (v == null ? '' : String(v).replace(/"/g, '""'));
+        const row = (t: TicketRow) => headers.map((h) => `"${escape((t as Record<string, unknown>)[h])}"`).join(',');
+        const csv = [headers.join(','), ...(filtered as TicketRow[]).map(row)].join('\n');
+        return new NextResponse(csv, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+          },
+        });
+      }
+      const exportData = { success: true, serviceSlug: filterServiceSlug, exportedAt: new Date().toISOString(), tickets: filtered };
+      return new NextResponse(JSON.stringify(exportData, null, 2), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      });
+    }
 
     return NextResponse.json({ success: true, tickets: filtered });
   } catch (error) {

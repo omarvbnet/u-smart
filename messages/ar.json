@@ -206,7 +206,14 @@
       "filterFrom": "من",
       "filterTo": "إلى",
       "filterBySite": "الموقع",
-      "filterPlaceholder": "جميع المواقع"
+      "filterPlaceholder": "جميع المواقع",
+      "exportSites": "تصدير المواقع",
+      "importSites": "استيراد المواقع",
+      "exportDashboardData": "تصدير كل البيانات",
+      "importSitesHint": "ارفع ملف JSON يحتوي مصفوفة \"sites\" (siteId, location, province)",
+      "exportSitesHint": "تحميل كل المواقع كـ JSON",
+      "importSuccess": "تم الاستيراد",
+      "importError": "فشل الاستيراد"
     },
     "enterpriseNetworkingTechnologies": {
       "title": "التقنيات والميزات التي نقدمها",

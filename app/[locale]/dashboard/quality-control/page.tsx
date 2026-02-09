@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ClipboardList, LogOut, Loader2, Bell, UserCog, PlusCircle, X, Clock, CheckCircle, BarChart3, Building2, MapPin, Activity, Map, Edit2, Trash2, Filter, ShieldCheck, FileText, Paperclip, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ClipboardList, LogOut, Loader2, Bell, UserCog, PlusCircle, X, Clock, CheckCircle, BarChart3, Building2, MapPin, Activity, Map, Edit2, Trash2, Filter, ShieldCheck, FileText, Paperclip, TrendingUp, TrendingDown, Minus, Download, Upload } from 'lucide-react';
 
 const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'] as const;
 
@@ -73,6 +73,10 @@ export default function QualityControlDashboardPage() {
   const [siteTicketsFilter, setSiteTicketsFilter] = useState({ status: '', from: '', to: '' });
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [ticketListFilter, setTicketListFilter] = useState({ result: '', siteName: '', ticketId: '' });
+  const [exportingSites, setExportingSites] = useState(false);
+  const [importingSites, setImportingSites] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const siteFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     const qs = '?serviceSlug=quality-control-supervision';
@@ -190,6 +194,81 @@ export default function QualityControlDashboardPage() {
       if (data.success) loadSites();
     } catch {
       /* ignore */
+    }
+  };
+
+  const handleExportSites = async () => {
+    setExportingSites(true);
+    try {
+      const res = await fetch('/api/sites?export=1', { credentials: 'include' });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sites-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setSiteMessage({ type: 'error', text: t('ticketForm.importError') });
+    } finally {
+      setExportingSites(false);
+    }
+  };
+
+  const handleImportSitesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportingSites(true);
+    setSiteMessage(null);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const sitesList = Array.isArray(data.sites) ? data.sites : Array.isArray(data) ? data : [];
+      if (sitesList.length === 0) {
+        setSiteMessage({ type: 'error', text: t('ticketForm.importError') });
+        setImportingSites(false);
+        if (siteFileInputRef.current) siteFileInputRef.current.value = '';
+        return;
+      }
+      const res = await fetch('/api/sites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ sites: sitesList }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setSiteMessage({ type: 'success', text: `${t('ticketForm.importSuccess')}: ${result.created} created, ${result.skipped} skipped` });
+        loadSites();
+        setTimeout(() => setSiteMessage(null), 4000);
+      } else {
+        setSiteMessage({ type: 'error', text: result.message || t('ticketForm.importError') });
+      }
+    } catch {
+      setSiteMessage({ type: 'error', text: t('ticketForm.importError') });
+    } finally {
+      setImportingSites(false);
+      if (siteFileInputRef.current) siteFileInputRef.current.value = '';
+    }
+  };
+
+  const handleExportDashboardData = async () => {
+    setExportingData(true);
+    try {
+      const res = await fetch('/api/tickets?serviceSlug=quality-control-supervision&export=1&format=json', { credentials: 'include' });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `quality-dashboard-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setTicketMessage({ type: 'error', text: t('ticketForm.importError') });
+    } finally {
+      setExportingData(false);
     }
   };
 
@@ -385,6 +464,16 @@ export default function QualityControlDashboardPage() {
             </button>
             <button
               type="button"
+              onClick={handleExportDashboardData}
+              disabled={exportingData}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl font-medium transition-colors disabled:opacity-50"
+              title={t('ticketForm.exportDashboardData')}
+            >
+              {exportingData ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+              {t('ticketForm.exportDashboardData')}
+            </button>
+            <button
+              type="button"
               onClick={handleLogout}
               className="inline-flex items-center gap-2 px-4 py-2 border border-white/20 rounded-xl text-gray-400 hover:text-white hover:border-white/40 transition-colors"
             >
@@ -524,19 +613,48 @@ export default function QualityControlDashboardPage() {
                 <Map className="w-5 h-5 text-amber-400" />
                 {t('ticketForm.navSites')}
               </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingSite(null);
-                  setSiteForm({ siteId: '', location: '', province: '' });
-                  setSiteFormOpen(true);
-                  setSiteMessage(null);
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-white text-sm font-medium"
-              >
-                <PlusCircle className="w-4 h-4" />
-                {t('ticketForm.addSite')}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportSites}
+                  disabled={exportingSites || sites.length === 0}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-medium disabled:opacity-50"
+                  title={t('ticketForm.exportSitesHint')}
+                >
+                  {exportingSites ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {t('ticketForm.exportSites')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => siteFileInputRef.current?.click()}
+                  disabled={importingSites}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-medium disabled:opacity-50"
+                  title={t('ticketForm.importSitesHint')}
+                >
+                  {importingSites ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {t('ticketForm.importSites')}
+                </button>
+                <input
+                  ref={siteFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={handleImportSitesChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSite(null);
+                    setSiteForm({ siteId: '', location: '', province: '' });
+                    setSiteFormOpen(true);
+                    setSiteMessage(null);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-white text-sm font-medium"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  {t('ticketForm.addSite')}
+                </button>
+              </div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center gap-3">

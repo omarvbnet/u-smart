@@ -206,7 +206,14 @@
       "filterFrom": "Başlangıç",
       "filterTo": "Bitiş",
       "filterBySite": "Site",
-      "filterPlaceholder": "Tüm siteler"
+      "filterPlaceholder": "Tüm siteler",
+      "exportSites": "Siteleri dışa aktar",
+      "importSites": "Siteleri içe aktar",
+      "exportDashboardData": "Tüm verileri dışa aktar",
+      "importSitesHint": "\"sites\" dizisi (siteId, location, province) içeren bir JSON dosyası yükleyin",
+      "exportSitesHint": "Tüm sitelerinizi JSON olarak indirin",
+      "importSuccess": "İçe aktarma tamamlandı",
+      "importError": "İçe aktarma başarısız"
     },
     "enterpriseNetworkingTechnologies": {
       "title": "Teklif Ettiğimiz Teknikler ve Özellikler",

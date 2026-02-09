@@ -206,7 +206,14 @@
       "filterFrom": "لە",
       "filterTo": "بۆ",
       "filterBySite": "شوێن",
-      "filterPlaceholder": "هەموو شوێنەکان"
+      "filterPlaceholder": "هەموو شوێنەکان",
+      "exportSites": "هەناردەی شوێنەکان",
+      "importSites": "هاتنەژوورەوەی شوێنەکان",
+      "exportDashboardData": "هەناردەی هەموو داتاکان",
+      "importSitesHint": "فایلێکی JSON بە آرەی \"sites\" (siteId, location, province) باربکە",
+      "exportSitesHint": "هەموو شوێنەکان وەک JSON دابەزێنە",
+      "importSuccess": "هاتنەژوورەوە تەواو بوو",
+      "importError": "هاتنەژوورەوە سەرکەوتوو نەبوو"
     },
     "enterpriseNetworkingTechnologies": {
       "title": "تەکنەلۆژیا و تایبەتمەندیەکان کە پێشکەش دەکەین",

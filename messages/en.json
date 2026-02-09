@@ -286,7 +286,14 @@
       "filterFrom": "From",
       "filterTo": "To",
       "filterBySite": "Site",
-      "filterPlaceholder": "All sites"
+      "filterPlaceholder": "All sites",
+      "exportSites": "Export sites",
+      "importSites": "Import sites",
+      "exportDashboardData": "Export all data",
+      "importSitesHint": "Upload a JSON file with a \"sites\" array (siteId, location, province)",
+      "exportSitesHint": "Download all your sites as JSON",
+      "importSuccess": "Import complete",
+      "importError": "Import failed"
     },
     "hero": {
       "subtitle": "Next-Gen Digital Solutions",
