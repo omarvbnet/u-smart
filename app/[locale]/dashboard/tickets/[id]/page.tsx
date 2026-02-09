@@ -422,16 +422,17 @@ export default function TicketDetailPage() {
                       <div className="flex flex-wrap gap-2">
                         {ticket.attachmentUrls.map((url, idx) => {
                           const isImage = /\.(jpe?g|png|gif|webp)$/i.test(url) || url.includes('image');
+                          const srcOrHref = url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`;
                           return (
                             <a
                               key={idx}
-                              href={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`}
+                              href={srcOrHref}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="block rounded-lg border border-amber-500/30 overflow-hidden hover:border-amber-400/50 transition-colors"
                             >
                               {isImage ? (
-                                <img src={url.startsWith('/') ? url : `/${url}`} alt={`Attachment ${idx + 1}`} className="w-20 h-20 object-cover" />
+                                <img src={srcOrHref} alt={`Attachment ${idx + 1}`} className="w-20 h-20 object-cover" />
                               ) : (
                                 <div className="w-20 h-20 flex items-center justify-center bg-amber-500/20 text-amber-400 text-xs font-medium px-2 text-center">PDF</div>
                               )}

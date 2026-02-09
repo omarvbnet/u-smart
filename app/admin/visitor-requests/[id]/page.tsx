@@ -714,11 +714,14 @@ export default function VisitorRequestDetailPage() {
                 <label className="block text-sm font-medium text-gray-500 mb-2">Before images</label>
                 {beforeUrls.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {beforeUrls.map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block w-24 h-24 rounded-lg border border-gray-200 overflow-hidden hover:border-blue-400">
-                        <img src={url.startsWith('/') ? url : `/${url}`} alt={`Before ${idx + 1}`} className="w-full h-full object-cover" />
-                      </a>
-                    ))}
+                    {beforeUrls.map((url, idx) => {
+                      const imgSrc = url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`;
+                      return (
+                        <a key={idx} href={imgSrc} target="_blank" rel="noopener noreferrer" className="block w-24 h-24 rounded-lg border border-gray-200 overflow-hidden hover:border-blue-400">
+                          <img src={imgSrc} alt={`Before ${idx + 1}`} className="w-full h-full object-cover" />
+                        </a>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400 italic">No before images yet</p>
@@ -728,11 +731,14 @@ export default function VisitorRequestDetailPage() {
                 <label className="block text-sm font-medium text-gray-500 mb-2">After / finishing images</label>
                 {afterUrls.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {afterUrls.map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block w-24 h-24 rounded-lg border border-gray-200 overflow-hidden hover:border-blue-400">
-                        <img src={url.startsWith('/') ? url : `/${url}`} alt={`After ${idx + 1}`} className="w-full h-full object-cover" />
-                      </a>
-                    ))}
+                    {afterUrls.map((url, idx) => {
+                      const imgSrc = url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`;
+                      return (
+                        <a key={idx} href={imgSrc} target="_blank" rel="noopener noreferrer" className="block w-24 h-24 rounded-lg border border-gray-200 overflow-hidden hover:border-blue-400">
+                          <img src={imgSrc} alt={`After ${idx + 1}`} className="w-full h-full object-cover" />
+                        </a>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400 italic">No after images yet</p>
