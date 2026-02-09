@@ -29,7 +29,7 @@ export function uploadWithProgress(
       try {
         const body = JSON.parse(xhr.responseText || '{}') as { success?: boolean; url?: string; message?: string };
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(body);
+          resolve({ success: body.success === true, url: body.url, message: body.message });
         } else {
           reject(new Error(body.message || `Upload failed (${xhr.status})`));
         }
