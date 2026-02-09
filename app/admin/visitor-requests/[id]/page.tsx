@@ -445,45 +445,57 @@ export default function VisitorRequestDetailPage() {
         </dl>
       </div>
 
-      {request.serviceSlug === 'quality-control-supervision' && (designSpecifications || attachmentUrls.length > 0) && (
+      {attachmentUrls.length > 0 && (
+        <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-100/80">
+            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <PhotoIcon className="w-5 h-5 text-slate-600" />
+              Attachments from requester
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="flex flex-wrap gap-4">
+              {attachmentUrls.map((url, idx) => {
+                const href = url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`;
+                const isImage = /\.(jpe?g|png|gif|webp)$/i.test(url) || url.toLowerCase().includes('image');
+                const filename = url.split('/').pop() ?? `Attachment ${idx + 1}`;
+                return (
+                  <a
+                    key={idx}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-slate-200 overflow-hidden hover:border-slate-400 hover:shadow-md transition-all bg-white"
+                  >
+                    {isImage ? (
+                      <img src={href} alt={filename} className="w-32 h-32 object-cover" />
+                    ) : (
+                      <div className="w-32 h-32 flex flex-col items-center justify-center bg-slate-100 text-slate-600 text-xs font-medium px-2 text-center gap-1">
+                        <span className="text-lg">📎</span>
+                        <span className="truncate max-w-[120px]">{filename}</span>
+                      </div>
+                    )}
+                    <span className="block text-xs text-slate-600 truncate px-2 py-1.5 max-w-[128px] border-t border-slate-100">{filename}</span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {request.serviceSlug === 'quality-control-supervision' && designSpecifications && (
         <div className="mt-6 bg-amber-50/80 border border-amber-200 rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-amber-200 bg-amber-100/50">
             <h2 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
               <PhotoIcon className="w-5 h-5 text-amber-600" />
-              For inspection (design, specs & attachments)
+              Design & specifications
             </h2>
           </div>
-          <div className="p-6 space-y-4">
-            {designSpecifications && (
-              <div>
-                <label className="block text-sm font-medium text-amber-800 mb-1">Design & specifications</label>
-                <div className="rounded-lg border border-amber-200 bg-white p-4 min-h-[60px]">
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{designSpecifications}</p>
-                </div>
-              </div>
-            )}
-            {attachmentUrls.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-amber-800 mb-2">Attached files</label>
-                <div className="flex flex-wrap gap-2">
-                  {attachmentUrls.map((url, idx) => {
-                    const isImage = /\.(jpe?g|png|gif|webp)$/i.test(url) || url.includes('image');
-                    return (
-                      <a key={idx} href={url.startsWith('/') ? url : `/${url}`} target="_blank" rel="noopener noreferrer" className="block rounded-lg border border-amber-200 overflow-hidden hover:border-amber-400 transition-colors">
-                        {isImage ? (
-                          <img src={url.startsWith('/') ? url : `/${url}`} alt={`Attachment ${idx + 1}`} className="w-24 h-24 object-cover" />
-                        ) : (
-                          <div className="w-24 h-24 flex items-center justify-center bg-amber-100 text-amber-700 text-xs font-medium px-2 text-center">
-                            PDF
-                          </div>
-                        )}
-                        <span className="block text-xs text-amber-800 truncate px-1 py-0.5 max-w-[96px]">{url.split('/').pop() ?? 'File'}</span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+          <div className="p-6">
+            <div className="rounded-lg border border-amber-200 bg-white p-4 min-h-[60px]">
+              <p className="text-sm text-gray-900 whitespace-pre-wrap">{designSpecifications}</p>
+            </div>
           </div>
         </div>
       )}
