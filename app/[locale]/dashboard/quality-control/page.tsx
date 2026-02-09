@@ -1067,7 +1067,7 @@ export default function QualityControlDashboardPage() {
                         credentials: 'include',
                         onProgress: (p) => setAttachmentUploadProgress(p),
                       });
-                      if (d.success && d.url) setAttachmentUrls((u) => [...u, d.url]);
+                      if (d.success && d.url) setAttachmentUrls((u) => [...u, d.url!]);
                     } catch { /* ignore */ } finally { setAttachmentUploading(false); setAttachmentUploadProgress(null); e.target.value = ''; }
                   }} />
                 </label>
