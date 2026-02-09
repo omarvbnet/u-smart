@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeftIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 type Team = { id: string; name: string; leader?: { id: string; fullName: string; phone?: string } };
 type VisitorRequest = {
@@ -44,6 +45,8 @@ export default function VisitorRequestDetailPage() {
   const [beforeUrls, setBeforeUrls] = useState<string[]>([]);
   const [afterUrls, setAfterUrls] = useState<string[]>([]);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadProgress, setImageUploadProgress] = useState<number | null>(null);
   const [statusError, setStatusError] = useState('');
   const [inspectionResultVal, setInspectionResultVal] = useState('');
   const [inspectionCommentsVal, setInspectionCommentsVal] = useState('');
@@ -230,12 +233,21 @@ export default function VisitorRequestDetailPage() {
     }
   };
 
-  const uploadTicketImage = async (file: File): Promise<string | null> => {
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch('/api/upload/ticket-image', { method: 'POST', body: form });
-    const data = await res.json();
-    return data.success ? data.url : null;
+  const uploadTicketImage = async (file: File, onProgress?: (percent: number) => void): Promise<string | null> => {
+    setImageUploading(true);
+    setImageUploadProgress(0);
+    try {
+      const data = await uploadWithProgress('/api/upload/ticket-image', file, {
+        onProgress: (p) => {
+          setImageUploadProgress(p);
+          onProgress?.(p);
+        },
+      });
+      return data.success && data.url ? data.url : null;
+    } finally {
+      setImageUploading(false);
+      setImageUploadProgress(null);
+    }
   };
 
   const handleSaveMaintenance = async () => {
@@ -783,11 +795,12 @@ export default function VisitorRequestDetailPage() {
                   </span>
                 ))}
                 {!isCompleted && (
-                <label className="w-20 h-20 rounded border border-dashed border-gray-400 flex items-center justify-center cursor-pointer hover:bg-gray-50">
+                <label className={`w-20 h-20 rounded border border-dashed flex items-center justify-center shrink-0 ${imageUploading ? 'border-gray-300 bg-gray-50 cursor-not-allowed opacity-60' : 'border-gray-400 cursor-pointer hover:bg-gray-50'}`}>
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
+                    disabled={imageUploading}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -801,6 +814,11 @@ export default function VisitorRequestDetailPage() {
                 </label>
                 )}
               </div>
+              {imageUploading && imageUploadProgress != null && (
+                <div className="mt-1 w-full max-w-[200px] h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-200" style={{ width: `${imageUploadProgress}%` }} />
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">After / finishing images</label>
@@ -821,11 +839,12 @@ export default function VisitorRequestDetailPage() {
                     )}
                   </span>
                 ))}
-                <label className="w-20 h-20 rounded border border-dashed border-gray-400 flex items-center justify-center cursor-pointer hover:bg-gray-50">
+                <label className={`w-20 h-20 rounded border border-dashed flex items-center justify-center shrink-0 ${imageUploading ? 'border-gray-300 bg-gray-50 cursor-not-allowed opacity-60' : 'border-gray-400 cursor-pointer hover:bg-gray-50'}`}>
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
+                    disabled={imageUploading}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -842,10 +861,10 @@ export default function VisitorRequestDetailPage() {
             <button
               type="button"
               onClick={handleSaveMaintenance}
-              disabled={savingMaintenance || isCompleted}
+              disabled={savingMaintenance || imageUploading || isCompleted}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {savingMaintenance ? 'Saving…' : isCompleted ? 'Completed — no edits' : 'Save description & images'}
+              {savingMaintenance ? 'Saving…' : imageUploading ? `Uploading${imageUploadProgress != null ? ` ${imageUploadProgress}%` : '…'}` : isCompleted ? 'Completed — no edits' : 'Save description & images'}
             </button>
           </div>
         </div>

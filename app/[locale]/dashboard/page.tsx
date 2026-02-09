@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ClipboardList, LogOut, Loader2, Bell, UserCog, PlusCircle, X, Clock, CheckCircle, BarChart3, Building2, MapPin, Activity, Map, Edit2, Trash2, Filter, Download, Upload } from 'lucide-react';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 const ENTERPRISE_TECH_KEYS = ['maintenance', 'fiber', 'cable_systemization', 'closures', 'splice', 'qgis', 'asbuilt_design'] as const;
 const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'] as const;
@@ -148,6 +149,7 @@ export default function TicketDashboardPage() {
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   const [dashboardSection, setDashboardSection] = useState<'pending' | 'completed' | 'statistics' | 'company' | 'sites'>('pending');
   const [certUploading, setCertUploading] = useState(false);
+  const [certUploadProgress, setCertUploadProgress] = useState<number | null>(null);
   const [certMessage, setCertMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -959,7 +961,7 @@ export default function TicketDashboardPage() {
             )}
             {!isRestricted && (
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 rounded-xl text-sm font-medium cursor-pointer border border-white/10">
+                <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-white/10 ${certUploading ? 'bg-white/10 cursor-not-allowed opacity-80' : 'bg-white/10 hover:bg-white/15 cursor-pointer'}`}>
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png,image/webp"
@@ -970,11 +972,12 @@ export default function TicketDashboardPage() {
                       if (!file) return;
                       setCertMessage(null);
                       setCertUploading(true);
+                      setCertUploadProgress(0);
                       try {
-                        const form = new FormData();
-                        form.append('file', file);
-                        const upRes = await fetch('/api/upload/certification', { method: 'POST', credentials: 'include', body: form });
-                        const upData = await upRes.json();
+                        const upData = await uploadWithProgress('/api/upload/certification', file, {
+                          credentials: 'include',
+                          onProgress: (p) => setCertUploadProgress(p),
+                        });
                         if (!upData.success || !upData.url) {
                           setCertMessage({ type: 'error', text: upData.message || t('ticketForm.uploadFailed') });
                           return;
@@ -996,13 +999,19 @@ export default function TicketDashboardPage() {
                         setCertMessage({ type: 'error', text: t('ticketForm.uploadFailed') });
                       } finally {
                         setCertUploading(false);
+                        setCertUploadProgress(null);
                         e.target.value = '';
                       }
                     }}
                   />
-                  {certUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {t('ticketForm.attachCertification')}
+                  {certUploading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                  <span>{certUploading && certUploadProgress != null ? `${t('ticketForm.uploading')} ${certUploadProgress}%` : t('ticketForm.attachCertification')}</span>
                 </label>
+                {certUploading && certUploadProgress != null && (
+                  <div className="w-full max-w-[200px] h-1.5 rounded-full bg-white/10 overflow-hidden mt-1">
+                    <div className="h-full bg-cyan-500 rounded-full transition-all duration-200" style={{ width: `${certUploadProgress}%` }} />
+                  </div>
+                )}
               </div>
             )}
             <button

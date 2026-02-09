@@ -16,6 +16,7 @@ import {
   Upload,
   Loader2,
 } from 'lucide-react';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 type Career = {
   id: string;
@@ -56,6 +57,7 @@ export default function CareerDetailPage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeUrl, setResumeUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -92,11 +94,11 @@ export default function CareerDetailPage() {
   const uploadResume = async () => {
     if (!resumeFile) return null;
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const fd = new FormData();
-      fd.append('file', resumeFile);
-      const res = await fetch('/api/upload/resume', { method: 'POST', body: fd });
-      const data = await res.json();
+      const data = await uploadWithProgress('/api/upload/resume', resumeFile, {
+        onProgress: (p) => setUploadProgress(p),
+      });
       if (data.success && data.url) {
         setResumeUrl(data.url);
         return data.url;
@@ -107,6 +109,7 @@ export default function CareerDetailPage() {
       return null;
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -308,18 +311,24 @@ export default function CareerDetailPage() {
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1.5">Resume * (PDF, JPEG, PNG, max 5MB)</label>
-                    <label className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-white/5 border border-dashed border-white/20 hover:border-blue-500/50 cursor-pointer transition-colors">
-                      <Upload className="w-4 h-4 text-gray-500" />
+                    <label className={`flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg border border-dashed transition-colors ${uploading ? 'bg-white/5 border-white/20 cursor-not-allowed opacity-80' : 'bg-white/5 border-white/20 hover:border-blue-500/50 cursor-pointer'}`}>
+                      <Upload className="w-4 h-4 text-gray-500 shrink-0" />
                       <span className="text-sm text-gray-400">
-                        {resumeFile ? resumeFile.name : resumeUrl ? 'Uploaded ✓' : 'Choose file'}
+                        {uploading ? `Uploading${uploadProgress != null ? ` ${uploadProgress}%` : '…'}` : resumeFile ? resumeFile.name : resumeUrl ? 'Uploaded ✓' : 'Choose file'}
                       </span>
                       <input
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png"
                         onChange={handleResumeChange}
                         className="hidden"
+                        disabled={uploading}
                       />
                     </label>
+                    {uploading && uploadProgress != null && (
+                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1.5">Cover letter (optional)</label>
@@ -341,8 +350,8 @@ export default function CareerDetailPage() {
                   >
                     {(submitting || uploading) ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {uploading ? 'Uploading...' : 'Submitting...'}
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                        {uploading ? `Uploading${uploadProgress != null ? ` ${uploadProgress}%` : '…'}` : 'Submitting...'}
                       </>
                     ) : (
                       t('careers.apply')

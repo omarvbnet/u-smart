@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity } from 'lucide-react';
+import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2 } from 'lucide-react';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
@@ -108,6 +109,8 @@ export default function ServiceDetailPage() {
     certificateUrl: '',
   });
   const [createDashboardSubmitting, setCreateDashboardSubmitting] = useState(false);
+  const [certificateUploading, setCertificateUploading] = useState(false);
+  const [certificateUploadProgress, setCertificateUploadProgress] = useState<number | null>(null);
   const [createDashboardSuccess, setCreateDashboardSuccess] = useState(false);
   const [ticketCredentials, setTicketCredentials] = useState<{ username: string; password: string } | null>(null);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
@@ -765,24 +768,37 @@ export default function ServiceDetailPage() {
                         placeholder={t('companyRequest.certificatePlaceholder')}
                         className="flex-1 min-w-0 px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
                       />
-                      <label className="inline-flex shrink-0 items-center gap-2 px-3 py-2 sm:py-2.5 bg-white/10 hover:bg-white/15 rounded-lg text-xs sm:text-sm font-medium cursor-pointer border border-white/10">
+                      <label className={`inline-flex shrink-0 items-center gap-2 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium border border-white/10 ${certificateUploading ? 'bg-white/10 cursor-not-allowed opacity-80' : 'bg-white/10 hover:bg-white/15 cursor-pointer'}`}>
                         <input
                           type="file"
                           accept=".pdf,image/jpeg,image/png,image/webp"
                           className="hidden"
+                          disabled={certificateUploading}
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
-                            const form = new FormData();
-                            form.append('file', file);
-                            const up = await fetch('/api/upload/company-certificate', { method: 'POST', body: form });
-                            const d = await up.json();
-                            if (d.success && d.url) setCreateDashboardForm((f) => ({ ...f, certificateUrl: d.url }));
-                            e.target.value = '';
+                            setCertificateUploading(true);
+                            setCertificateUploadProgress(0);
+                            try {
+                              const d = await uploadWithProgress('/api/upload/company-certificate', file, {
+                                onProgress: (p) => setCertificateUploadProgress(p),
+                              });
+                              if (d.success && d.url) setCreateDashboardForm((f) => ({ ...f, certificateUrl: d.url ?? '' }));
+                            } finally {
+                              setCertificateUploading(false);
+                              setCertificateUploadProgress(null);
+                              e.target.value = '';
+                            }
                           }}
                         />
-                        Upload
+                        {certificateUploading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                        <span>{certificateUploading && certificateUploadProgress != null ? `Uploading ${certificateUploadProgress}%` : 'Upload'}</span>
                       </label>
+                      {certificateUploading && certificateUploadProgress != null && (
+                        <div className="w-full max-w-[160px] h-1.5 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full bg-cyan-500 rounded-full transition-all duration-200" style={{ width: `${certificateUploadProgress}%` }} />
+                        </div>
+                      )}
                     </div>
                   </div>
                   {requestMessage && (
@@ -793,12 +809,12 @@ export default function ServiceDetailPage() {
                   <div className="flex gap-2 pt-2">
                     <button
                       type="submit"
-                      disabled={createDashboardSubmitting}
-                      className="flex-1 py-2.5 sm:py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-all"
+                      disabled={createDashboardSubmitting || certificateUploading}
+                      className="flex-1 py-2.5 sm:py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-all"
                     >
-                      {createDashboardSubmitting ? '...' : t('companyRequest.submit')}
+                      {createDashboardSubmitting ? '...' : certificateUploading ? 'Uploading...' : t('companyRequest.submit')}
                     </button>
-                    <button type="button" onClick={() => setRequestModalOpen(false)} className="px-4 py-2.5 sm:py-3 border border-white/20 rounded-lg text-sm text-gray-400 hover:text-white hover:border-white/30 transition-colors">
+                    <button type="button" onClick={() => setRequestModalOpen(false)} disabled={certificateUploading} className="px-4 py-2.5 sm:py-3 border border-white/20 rounded-lg text-sm text-gray-400 hover:text-white hover:border-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       {t('visitorRequestForm.close')}
                     </button>
                   </div>

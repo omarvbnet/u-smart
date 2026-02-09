@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -57,6 +58,7 @@ export default function QualityControlDashboardPage() {
   });
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentUploadProgress, setAttachmentUploadProgress] = useState<number | null>(null);
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketMessage, setTicketMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [dashboardSection, setDashboardSection] = useState<'pending' | 'completed' | 'company' | 'sites'>('pending');
@@ -1052,21 +1054,28 @@ export default function QualityControlDashboardPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-0.5">{t('ticketForm.attachFiles')}</label>
-                <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg cursor-pointer border border-amber-500/30">
-                  <Paperclip className="w-3.5 h-3.5" />{attachmentUploading ? t('ticketForm.uploading') : t('ticketForm.addFile')}
+                <label className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border cursor-pointer ${attachmentUploading ? 'bg-amber-500/10 border-amber-500/30 text-amber-500/70 cursor-not-allowed' : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border-amber-500/30'}`}>
+                  <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                  <span>{attachmentUploading ? (attachmentUploadProgress != null ? `${t('ticketForm.uploading')} ${attachmentUploadProgress}%` : t('ticketForm.uploading')) : t('ticketForm.addFile')}</span>
                   <input type="file" accept="image/*,.pdf" className="hidden" disabled={attachmentUploading} onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     setAttachmentUploading(true);
+                    setAttachmentUploadProgress(0);
                     try {
-                      const fd = new FormData();
-                      fd.append('file', file);
-                      const res = await fetch('/api/upload/ticket-attachment', { method: 'POST', credentials: 'include', body: fd });
-                      const d = await res.json();
+                      const d = await uploadWithProgress('/api/upload/ticket-attachment', file, {
+                        credentials: 'include',
+                        onProgress: (p) => setAttachmentUploadProgress(p),
+                      });
                       if (d.success && d.url) setAttachmentUrls((u) => [...u, d.url]);
-                    } catch { /* ignore */ } finally { setAttachmentUploading(false); e.target.value = ''; }
+                    } catch { /* ignore */ } finally { setAttachmentUploading(false); setAttachmentUploadProgress(null); e.target.value = ''; }
                   }} />
                 </label>
+                {attachmentUploading && attachmentUploadProgress != null && (
+                  <div className="mt-1.5 h-1.5 w-full max-w-[200px] rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full transition-all duration-200" style={{ width: `${attachmentUploadProgress}%` }} />
+                  </div>
+                )}
                 {attachmentUrls.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {attachmentUrls.map((url, i) => (
@@ -1084,8 +1093,8 @@ export default function QualityControlDashboardPage() {
                 <input value={ticketForm.province} onChange={(e) => setTicketForm((f) => ({ ...f, province: e.target.value }))} className="w-full px-2.5 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:border-amber-500 outline-none" />
               </div>
               <div className="flex gap-2 pt-2">
-                <button type="submit" disabled={ticketSubmitting} className="flex-1 py-2.5 text-sm font-semibold bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg">{ticketSubmitting ? '...' : t('ticketForm.submitButton')}</button>
-                <button type="button" onClick={() => !ticketSubmitting && setTicketFormOpen(false)} className="px-3 py-2.5 text-sm border border-white/20 rounded-lg text-gray-400 hover:text-white">{t('visitorRequestForm.close')}</button>
+                <button type="submit" disabled={ticketSubmitting || attachmentUploading} className="flex-1 py-2.5 text-sm font-semibold bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg">{ticketSubmitting ? '...' : attachmentUploading ? t('ticketForm.uploading') : t('ticketForm.submitButton')}</button>
+                <button type="button" onClick={() => !ticketSubmitting && !attachmentUploading && setTicketFormOpen(false)} className="px-3 py-2.5 text-sm border border-white/20 rounded-lg text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" disabled={ticketSubmitting || attachmentUploading}>{t('visitorRequestForm.close')}</button>
               </div>
             </form>
           </div>
