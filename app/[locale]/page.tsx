@@ -483,6 +483,7 @@ type HeroData = {
 
 export default function ProfessionalHomePage() {
   const t = useTranslations("Index");
+  const tNav = useTranslations("Navbar");
   const locale = useLocale();
   const isRTL = locale === "ar";
   const { scrollYProgress } = useScroll();
@@ -1093,13 +1094,19 @@ export default function ProfessionalHomePage() {
                 {t("footer.links")}
               </h3>
               <div className="space-y-2">
-                {["Home", "Services", "Industry", "Development", "Training", "Careers"].map((item) => (
+                <a href="#hero" className="block text-sm text-gray-300 hover:text-white transition-colors">
+                  {tNav("home")}
+                </a>
+                <Link href="/about" className="block text-sm text-gray-300 hover:text-white transition-colors">
+                  {tNav("about")}
+                </Link>
+                {["services", "industry", "development", "training", "careers"].map((key) => (
                   <a
-                    key={item}
-                    href={`#${item.toLowerCase()}`}
+                    key={key}
+                    href={`#${key}`}
                     className="block text-sm text-gray-300 hover:text-white transition-colors"
                   >
-                    {item}
+                    {tNav(key)}
                   </a>
                 ))}
               </div>

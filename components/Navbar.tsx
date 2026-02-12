@@ -27,7 +27,7 @@ export default function ProfessionalNavbar() {
     window.addEventListener("scroll", handleScroll);
     updateActiveLink(); // Initial check
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [pathname]);
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps -- updateActiveLink depends on pathname
 
   useEffect(() => {
     if (isMobileMenuOpen) {
@@ -46,7 +46,11 @@ export default function ProfessionalNavbar() {
   }, []);
 
   const updateActiveLink = () => {
-    const sections = ['home', 'services', 'industry', 'development', 'training', 'careers'];
+    if (pathname?.includes('/about')) {
+      setActiveLink('about');
+      return;
+    }
+    const sections = ['home', 'hero', 'services', 'industry', 'development', 'training', 'careers'];
     const currentScroll = window.scrollY + 100;
 
     for (const section of sections) {
@@ -54,7 +58,7 @@ export default function ProfessionalNavbar() {
       if (element) {
         const { offsetTop, offsetHeight } = element;
         if (currentScroll >= offsetTop && currentScroll < offsetTop + offsetHeight) {
-          setActiveLink(section);
+          setActiveLink(section === 'hero' ? 'home' : section);
           return;
         }
       }
@@ -64,6 +68,7 @@ export default function ProfessionalNavbar() {
 
   const navLinks = [
     { key: "home", href: "#home", label: t("home") },
+    { key: "about", href: "/about", label: t("about") },
     { key: "services", href: "#services", label: t("services") },
     { key: "industry", href: "#industry", label: t("industry") },
     { key: "development", href: "#development", label: t("development") },
@@ -140,30 +145,46 @@ export default function ProfessionalNavbar() {
           {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center h-full gap-1">
             <div className="flex items-center h-full">
-              {navLinks.map((link) => (
-                <div key={link.key} className="relative h-full flex items-center group">
-                  <button
-                    onClick={() => scrollToSection(link.href)}
-                    className={`px-4 py-2 h-full flex items-center text-sm font-medium tracking-wide transition-colors duration-200 rounded-lg mx-0.5 ${
-                      activeLink === link.key
-                        ? "text-white"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    {link.label}
-                  </button>
-                  {activeLink === link.key && (
-                    <motion.div
-                      layoutId="navbar-indicator"
-                      className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  {activeLink !== link.key && (
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-300 group-hover:w-2/3" />
-                  )}
-                </div>
-              ))}
+              {navLinks.map((link) => {
+                const isPageLink = link.href.startsWith('/');
+                return (
+                  <div key={link.key} className="relative h-full flex items-center group">
+                    {isPageLink ? (
+                      <Link
+                        href={link.href}
+                        className={`px-4 py-2 h-full flex items-center text-sm font-medium tracking-wide transition-colors duration-200 rounded-lg mx-0.5 ${
+                          activeLink === link.key
+                            ? "text-white"
+                            : "text-gray-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        {link.label}
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={() => scrollToSection(link.href)}
+                        className={`px-4 py-2 h-full flex items-center text-sm font-medium tracking-wide transition-colors duration-200 rounded-lg mx-0.5 ${
+                          activeLink === link.key
+                            ? "text-white"
+                            : "text-gray-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        {link.label}
+                      </button>
+                    )}
+                    {activeLink === link.key && (
+                      <motion.div
+                        layoutId="navbar-indicator"
+                        className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    {activeLink !== link.key && !isPageLink && (
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-300 group-hover:w-2/3" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="w-px h-6 bg-white/10 mx-2" />
@@ -272,27 +293,50 @@ export default function ProfessionalNavbar() {
               {/* Nav Links */}
               <div className="flex-1 overflow-y-auto py-4 px-3">
                 <div className="space-y-1">
-                  {navLinks.map((link, index) => (
-                    <motion.button
-                      key={link.key}
-                      initial={{ opacity: 0, x: isRTL ? -16 : 16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      onClick={() => scrollToSection(link.href)}
-                      className={`w-full text-left px-4 py-3.5 rounded-xl text-base font-medium transition-all duration-200 flex items-center justify-between min-h-[48px] ${
-                        activeLink === link.key
-                          ? "bg-gradient-to-r from-blue-500/15 to-cyan-500/10 text-white border border-blue-500/20"
-                          : "text-gray-400 hover:text-white hover:bg-white/5"
-                      }`}
-                    >
-                      <span>{link.label}</span>
-                      {activeLink === link.key ? (
-                        <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />
-                      ) : (
-                        <ChevronDown className={`w-4 h-4 text-gray-500 ${isRTL ? "rotate-90" : "-rotate-90"}`} />
-                      )}
-                    </motion.button>
-                  ))}
+                  {navLinks.map((link, index) => {
+                    const isPageLink = link.href.startsWith('/');
+                    return isPageLink ? (
+                      <Link key={link.key} href={link.href} onClick={() => setIsMobileMenuOpen(false)}>
+                        <motion.div
+                          initial={{ opacity: 0, x: isRTL ? -16 : 16 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className={`w-full text-left px-4 py-3.5 rounded-xl text-base font-medium transition-all duration-200 flex items-center justify-between min-h-[48px] ${
+                            activeLink === link.key
+                              ? "bg-gradient-to-r from-blue-500/15 to-cyan-500/10 text-white border border-blue-500/20"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <span>{link.label}</span>
+                          {activeLink === link.key ? (
+                            <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />
+                          ) : (
+                            <ChevronDown className={`w-4 h-4 text-gray-500 ${isRTL ? "rotate-90" : "-rotate-90"}`} />
+                          )}
+                        </motion.div>
+                      </Link>
+                    ) : (
+                      <motion.button
+                        key={link.key}
+                        initial={{ opacity: 0, x: isRTL ? -16 : 16 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        onClick={() => scrollToSection(link.href)}
+                        className={`w-full text-left px-4 py-3.5 rounded-xl text-base font-medium transition-all duration-200 flex items-center justify-between min-h-[48px] ${
+                          activeLink === link.key
+                            ? "bg-gradient-to-r from-blue-500/15 to-cyan-500/10 text-white border border-blue-500/20"
+                            : "text-gray-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <span>{link.label}</span>
+                        {activeLink === link.key ? (
+                          <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />
+                        ) : (
+                          <ChevronDown className={`w-4 h-4 text-gray-500 ${isRTL ? "rotate-90" : "-rotate-90"}`} />
+                        )}
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
 
