@@ -70,15 +70,21 @@ export default function AdminTrainingRequestsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
+        credentials: 'include',
       });
       const data = await res.json();
       if (data.success) {
         setList((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
         if (status !== 'PENDING') setPendingCount((c) => Math.max(0, c - 1));
         setExpandedId(null);
+      } else if (res.status === 401) {
+        window.alert('Session expired. Please log in again.');
+      } else {
+        window.alert(data.message || 'Failed to update status');
       }
     } catch (e) {
       console.error(e);
+      window.alert('Failed to update status. Please try again.');
     } finally {
       setUpdatingId(null);
     }

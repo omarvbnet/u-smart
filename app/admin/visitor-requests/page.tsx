@@ -108,25 +108,37 @@ export default function VisitorRequestsAdminPage() {
     }
   };
 
+  const VISITOR_STATUS_OPTIONS = [
+    { value: 'PENDING', label: 'Pending' },
+    { value: 'ON_SITE', label: 'On site' },
+    { value: 'IN_PROGRESS', label: 'In progress' },
+    { value: 'COMPLETED', label: 'Completed' },
+  ] as const;
+
   const parseTicketData = (r: VisitorRequest) => {
     let siteName = r.siteName ?? null;
     let siteCoordinator = r.siteCoordinator ?? null;
     let slaHours = r.slaHours ?? null;
     let displayCompany = r.company ?? null;
+    let displayStatus = (r.status ?? '').toUpperCase() || 'PENDING';
     if (typeof r.company === 'string') {
       try {
         const parsed = JSON.parse(r.company);
-        if (parsed._ticket) {
+        if (parsed._ticket && typeof parsed.status === 'string') {
           siteName = parsed.siteName ?? siteName;
           siteCoordinator = parsed.siteCoordinator ?? siteCoordinator;
           slaHours = parsed.slaHours ?? slaHours;
           displayCompany = parsed.company ?? displayCompany;
+          displayStatus = parsed.status.toUpperCase();
         }
       } catch {
         /* not ticket JSON */
       }
     }
-    return { siteName, siteCoordinator, slaHours, displayCompany };
+    if (!displayStatus || !VISITOR_STATUS_OPTIONS.some((o) => o.value === displayStatus)) {
+      displayStatus = 'PENDING';
+    }
+    return { siteName, siteCoordinator, slaHours, displayCompany, displayStatus };
   };
 
   return (
@@ -199,7 +211,8 @@ export default function VisitorRequestsAdminPage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {list.map((r) => {
-                const { siteName, siteCoordinator, slaHours, displayCompany } = parseTicketData(r);
+                const { siteName, siteCoordinator, slaHours, displayCompany, displayStatus } = parseTicketData(r);
+                const isUpdating = updatingId === r.id;
                 return (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.createdAt)}</td>
@@ -214,7 +227,22 @@ export default function VisitorRequestsAdminPage() {
                   <td className="px-4 py-3 text-sm text-gray-600">{r.name ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{displayCompany ?? '—'}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className="text-gray-500">—</span>
+                    <select
+                      value={displayStatus}
+                      disabled={isUpdating || displayStatus === 'COMPLETED'}
+                      onChange={(e) => updateStatus(r.id, e.target.value)}
+                      className="min-w-[120px] px-2 py-1.5 text-sm rounded-md border border-gray-300 bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                      title={displayStatus === 'COMPLETED' ? 'Completed requests cannot be changed' : 'Change status'}
+                    >
+                      {VISITOR_STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    {isUpdating && (
+                      <span className="ml-1 text-xs text-gray-500">Saving…</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <Link
