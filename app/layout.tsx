@@ -13,9 +13,9 @@ export const metadata: Metadata = {
     template: '%s | U-SMART',
   },
   description:
-    'U-SMART delivers cutting-edge technology solutions for smart homes, enterprise networking, and custom software development. ' +
+    'U-SMART delivers cutting-edge technology solutions for smart homes and smart cities (المدن الذكية), enterprise networking, and custom software development. ' +
     'Pioneering digital transformation through innovation and excellence. Based in Iraq, Kirkuk.',
-  keywords: ['smart home', 'home automation', 'KNX', 'enterprise networking', 'fiber optic', 'software development', 'Iraq', 'Kirkuk', 'U-SMART'],
+  keywords: ['smart home', 'home automation', 'المدن الذكية', 'smart cities', 'KNX', 'enterprise networking', 'fiber optic', 'software development', 'Iraq', 'Kirkuk', 'U-SMART'],
   authors: [{ name: 'U-SMART', url: baseUrl }],
   creator: 'U-SMART',
   openGraph: {
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     siteName: 'U-SMART',
     title: 'U-SMART – Smart Homes, Networking & Software Solutions',
     description:
-      'U-SMART delivers cutting-edge technology solutions for smart homes, enterprise networking, and custom software development. Pioneering digital transformation through innovation and excellence.',
+      'U-SMART delivers cutting-edge technology solutions for smart homes and smart cities (المدن الذكية), enterprise networking, and custom software development. Pioneering digital transformation through innovation and excellence.',
   },
   icons: {
     icon: '/logo/usmart.PNG',
