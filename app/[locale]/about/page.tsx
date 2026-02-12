@@ -4,6 +4,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   Target,
@@ -63,7 +64,7 @@ const ServiceCard = ({
   index,
   gradient,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   title: string;
   description: string;
   href: string;
@@ -281,7 +282,7 @@ export default function AboutPage() {
       </Section>
 
       {/* Back CTA */}
-      <Section padding="pb-20">
+      <Section id="back-cta" padding="pb-20">
         <div className="text-center">
           <Link
             href="/"
