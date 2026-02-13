@@ -82,6 +82,17 @@ export async function PATCH(
           return { id: c.id, label: c.label, checked: !!c.checked, comment: c.comment, weight: w };
         })
       : undefined;
+    const ncrReason = typeof body.ncrReason === 'string' ? body.ncrReason.trim() : undefined;
+    const ncrImageUrls = Array.isArray(body.ncrImageUrls) ? body.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : undefined;
+    const ncrResubmit = body.ncrResubmit && typeof body.ncrResubmit === 'object'
+      ? {
+          comment: typeof body.ncrResubmit.comment === 'string' ? body.ncrResubmit.comment.trim() : '',
+          imageUrls: Array.isArray(body.ncrResubmit.imageUrls) ? body.ncrResubmit.imageUrls.filter((u: unknown) => typeof u === 'string') : [],
+        }
+      : undefined;
+    const ncrAction = body.ncrAction === 'accept' || body.ncrAction === 'resubmit' ? body.ncrAction : undefined;
+    const ncrAdminComment = typeof body.ncrAdminComment === 'string' ? body.ncrAdminComment.trim() : undefined;
+    const ncrAdminImageUrls = Array.isArray(body.ncrAdminImageUrls) ? body.ncrAdminImageUrls.filter((u: unknown) => typeof u === 'string') : undefined;
 
     // When setting status to IN_PROGRESS, require a team to be assigned (body or already on record)
     if (status === 'IN_PROGRESS') {
@@ -110,21 +121,78 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    if (inspectionResult === 'ncr' && !ncrAction && !ncrResubmit) {
+      const reason = typeof ncrReason === 'string' ? ncrReason.trim() : '';
+      if (!reason) {
+        return NextResponse.json(
+          { success: false, message: 'NCR reason is required when result is NCR' },
+          { status: 400 }
+        );
+      }
+    }
 
     const existing = await prisma.visitorRequest.findUnique({ where: { id }, select: { company: true } });
     let companyPayload: string | undefined;
+    let effectiveStatus = status;
     if (existing?.company && typeof existing.company === 'string') {
       try {
         const parsed = JSON.parse(existing.company) as Record<string, unknown>;
         if (parsed._ticket) {
-          if (status) parsed.status = status;
-          if (status === 'COMPLETED') {
-            parsed.completedAt = new Date().toISOString();
+          // NCR flow: requester resubmits
+          if (ncrResubmit !== undefined) {
+            const list = Array.isArray(parsed.ncrResubmissions) ? (parsed.ncrResubmissions as Array<Record<string, unknown>>) : [];
+            list.push({
+              at: new Date().toISOString(),
+              by: 'requester',
+              comment: ncrResubmit.comment || null,
+              imageUrls: ncrResubmit.imageUrls || [],
+              action: 'resubmit',
+            });
+            parsed.ncrResubmissions = list;
+            companyPayload = JSON.stringify(parsed);
           }
-          if (inspectionResult !== undefined) parsed.inspectionResult = inspectionResult || null;
-          if (inspectionComments !== undefined) parsed.inspectionComments = inspectionComments || null;
-          if (inspectionChecklist !== undefined) parsed.inspectionChecklist = inspectionChecklist || [];
-          companyPayload = JSON.stringify(parsed);
+          // NCR flow: admin accepts (close ticket)
+          else if (ncrAction === 'accept') {
+            const list = Array.isArray(parsed.ncrResubmissions) ? (parsed.ncrResubmissions as Array<Record<string, unknown>>) : [];
+            list.push({ at: new Date().toISOString(), by: 'admin', action: 'accept' });
+            parsed.ncrResubmissions = list;
+            parsed.status = 'COMPLETED';
+            parsed.completedAt = new Date().toISOString();
+            parsed.inspectionResult = 'accepted';
+            companyPayload = JSON.stringify(parsed);
+            effectiveStatus = 'COMPLETED';
+          }
+          // NCR flow: admin resubmits (send back to requester with comment/photos)
+          else if (ncrAction === 'resubmit') {
+            const list = Array.isArray(parsed.ncrResubmissions) ? (parsed.ncrResubmissions as Array<Record<string, unknown>>) : [];
+            list.push({
+              at: new Date().toISOString(),
+              by: 'admin',
+              comment: ncrAdminComment || null,
+              imageUrls: ncrAdminImageUrls || [],
+              action: 'resubmit',
+            });
+            parsed.ncrResubmissions = list;
+            companyPayload = JSON.stringify(parsed);
+          }
+          // Normal inspection save (including NCR with reason + images)
+          else {
+            if (status) parsed.status = status;
+            if (inspectionResult !== undefined) parsed.inspectionResult = inspectionResult || null;
+            if (inspectionComments !== undefined) parsed.inspectionComments = inspectionComments || null;
+            if (inspectionChecklist !== undefined) parsed.inspectionChecklist = inspectionChecklist || [];
+            if (ncrReason !== undefined) parsed.ncrReason = ncrReason || null;
+            if (ncrImageUrls !== undefined) parsed.ncrImageUrls = ncrImageUrls || [];
+            if (inspectionResult === 'ncr') {
+              parsed.status = 'IN_PROGRESS';
+              effectiveStatus = 'IN_PROGRESS';
+              if (!parsed.ncrResubmissions) parsed.ncrResubmissions = [];
+            }
+            if (effectiveStatus === 'COMPLETED') {
+              parsed.completedAt = new Date().toISOString();
+            }
+            companyPayload = JSON.stringify(parsed);
+          }
         }
       } catch {
         /* ignore */
@@ -142,9 +210,9 @@ export async function PATCH(
       finishingImageUrls?: unknown;
     };
     const updateData: UpdatePayload = {};
-    if (status) updateData.status = status as 'PENDING' | 'ON_SITE' | 'IN_PROGRESS' | 'COMPLETED';
+    if (effectiveStatus) updateData.status = effectiveStatus as 'PENDING' | 'ON_SITE' | 'IN_PROGRESS' | 'COMPLETED';
     if (companyPayload) updateData.company = companyPayload;
-    if (status === 'COMPLETED') updateData.completedAt = new Date();
+    if (effectiveStatus === 'COMPLETED') updateData.completedAt = new Date();
     if (assignedTeamId !== undefined) {
       updateData.assignedTeamId = assignedTeamId;
       updateData.assignedAt = assignedTeamId ? new Date() : null;

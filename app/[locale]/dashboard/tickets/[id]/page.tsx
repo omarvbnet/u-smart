@@ -48,6 +48,9 @@ type TicketDetail = {
   inspectionResult?: string | null;
   inspectionComments?: string | null;
   inspectionChecklist?: Array<{ id: string; label: string; checked: boolean; comment?: string; weight?: string }>;
+  ncrReason?: string | null;
+  ncrImageUrls?: string[];
+  ncrResubmissions?: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }>;
 };
 
 export default function TicketDetailPage() {
@@ -64,12 +67,27 @@ export default function TicketDetailPage() {
   const [user, setUser] = useState<{ name: string | null; phone?: string; company?: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [ncrResubmitComment, setNcrResubmitComment] = useState('');
+  const [ncrResubmitImageUrls, setNcrResubmitImageUrls] = useState<string[]>([]);
+  const [ncrResubmitSubmitting, setNcrResubmitSubmitting] = useState(false);
+  const [ncrResubmitUploading, setNcrResubmitUploading] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setShareUrl(`${window.location.origin}/${locale}/ticket/${id}`);
     }
   }, [locale, id]);
+
+  const loadTicket = async () => {
+    if (!id) return null;
+    const ticketRes = await fetch(`/api/tickets/${id}`, { credentials: 'include' });
+    const ticketData = await ticketRes.json();
+    if (ticketData.success && ticketData.ticket) {
+      setTicket(ticketData.ticket as TicketDetail);
+      return ticketData.ticket as TicketDetail;
+    }
+    return null;
+  };
 
   useEffect(() => {
     if (!id) {
@@ -123,6 +141,44 @@ export default function TicketDetailPage() {
     load();
     return () => { cancelled = true; };
   }, [id]);
+
+  const handleNcrResubmit = async () => {
+    if (!id) return;
+    setNcrResubmitSubmitting(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}/ncr-resubmit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ comment: ncrResubmitComment.trim() || null, imageUrls: ncrResubmitImageUrls }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNcrResubmitComment('');
+        setNcrResubmitImageUrls([]);
+        await loadTicket();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setNcrResubmitSubmitting(false);
+    }
+  };
+
+  const uploadNcrImage = async (file: File): Promise<string | null> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    setNcrResubmitUploading(true);
+    try {
+      const res = await fetch('/api/upload/ticket-image', { method: 'POST', body: formData });
+      const data = await res.json();
+      return data.success && data.url ? data.url : null;
+    } catch {
+      return null;
+    } finally {
+      setNcrResubmitUploading(false);
+    }
+  };
 
   const formatDate = (s: string) => {
     try {
@@ -464,6 +520,109 @@ export default function TicketDetailPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* NCR (Non-Conformance Report) - reason, images, resubmit form, timeline */}
+            {isQCTicket && (ticket.inspectionResult || '').toLowerCase() === 'ncr' && (
+              <section className="rounded-xl border border-rose-500/30 bg-rose-500/10 overflow-hidden">
+                <div className="px-4 py-3 border-b border-rose-500/30 bg-rose-500/20">
+                  <h2 className="text-sm font-semibold text-rose-400 uppercase tracking-wider">NCR – Non-Conformance Report</h2>
+                  <p className="text-xs text-rose-300/90 mt-0.5">Resubmit with comments and clearance images for review</p>
+                </div>
+                <div className="p-4 sm:p-5 space-y-4">
+                  {ticket.ncrReason && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Reason for NCR</p>
+                      <p className="text-sm text-gray-300 whitespace-pre-wrap rounded-lg border border-rose-500/20 bg-white/5 p-3">{ticket.ncrReason}</p>
+                    </div>
+                  )}
+                  {ticket.ncrImageUrls && ticket.ncrImageUrls.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2">NCR attached images</p>
+                      <div className="flex flex-wrap gap-2">
+                        {ticket.ncrImageUrls.map((url, i) => (
+                          <a key={i} href={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded-lg border border-rose-500/30 overflow-hidden">
+                            <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-full h-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {ticket.ncrResubmissions && ticket.ncrResubmissions.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2">Resubmission history</p>
+                      <div className="space-y-2">
+                        {ticket.ncrResubmissions.map((entry, idx) => (
+                          <div key={idx} className="rounded-lg border border-rose-500/20 bg-white/5 p-3 text-sm">
+                            <div className="flex items-center gap-2 text-gray-400">
+                              <span>{entry.by === 'admin' ? 'Admin' : 'You'}</span>
+                              <span>—</span>
+                              <span>{entry.action === 'accept' ? 'Accepted (NCR closed)' : 'Resubmitted'}</span>
+                              <span className="text-xs">{formatDate(entry.at)}</span>
+                            </div>
+                            {entry.comment && <p className="mt-1 text-gray-300 whitespace-pre-wrap">{entry.comment}</p>}
+                            {entry.imageUrls && entry.imageUrls.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {entry.imageUrls.map((url, i) => (
+                                  <a key={i} href={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} target="_blank" rel="noopener noreferrer" className="block w-14 h-14 rounded border border-rose-500/20 overflow-hidden">
+                                    <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-full h-full object-cover" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {ticket.status !== 'COMPLETED' && (
+                    <div className="rounded-lg border-2 border-rose-500/30 bg-rose-500/10 p-4 space-y-3">
+                      <p className="text-sm font-medium text-rose-300">Resubmit NCR response (comments and clearance images)</p>
+                      <textarea
+                        value={ncrResubmitComment}
+                        onChange={(e) => setNcrResubmitComment(e.target.value)}
+                        placeholder="Add your comments and clearance details..."
+                        rows={3}
+                        className="w-full text-sm rounded-lg border border-rose-500/30 bg-white/5 text-gray-200 placeholder-gray-500 px-3 py-2 focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500/50"
+                      />
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {ncrResubmitImageUrls.map((url) => (
+                          <span key={url} className="relative inline-block">
+                            <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-16 h-16 object-cover rounded border border-rose-500/20" />
+                            <button type="button" onClick={() => setNcrResubmitImageUrls((p) => p.filter((u) => u !== url))} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">×</button>
+                          </span>
+                        ))}
+                        <label className={`w-16 h-16 rounded border border-dashed border-rose-500/40 flex items-center justify-center cursor-pointer hover:bg-rose-500/20 transition-colors ${ncrResubmitUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={ncrResubmitUploading}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const url = await uploadNcrImage(file);
+                                if (url) setNcrResubmitImageUrls((p) => [...p, url]);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                          {ncrResubmitUploading ? <Loader2 className="w-6 h-6 text-rose-400 animate-spin" /> : <ImageIcon className="w-6 h-6 text-rose-400" />}
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleNcrResubmit}
+                        disabled={ncrResubmitSubmitting}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium rounded-lg disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {ncrResubmitSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        {ncrResubmitSubmitting ? 'Submitting...' : 'Submit NCR response'}
+                      </button>
                     </div>
                   )}
                 </div>

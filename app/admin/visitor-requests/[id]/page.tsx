@@ -54,6 +54,12 @@ export default function VisitorRequestDetailPage() {
   const [savingInspection, setSavingInspection] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [checklistTemplates, setChecklistTemplates] = useState<Array<{ id: string; name: string; items: { id: string; label: string; weight?: string }[] }>>([]);
+  const [ncrReasonVal, setNcrReasonVal] = useState('');
+  const [ncrImageUrls, setNcrImageUrls] = useState<string[]>([]);
+  const [ncrAdminComment, setNcrAdminComment] = useState('');
+  const [ncrAdminImageUrls, setNcrAdminImageUrls] = useState<string[]>([]);
+  const [savingNcrAccept, setSavingNcrAccept] = useState(false);
+  const [savingNcrResubmit, setSavingNcrResubmit] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -108,9 +114,10 @@ export default function VisitorRequestDetailPage() {
     load();
   }, [id]);
 
+  type NcrResubmission = { at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] };
   type ChecklistItem = { id: string; label: string; checked: boolean; comment?: string; weight?: 'minor' | 'major' };
   const parseTicketData = (r: VisitorRequest | null) => {
-    if (!r) return { siteName: null, siteCoordinator: null, slaHours: null, displayCompany: null, designSpecifications: null, attachmentUrls: [], inspectionResult: null, inspectionComments: null, inspectionChecklist: [] as ChecklistItem[] };
+    if (!r) return { siteName: null, siteCoordinator: null, slaHours: null, displayCompany: null, designSpecifications: null, attachmentUrls: [], inspectionResult: null, inspectionComments: null, inspectionChecklist: [] as ChecklistItem[], ncrReason: null, ncrImageUrls: [] as string[], ncrResubmissions: [] as NcrResubmission[] };
     let siteName = r.siteName ?? null;
     let siteCoordinator = r.siteCoordinator ?? null;
     let slaHours = r.slaHours ?? null;
@@ -120,6 +127,9 @@ export default function VisitorRequestDetailPage() {
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
     let inspectionChecklist: ChecklistItem[] = [];
+    let ncrReason: string | null = null;
+    let ncrImageUrls: string[] = [];
+    let ncrResubmissions: NcrResubmission[] = [];
     if (typeof r.company === 'string') {
       try {
         const parsed = JSON.parse(r.company) as Record<string, unknown>;
@@ -135,12 +145,17 @@ export default function VisitorRequestDetailPage() {
           inspectionChecklist = Array.isArray(parsed.inspectionChecklist)
             ? (parsed.inspectionChecklist as { id?: string; label?: string; checked?: boolean; comment?: string; weight?: string }[]).filter((c) => c && typeof c === 'object' && 'id' in c && 'label' in c).map((c) => ({ id: String(c.id), label: String(c.label), checked: !!c.checked, comment: c.comment, weight: c.weight === 'major' ? 'major' : 'minor' }))
             : [];
+          ncrReason = (parsed.ncrReason as string) ?? null;
+          ncrImageUrls = Array.isArray(parsed.ncrImageUrls) ? parsed.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
+          ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
+            ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
+            : [];
         }
       } catch {
         /* not ticket JSON */
       }
     }
-    return { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist };
+    return { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist, ncrReason, ncrImageUrls, ncrResubmissions };
   };
 
   const parsed = parseTicketData(request);
@@ -148,7 +163,9 @@ export default function VisitorRequestDetailPage() {
     setInspectionResultVal(parsed.inspectionResult ?? '');
     setInspectionCommentsVal(parsed.inspectionComments ?? '');
     setInspectionChecklistVal(parsed.inspectionChecklist ?? []);
-  }, [parsed.inspectionResult, parsed.inspectionComments, JSON.stringify(parsed.inspectionChecklist)]);
+    setNcrReasonVal(parsed.ncrReason ?? '');
+    setNcrImageUrls(parsed.ncrImageUrls ?? []);
+  }, [parsed.inspectionResult, parsed.inspectionComments, JSON.stringify(parsed.inspectionChecklist), parsed.ncrReason, JSON.stringify(parsed.ncrImageUrls)]);
 
   const computeAutoInspectionResult = (items: typeof inspectionChecklistVal) => {
     if (items.length === 0) return null;
@@ -313,25 +330,82 @@ export default function VisitorRequestDetailPage() {
 
   const handleSaveInspection = async () => {
     if (!id) return;
+    if ((inspectionResultVal || '').toLowerCase() === 'ncr' && !ncrReasonVal.trim()) {
+      return;
+    }
     setSavingInspection(true);
     try {
+      const body: Record<string, unknown> = {
+        inspectionResult: inspectionResultVal || null,
+        inspectionComments: inspectionCommentsVal || null,
+        inspectionChecklist: inspectionChecklistVal,
+      };
+      if ((inspectionResultVal || '').toLowerCase() === 'ncr') {
+        body.ncrReason = ncrReasonVal.trim();
+        body.ncrImageUrls = ncrImageUrls;
+        body.status = 'IN_PROGRESS';
+      }
       const res = await fetch(`/api/visitor-requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inspectionResult: inspectionResultVal || null,
-          inspectionComments: inspectionCommentsVal || null,
-          inspectionChecklist: inspectionChecklistVal,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success && data.request) {
         setRequest(data.request);
+        setStatus('IN_PROGRESS');
       }
     } catch (e) {
       console.error(e);
     } finally {
       setSavingInspection(false);
+    }
+  };
+
+  const handleNcrAccept = async () => {
+    if (!id) return;
+    setSavingNcrAccept(true);
+    try {
+      const res = await fetch(`/api/visitor-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ncrAction: 'accept' }),
+      });
+      const data = await res.json();
+      if (data.success && data.request) {
+        setRequest(data.request);
+        setStatus('COMPLETED');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingNcrAccept(false);
+    }
+  };
+
+  const handleNcrResubmit = async () => {
+    if (!id) return;
+    setSavingNcrResubmit(true);
+    try {
+      const res = await fetch(`/api/visitor-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ncrAction: 'resubmit',
+          ncrAdminComment: ncrAdminComment.trim() || null,
+          ncrAdminImageUrls,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.request) {
+        setRequest(data.request);
+        setNcrAdminComment('');
+        setNcrAdminImageUrls([]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingNcrResubmit(false);
     }
   };
 
@@ -546,6 +620,61 @@ export default function VisitorRequestDetailPage() {
                 placeholder="Inspection comments (e.g. for Accepted with comments)"
               />
             </div>
+            {(inspectionResultVal || '').toLowerCase() === 'ncr' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-amber-800 mb-1">NCR reason <span className="text-red-600">*</span></label>
+                  <textarea
+                    value={ncrReasonVal}
+                    onChange={(e) => setNcrReasonVal(e.target.value)}
+                    disabled={isCompleted}
+                    rows={3}
+                    className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2 bg-white text-gray-900 disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Reason for Non-Conformance Report (required)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-amber-800 mb-1">NCR attached images</label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {ncrImageUrls.map((url) => (
+                      <span key={url} className="relative inline-block">
+                        <a href={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded border bg-gray-100 overflow-hidden">
+                          <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="NCR" className="w-full h-full object-cover" />
+                        </a>
+                        {!isCompleted && (
+                          <button
+                            type="button"
+                            onClick={() => setNcrImageUrls((prev) => prev.filter((u) => u !== url))}
+                            className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {!isCompleted && (
+                      <label className={`w-20 h-20 rounded border border-dashed flex items-center justify-center shrink-0 ${imageUploading ? 'border-gray-300 bg-gray-50 cursor-not-allowed opacity-60' : 'border-amber-400 cursor-pointer hover:bg-amber-50'}`}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={imageUploading}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await uploadTicketImage(file);
+                              if (url) setNcrImageUrls((prev) => [...prev, url]);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <PhotoIcon className="w-8 h-8 text-amber-500" />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
             <div>
               <label className="block text-sm font-medium text-amber-800 mb-1">Checklist</label>
               {checklistTemplates.length > 0 && !isCompleted && (
@@ -695,11 +824,99 @@ export default function VisitorRequestDetailPage() {
             <button
               type="button"
               onClick={handleSaveInspection}
-              disabled={savingInspection || isCompleted}
+              disabled={savingInspection || isCompleted || ((inspectionResultVal || '').toLowerCase() === 'ncr' && !ncrReasonVal.trim())}
               className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {savingInspection ? 'Saving...' : isCompleted ? 'Completed — no edits' : 'Save inspection'}
+              {savingInspection ? 'Saving...' : isCompleted ? 'Completed — no edits' : (inspectionResultVal || '').toLowerCase() === 'ncr' && !ncrReasonVal.trim() ? 'Enter NCR reason to save' : 'Save inspection'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {request.serviceSlug === 'quality-control-supervision' && (parsed.inspectionResult || '').toLowerCase() === 'ncr' && parsed.ncrResubmissions.length > 0 && (
+        <div className="mt-6 bg-rose-50/80 border border-rose-200 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-rose-200 bg-rose-100/50">
+            <h2 className="text-lg font-semibold text-rose-900">NCR resubmissions</h2>
+            <p className="text-sm text-rose-800 mt-0.5">Timeline of requester resubmissions and admin actions</p>
+          </div>
+          <div className="p-6 space-y-4">
+            {parsed.ncrResubmissions.map((entry, idx) => (
+              <div key={idx} className="rounded-lg border border-rose-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-900">{entry.by === 'admin' ? 'Admin' : 'Requester'}</span>
+                  <span className="text-gray-500">—</span>
+                  <span className="text-gray-600">{entry.action === 'accept' ? 'Accepted (NCR closed)' : 'Resubmitted'}</span>
+                  <span className="text-gray-400">{new Date(entry.at).toLocaleString()}</span>
+                </div>
+                {entry.comment && <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{entry.comment}</p>}
+                {entry.imageUrls && entry.imageUrls.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {entry.imageUrls.map((url, i) => (
+                      <a key={i} href={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} target="_blank" rel="noopener noreferrer" className="block w-16 h-16 rounded border overflow-hidden">
+                        <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {parsed.ncrResubmissions.length > 0 && parsed.ncrResubmissions[parsed.ncrResubmissions.length - 1].by === 'requester' && parsed.ncrResubmissions[parsed.ncrResubmissions.length - 1].action === 'resubmit' && !isCompleted && (
+              <div className="rounded-lg border-2 border-rose-300 bg-rose-50/50 p-4 space-y-4">
+                <p className="text-sm font-medium text-rose-900">Requester has resubmitted. Accept or send back with comment/photos.</p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleNcrAccept}
+                    disabled={savingNcrAccept}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {savingNcrAccept ? 'Saving...' : 'Accept (close NCR)'}
+                  </button>
+                  <div className="flex-1 min-w-[200px]">
+                    <textarea
+                      value={ncrAdminComment}
+                      onChange={(e) => setNcrAdminComment(e.target.value)}
+                      placeholder="Comment for requester (optional)"
+                      rows={2}
+                      className="w-full text-sm border border-rose-200 rounded-lg px-3 py-2"
+                    />
+                    <div className="flex flex-wrap gap-2 items-center mt-2">
+                      {ncrAdminImageUrls.map((url) => (
+                        <span key={url} className="relative inline-block">
+                          <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-14 h-14 object-cover rounded border" />
+                          <button type="button" onClick={() => setNcrAdminImageUrls((p) => p.filter((u) => u !== url))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs">×</button>
+                        </span>
+                      ))}
+                      <label className="w-14 h-14 rounded border border-dashed border-rose-300 flex items-center justify-center cursor-pointer hover:bg-rose-50">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={imageUploading}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await uploadTicketImage(file);
+                              if (url) setNcrAdminImageUrls((p) => [...p, url]);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <PhotoIcon className="w-6 h-6 text-rose-500" />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleNcrResubmit}
+                      disabled={savingNcrResubmit}
+                      className="mt-2 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50 text-sm"
+                    >
+                      {savingNcrResubmit ? 'Sending...' : 'Resubmit to requester'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

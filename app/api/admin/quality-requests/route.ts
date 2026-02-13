@@ -7,20 +7,50 @@ function pickCompany(val: unknown): string | null {
   return null;
 }
 
-function fromJson(raw: string | null): { company: string | null; siteName?: string; siteCoordinator?: string; slaHours?: number; inspectionResult?: string } {
-  const empty = { company: null as string | null, siteName: undefined as string | undefined, siteCoordinator: undefined as string | undefined, slaHours: undefined as number | undefined, inspectionResult: undefined as string | undefined };
+function fromJson(raw: string | null): {
+  company: string | null;
+  siteName?: string;
+  siteCoordinator?: string;
+  slaHours?: number;
+  inspectionResult?: string;
+  ncrReason?: string | null;
+  ncrImageUrls?: string[];
+  ncrResubmissions?: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }>;
+} {
+  const empty = {
+    company: null as string | null,
+    siteName: undefined as string | undefined,
+    siteCoordinator: undefined as string | undefined,
+    slaHours: undefined as number | undefined,
+    inspectionResult: undefined as string | undefined,
+    ncrReason: undefined as string | null | undefined,
+    ncrImageUrls: undefined as string[] | undefined,
+    ncrResubmissions: undefined as Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> | undefined,
+  };
   if (!raw || typeof raw !== 'string') return empty;
   const s = raw.trim();
   if (!s) return empty;
   if (!s.startsWith('{')) return { ...empty, company: s || null };
   try {
     const p = JSON.parse(s) as Record<string, unknown>;
+    const ncrResubmissions = Array.isArray(p.ncrResubmissions)
+      ? (p.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({
+          at: e.at || '',
+          by: e.by || '',
+          action: e.action || 'resubmit',
+          comment: e.comment ?? null,
+          imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [],
+        }))
+      : undefined;
     return {
-      company: pickCompany(p.company) ?? pickCompany(p.companyName),
+      company: pickCompany(p.company as string) ?? pickCompany(p.companyName as string),
       siteName: typeof p.siteName === 'string' ? p.siteName : undefined,
       siteCoordinator: typeof p.siteCoordinator === 'string' ? p.siteCoordinator : undefined,
       slaHours: typeof p.slaHours === 'number' ? p.slaHours : undefined,
       inspectionResult: typeof p.inspectionResult === 'string' ? p.inspectionResult : undefined,
+      ncrReason: typeof p.ncrReason === 'string' ? p.ncrReason : p.ncrReason === null ? null : undefined,
+      ncrImageUrls: Array.isArray(p.ncrImageUrls) ? (p.ncrImageUrls as string[]).filter((u: unknown) => typeof u === 'string') : undefined,
+      ncrResubmissions,
     };
   } catch {
     return { ...empty, company: s || null };
@@ -77,6 +107,9 @@ export async function GET(req: NextRequest) {
         slaHours: j.slaHours ?? r.slaHours ?? null,
         displayCompany,
         inspectionResult: j.inspectionResult ?? null,
+        ncrReason: j.ncrReason ?? null,
+        ncrImageUrls: j.ncrImageUrls ?? [],
+        ncrResubmissions: j.ncrResubmissions ?? [],
       };
     });
 

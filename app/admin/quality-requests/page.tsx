@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowPathIcon, EyeIcon, FunnelIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 
+type NcrResubmission = { at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] };
 type QualityRequest = {
   id: string;
   status: string;
@@ -18,6 +19,9 @@ type QualityRequest = {
   slaHours: number | null;
   displayCompany: string | null;
   inspectionResult: string | null;
+  ncrReason?: string | null;
+  ncrImageUrls?: string[];
+  ncrResubmissions?: NcrResubmission[];
 };
 
 export default function AdminQualityRequestsPage() {
@@ -251,6 +255,7 @@ export default function AdminQualityRequestsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Technique</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">NCR / Resubmissions</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -274,6 +279,21 @@ export default function AdminQualityRequestsPage() {
                     >
                       {getResultLabel(r.inspectionResult)}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {r.inspectionResult === 'ncr' && (
+                      <span className="inline-flex flex-wrap items-center gap-1">
+                        {r.ncrResubmissions && r.ncrResubmissions.length > 0 && (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700">
+                            {r.ncrResubmissions.length} resubmission{r.ncrResubmissions.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {r.ncrReason && (
+                          <span className="text-xs text-gray-500 max-w-[180px] truncate" title={r.ncrReason}>{r.ncrReason}</span>
+                        )}
+                      </span>
+                    )}
+                    {r.inspectionResult !== 'ncr' && '—'}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getStatusBadge(r.status)}`}>

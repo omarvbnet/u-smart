@@ -21,6 +21,9 @@ type Ticket = {
   completedAt: string | null;
   inspectionResult?: string | null;
   statusTimeline?: { status: string; createdAt: string }[];
+  ncrReason?: string | null;
+  ncrImageUrls?: string[];
+  ncrResubmissions?: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }>;
 };
 
 type Site = {
@@ -808,6 +811,9 @@ export default function QualityControlDashboardPage() {
                                 {ticket.status === 'COMPLETED' && ticket.completedAt && (
                                   <p className="text-xs text-emerald-400/90 mt-1">{t('ticketForm.completedAt')}: {formatDate(ticket.completedAt)} · {t('ticketForm.totalDelay')}: {formatTotalDelay(ticket.createdAt, ticket.completedAt)}</p>
                                 )}
+                                {ticket.inspectionResult === 'ncr' && ticket.ncrResubmissions && ticket.ncrResubmissions.length > 0 && (
+                                  <p className="text-xs text-red-400/90 mt-1">NCR · {ticket.ncrResubmissions.length} resubmission{ticket.ncrResubmissions.length !== 1 ? 's' : ''}</p>
+                                )}
                               </div>
                               <span className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-medium ${ticket.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-400' : ticket.status === 'IN_PROGRESS' ? 'bg-amber-500/20 text-amber-400' : ticket.status === 'ON_SITE' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'}`}>
                                 {getStatusLabel(ticket.status)}
@@ -921,14 +927,26 @@ export default function QualityControlDashboardPage() {
                     {ticket.status === 'COMPLETED' && ticket.completedAt && (
                       <p className="text-xs text-emerald-400/90 mt-0.5">{t('ticketForm.completedAt')}: {formatDate(ticket.completedAt)} · {t('ticketForm.totalDelay')}: {formatTotalDelay(ticket.createdAt, ticket.completedAt)}</p>
                     )}
+                    {ticket.inspectionResult === 'ncr' && (
+                      <p className="text-xs text-red-400/90 mt-1 flex items-center gap-1.5">
+                        NCR
+                        {ticket.ncrResubmissions && ticket.ncrResubmissions.length > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 text-[10px] font-medium">
+                            {ticket.ncrResubmissions.length} resubmission{ticket.ncrResubmissions.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
-                  <span className={`shrink-0 px-2 py-1 rounded-lg text-xs font-medium ${
-                    ticket.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-400' :
-                    ticket.status === 'IN_PROGRESS' ? 'bg-amber-500/20 text-amber-400' :
-                    ticket.status === 'ON_SITE' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
-                  }`}>
-                    {getStatusLabel(ticket.status)}
-                  </span>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                      ticket.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-400' :
+                      ticket.status === 'IN_PROGRESS' ? 'bg-amber-500/20 text-amber-400' :
+                      ticket.status === 'ON_SITE' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
+                    }`}>
+                      {getStatusLabel(ticket.status)}
+                    </span>
+                  </div>
                 </div>
               </Link>
             ))}

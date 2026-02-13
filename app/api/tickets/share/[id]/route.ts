@@ -76,6 +76,9 @@ export async function GET(
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
     let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; comment?: string }> = [];
+    let ncrReason: string | null = null;
+    let ncrImageUrls: string[] = [];
+    let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -92,6 +95,11 @@ export async function GET(
           ? parsed.inspectionChecklist
             .filter((c: unknown) => c && typeof c === 'object' && 'id' in c && 'label' in c && 'checked' in c)
             .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string }) => ({ id: c.id, label: c.label, checked: !!c.checked, comment: c.comment, weight: c.weight === 'major' ? 'major' : 'minor' }))
+          : [];
+        ncrReason = (parsed.ncrReason as string) ?? null;
+        ncrImageUrls = Array.isArray(parsed.ncrImageUrls) ? parsed.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
+        ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
+          ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
           : [];
       }
     } catch {
@@ -138,6 +146,9 @@ export async function GET(
         inspectionResult,
         inspectionComments,
         inspectionChecklist,
+        ncrReason,
+        ncrImageUrls,
+        ncrResubmissions,
       },
     });
   } catch (err) {

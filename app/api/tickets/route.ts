@@ -366,6 +366,9 @@ export async function GET(req: NextRequest) {
       let designSpecifications: string | null = null;
       let attachmentUrls: string[] = [];
       let inspectionResult: string | null = null;
+      let ncrReason: string | null = null;
+      let ncrImageUrls: string[] = [];
+      let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
       try {
         const parsed = typeof r.company === 'string' ? JSON.parse(r.company) : {} as Record<string, unknown>;
         if (parsed._ticket) {
@@ -377,6 +380,11 @@ export async function GET(req: NextRequest) {
           designSpecifications = (parsed.designSpecifications as string) ?? null;
           attachmentUrls = Array.isArray(parsed.attachmentUrls) ? parsed.attachmentUrls.filter((u: unknown) => typeof u === 'string') : [];
           inspectionResult = typeof parsed.inspectionResult === 'string' ? parsed.inspectionResult : null;
+          ncrReason = (parsed.ncrReason as string) ?? null;
+          ncrImageUrls = Array.isArray(parsed.ncrImageUrls) ? parsed.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
+          ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
+            ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
+            : [];
         }
       } catch {
         /* ignore */
@@ -399,12 +407,15 @@ export async function GET(req: NextRequest) {
         designSpecifications: designSpecifications || null,
         attachmentUrls: attachmentUrls || [],
         inspectionResult: inspectionResult || null,
+        ncrReason: ncrReason || null,
+        ncrImageUrls,
+        ncrResubmissions,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
       };
     });
 
     // If filtering by siteName, keep only tickets whose siteName matches (we filtered by OR on DB but company contains is loose)
-    type TicketRow = { id: string; siteName: string | null; siteCoordinator: string | null; slaHours: number | null; technique: string; status: string; createdAt: Date; completedAt: string | null; designSpecifications?: string | null; attachmentUrls?: string[]; inspectionResult?: string | null; statusTimeline?: { status: string; createdAt: Date }[] };
+    type TicketRow = { id: string; siteName: string | null; siteCoordinator: string | null; slaHours: number | null; technique: string; status: string; createdAt: Date; completedAt: string | null; designSpecifications?: string | null; attachmentUrls?: string[]; inspectionResult?: string | null; ncrReason?: string | null; ncrImageUrls?: string[]; ncrResubmissions?: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }>; statusTimeline?: { status: string; createdAt: Date }[] };
     const filtered = siteNameParam && !doExport
       ? tickets.filter((t: TicketRow) => t.siteName?.toLowerCase().includes(siteNameParam.toLowerCase()))
       : tickets;
@@ -414,9 +425,12 @@ export async function GET(req: NextRequest) {
       const dateStr = new Date().toISOString().slice(0, 10);
       const filename = `dashboard-${slugLabel}-export-${dateStr}.${exportFormat === 'csv' ? 'csv' : 'json'}`;
       if (exportFormat === 'csv') {
-        const headers = ['id', 'siteName', 'siteCoordinator', 'technique', 'status', 'createdAt', 'completedAt', 'slaHours', 'inspectionResult'];
+        const headers = ['id', 'siteName', 'siteCoordinator', 'technique', 'status', 'createdAt', 'completedAt', 'slaHours', 'inspectionResult', 'ncrReason', 'ncrResubmissionsCount'];
         const escape = (v: unknown) => (v == null ? '' : String(v).replace(/"/g, '""'));
-        const row = (t: TicketRow) => headers.map((h) => `"${escape((t as Record<string, unknown>)[h])}"`).join(',');
+        const row = (t: TicketRow) => {
+          const ncrResubmissionsCount = Array.isArray(t.ncrResubmissions) ? t.ncrResubmissions.length : 0;
+          return headers.map((h) => (h === 'ncrResubmissionsCount' ? `"${ncrResubmissionsCount}"` : `"${escape((t as Record<string, unknown>)[h])}"`)).join(',');
+        };
         const csv = [headers.join(','), ...(filtered as TicketRow[]).map(row)].join('\n');
         return new NextResponse(csv, {
           status: 200,
