@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendSubscriptionConfirmation } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const name = typeof body.name === 'string' ? body.name.trim() || null : null;
     const existing = await prisma.subscriber.findUnique({ where: { email } });
     if (existing) {
       if (existing.active) {
@@ -31,19 +33,21 @@ export async function POST(req: NextRequest) {
       }
       await prisma.subscriber.update({
         where: { email },
-        data: { active: true, name: body.name?.trim() || null },
+        data: { active: true, name: name ?? existing.name },
       });
+      await sendSubscriptionConfirmation(email, name ?? existing.name);
       return NextResponse.json({ success: true, message: 'Subscription reactivated' });
     }
 
     await prisma.subscriber.create({
       data: {
         email,
-        name: body.name?.trim() || null,
+        name,
         active: true,
       },
     });
 
+    await sendSubscriptionConfirmation(email, name);
     return NextResponse.json({ success: true, message: 'Subscribed successfully' });
   } catch (error) {
     console.error('POST /api/subscribe:', error);

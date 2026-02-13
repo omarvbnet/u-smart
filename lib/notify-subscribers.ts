@@ -62,7 +62,7 @@ function escapeHtml(s: string): string {
 
 async function sendViaResend(to: string, subject: string, html: string): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL || 'U-SMART <onboarding@resend.dev>';
+  const from = process.env.RESEND_FROM_EMAIL || 'U-SMART <contact@usmart-iot.com>';
   if (!apiKey) return false;
   try {
     const res = await fetch(RESEND_API, {
