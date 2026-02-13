@@ -101,7 +101,7 @@
     "programmingTitle": "Programming & Custom Software",
     "programmingDescription": "Scalable, secure software built with modern stacks—Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation, we deliver solutions that grow with your business.",
     "smartHomesTitle": "Smart Homes & Building Automation",
-    "smartHomesDescription": "End-to-end smart home and building automation with KNX, Buspro, and Zigbee. Lighting, climate, security, and energy management—designed for reliability, interoperability, and a seamless connected experience.",
+    "smartHomesDescription": "End-to-end smart home and building automation with KNX, HDL Buspro, Zigbee, and electrical solutions. Lighting, climate, security, and energy management—designed for reliability, interoperability, and a seamless connected experience.",
     "contactTitle": "Get in Touch",
     "contactSubtitle": "We'd love to hear from you",
     "contactDescription": "Reach out for projects, partnerships, or support. Our team is ready to help you achieve your goals.",
@@ -166,27 +166,38 @@
       }
     },
     "serviceTechnologies": {
-      "title": "Systems & Technologies We Use",
-      "intro": "We deploy industry-leading protocols for smart home automation. Below are the main systems we use, with a brief description and their advantages and disadvantages.",
+      "title": "Systems We Use",
+      "intro": "We choose the right system for your project based on your requirements. Below are the main systems we deploy, with descriptions and when each is ideal for your needs.",
+      "idealForLabel": "Ideal for",
       "advantagesLabel": "Advantages",
       "disadvantagesLabel": "Disadvantages",
       "knx": {
         "name": "KNX",
         "description": "KNX is an open standard for home and building automation. It uses a dedicated twisted-pair bus for lighting, heating, security, and energy management. It is widely used in Europe and is known for reliability and interoperability between manufacturers.",
+        "idealFor": "New construction or major renovation; commercial buildings; maximum reliability and long-term investment; multi-brand compatibility.",
         "advantages": ["Open standard; many compatible devices and brands", "Very reliable and stable; used in commercial and residential", "Wired bus reduces wireless interference and is secure", "Scalable from small homes to large buildings", "Long product lifecycle and backward compatible"],
         "disadvantages": ["Installation requires wiring; best planned during construction", "Higher initial cost than wireless-only systems", "Requires certified installers for optimal design"]
       },
       "buspro": {
-        "name": "Buspro",
-        "description": "Buspro is a proprietary wireless and wired automation system by Nice. It supports lighting, climate, security, and AV control. It is known for flexibility and integration with Nice's range of products including gates and automation.",
-        "advantages": ["Wireless and wired options; flexible for retrofits", "Good integration with Nice gate and motorization products", "User-friendly configuration and support", "Suitable for residential and villa projects"],
-        "disadvantages": ["Proprietary ecosystem; less third-party choice than KNX", "Mainly associated with one manufacturer (Nice)"]
+        "name": "HDL Buspro",
+        "description": "HDL Buspro is a proprietary wireless and wired automation system by HDL Automation. It supports lighting, climate, security, and AV control. It is known for flexibility, scalability, and integration with a wide range of smart home products including curtains, gates, and motorization.",
+        "idealFor": "Residential villas; retrofit projects; flexible wiring preference; integrated curtain, gate, and motorization control.",
+        "advantages": ["Wireless and wired options; flexible for retrofits", "Good integration with curtains, gates, and motorization", "User-friendly configuration and support", "Suitable for residential and villa projects"],
+        "disadvantages": ["Proprietary ecosystem; less third-party choice than KNX", "Mainly associated with HDL Automation"]
       },
       "zigbee": {
         "name": "Zigbee",
         "description": "Zigbee is a wireless mesh protocol used in smart homes and IoT. It enables low-power devices (sensors, switches, bulbs) to form a self-healing mesh network. It is popular for lighting, sensors, and integration with voice assistants and hubs.",
+        "idealFor": "Retrofit without new wiring; budget-conscious projects; voice assistant integration; expandable device ecosystem.",
         "advantages": ["Wireless; easy to add devices without new wiring", "Low power consumption; battery devices last long", "Mesh network extends range and reliability", "Wide ecosystem; many brands (Philips Hue, IKEA, etc.)", "Often lower cost per device"],
         "disadvantages": ["Multiple hubs/bridges possible; interoperability can vary", "Less suited for mission-critical or high-security applications than wired", "Signal can be affected by physical obstacles"]
+      },
+      "electricalSolutions": {
+        "name": "Electrical Solutions",
+        "description": "Complete electrical design, distribution, and integration for smart homes. From panels and circuit protection to surge suppression and load management—we ensure safe, efficient power for all automation and appliances.",
+        "idealFor": "New construction; electrical upgrades; surge protection and power quality; load monitoring and energy efficiency.",
+        "advantages": ["Proper distribution panels and circuit design", "Surge and overload protection for sensitive equipment", "Load management and energy monitoring", "Integration with smart home and backup systems", "Compliance with electrical codes and safety standards"],
+        "disadvantages": ["Requires qualified electricians and planning", "Cost varies with scope of electrical work"]
       }
     },
     "programmingTechnologies": {
@@ -313,7 +324,7 @@
       "successMessage": "Request sent successfully. We will contact you soon.",
       "errorMessage": "Failed to send. Please try again.",
       "buildingTypes": { "home": "Home", "villa": "Villa", "hotel": "Hotel", "complex": "Complex", "other": "Other" },
-      "techniques": { "knx": "KNX", "buspro": "Buspro", "zigbee": "Zigbee" },
+      "techniques": { "knx": "KNX", "buspro": "HDL Buspro", "zigbee": "Zigbee", "electricalSolutions": "Electrical Solutions" },
       "programmingTechniques": { "nodejs": "Node.js", "flutter": "Flutter/Dart", "python": "Python", "mysql": "MySQL", "postgresql": "PostgreSQL", "nosql": "NoSQL" },
       "ctaDescriptionProgramming": "Tell us your preferred technology and project requirements. We'll get back to you shortly.",
       "techniquesLabel": "Select techniques / features",

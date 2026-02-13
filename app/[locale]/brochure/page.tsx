@@ -466,6 +466,113 @@ export default function BrochurePage() {
           </section>
         )}
 
+        {/* Systems We Use page – Smart Home only: KNX, Buspro, Zigbee with ideal-for per customer */}
+        {config?.systemsPageKey && config?.systemsKeys && config.systemsKeys.length > 0 && (() => {
+          const systemsObj = tIndex.raw(config.systemsPageKey) as Record<string, unknown> | undefined;
+          if (!systemsObj || typeof systemsObj !== 'object') return null;
+          const title = (systemsObj.title as string) || 'Systems We Use';
+          const intro = (systemsObj.intro as string) || '';
+          const idealForLabel = (systemsObj.idealForLabel as string) || 'Ideal for';
+          const advantagesLabel = (systemsObj.advantagesLabel as string) || 'Advantages';
+          const disadvantagesLabel = (systemsObj.disadvantagesLabel as string) || 'Disadvantages';
+          return (
+            <section
+              className="relative py-12 px-8 overflow-hidden flex flex-col justify-center"
+              style={{
+                width: '100%',
+                height: `${A4_HEIGHT_CM}cm`,
+                minHeight: `${A4_HEIGHT_CM}cm`,
+                backgroundColor: pageBg,
+                color: '#1e293b',
+              }}
+            >
+              <div className="relative z-10 max-w-4xl mx-auto space-y-4">
+                <div className="p-4 rounded-xl border-2 flex items-center gap-4" style={{ borderColor: accent, backgroundColor: boxBg }}>
+                  <span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}15` }}>
+                    <BrochureIcon name="Cpu" className="w-7 h-7" style={{ color: accent }} />
+                  </span>
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
+                      {t('pageServicesTitle')}
+                    </span>
+                    <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
+                      {title}
+                    </h2>
+                  </div>
+                </div>
+                {intro && (
+                  <div className="p-5 rounded-xl border-2" style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}>
+                    <p className="text-[0.9rem] leading-[1.65] text-gray-700">{intro}</p>
+                  </div>
+                )}
+                <div className="space-y-4">
+                  {config.systemsKeys.map((key, i) => {
+                    const sys = (systemsObj as Record<string, Record<string, unknown>>)[key];
+                    if (!sys || typeof sys !== 'object') return null;
+                    const name = String(sys.name ?? key);
+                    const description = String(sys.description ?? '');
+                    const idealFor = sys.idealFor ? String(sys.idealFor) : '';
+                    const advantages = Array.isArray(sys.advantages) ? (sys.advantages as string[]) : [];
+                    const disadvantages = Array.isArray(sys.disadvantages) ? (sys.disadvantages as string[]) : [];
+                    return (
+                      <div
+                        key={key}
+                        className="p-5 rounded-xl border-2"
+                        style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}
+                      >
+                        <div className="flex items-start gap-3 mb-2">
+                          <span
+                            className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white"
+                            style={{ backgroundColor: accent }}
+                          >
+                            <BrochureIcon name={FEATURE_ICONS[key] ?? 'Cpu'} className="w-5 h-5" />
+                          </span>
+                          <h3 className="font-bold text-gray-900 text-[1.05rem] leading-tight">{name}</h3>
+                        </div>
+                        <p className="text-gray-600 text-[0.9rem] leading-relaxed mb-2 pl-12">{description}</p>
+                        {idealFor && (
+                          <p className="text-[0.875rem] pl-12 mb-3 font-medium" style={{ color: accent }}>
+                            <span className="text-gray-600 font-normal">{idealForLabel}: </span>
+                            {idealFor}
+                          </p>
+                        )}
+                        <div className={`flex flex-wrap gap-4 pl-12 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          {advantages.length > 0 && (
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold uppercase text-gray-500 block mb-1">{advantagesLabel}</span>
+                              <ul className="space-y-1 list-none p-0 m-0">
+                                {advantages.map((a, j) => (
+                                  <li key={j} className="flex items-center gap-2 text-[0.8rem] text-gray-600">
+                                    <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accent }} />
+                                    {a}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {disadvantages.length > 0 && (
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold uppercase text-gray-500 block mb-1">{disadvantagesLabel}</span>
+                              <ul className="space-y-1 list-none p-0 m-0">
+                                {disadvantages.map((d, j) => (
+                                  <li key={j} className="flex items-start gap-2 text-[0.8rem] text-gray-600">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: accent }} />
+                                    {d}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
         {/* Page 3 – Services: Solid background, service boxes */}
         <section
           className="relative py-12 px-8 overflow-hidden flex flex-col justify-center"

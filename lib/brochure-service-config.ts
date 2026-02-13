@@ -15,6 +15,10 @@ export type BrochureServiceConfig = {
   featureKeys: string[];
   aboutTitleKey: string;
   aboutDescKey: string;
+  /** Optional: Index key for "Systems We Use" page (e.g. serviceTechnologies) */
+  systemsPageKey?: string;
+  /** Keys for systems to show (e.g. knx, buspro, zigbee) */
+  systemsKeys?: string[];
   accent: string;
   accentLight: string;
   accentBg: string;
@@ -67,6 +71,8 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
   'smart-home-automation': {
     indexKey: 'smartHomeFeatures',
     featureKeys: ['security', 'lighting', 'control', 'luxury', 'powerSavings', 'climate'],
+    systemsPageKey: 'serviceTechnologies',
+    systemsKeys: ['knx', 'buspro', 'zigbee', 'electricalSolutions'],
     aboutTitleKey: 'smartHomesTitle',
     aboutDescKey: 'smartHomesDescription',
     accent: '#1d4ed8',
@@ -132,6 +138,7 @@ export const FEATURE_ICONS: Record<string, string> = {
   knx: 'Cpu',
   buspro: 'Radio',
   zigbee: 'Wifi',
+  electricalSolutions: 'Zap',
   security: 'Shield',
   lighting: 'Lightbulb',
   control: 'PanelTop',

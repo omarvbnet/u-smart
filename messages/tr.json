@@ -101,7 +101,7 @@
     "programmingTitle": "Programlama ve Özel Yazılım",
     "programmingDescription": "Node.js, Flutter, Python ve güçlü veritabanlarıyla ölçeklenebilir, güvenli yazılım. Web ve mobil uygulamalardan API ve otomasyona, işinizle büyüyen çözümler sunuyoruz.",
     "smartHomesTitle": "Akıllı Ev ve Bina Otomasyonu",
-    "smartHomesDescription": "KNX, Buspro ve Zigbee ile uçtan uca akıllı ev ve bina otomasyonu. Aydınlatma, iklim, güvenlik ve enerji yönetimi—güvenilirlik, birlikte çalışabilirlik ve kesintisiz bağlı deneyim için tasarlandı.",
+    "smartHomesDescription": "KNX, HDL Buspro, Zigbee ve elektrik çözümleriyle uçtan uca akıllı ev ve bina otomasyonu. Aydınlatma, iklim, güvenlik ve enerji yönetimi—güvenilirlik, birlikte çalışabilirlik ve kesintisiz bağlı deneyim için tasarlandı.",
     "contactTitle": "İletişime Geçin",
     "contactSubtitle": "Sizden haber almak isteriz",
     "contactDescription": "Projeler, ortaklıklar veya destek için bize ulaşın. Ekibimiz hedeflerinize ulaşmanızda size yardımcı olmaya hazır.",
@@ -166,27 +166,38 @@
       }
     },
     "serviceTechnologies": {
-      "title": "Kullandığımız Sistemler ve Teknolojiler",
-      "intro": "Akıllı ev otomasyonu için sektör lideri protokoller kullanıyoruz. Aşağıda kısa açıklama ve avantaj/dezavantajlarıyla birlikte ana sistemlerimiz yer alıyor.",
+      "title": "Kullandığımız Sistemler",
+      "intro": "Projenize en uygun sistemi gereksinimlerinize göre seçiyoruz. Aşağıda ana sistemlerimiz, açıklamalar ve her birinin ne zaman ideal olduğu yer alıyor.",
+      "idealForLabel": "İdeal olduğu durumlar",
       "advantagesLabel": "Avantajlar",
       "disadvantagesLabel": "Dezavantajlar",
       "knx": {
         "name": "KNX",
         "description": "KNX, ev ve bina otomasyonu için açık bir standarttır. Aydınlatma, ısıtma, güvenlik ve enerji yönetimi için özel bir twisted-pair bus kullanır. Avrupa'da yaygın kullanılır; güvenilirlik ve üreticiler arası uyumlulukla bilinir.",
+        "idealFor": "Yeni inşaat veya büyük yenileme; ticari binalar; maksimum güvenilirlik ve uzun vadeli yatırım; çok marka uyumluluğu.",
         "advantages": ["Açık standart; birçok uyumlu cihaz ve marka", "Çok güvenilir ve kararlı; ticari ve konut projelerinde kullanılır", "Kablolu bus kablosuz paraziti azaltır ve güvenlidir", "Küçük evlerden büyük binalara ölçeklenebilir", "Uzun ürün ömrü ve geriye dönük uyumlu"],
         "disadvantages": ["Kurulum kablo gerektirir; inşaat sırasında planlanması ideal", "Yalnızca kablosuz sistemlere göre daha yüksek başlangıç maliyeti", "Optimal tasarım için sertifikalı kurucular gerekir"]
       },
       "buspro": {
-        "name": "Buspro",
-        "description": "Buspro, Nice'e ait kablosuz ve kablolu bir otomasyon sistemidir. Aydınlatma, iklim, güvenlik ve AV kontrolünü destekler. Esneklik ve Nice kapı/otomasyon ürünleriyle entegrasyonuyla bilinir.",
-        "advantages": ["Kablosuz ve kablolu seçenekler; yenilemeler için esnek", "Nice kapı ve motorizasyon ürünleriyle iyi entegrasyon", "Kullanıcı dostu yapılandırma ve destek", "Konut ve villa projeleri için uygun"],
-        "disadvantages": ["Özel ekosistem; KNX'e göre daha az üçüncü taraf seçeneği", "Ağırlıklı olarak bir üretici (Nice) ile ilişkili"]
+        "name": "HDL Buspro",
+        "description": "HDL Buspro, HDL Automation'a ait kablosuz ve kablolu bir otomasyon sistemidir. Aydınlatma, iklim, güvenlik ve AV kontrolünü destekler. Esneklik, ölçeklenebilirlik ve perde, kapı ve motorizasyon dahil geniş akıllı ev ürün yelpazesiyle entegrasyonuyla bilinir.",
+        "idealFor": "Konut villaları; yenileme projeleri; esnek kablo tercihi; entegre perde, kapı ve motorizasyon kontrolü.",
+        "advantages": ["Kablosuz ve kablolu seçenekler; yenilemeler için esnek", "Perde, kapı ve motorizasyonla iyi entegrasyon", "Kullanıcı dostu yapılandırma ve destek", "Konut ve villa projeleri için uygun"],
+        "disadvantages": ["Özel ekosistem; KNX'e göre daha az üçüncü taraf seçeneği", "Ağırlıklı olarak HDL Automation ile ilişkili"]
       },
       "zigbee": {
         "name": "Zigbee",
         "description": "Zigbee, akıllı ev ve IoT'de kullanılan kablosuz bir mesh protokolüdür. Düşük güçlü cihazların (sensör, anahtar, ampul) kendini onaran bir mesh ağı oluşturmasını sağlar. Aydınlatma, sensörler ve ses asistanları/hublarla entegrasyon için yaygındır.",
+        "idealFor": "Yeni kablo olmadan yenileme; bütçe odaklı projeler; ses asistanı entegrasyonu; genişletilebilir cihaz ekosistemi.",
         "advantages": ["Kablosuz; yeni kablo olmadan cihaz eklemek kolay", "Düşük güç tüketimi; pilli cihazlar uzun ömürlü", "Mesh ağı menzili ve güvenilirliği artırır", "Geniş ekosistem; birçok marka (Philips Hue, IKEA vb.)", "Cihaz başına genelde daha düşük maliyet"],
         "disadvantages": ["Birden fazla hub/köprü mümkün; birlikte çalışabilirlik değişebilir", "Kabloluya göre kritik veya yüksek güvenlik uygulamalarına daha az uygun", "Sinyal fiziksel engellerden etkilenebilir"]
+      },
+      "electricalSolutions": {
+        "name": "Elektrik Çözümleri",
+        "description": "Akıllı evler için eksiksiz elektrik tasarımı, dağıtımı ve entegrasyonu. Paneller ve devre korumasından dalga bastırma ve yük yönetimine—tüm otomasyon ve cihazlar için güvenli, verimli güç sağlıyoruz.",
+        "idealFor": "Yeni inşaat; elektrik yükseltmeleri; dalga koruması ve güç kalitesi; yük izleme ve enerji verimliliği.",
+        "advantages": ["Uygun dağıtım panelleri ve devre tasarımı", "Hassas ekipman için dalga ve aşırı yük koruması", "Yük yönetimi ve enerji izleme", "Akıllı ev ve yedek sistemlerle entegrasyon", "Elektrik kodlarına ve güvenlik standartlarına uyum"],
+        "disadvantages": ["Nitelikli elektrikçiler ve planlama gerektirir", "Maliyet elektrik işinin kapsamına göre değişir"]
       }
     },
     "programmingTechnologies": {
@@ -233,7 +244,7 @@
       "successMessage": "Talebiniz alındı. En kısa sürede sizinle iletişime geçeceğiz.",
       "errorMessage": "Gönderilemedi. Lütfen tekrar deneyin.",
       "buildingTypes": { "home": "Ev", "villa": "Villa", "hotel": "Otel", "complex": "Site", "other": "Diğer" },
-      "techniques": { "knx": "KNX", "buspro": "Buspro", "zigbee": "Zigbee" },
+      "techniques": { "knx": "KNX", "buspro": "HDL Buspro", "zigbee": "Zigbee", "electricalSolutions": "Elektrik Çözümleri" },
       "programmingTechniques": { "nodejs": "Node.js", "flutter": "Flutter/Dart", "python": "Python", "mysql": "MySQL", "postgresql": "PostgreSQL", "nosql": "NoSQL" },
       "ctaDescriptionProgramming": "Tercih ettiğiniz teknoloji ve proje gereksinimlerinizi bize iletin. En kısa sürede size dönüş yapacağız.",
       "techniquesLabel": "Teknikler / özellikler seçin",
