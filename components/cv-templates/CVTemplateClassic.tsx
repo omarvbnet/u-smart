@@ -1,11 +1,11 @@
 'use client';
 
-import type { CVData } from '@/lib/cv-types';
+import type { CVData, CVLabels } from '@/lib/cv-types';
 import { isRtlLocale, ARABIC_FONT } from '@/lib/cv-types';
 
 const A4_WIDTH_PX = 595;
 
-export default function CVTemplateClassic({ data, locale }: { data: CVData; locale: string }) {
+export default function CVTemplateClassic({ data, locale, labels }: { data: CVData; locale: string; labels: CVLabels }) {
   const rtl = isRtlLocale(locale);
   const skillsList = data.skills
     ? data.skills.split(/[,،]/).map((s) => s.trim()).filter(Boolean)
@@ -48,7 +48,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
               className="text-sm font-bold uppercase text-gray-900"
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
-              Professional Summary
+              {labels.summary}
             </h2>
             <p className="leading-relaxed text-gray-700" style={{ margin: 0 }}>
               {data.summary}
@@ -62,7 +62,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
               className="text-sm font-bold uppercase text-gray-900"
               style={{ margin: '0 0 8px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
-              Work Experience
+              {labels.experience}
             </h2>
             <div className="space-y-4">
               {data.experience.map((exp) => (
@@ -72,7 +72,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
                   </h3>
                   <p className="text-gray-600 italic text-[10px]" style={{ margin: 0 }}>
                     {exp.company} · {exp.dateFrom}
-                    {exp.dateTo ? ` – ${exp.current ? 'Present' : exp.dateTo}` : ''}
+                    {exp.dateTo ? ` – ${exp.current ? labels.present : exp.dateTo}` : ''}
                   </p>
                   {exp.description && (
                     <p className="text-gray-700 leading-relaxed mt-1 text-[10px]" style={{ margin: 0 }}>
@@ -91,7 +91,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
               className="text-sm font-bold uppercase text-gray-900"
               style={{ margin: '0 0 8px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
-              Education
+              {labels.education}
             </h2>
             <div className="space-y-3">
               {data.education.map((edu) => (
@@ -115,7 +115,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
               className="text-sm font-bold uppercase text-gray-900"
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
-              Skills
+              {labels.skills}
             </h2>
             <p className="text-gray-700 leading-relaxed" style={{ margin: 0 }}>
               {skillsList.join(', ')}
@@ -129,7 +129,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
               className="text-sm font-bold uppercase text-gray-900"
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
-              Languages
+              {labels.languages}
             </h2>
             <p className="text-gray-700 text-[10px]" style={{ margin: 0 }}>
               {data.languages}
@@ -143,7 +143,7 @@ export default function CVTemplateClassic({ data, locale }: { data: CVData; loca
               className="text-sm font-bold uppercase text-gray-900"
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
-              Certifications
+              {labels.certifications}
             </h2>
             <p className="text-gray-700 text-[10px] whitespace-pre-line" style={{ margin: 0 }}>
               {data.certifications}

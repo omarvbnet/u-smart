@@ -479,7 +479,20 @@ export default function CVBuilderPage() {
                 className="inline-block shadow-2xl origin-top"
                 style={{ minWidth: 595 }}
               >
-                <CVTemplateRenderer templateId={templateId} data={data} locale={locale} />
+                <CVTemplateRenderer
+                templateId={templateId}
+                data={data}
+                locale={locale}
+                labels={{
+                  summary: t('summary'),
+                  experience: t('experience'),
+                  education: t('education'),
+                  skills: t('skills'),
+                  languages: t('languages'),
+                  certifications: t('certifications'),
+                  present: t('current'),
+                }}
+              />
               </div>
             </div>
             <div className="mt-4 flex justify-end">

@@ -56,3 +56,14 @@ export function isRtlLocale(locale: string): boolean {
 
 export const ARABIC_FONT =
   "'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', Tahoma, Arial, sans-serif";
+
+/** Translated labels for CV template sections (Summary, Experience, etc.) */
+export type CVLabels = {
+  summary: string;
+  experience: string;
+  education: string;
+  skills: string;
+  languages: string;
+  certifications: string;
+  present: string;
+};

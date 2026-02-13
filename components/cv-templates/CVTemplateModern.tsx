@@ -1,11 +1,11 @@
 'use client';
 
-import type { CVData } from '@/lib/cv-types';
+import type { CVData, CVLabels } from '@/lib/cv-types';
 import { isRtlLocale, ARABIC_FONT } from '@/lib/cv-types';
 
 const A4_WIDTH_PX = 595; // 210mm at 72dpi
 
-export default function CVTemplateModern({ data, locale }: { data: CVData; locale: string }) {
+export default function CVTemplateModern({ data, locale, labels }: { data: CVData; locale: string; labels: CVLabels }) {
   const rtl = isRtlLocale(locale);
   const skillsList = data.skills
     ? data.skills.split(/[,،]/).map((s) => s.trim()).filter(Boolean)
@@ -59,7 +59,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
               className="text-xs font-bold uppercase mb-2"
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
-              Summary
+              {labels.summary}
             </h2>
             <p className="leading-relaxed text-gray-700" style={{ margin: 0 }}>
               {data.summary}
@@ -73,7 +73,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
               className="text-xs font-bold uppercase mb-3"
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
-              Experience
+              {labels.experience}
             </h2>
             <div className="space-y-4">
               {data.experience.map((exp) => (
@@ -84,7 +84,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
                     </h3>
                     <span className="text-gray-500 text-[10px]">
                       {exp.dateFrom}
-                      {exp.dateTo ? ` – ${exp.current ? 'Present' : exp.dateTo}` : ''}
+                      {exp.dateTo ? ` – ${exp.current ? labels.present : exp.dateTo}` : ''}
                     </span>
                   </div>
                   <p className="text-gray-600 text-[10px] mb-1" style={{ margin: 0 }}>
@@ -107,7 +107,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
               className="text-xs font-bold uppercase mb-3"
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
-              Education
+              {labels.education}
             </h2>
             <div className="space-y-3">
               {data.education.map((edu) => (
@@ -131,7 +131,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
               className="text-xs font-bold uppercase mb-2"
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
-              Skills
+              {labels.skills}
             </h2>
             <p className="text-gray-700 leading-relaxed" style={{ margin: 0 }}>
               {skillsList.join(' · ')}
@@ -147,7 +147,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
               className="text-xs font-bold uppercase mb-1"
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
-              Languages
+              {labels.languages}
                 </h2>
                 <p className="text-gray-700 text-[10px]" style={{ margin: 0 }}>
                   {data.languages}
@@ -160,7 +160,7 @@ export default function CVTemplateModern({ data, locale }: { data: CVData; local
               className="text-xs font-bold uppercase mb-1"
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
-              Certifications
+              {labels.certifications}
                 </h2>
                 <p className="text-gray-700 text-[10px] whitespace-pre-line" style={{ margin: 0 }}>
                   {data.certifications}

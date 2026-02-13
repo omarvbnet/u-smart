@@ -1,11 +1,11 @@
 'use client';
 
-import type { CVData } from '@/lib/cv-types';
+import type { CVData, CVLabels } from '@/lib/cv-types';
 import { isRtlLocale, ARABIC_FONT } from '@/lib/cv-types';
 
 const A4_WIDTH_PX = 595;
 
-export default function CVTemplateMinimal({ data, locale }: { data: CVData; locale: string }) {
+export default function CVTemplateMinimal({ data, locale, labels }: { data: CVData; locale: string; labels: CVLabels }) {
   const rtl = isRtlLocale(locale);
   const skillsList = data.skills
     ? data.skills.split(/[,،]/).map((s) => s.trim()).filter(Boolean)
@@ -47,7 +47,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
               className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 8px 0' }}
             >
-              Summary
+              {labels.summary}
             </h2>
             <p className="leading-relaxed text-gray-600 max-w-full" style={{ margin: 0 }}>
               {data.summary}
@@ -61,7 +61,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
               className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 10px 0' }}
             >
-              Experience
+              {labels.experience}
             </h2>
             <div className="space-y-5">
               {data.experience.map((exp) => (
@@ -72,7 +72,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
                     </h3>
                     <span className="text-gray-400 text-[10px] shrink-0">
                       {exp.dateFrom}
-                      {exp.dateTo ? ` – ${exp.current ? 'Present' : exp.dateTo}` : ''}
+                      {exp.dateTo ? ` – ${exp.current ? labels.present : exp.dateTo}` : ''}
                     </span>
                   </div>
                   <p className="text-gray-500 text-[10px] mt-0.5" style={{ margin: 0 }}>
@@ -95,7 +95,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
               className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 10px 0' }}
             >
-              Education
+              {labels.education}
             </h2>
             <div className="space-y-3">
               {data.education.map((edu) => (
@@ -119,7 +119,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
               className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 8px 0' }}
             >
-              Skills
+              {labels.skills}
             </h2>
             <p className="text-gray-600 leading-relaxed" style={{ margin: 0 }}>
               {skillsList.join('  ·  ')}
@@ -135,7 +135,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
                   className="text-[10px] font-semibold uppercase text-gray-400"
                   style={{ margin: '0 0 6px 0' }}
                 >
-                  Languages
+                  {labels.languages}
                 </h2>
                 <p className="text-gray-600 text-[10px]" style={{ margin: 0 }}>
                   {data.languages}
@@ -148,7 +148,7 @@ export default function CVTemplateMinimal({ data, locale }: { data: CVData; loca
                   className="text-[10px] font-semibold uppercase text-gray-400"
                   style={{ margin: '0 0 6px 0' }}
                 >
-                  Certifications
+                  {labels.certifications}
                 </h2>
                 <p className="text-gray-600 text-[10px] whitespace-pre-line" style={{ margin: 0 }}>
                   {data.certifications}

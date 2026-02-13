@@ -209,7 +209,7 @@ export default function ServiceDetailPage() {
             {t('serviceDetail.backToServices')}
           </Link>
           <Link
-            href="/brochure"
+            href={`/brochure?service=${encodeURIComponent(slug)}`}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm font-medium transition-colors"
           >
             <FileDown className="w-4 h-4" />
