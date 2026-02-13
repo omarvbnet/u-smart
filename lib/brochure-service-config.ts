@@ -18,14 +18,13 @@ export type BrochureServiceConfig = {
   accent: string;
   accentLight: string;
   accentBg: string;
-  /** Gradient start for cover/headers */
-  gradientFrom: string;
-  /** Gradient end */
-  gradientTo: string;
-  /** Light tint for light pages */
-  pageTint: string;
-  /** Secondary accent (darker) */
   accentDark: string;
+  /** Solid dark background for cover */
+  coverBg: string;
+  /** Solid light background for content pages */
+  pageBg: string;
+  /** Secondary light background for alternate boxes */
+  boxBg: string;
 };
 
 const defaultPalette = {
@@ -33,9 +32,9 @@ const defaultPalette = {
   accentLight: '#3b82f6',
   accentDark: '#1e3a8a',
   accentBg: 'rgba(59, 130, 246, 0.12)',
-  gradientFrom: '#1e40af',
-  gradientTo: '#3b82f6',
-  pageTint: 'rgba(59, 130, 246, 0.06)',
+  coverBg: '#0f172a',
+  pageBg: '#f8fafc',
+  boxBg: '#ffffff',
 };
 
 export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
@@ -47,10 +46,10 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
     accent: '#b45309',
     accentLight: '#f59e0b',
     accentDark: '#92400e',
-    accentBg: 'rgba(245, 158, 11, 0.15)',
-    gradientFrom: '#78350f',
-    gradientTo: '#f59e0b',
-    pageTint: 'rgba(245, 158, 11, 0.08)',
+    accentBg: 'rgba(245, 158, 11, 0.12)',
+    coverBg: '#1c1917',
+    pageBg: '#fffbeb',
+    boxBg: '#ffffff',
   },
   'enterprise-networking': {
     indexKey: 'enterpriseNetworkingTechnologies',
@@ -60,10 +59,10 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
     accent: '#0e7490',
     accentLight: '#06b6d4',
     accentDark: '#0c4a6e',
-    accentBg: 'rgba(6, 182, 212, 0.15)',
-    gradientFrom: '#0e7490',
-    gradientTo: '#22d3ee',
-    pageTint: 'rgba(6, 182, 212, 0.08)',
+    accentBg: 'rgba(6, 182, 212, 0.12)',
+    coverBg: '#0c4a6e',
+    pageBg: '#ecfeff',
+    boxBg: '#ffffff',
   },
   'smart-home-automation': {
     indexKey: 'serviceTechnologies',
@@ -73,10 +72,10 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
     accent: '#1d4ed8',
     accentLight: '#3b82f6',
     accentDark: '#1e3a8a',
-    accentBg: 'rgba(59, 130, 246, 0.15)',
-    gradientFrom: '#1e40af',
-    gradientTo: '#60a5fa',
-    pageTint: 'rgba(59, 130, 246, 0.08)',
+    accentBg: 'rgba(59, 130, 246, 0.12)',
+    coverBg: '#0f172a',
+    pageBg: '#eff6ff',
+    boxBg: '#ffffff',
   },
   'custom-software': {
     indexKey: 'programmingTechnologies',
@@ -86,10 +85,10 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
     accent: '#047857',
     accentLight: '#10b981',
     accentDark: '#065f46',
-    accentBg: 'rgba(16, 185, 129, 0.15)',
-    gradientFrom: '#064e3b',
-    gradientTo: '#34d399',
-    pageTint: 'rgba(16, 185, 129, 0.08)',
+    accentBg: 'rgba(16, 185, 129, 0.12)',
+    coverBg: '#064e3b',
+    pageBg: '#ecfdf5',
+    boxBg: '#ffffff',
   },
   programming: {
     indexKey: 'programmingTechnologies',
@@ -99,27 +98,12 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
     accent: '#047857',
     accentLight: '#10b981',
     accentDark: '#065f46',
-    accentBg: 'rgba(16, 185, 129, 0.15)',
-    gradientFrom: '#064e3b',
-    gradientTo: '#34d399',
-    pageTint: 'rgba(16, 185, 129, 0.08)',
+    accentBg: 'rgba(16, 185, 129, 0.12)',
+    coverBg: '#064e3b',
+    pageBg: '#ecfdf5',
+    boxBg: '#ffffff',
   },
 };
-
-/** Default palette when no service selected */
-export function getDefaultBrochureConfig(): BrochureServiceConfig {
-  return {
-    indexKey: '',
-    featureKeys: [],
-    aboutTitleKey: '',
-    aboutDescKey: '',
-    ...defaultPalette,
-    accentDark: defaultPalette.accentDark,
-    gradientFrom: defaultPalette.gradientFrom,
-    gradientTo: defaultPalette.gradientTo,
-    pageTint: defaultPalette.pageTint,
-  };
-}
 
 export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string }[] = [
   { slug: 'quality-control-supervision', brochureKey: 'serviceQuality' },
