@@ -133,7 +133,7 @@ export async function PATCH(
 
     const existing = await prisma.visitorRequest.findUnique({ where: { id }, select: { company: true } });
     let companyPayload: string | undefined;
-    let effectiveStatus = status;
+    let statusToApply = status;
     if (existing?.company && typeof existing.company === 'string') {
       try {
         const parsed = JSON.parse(existing.company) as Record<string, unknown>;
@@ -160,7 +160,7 @@ export async function PATCH(
             parsed.completedAt = new Date().toISOString();
             parsed.inspectionResult = 'accepted';
             companyPayload = JSON.stringify(parsed);
-            effectiveStatus = 'COMPLETED';
+            statusToApply = 'COMPLETED';
           }
           // NCR flow: admin resubmits (send back to requester with comment/photos)
           else if (ncrAction === 'resubmit') {
@@ -185,10 +185,10 @@ export async function PATCH(
             if (ncrImageUrls !== undefined) parsed.ncrImageUrls = ncrImageUrls || [];
             if (inspectionResult === 'ncr') {
               parsed.status = 'IN_PROGRESS';
-              effectiveStatus = 'IN_PROGRESS';
+              statusToApply = 'IN_PROGRESS';
               if (!parsed.ncrResubmissions) parsed.ncrResubmissions = [];
             }
-            if (effectiveStatus === 'COMPLETED') {
+            if (statusToApply === 'COMPLETED') {
               parsed.completedAt = new Date().toISOString();
             }
             companyPayload = JSON.stringify(parsed);
@@ -210,9 +210,9 @@ export async function PATCH(
       finishingImageUrls?: unknown;
     };
     const updateData: UpdatePayload = {};
-    if (effectiveStatus) updateData.status = effectiveStatus as 'PENDING' | 'ON_SITE' | 'IN_PROGRESS' | 'COMPLETED';
+    if (statusToApply) updateData.status = statusToApply as 'PENDING' | 'ON_SITE' | 'IN_PROGRESS' | 'COMPLETED';
     if (companyPayload) updateData.company = companyPayload;
-    if (effectiveStatus === 'COMPLETED') updateData.completedAt = new Date();
+    if (statusToApply === 'COMPLETED') updateData.completedAt = new Date();
     if (assignedTeamId !== undefined) {
       updateData.assignedTeamId = assignedTeamId;
       updateData.assignedAt = assignedTeamId ? new Date() : null;
