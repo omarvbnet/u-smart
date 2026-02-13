@@ -344,6 +344,8 @@ export default function VisitorRequestDetailPage() {
         body.ncrReason = ncrReasonVal.trim();
         body.ncrImageUrls = ncrImageUrls;
         body.status = 'IN_PROGRESS';
+      } else if (['accepted', 'accepted_with_comments'].includes((inspectionResultVal || '').toLowerCase())) {
+        body.status = 'COMPLETED';
       }
       const res = await fetch(`/api/visitor-requests/${id}`, {
         method: 'PATCH',
@@ -353,7 +355,8 @@ export default function VisitorRequestDetailPage() {
       const data = await res.json();
       if (data.success && data.request) {
         setRequest(data.request);
-        setStatus('IN_PROGRESS');
+        const newStatus = (data.request as { status?: string }).status ?? '';
+        setStatus(newStatus);
       }
     } catch (e) {
       console.error(e);
@@ -374,7 +377,7 @@ export default function VisitorRequestDetailPage() {
       const data = await res.json();
       if (data.success && data.request) {
         setRequest(data.request);
-        setStatus('COMPLETED');
+        setStatus('IN_PROGRESS');
       }
     } catch (e) {
       console.error(e);
@@ -868,6 +871,7 @@ export default function VisitorRequestDetailPage() {
             {parsed.ncrResubmissions.length > 0 && parsed.ncrResubmissions[parsed.ncrResubmissions.length - 1].by === 'requester' && parsed.ncrResubmissions[parsed.ncrResubmissions.length - 1].action === 'resubmit' && !isCompleted && (
               <div className="rounded-lg border-2 border-rose-300 bg-rose-50/50 p-4 space-y-4">
                 <p className="text-sm font-medium text-rose-900">Requester has resubmitted. Accept or send back with comment/photos.</p>
+                <p className="text-xs text-rose-700">If you Accept, edit the checklist and report below, set the new result (e.g. Accepted), then Save inspection to complete the ticket.</p>
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -875,7 +879,7 @@ export default function VisitorRequestDetailPage() {
                     disabled={savingNcrAccept}
                     className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {savingNcrAccept ? 'Saving...' : 'Accept (close NCR)'}
+                    {savingNcrAccept ? 'Saving...' : 'Accept NCR response'}
                   </button>
                   <div className="flex-1 min-w-[200px]">
                     <textarea

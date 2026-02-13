@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowPathIcon, EyeIcon, FunnelIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, EyeIcon, FunnelIcon, BanknotesIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 type NcrResubmission = { at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] };
 type QualityRequest = {
@@ -29,6 +29,7 @@ export default function AdminQualityRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingNcrResubmitCount, setPendingNcrResubmitCount] = useState(0);
   const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState({
     result: '',
@@ -68,6 +69,7 @@ export default function AdminQualityRequestsPage() {
       if (data.success) {
         setList(data.requests);
         setPendingCount(data.pendingCount ?? 0);
+        setPendingNcrResubmitCount(data.pendingNcrResubmitCount ?? 0);
         setTotal(data.total ?? 0);
       }
     } catch (e) {
@@ -99,6 +101,15 @@ export default function AdminQualityRequestsPage() {
       in_progress: 'In progress',
     };
     return map[r] ?? r;
+  };
+
+  const isAwaitingAdminNcr = (r: QualityRequest) => {
+    if ((r.status || '').toUpperCase() === 'COMPLETED') return false;
+    if ((r.inspectionResult || '').toLowerCase() !== 'ncr') return false;
+    const subs = r.ncrResubmissions || [];
+    if (subs.length === 0) return false;
+    const last = subs[subs.length - 1];
+    return last.by === 'requester' && last.action === 'resubmit';
   };
 
   const getStatusBadge = (status: string) => {
@@ -137,8 +148,8 @@ export default function AdminQualityRequestsPage() {
         </div>
       </div>
 
-      {/* Budget & Pending counts */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      {/* Budget, NCR resubmissions & Pending counts */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
           <div className="flex items-center gap-2 text-amber-800 mb-1">
             <BanknotesIcon className="w-5 h-5" />
@@ -146,6 +157,14 @@ export default function AdminQualityRequestsPage() {
           </div>
           <p className="text-2xl font-bold text-amber-900">{pendingCount}</p>
           <p className="text-xs text-amber-700 mt-0.5">QC tickets awaiting action</p>
+        </div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-4">
+          <div className="flex items-center gap-2 text-rose-800 mb-1">
+            <ExclamationTriangleIcon className="w-5 h-5" />
+            <span className="text-sm font-medium">NCR resubmitted</span>
+          </div>
+          <p className="text-2xl font-bold text-rose-900">{pendingNcrResubmitCount}</p>
+          <p className="text-xs text-rose-700 mt-0.5">Requester resubmitted — needs your review</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
           <div className="flex items-center gap-2 text-gray-700 mb-1">
@@ -262,9 +281,19 @@ export default function AdminQualityRequestsPage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {list.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
+                <tr key={r.id} className={`hover:bg-gray-50 ${isAwaitingAdminNcr(r) ? 'bg-rose-50/60 border-l-4 border-l-rose-500' : ''}`}>
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.createdAt)}</td>
-                  <td className="px-4 py-3 text-sm font-mono text-gray-700">#{r.id.slice(-8)}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-gray-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      {isAwaitingAdminNcr(r) && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-500 text-white text-[10px] font-bold uppercase" title="Requester resubmitted NCR — needs your review">
+                          <ExclamationTriangleIcon className="w-3.5 h-3.5" />
+                          Review
+                        </span>
+                      )}
+                      #{r.id.slice(-8)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-900">{r.siteName ?? r.siteCoordinator ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 font-medium">{String(r.displayCompany || '').trim() || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.technique}</td>

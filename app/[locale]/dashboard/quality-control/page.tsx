@@ -937,6 +937,13 @@ export default function QualityControlDashboardPage() {
                             </span>
                           )}
                         </p>
+                        {ticket.ncrReason && (
+                          <p className="text-xs text-gray-400 mt-0.5 truncate max-w-full" title={ticket.ncrReason}>Reason: {ticket.ncrReason}</p>
+                        )}
+                        {ticket.ncrResubmissions && ticket.ncrResubmissions.length > 0 && (() => {
+                          const last = ticket.ncrResubmissions![ticket.ncrResubmissions!.length - 1];
+                          return last.comment ? <p className="text-xs text-gray-500 mt-0.5 truncate max-w-full" title={last.comment}>Last: {last.comment}</p> : null;
+                        })()}
                         {ticket.status !== 'COMPLETED' && (
                           <p className="text-xs text-rose-300 mt-1">
                             Resubmit to admin with comments and clearance images →

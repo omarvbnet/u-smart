@@ -151,16 +151,13 @@ export async function PATCH(
             parsed.ncrResubmissions = list;
             companyPayload = JSON.stringify(parsed);
           }
-          // NCR flow: admin accepts (close ticket)
+          // NCR flow: admin accepts (record only; status stays IN_PROGRESS until admin saves inspection with new result)
           else if (ncrAction === 'accept') {
             const list = Array.isArray(parsed.ncrResubmissions) ? (parsed.ncrResubmissions as Array<Record<string, unknown>>) : [];
             list.push({ at: new Date().toISOString(), by: 'admin', action: 'accept' });
             parsed.ncrResubmissions = list;
-            parsed.status = 'COMPLETED';
-            parsed.completedAt = new Date().toISOString();
-            parsed.inspectionResult = 'accepted';
             companyPayload = JSON.stringify(parsed);
-            statusToApply = 'COMPLETED';
+            // Do not set statusToApply; ticket stays IN_PROGRESS until admin edits checklist/report and saves with new result
           }
           // NCR flow: admin resubmits (send back to requester with comment/photos)
           else if (ncrAction === 'resubmit') {
