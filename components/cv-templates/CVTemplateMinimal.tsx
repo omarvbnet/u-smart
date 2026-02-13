@@ -1,26 +1,31 @@
 'use client';
 
 import type { CVData } from '@/lib/cv-types';
+import { isRtlLocale, ARABIC_FONT } from '@/lib/cv-types';
 
 const A4_WIDTH_PX = 595;
 
-export default function CVTemplateMinimal({ data }: { data: CVData }) {
+export default function CVTemplateMinimal({ data, locale }: { data: CVData; locale: string }) {
+  const rtl = isRtlLocale(locale);
   const skillsList = data.skills
     ? data.skills.split(/[,،]/).map((s) => s.trim()).filter(Boolean)
     : [];
   return (
     <div
       className="bg-white text-gray-800 overflow-hidden"
+      dir={rtl ? 'rtl' : 'ltr'}
+      lang={locale}
       style={{
         width: A4_WIDTH_PX,
         minHeight: 842,
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: rtl ? ARABIC_FONT : 'system-ui, -apple-system, sans-serif',
         fontSize: 11,
+        textAlign: rtl ? 'right' : 'left',
       }}
     >
       <div className="px-14 py-10">
-        <div className="border-l-2 border-gray-300 pl-6">
-          <h1 className="text-2xl font-light tracking-tight text-gray-900" style={{ margin: 0 }}>
+        <div className={rtl ? 'border-r-2 border-gray-300 pr-6' : 'border-l-2 border-gray-300 pl-6'}>
+          <h1 className="text-2xl font-light text-gray-900" style={{ margin: 0, letterSpacing: 0 }}>
             {data.fullName || 'Your Name'}
           </h1>
           {data.jobTitle && (
@@ -39,7 +44,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
         {data.summary && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase tracking-widest text-gray-400"
+              className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 8px 0' }}
             >
               Summary
@@ -53,7 +58,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
         {data.experience.length > 0 && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase tracking-widest text-gray-400"
+              className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 10px 0' }}
             >
               Experience
@@ -61,7 +66,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
             <div className="space-y-5">
               {data.experience.map((exp) => (
                 <div key={exp.id} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex justify-between items-start gap-2 flex-wrap">
+                  <div className={`flex justify-between items-start gap-2 flex-wrap ${rtl ? 'flex-row-reverse' : ''}`}>
                     <h3 className="font-medium text-gray-900" style={{ margin: 0, fontSize: 12 }}>
                       {exp.jobTitle}
                     </h3>
@@ -87,7 +92,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
         {data.education.length > 0 && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase tracking-widest text-gray-400"
+              className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 10px 0' }}
             >
               Education
@@ -111,7 +116,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
         {skillsList.length > 0 && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase tracking-widest text-gray-400"
+              className="text-[10px] font-semibold uppercase text-gray-400"
               style={{ margin: '0 0 8px 0' }}
             >
               Skills
@@ -127,7 +132,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
             {data.languages && (
               <section>
                 <h2
-                  className="text-[10px] font-semibold uppercase tracking-widest text-gray-400"
+                  className="text-[10px] font-semibold uppercase text-gray-400"
                   style={{ margin: '0 0 6px 0' }}
                 >
                   Languages
@@ -140,7 +145,7 @@ export default function CVTemplateMinimal({ data }: { data: CVData }) {
             {data.certifications && (
               <section>
                 <h2
-                  className="text-[10px] font-semibold uppercase tracking-widest text-gray-400"
+                  className="text-[10px] font-semibold uppercase text-gray-400"
                   style={{ margin: '0 0 6px 0' }}
                 >
                   Certifications

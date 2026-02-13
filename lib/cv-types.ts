@@ -48,3 +48,11 @@ export const defaultCVData: CVData = {
 };
 
 export type CVTemplateId = 'modern' | 'classic' | 'minimal';
+
+/** Locales that use RTL and Arabic script for proper CV rendering */
+export function isRtlLocale(locale: string): boolean {
+  return locale === 'ar' || locale === 'ku';
+}
+
+export const ARABIC_FONT =
+  "'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', Tahoma, Arial, sans-serif";

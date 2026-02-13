@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { useTranslations } from 'next-intl';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import {
   FileDown,
@@ -29,10 +29,21 @@ function generateId() {
 
 export default function CVBuilderPage() {
   const t = useTranslations('CV');
+  const locale = useLocale();
   const [data, setData] = useState<CVData>(defaultCVData);
   const [templateId, setTemplateId] = useState<CVTemplateId>('modern');
   const [exporting, setExporting] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
+
+  // Load Arabic font for RTL locales so PDF export renders correctly
+  useEffect(() => {
+    if (locale !== 'ar' && locale !== 'ku') return;
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, [locale]);
 
   const update = useCallback((updates: Partial<CVData>) => {
     setData((prev) => ({ ...prev, ...updates }));
@@ -468,7 +479,7 @@ export default function CVBuilderPage() {
                 className="inline-block shadow-2xl origin-top"
                 style={{ minWidth: 595 }}
               >
-                <CVTemplateRenderer templateId={templateId} data={data} />
+                <CVTemplateRenderer templateId={templateId} data={data} locale={locale} />
               </div>
             </div>
             <div className="mt-4 flex justify-end">

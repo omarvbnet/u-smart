@@ -208,15 +208,13 @@ export default function ServiceDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             {t('serviceDetail.backToServices')}
           </Link>
-          <a
-            href={`/api/brochure/pdf?locale=${locale}&service=${encodeURIComponent(slug)}`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/brochure"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm font-medium transition-colors"
           >
             <FileDown className="w-4 h-4" />
             {tBrochure('downloadPdf')}
-          </a>
+          </Link>
         </div>
 
         {/* Service brief - description first */}

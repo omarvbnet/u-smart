@@ -1,27 +1,32 @@
 'use client';
 
 import type { CVData } from '@/lib/cv-types';
+import { isRtlLocale, ARABIC_FONT } from '@/lib/cv-types';
 
 const A4_WIDTH_PX = 595;
 
-export default function CVTemplateClassic({ data }: { data: CVData }) {
+export default function CVTemplateClassic({ data, locale }: { data: CVData; locale: string }) {
+  const rtl = isRtlLocale(locale);
   const skillsList = data.skills
     ? data.skills.split(/[,،]/).map((s) => s.trim()).filter(Boolean)
     : [];
   return (
     <div
       className="bg-[#fefefe] text-gray-800 overflow-hidden"
+      dir={rtl ? 'rtl' : 'ltr'}
+      lang={locale}
       style={{
         width: A4_WIDTH_PX,
         minHeight: 842,
-        fontFamily: 'Georgia, serif',
+        fontFamily: rtl ? ARABIC_FONT : 'Georgia, serif',
         fontSize: 11,
+        textAlign: rtl ? 'right' : 'left',
       }}
     >
       <div className="px-12 py-8">
         <h1
-          className="text-3xl font-bold text-gray-900 text-center tracking-tight"
-          style={{ margin: 0, fontFamily: 'Georgia, serif', borderBottom: '1px solid #333', paddingBottom: 12 }}
+          className="text-3xl font-bold text-gray-900 text-center"
+          style={{ margin: 0, fontFamily: rtl ? ARABIC_FONT : 'Georgia, serif', borderBottom: '1px solid #333', paddingBottom: 12, letterSpacing: 0 }}
         >
           {data.fullName || 'Your Name'}
         </h1>
@@ -40,8 +45,8 @@ export default function CVTemplateClassic({ data }: { data: CVData }) {
         {data.summary && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase tracking-widest text-gray-900"
-              style={{ margin: '0 0 6px 0', fontFamily: 'system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase text-gray-900"
+              style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               Professional Summary
             </h2>
@@ -54,8 +59,8 @@ export default function CVTemplateClassic({ data }: { data: CVData }) {
         {data.experience.length > 0 && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase tracking-widest text-gray-900"
-              style={{ margin: '0 0 8px 0', fontFamily: 'system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase text-gray-900"
+              style={{ margin: '0 0 8px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               Work Experience
             </h2>
@@ -83,8 +88,8 @@ export default function CVTemplateClassic({ data }: { data: CVData }) {
         {data.education.length > 0 && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase tracking-widest text-gray-900"
-              style={{ margin: '0 0 8px 0', fontFamily: 'system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase text-gray-900"
+              style={{ margin: '0 0 8px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               Education
             </h2>
@@ -107,8 +112,8 @@ export default function CVTemplateClassic({ data }: { data: CVData }) {
         {skillsList.length > 0 && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase tracking-widest text-gray-900"
-              style={{ margin: '0 0 6px 0', fontFamily: 'system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase text-gray-900"
+              style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               Skills
             </h2>
@@ -121,8 +126,8 @@ export default function CVTemplateClassic({ data }: { data: CVData }) {
         {data.languages && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase tracking-widest text-gray-900"
-              style={{ margin: '0 0 6px 0', fontFamily: 'system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase text-gray-900"
+              style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               Languages
             </h2>
@@ -135,8 +140,8 @@ export default function CVTemplateClassic({ data }: { data: CVData }) {
         {data.certifications && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase tracking-widest text-gray-900"
-              style={{ margin: '0 0 6px 0', fontFamily: 'system-ui, sans-serif' }}
+              className="text-sm font-bold uppercase text-gray-900"
+              style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               Certifications
             </h2>

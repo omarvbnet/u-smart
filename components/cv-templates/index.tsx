@@ -6,7 +6,9 @@ import CVTemplateModern from './CVTemplateModern';
 import CVTemplateClassic from './CVTemplateClassic';
 import CVTemplateMinimal from './CVTemplateMinimal';
 
-const templates: Record<CVTemplateId, React.ComponentType<{ data: CVData }>> = {
+export type CVTemplateProps = { data: CVData; locale: string };
+
+const templates: Record<CVTemplateId, React.ComponentType<CVTemplateProps>> = {
   modern: CVTemplateModern,
   classic: CVTemplateClassic,
   minimal: CVTemplateMinimal,
@@ -15,12 +17,14 @@ const templates: Record<CVTemplateId, React.ComponentType<{ data: CVData }>> = {
 export default function CVTemplateRenderer({
   templateId,
   data,
+  locale = 'en',
 }: {
   templateId: CVTemplateId;
   data: CVData;
+  locale?: string;
 }) {
   const Template = templates[templateId] ?? CVTemplateModern;
-  return <Template data={data} />;
+  return <Template data={data} locale={locale} />;
 }
 
 export { CVTemplateModern, CVTemplateClassic, CVTemplateMinimal };
