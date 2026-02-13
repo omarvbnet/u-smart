@@ -7,9 +7,9 @@ import {
   EyeIcon,
   FunnelIcon,
   XMarkIcon,
-  Wifi,
-  Clock,
-  CheckCircle,
+  WifiIcon,
+  ClockIcon,
+  CheckCircleIcon,
   ListBulletIcon,
 } from '@heroicons/react/24/outline';
 
@@ -243,7 +243,7 @@ export default function EnterpriseNetworkingRequestsAdminPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-600 to-blue-600 shadow-lg shadow-cyan-500/25">
-              <Wifi className="w-8 h-8 text-white" />
+              <WifiIcon className="w-8 h-8 text-white" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Enterprise Networking Requests</h1>
@@ -278,7 +278,7 @@ export default function EnterpriseNetworkingRequestsAdminPage() {
                 <p className="text-sm font-medium text-amber-800">Pending</p>
                 <p className="text-2xl font-bold text-amber-900 mt-0.5">{pendingCount}</p>
               </div>
-              <Clock className="w-8 h-8 text-amber-500" />
+              <ClockIcon className="w-8 h-8 text-amber-500" />
             </div>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 shadow-sm">
@@ -287,7 +287,7 @@ export default function EnterpriseNetworkingRequestsAdminPage() {
                 <p className="text-sm font-medium text-emerald-800">Completed</p>
                 <p className="text-2xl font-bold text-emerald-900 mt-0.5">{completedCount}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-emerald-500" />
+              <CheckCircleIcon className="w-8 h-8 text-emerald-500" />
             </div>
           </div>
         </div>
@@ -473,7 +473,7 @@ export default function EnterpriseNetworkingRequestsAdminPage() {
             <div className="py-16 text-center text-gray-500">Loading...</div>
           ) : list.length === 0 ? (
             <div className="py-16 text-center">
-              <Wifi className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <WifiIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">No enterprise networking requests yet.</p>
             </div>
           ) : (
