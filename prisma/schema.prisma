@@ -502,3 +502,10 @@ model User {
     APPROVED
     REJECTED
   }
+
+  // CV builder: one row per PDF export (download) for admin count
+  model CvExport {
+    id        String   @id @default(cuid())
+    createdAt DateTime @default(now())
+    @@map("cv_exports")
+  }

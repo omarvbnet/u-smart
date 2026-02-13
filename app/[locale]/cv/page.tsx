@@ -155,6 +155,7 @@ export default function CVBuilderPage() {
       }
       const name = (data.fullName || 'CV').replace(/\s+/g, '-');
       pdf.save(`${name}-${templateId}.pdf`);
+      fetch('/api/cv/track-export', { method: 'POST' }).catch(() => {});
     } catch (e) {
       console.error('PDF export failed:', e);
     } finally {

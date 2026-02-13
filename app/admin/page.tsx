@@ -16,6 +16,7 @@ export default function HeroAdminPage() {
   const [stats, setStats] = useState<HeroStat[]>([]);
   const [projects, setProjects] = useState<FeaturedProject[]>([]);
   const [solutions, setSolutions] = useState<Solution[]>([]);
+  const [cvCount, setCvCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingStat, setEditingStat] = useState<string | null>(null);
   const [editedValue, setEditedValue] = useState<number>(0);
@@ -27,15 +28,17 @@ export default function HeroAdminPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statsRes, projectsRes, solutionsRes] = await Promise.all([
+      const [statsRes, projectsRes, solutionsRes, cvRes] = await Promise.all([
         heroApi.getStats(),
         heroApi.getFeaturedProjects(),
-        heroApi.getSolutions()
+        heroApi.getSolutions(),
+        fetch('/api/admin/cv-stats').then((r) => r.json()),
       ]);
 
       if (statsRes.success) setStats(statsRes.statistics);
       if (projectsRes.success) setProjects(projectsRes.projects);
       if (solutionsRes.success) setSolutions(solutionsRes.solutions);
+      if (cvRes?.success && typeof cvRes.count === 'number') setCvCount(cvRes.count);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -66,6 +69,15 @@ export default function HeroAdminPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">
         إدارة قسم الهيرو
       </h1>
+
+      {/* CV creations count */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-l-4 border-blue-500">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">CV creations</h2>
+        <p className="text-3xl font-bold text-gray-900">
+          {cvCount !== null ? cvCount.toLocaleString() : '—'}
+        </p>
+        <p className="text-sm text-gray-500 mt-1">Total CVs generated in the system</p>
+      </div>
 
       {/* إحصائيات الهيرو */}
       <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
