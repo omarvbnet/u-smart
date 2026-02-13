@@ -103,9 +103,9 @@ export default function AdminQualityRequestsPage() {
     return map[r] ?? r;
   };
 
+  // "Review" badge: ticket needs admin action (status != COMPLETED and last entry is requester resubmit)
   const isAwaitingAdminNcr = (r: QualityRequest) => {
     if ((r.status || '').toUpperCase() === 'COMPLETED') return false;
-    if ((r.inspectionResult || '').toLowerCase() !== 'ncr') return false;
     const subs = r.ncrResubmissions || [];
     if (subs.length === 0) return false;
     const last = subs[subs.length - 1];

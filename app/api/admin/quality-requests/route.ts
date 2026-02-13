@@ -115,13 +115,15 @@ export async function GET(req: NextRequest) {
 
     const pendingCount = rows.filter((r) => r.status === 'PENDING').length;
 
+    // NCR budget count: include only when status != COMPLETED OR requester did not make resubmission (or both)
     const pendingNcrResubmitCount = enriched.filter((r) => {
-      if ((r.status || '').toUpperCase() === 'COMPLETED') return false;
-      if ((r.inspectionResult || '').toLowerCase() !== 'ncr') return false;
       const subs = r.ncrResubmissions || [];
       if (subs.length === 0) return false;
       const last = subs[subs.length - 1];
-      return last.by === 'requester' && last.action === 'resubmit';
+      const requesterResubmitted = last.by === 'requester' && last.action === 'resubmit';
+      const completed = (r.status || '').toUpperCase() === 'COMPLETED';
+      if (completed && requesterResubmitted) return false;
+      return true;
     }).length;
 
     if (resultFilter) {
