@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyRequesterToken, COOKIE_NAME } from '@/lib/requester-auth';
+import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = req.cookies.get(COOKIE_NAME)?.value;
+    const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
     const requester = token ? verifyRequesterToken(token) : null;
     if (!requester) {
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
