@@ -4,16 +4,99 @@ import { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, FileDown, Check, Layers } from 'lucide-react';
+import {
+  ArrowLeft,
+  FileDown,
+  Check,
+  Layers,
+  Sparkles,
+  Building2,
+  Target,
+  BarChart3,
+  ShieldCheck,
+  Zap,
+  Home,
+  Cable,
+  Leaf,
+  ClipboardCheck,
+  Network,
+  Code2,
+  Search,
+  Eye,
+  Shield,
+  FileSearch,
+  TrendingUp,
+  LayoutList,
+  Box,
+  Link2,
+  Map,
+  PencilRuler,
+  Wrench,
+  Cpu,
+  Radio,
+  Wifi,
+  Server,
+  Smartphone,
+  Terminal,
+  Database,
+  HardDrive,
+  Mail,
+  Globe,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
 import {
   BROCHURE_SERVICE_CONFIG,
   BROCHURE_SERVICES_ORDER,
+  WHY_CHOOSE_ICONS,
+  FEATURE_ICONS,
 } from '@/lib/brochure-service-config';
 
 const WEBSITE_URL = 'https://www.usmart-iot.com';
+
+const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  Sparkles,
+  Building2,
+  Target,
+  BarChart3,
+  ShieldCheck,
+  Zap,
+  Home,
+  Cable,
+  Leaf,
+  ClipboardCheck,
+  Network,
+  Code2,
+  Layers,
+  Search,
+  Eye,
+  Shield,
+  FileSearch,
+  TrendingUp,
+  LayoutList,
+  Box,
+  Link2,
+  Map,
+  PencilRuler,
+  Wrench,
+  Cpu,
+  Radio,
+  Wifi,
+  Server,
+  Smartphone,
+  Terminal,
+  Database,
+  HardDrive,
+  Mail,
+  Globe,
+};
+
+function BrochureIcon({ name, className = 'w-5 h-5', style }: { name: string; className?: string; style?: React.CSSProperties }) {
+  const Icon = ICON_MAP[name] ?? Layers;
+  const content = <Icon className={className} />;
+  return style ? <span style={style} className="inline-flex">{content}</span> : content;
+}
 
 // A4 print: 21 × 29.7 cm → 300 DPI = 2480 × 3508 px
 const A4_WIDTH_CM = 21;
@@ -230,6 +313,11 @@ export default function BrochurePage() {
               </div>
             </div>
             <div className="p-6 rounded-xl border-2 text-center" style={{ borderColor: accent, backgroundColor: `${accent}15` }}>
+              <div className="flex justify-center mb-3">
+                <span className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${accentLight}30` }}>
+                  <BrochureIcon name="Sparkles" className="w-6 h-6" style={{ color: accentLight }} />
+                </span>
+              </div>
               <h1 className="text-xl font-bold text-white mb-2" style={{ letterSpacing: isRtl ? 0 : '-0.03em' }}>
                 {t('title')}
               </h1>
@@ -238,7 +326,10 @@ export default function BrochurePage() {
                   {featuredTitle}
                 </p>
               )}
-              <p className="text-sm font-medium text-white/90">{t('tagline')}</p>
+              <p className="text-sm font-medium text-white/90 flex items-center justify-center gap-2">
+                <BrochureIcon name="Sparkles" className="w-4 h-4" style={{ color: accentLight }} />
+                {t('tagline')}
+              </p>
             </div>
             <div className="p-5 rounded-xl border" style={{ borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
               <p className="text-sm text-white/85 leading-relaxed">{t('headline')}</p>
@@ -258,16 +349,24 @@ export default function BrochurePage() {
           }}
         >
           <div className="relative z-10 max-w-3xl space-y-4">
-            <div className="p-4 rounded-xl border-2" style={{ borderColor: accent, backgroundColor: boxBg }}>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
-                {t('pageAboutTitle')}
+            <div className="p-4 rounded-xl border-2 flex items-center gap-4" style={{ borderColor: accent, backgroundColor: boxBg }}>
+              <span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}15` }}>
+                <BrochureIcon name="Building2" className="w-7 h-7" style={{ color: accent }} />
               </span>
-              <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
-                {t('pageAboutTitle')}
-              </h2>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
+                  {t('pageAboutTitle')}
+                </span>
+                <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
+                  {t('pageAboutTitle')}
+                </h2>
+              </div>
             </div>
-            <div className="p-5 rounded-xl border-2" style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}>
-              <p className="text-[0.95rem] leading-[1.7] text-gray-700 font-medium">{t('description')}</p>
+            <div className="p-5 rounded-xl border-2 flex gap-4 items-start" style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}>
+              <span className="w-20 h-20 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}12` }}>
+                <BrochureIcon name="Globe" className="w-10 h-10" style={{ color: accent }} />
+              </span>
+              <p className="text-[0.95rem] leading-[1.7] text-gray-700 font-medium flex-1">{t('description')}</p>
             </div>
             <div className="p-5 rounded-xl border-2" style={{ borderColor: `${accent}40`, backgroundColor: boxBg }}>
               <p className="text-[0.9rem] leading-[1.65] text-gray-600">{t('description2')}</p>
@@ -319,10 +418,13 @@ export default function BrochurePage() {
                     >
                       <div className="flex items-start gap-3 mb-2">
                         <span
-                          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm"
+                          className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white"
                           style={{ backgroundColor: accent }}
                         >
-                          {i + 1}
+                          <BrochureIcon
+                            name={FEATURE_ICONS[config!.featureKeys[i]] ?? 'Layers'}
+                            className="w-5 h-5"
+                          />
                         </span>
                         <h3 className="font-bold text-gray-900 text-[1.05rem] leading-tight">{item.name}</h3>
                       </div>
@@ -370,16 +472,21 @@ export default function BrochurePage() {
           }}
         >
           <div className="relative z-10 space-y-4">
-            <div className="p-4 rounded-xl border-2" style={{ borderColor: accent, backgroundColor: boxBg }}>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
-                {t('pageServicesTitle')}
+            <div className="p-4 rounded-xl border-2 flex items-center gap-4" style={{ borderColor: accent, backgroundColor: boxBg }}>
+              <span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}15` }}>
+                <BrochureIcon name="Layers" className="w-7 h-7" style={{ color: accent }} />
               </span>
-              <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
-                {t('pageServicesTitle')}
-              </h2>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                  {t('pageServicesTitle')}
+                </span>
+                <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
+                  {t('pageServicesTitle')}
+                </h2>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
-              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey }, i) => {
+              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }, i) => {
                 const isFeatured = serviceSlug === slug;
                 return (
                   <div
@@ -392,10 +499,10 @@ export default function BrochurePage() {
                   >
                     <div className="flex items-center gap-4">
                       <span
-                        className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                        className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-white"
                         style={{ backgroundColor: isFeatured ? accent : accentDark }}
                       >
-                        {i + 1}
+                        <BrochureIcon name={icon} className="w-6 h-6" />
                       </span>
                       <div className="min-w-0">
                         <span className={`text-[0.95rem] font-medium block ${isFeatured ? 'text-gray-900' : 'text-gray-600'}`}>
@@ -430,13 +537,18 @@ export default function BrochurePage() {
           }}
         >
           <div className="relative z-10 max-w-3xl space-y-4">
-            <div className="p-4 rounded-xl border-2" style={{ borderColor: accent, backgroundColor: boxBg }}>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
-                {t('pageWhyTitle')}
+            <div className="p-4 rounded-xl border-2 flex items-center gap-4" style={{ borderColor: accent, backgroundColor: boxBg }}>
+              <span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}15` }}>
+                <BrochureIcon name="Target" className="w-7 h-7" style={{ color: accent }} />
               </span>
-              <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
-                {t('pageWhyTitle')}
-              </h2>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                  {t('pageWhyTitle')}
+                </span>
+                <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
+                  {t('pageWhyTitle')}
+                </h2>
+              </div>
             </div>
             <div className="p-5 rounded-xl border-2" style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}>
               <p className="text-[1rem] text-gray-700 leading-[1.6] font-medium">{t('valueProposition')}</p>
@@ -448,8 +560,8 @@ export default function BrochurePage() {
                   className="p-4 rounded-xl border-2 flex items-start gap-3"
                   style={{ borderColor: `${accent}40`, backgroundColor: boxBg }}
                 >
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white mt-0.5" style={{ backgroundColor: accent }}>
-                    <Check className="w-4 h-4" strokeWidth={2.5} />
+                  <span className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center mt-0.5" style={{ backgroundColor: `${accent}20` }}>
+                    <BrochureIcon name={WHY_CHOOSE_ICONS[i] ?? 'Check'} className="w-5 h-5" style={{ color: accent }} />
                   </span>
                   <span className="text-gray-700 leading-[1.55] text-[0.9rem] pt-0.5">{s}</span>
                 </div>
@@ -470,22 +582,36 @@ export default function BrochurePage() {
           }}
         >
           <div className="relative z-10 max-w-3xl space-y-4">
-            <div className="p-4 rounded-xl border-2" style={{ borderColor: accent, backgroundColor: boxBg }}>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
-                {t('pageContactTitle')}
+            <div className="p-4 rounded-xl border-2 flex items-center gap-4" style={{ borderColor: accent, backgroundColor: boxBg }}>
+              <span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}15` }}>
+                <BrochureIcon name="Mail" className="w-7 h-7" style={{ color: accent }} />
               </span>
-              <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
-                {t('pageContactTitle')}
-              </h2>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                  {t('pageContactTitle')}
+                </span>
+                <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
+                  {t('pageContactTitle')}
+                </h2>
+              </div>
             </div>
             <div className="p-5 rounded-xl border-2" style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}>
               <p className="text-[0.95rem] text-gray-700 leading-[1.65]">{t('cta')}</p>
             </div>
             <div className={`flex flex-wrap items-stretch gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
               <div className="p-5 rounded-xl border-2 flex-1 min-w-[200px]" style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}>
-                <p className="font-bold text-gray-900 text-[1rem] mb-2">{t('contactUs')}</p>
-                <p className="text-gray-600 text-[0.9rem]">{t('visit')}: {t('websiteUrl')}</p>
-                <p className="text-gray-600 text-[0.9rem] mt-1">📧 {t('email')}</p>
+                <p className="font-bold text-gray-900 text-[1rem] mb-3 flex items-center gap-2">
+                  <BrochureIcon name="Mail" className="w-5 h-5" style={{ color: accent }} />
+                  {t('contactUs')}
+                </p>
+                <p className="text-gray-600 text-[0.9rem] flex items-center gap-2">
+                  <BrochureIcon name="Globe" className="w-4 h-4 shrink-0" style={{ color: accent }} />
+                  {t('visit')}: {t('websiteUrl')}
+                </p>
+                <p className="text-gray-600 text-[0.9rem] mt-2 flex items-center gap-2">
+                  <BrochureIcon name="Mail" className="w-4 h-4 shrink-0" style={{ color: accent }} />
+                  {t('email')}
+                </p>
               </div>
               <div className="p-5 rounded-xl border-2 flex flex-col items-center justify-center" style={{ borderColor: accent, backgroundColor: boxBg }}>
                 <QRCodeSVG value={WEBSITE_URL} size={130} level="M" />

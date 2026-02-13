@@ -105,9 +105,37 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
   },
 };
 
-export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string }[] = [
-  { slug: 'quality-control-supervision', brochureKey: 'serviceQuality' },
-  { slug: 'smart-home-automation', brochureKey: 'serviceSmartHome' },
-  { slug: 'enterprise-networking', brochureKey: 'serviceTelecom' },
-  { slug: 'custom-software', brochureKey: 'serviceCleanEnergy' },
+export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string; icon: string }[] = [
+  { slug: 'quality-control-supervision', brochureKey: 'serviceQuality', icon: 'ClipboardCheck' },
+  { slug: 'smart-home-automation', brochureKey: 'serviceSmartHome', icon: 'Home' },
+  { slug: 'enterprise-networking', brochureKey: 'serviceTelecom', icon: 'Network' },
+  { slug: 'custom-software', brochureKey: 'serviceCleanEnergy', icon: 'Code2' },
 ];
+
+/** Icons for Why Choose strengths (7 items) */
+export const WHY_CHOOSE_ICONS = ['Target', 'BarChart3', 'ShieldCheck', 'Zap', 'Home', 'Cable', 'Leaf'];
+
+/** Icons for feature keys by service (fallback per key) */
+export const FEATURE_ICONS: Record<string, string> = {
+  inspection: 'Search',
+  supervision: 'Eye',
+  hse: 'Shield',
+  investigation: 'FileSearch',
+  tracking: 'TrendingUp',
+  fiber: 'Cable',
+  cable_systemization: 'LayoutList',
+  closures: 'Box',
+  splice: 'Link2',
+  qgis: 'Map',
+  asbuilt_design: 'PencilRuler',
+  maintenance: 'Wrench',
+  knx: 'Cpu',
+  buspro: 'Radio',
+  zigbee: 'Wifi',
+  nodejs: 'Server',
+  flutter: 'Smartphone',
+  python: 'Terminal',
+  mysql: 'Database',
+  postgresql: 'Database',
+  nosql: 'HardDrive',
+};
