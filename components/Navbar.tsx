@@ -50,6 +50,10 @@ export default function ProfessionalNavbar() {
       setActiveLink('about');
       return;
     }
+    if (pathname?.includes('/cv')) {
+      setActiveLink('cv');
+      return;
+    }
     const sections = ['home', 'hero', 'services', 'industry', 'development', 'training', 'careers'];
     const currentScroll = window.scrollY + 100;
 
@@ -74,6 +78,7 @@ export default function ProfessionalNavbar() {
     { key: "development", href: "#development", label: t("development") },
     { key: "training", href: "#training", label: t("training") },
     { key: "careers", href: "#careers", label: t("careers") },
+    { key: "cv", href: "/cv", label: t("cv") },
   ];
 
   const languages = [

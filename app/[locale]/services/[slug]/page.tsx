@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2 } from 'lucide-react';
+import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, FileDown } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
@@ -75,6 +75,7 @@ type Project = {
 export default function ServiceDetailPage() {
   const params = useParams();
   const t = useTranslations('Index');
+  const tBrochure = useTranslations('Brochure');
   const slug = typeof params.slug === 'string' ? params.slug : '';
   const locale = (typeof params.locale === 'string' && LOCALES.includes(params.locale))
     ? params.locale
@@ -199,13 +200,24 @@ export default function ServiceDetailPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
       <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
-        <Link
-          href="/#services"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          {t('serviceDetail.backToServices')}
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <Link
+            href="/#services"
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t('serviceDetail.backToServices')}
+          </Link>
+          <a
+            href={`/api/brochure/pdf?locale=${locale}&service=${encodeURIComponent(slug)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm font-medium transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            {tBrochure('downloadPdf')}
+          </a>
+        </div>
 
         {/* Service brief - description first */}
         <section className="mb-16">

@@ -38,6 +38,7 @@ export default function AdminTrainingRequestsPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [resendEmailId, setResendEmailId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = async () => {
@@ -87,6 +88,29 @@ export default function AdminTrainingRequestsPage() {
       window.alert('Failed to update status. Please try again.');
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleResendEmail = async (requestId: string) => {
+    setResendEmailId(requestId);
+    try {
+      const res = await fetch('/api/resend-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ type: 'training', requestId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.alert('Confirmation email sent to requester.');
+      } else {
+        window.alert(data.message || 'Failed to resend email.');
+      }
+    } catch (e) {
+      console.error(e);
+      window.alert('Failed to resend email. Please try again.');
+    } finally {
+      setResendEmailId(null);
     }
   };
 
@@ -286,28 +310,40 @@ export default function AdminTrainingRequestsPage() {
                     {r.message && (
                       <p className="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-xl">{r.message}</p>
                     )}
-                    {r.status === 'PENDING' && (
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(r.id, 'APPROVED')}
-                          disabled={updatingId === r.id}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium disabled:opacity-60"
-                        >
-                          {updatingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(r.id, 'REJECTED')}
-                          disabled={updatingId === r.id}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-medium disabled:opacity-60"
-                        >
-                          {updatingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                          Reject
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-2 mt-4 items-center">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleResendEmail(r.id); }}
+                        disabled={resendEmailId === r.id}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded-xl text-sm font-medium disabled:opacity-60 border border-gray-200"
+                        title="Resend confirmation email to requester"
+                      >
+                        {resendEmailId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                        Resend email
+                      </button>
+                      {r.status === 'PENDING' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => updateStatus(r.id, 'APPROVED')}
+                            disabled={updatingId === r.id}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium disabled:opacity-60"
+                          >
+                            {updatingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateStatus(r.id, 'REJECTED')}
+                            disabled={updatingId === r.id}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-medium disabled:opacity-60"
+                          >
+                            {updatingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                            Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -17,7 +17,7 @@ import {
   GitBranch, CloudLightning, MessageSquare,
   Mail, Phone, Map, Linkedin, Twitter,
   Github, Instagram, Globe as GlobeIcon,
-  Facebook, MessageCircle
+  Facebook, MessageCircle, FileDown
 } from "lucide-react";
 import { getServiceIcon } from "@/lib/service-icons";
 import { Link } from "@/i18n/routing";
@@ -484,6 +484,7 @@ type HeroData = {
 export default function ProfessionalHomePage() {
   const t = useTranslations("Index");
   const tNav = useTranslations("Navbar");
+  const tBrochure = useTranslations("Brochure");
   const locale = useLocale();
   const isRTL = locale === "ar";
   const { scrollYProgress } = useScroll();
@@ -491,6 +492,7 @@ export default function ProfessionalHomePage() {
   const [heroDataLoading, setHeroDataLoading] = useState(true);
   const [subscribeEmail, setSubscribeEmail] = useState("");
   const [subscribeLoading, setSubscribeLoading] = useState(false);
+  const [subscribeResendLoading, setSubscribeResendLoading] = useState(false);
   const [subscribeMessage, setSubscribeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -510,7 +512,6 @@ export default function ProfessionalHomePage() {
       });
       const data = await res.json();
       if (data.success) {
-        setSubscribeEmail("");
         setSubscribeMessage({ type: "success", text: t("footer.subscribeSuccess") });
       } else {
         setSubscribeMessage({ type: "error", text: data.message || t("footer.subscribeError") });
@@ -519,6 +520,30 @@ export default function ProfessionalHomePage() {
       setSubscribeMessage({ type: "error", text: t("footer.subscribeError") });
     } finally {
       setSubscribeLoading(false);
+    }
+  };
+
+  const handleResendSubscribeEmail = async () => {
+    const email = subscribeEmail.trim();
+    if (!email) return;
+    setSubscribeResendLoading(true);
+    setSubscribeMessage(null);
+    try {
+      const res = await fetch("/api/resend-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "subscription", email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSubscribeMessage({ type: "success", text: t("footer.subscribeResendSuccess") || "Confirmation email resent." });
+      } else {
+        setSubscribeMessage({ type: "error", text: data.message || t("footer.subscribeError") });
+      }
+    } catch {
+      setSubscribeMessage({ type: "error", text: t("footer.subscribeError") });
+    } finally {
+      setSubscribeResendLoading(false);
     }
   };
 
@@ -1134,6 +1159,15 @@ export default function ProfessionalHomePage() {
                   <Map className="w-4 h-4 text-gray-500" />
                   <span>Iraq, Kirkuk</span>
                 </div>
+                <a
+                  href={`/api/brochure/pdf?locale=${locale}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-gray-300 hover:text-white transition-colors"
+                >
+                  <FileDown className="w-4 h-4" />
+                  {tBrochure("downloadPdf")}
+                </a>
               </div>
             </div>
 
@@ -1167,6 +1201,18 @@ export default function ProfessionalHomePage() {
                 {subscribeMessage && (
                   <p className={`text-sm ${subscribeMessage.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
                     {subscribeMessage.text}
+                  </p>
+                )}
+                {subscribeMessage?.type === "success" && subscribeEmail.trim() && (
+                  <p className="text-sm text-gray-400 mt-1">
+                    <button
+                      type="button"
+                      onClick={handleResendSubscribeEmail}
+                      disabled={subscribeResendLoading}
+                      className="underline hover:text-white disabled:opacity-60"
+                    >
+                      {subscribeResendLoading ? "…" : t("footer.resendEmail") || "Resend confirmation email"}
+                    </button>
                   </p>
                 )}
               </div>
