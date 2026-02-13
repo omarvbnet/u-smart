@@ -841,11 +841,11 @@ export default function VisitorRequestDetailPage() {
         </div>
       )}
 
-      {request.serviceSlug === 'quality-control-supervision' && (parsed.inspectionResult || '').toLowerCase() === 'ncr' && parsed.ncrResubmissions.length > 0 && (
+      {request.serviceSlug === 'quality-control-supervision' && parsed.ncrResubmissions.length > 0 && (
         <div className="mt-6 bg-rose-50/80 border border-rose-200 rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-rose-200 bg-rose-100/50">
-            <h2 className="text-lg font-semibold text-rose-900">NCR resubmissions</h2>
-            <p className="text-sm text-rose-800 mt-0.5">Timeline of requester resubmissions and admin actions</p>
+            <h2 className="text-lg font-semibold text-rose-900">NCR resubmissions (report)</h2>
+            <p className="text-sm text-rose-800 mt-0.5">Saved timeline of requester resubmissions and admin actions {isCompleted ? '(NCR closed)' : ''}</p>
           </div>
           <div className="p-6 space-y-4">
             {parsed.ncrResubmissions.map((entry, idx) => (

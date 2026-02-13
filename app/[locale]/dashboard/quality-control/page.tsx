@@ -64,7 +64,7 @@ export default function QualityControlDashboardPage() {
   const [attachmentUploadProgress, setAttachmentUploadProgress] = useState<number | null>(null);
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketMessage, setTicketMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [dashboardSection, setDashboardSection] = useState<'pending' | 'completed' | 'company' | 'sites'>('pending');
+  const [dashboardSection, setDashboardSection] = useState<'pending' | 'completed' | 'ncr' | 'company' | 'sites'>('pending');
   const [slaStats, setSlaStats] = useState<SlaStats | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -399,7 +399,9 @@ export default function QualityControlDashboardPage() {
 
   const baseFilteredTickets = dashboardSection === 'pending'
     ? tickets.filter((tk) => tk.status !== 'COMPLETED')
-    : tickets.filter((tk) => tk.status === 'COMPLETED');
+    : dashboardSection === 'ncr'
+      ? tickets.filter((tk) => (tk.inspectionResult || '').toLowerCase() === 'ncr' || (tk.ncrResubmissions?.length ?? 0) > 0)
+      : tickets.filter((tk) => tk.status === 'COMPLETED');
 
   const filteredTickets = baseFilteredTickets.filter((tk) => {
     if (ticketListFilter.result) {
@@ -557,6 +559,19 @@ export default function QualityControlDashboardPage() {
             className={`px-4 py-2 rounded-xl font-medium transition-colors ${dashboardSection === 'completed' ? 'bg-amber-600 text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}
           >
             {t('ticketForm.navCompleted')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDashboardSection('ncr')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors ${dashboardSection === 'ncr' ? 'bg-rose-600 text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            NCR
+            {tickets.filter((t) => (t.inspectionResult || '').toLowerCase() === 'ncr' || (t.ncrResubmissions?.length ?? 0) > 0).length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md bg-rose-500/80 text-white text-xs font-bold">
+                {tickets.filter((t) => (t.inspectionResult || '').toLowerCase() === 'ncr' || (t.ncrResubmissions?.length ?? 0) > 0).length}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -830,7 +845,7 @@ export default function QualityControlDashboardPage() {
           </div>
         )}
 
-        {(dashboardSection === 'pending' || dashboardSection === 'completed') && (
+        {(dashboardSection === 'pending' || dashboardSection === 'completed' || dashboardSection === 'ncr') && (
           <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
               <Filter className="w-4 h-4" />
@@ -885,9 +900,9 @@ export default function QualityControlDashboardPage() {
           </div>
         )}
 
-        {(dashboardSection === 'pending' || dashboardSection === 'completed') && (filteredTickets.length === 0 ? (
+        {(dashboardSection === 'pending' || dashboardSection === 'completed' || dashboardSection === 'ncr') && (filteredTickets.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center text-gray-500">
-            <p className="mb-4">{dashboardSection === 'pending' ? t('ticketForm.noTickets') : 'No completed tickets.'}</p>
+            <p className="mb-4">{dashboardSection === 'pending' ? t('ticketForm.noTickets') : dashboardSection === 'ncr' ? 'No NCR tickets.' : 'No completed tickets.'}</p>
             {dashboardSection === 'pending' && (
               <button
                 type="button"

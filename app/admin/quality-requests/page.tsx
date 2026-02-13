@@ -127,6 +127,16 @@ export default function AdminQualityRequestsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Quality Control Requests</h1>
         <div className="flex items-center gap-2">
+          <Link
+            href="/admin/ncr-resubmissions"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-lg font-medium"
+          >
+            <ExclamationTriangleIcon className="w-5 h-5" />
+            NCR resubmissions
+            {pendingNcrResubmitCount > 0 && (
+              <span className="ml-0.5 px-2 py-0.5 rounded-full bg-rose-500 text-white text-xs font-bold">{pendingNcrResubmitCount}</span>
+            )}
+          </Link>
           <button
             type="button"
             onClick={syncCompany}
