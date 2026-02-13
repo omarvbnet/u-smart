@@ -581,15 +581,21 @@ export default function TicketDetailPage() {
                   )}
                   {ticket.status !== 'COMPLETED' && (
                     <div className="rounded-lg border-2 border-rose-500/30 bg-rose-500/10 p-4 space-y-3">
-                      <p className="text-sm font-medium text-rose-300">Resubmit NCR response (comments and clearance images)</p>
-                      <textarea
-                        value={ncrResubmitComment}
-                        onChange={(e) => setNcrResubmitComment(e.target.value)}
-                        placeholder="Add your comments and clearance details..."
-                        rows={3}
-                        className="w-full text-sm rounded-lg border border-rose-500/30 bg-white/5 text-gray-200 placeholder-gray-500 px-3 py-2 focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500/50"
-                      />
-                      <div className="flex flex-wrap gap-2 items-center">
+                      <p className="text-sm font-medium text-rose-300">Resubmit to admin</p>
+                      <p className="text-xs text-rose-200/80">Add comments and clearance images for admin review.</p>
+                      <div>
+                        <label className="block text-xs font-medium text-rose-200/90 mb-1">Comments</label>
+                        <textarea
+                          value={ncrResubmitComment}
+                          onChange={(e) => setNcrResubmitComment(e.target.value)}
+                          placeholder="Your comments and clearance details for admin..."
+                          rows={3}
+                          className="w-full text-sm rounded-lg border border-rose-500/30 bg-white/5 text-gray-200 placeholder-gray-500 px-3 py-2 focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-rose-200/90 mb-1">Clearance images</label>
+                        <div className="flex flex-wrap gap-2 items-center">
                         {ncrResubmitImageUrls.map((url) => (
                           <span key={url} className="relative inline-block">
                             <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-16 h-16 object-cover rounded border border-rose-500/20" />
@@ -613,6 +619,7 @@ export default function TicketDetailPage() {
                           />
                           {ncrResubmitUploading ? <Loader2 className="w-6 h-6 text-rose-400 animate-spin" /> : <ImageIcon className="w-6 h-6 text-rose-400" />}
                         </label>
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -621,7 +628,7 @@ export default function TicketDetailPage() {
                         className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium rounded-lg disabled:opacity-50 flex items-center gap-2"
                       >
                         {ncrResubmitSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        {ncrResubmitSubmitting ? 'Submitting...' : 'Submit NCR response'}
+                        {ncrResubmitSubmitting ? 'Submitting...' : 'Resubmit to admin'}
                       </button>
                     </div>
                   )}

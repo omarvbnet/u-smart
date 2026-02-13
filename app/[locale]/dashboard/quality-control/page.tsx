@@ -928,14 +928,21 @@ export default function QualityControlDashboardPage() {
                       <p className="text-xs text-emerald-400/90 mt-0.5">{t('ticketForm.completedAt')}: {formatDate(ticket.completedAt)} · {t('ticketForm.totalDelay')}: {formatTotalDelay(ticket.createdAt, ticket.completedAt)}</p>
                     )}
                     {ticket.inspectionResult === 'ncr' && (
-                      <p className="text-xs text-red-400/90 mt-1 flex items-center gap-1.5">
-                        NCR
-                        {ticket.ncrResubmissions && ticket.ncrResubmissions.length > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 text-[10px] font-medium">
-                            {ticket.ncrResubmissions.length} resubmission{ticket.ncrResubmissions.length !== 1 ? 's' : ''}
-                          </span>
+                      <>
+                        <p className="text-xs text-red-400/90 mt-1 flex items-center gap-1.5">
+                          NCR
+                          {ticket.ncrResubmissions && ticket.ncrResubmissions.length > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 text-[10px] font-medium">
+                              {ticket.ncrResubmissions.length} resubmission{ticket.ncrResubmissions.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </p>
+                        {ticket.status !== 'COMPLETED' && (
+                          <p className="text-xs text-rose-300 mt-1">
+                            Resubmit to admin with comments and clearance images →
+                          </p>
                         )}
-                      </p>
+                      </>
                     )}
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1">

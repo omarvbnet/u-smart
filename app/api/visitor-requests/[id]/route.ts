@@ -183,7 +183,9 @@ export async function PATCH(
             if (inspectionChecklist !== undefined) parsed.inspectionChecklist = inspectionChecklist || [];
             if (ncrReason !== undefined) parsed.ncrReason = ncrReason || null;
             if (ncrImageUrls !== undefined) parsed.ncrImageUrls = ncrImageUrls || [];
-            if (inspectionResult === 'ncr') {
+            // NCR result: ticket must stay IN_PROGRESS until admin explicitly accepts (ncrAction: 'accept')
+            const resultIsNcr = (parsed.inspectionResult || '').toLowerCase() === 'ncr';
+            if (resultIsNcr) {
               parsed.status = 'IN_PROGRESS';
               statusToApply = 'IN_PROGRESS';
               if (!parsed.ncrResubmissions) parsed.ncrResubmissions = [];

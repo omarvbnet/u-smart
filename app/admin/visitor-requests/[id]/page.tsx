@@ -502,8 +502,13 @@ export default function VisitorRequestDetailPage() {
                     <option value="PENDING">Pending</option>
                     <option value="ON_SITE">We on site</option>
                     <option value="IN_PROGRESS">In Progress</option>
-                    <option value="COMPLETED">Completed</option>
+                    <option value="COMPLETED" disabled={request.serviceSlug === 'quality-control-supervision' && (parsed.inspectionResult || '').toLowerCase() === 'ncr'}>
+                      Completed
+                    </option>
                   </select>
+                  {request.serviceSlug === 'quality-control-supervision' && (parsed.inspectionResult || '').toLowerCase() === 'ncr' && (
+                    <p className="text-xs text-amber-700 mt-1">NCR tickets stay In Progress until you click Accept in the NCR section below.</p>
+                  )}
                 </dd>
               </div>
             </>
