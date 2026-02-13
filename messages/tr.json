@@ -133,6 +133,38 @@
     "dashboard": "Kontrol Paneli"
   },
   "Index": {
+    "smartHomeFeatures": {
+      "security": {
+        "name": "Güvenlik ve Erişim Kontrolü",
+        "description": "Akıllı kilitler, kameralar, hareket sensörleri ve alarm sistemleri ile entegre güvenlik. Uzaktan erişim, anlık uyarılar ve mülkünüzü her yerden izleyin.",
+        "highlights": ["Uzaktan izleme", "Akıllı kilitler ve erişim", "Hareket ve izinsiz giriş sensörleri", "Anlık uyarılar"]
+      },
+      "lighting": {
+        "name": "Akıllı Aydınlatma",
+        "description": "Otomatik ve ruh haline göre aydınlatma kontrolü. Parlaklık, renk sıcaklığı ve programları yaşam tarzınıza göre ayarlayın. Yemek, dinlenme, çalışma ve daha fazlası için sahneler.",
+        "highlights": ["Karartma ve renk kontrolü", "Sahneler ve programlar", "Hareketle tetiklenen aydınlatma", "Enerji tasarruflu LED'ler"]
+      },
+      "control": {
+        "name": "Birleşik Kontrol",
+        "description": "Tüm evinizi—aydınlatma, iklim, güvenlik, eğlence—tek bir uygulama veya panelden kontrol edin. Sesli komutlar, mobil kontrol ve duvar anahtarları.",
+        "highlights": ["Tek uygulama kontrolü", "Ses asistanı entegrasyonu", "Duvar panelleri ve anahtarlar", "Uzaktan erişim"]
+      },
+      "luxury": {
+        "name": "Lüks ve Konfor",
+        "description": "Perdeler, jaluzler, ses-görüntü sistemleri ve ortam kontrolü için premium otomasyon. Her durum için tek dokunuşla mükemmel atmosfer.",
+        "highlights": ["Motorlu perdeler ve jaluzler", "AV ve eğlence kontrolü", "Ortam ayarları", "Premium kaplamalar"]
+      },
+      "powerSavings": {
+        "name": "Enerji Tasarrufu",
+        "description": "Akıllı programlama, doluluk tabanlı kontrol ve enerji izleme ile elektrik faturalarını düşürün. Kullanılmayan cihazları otomatik kapatın, ısıtma ve soğutmayı optimize edin.",
+        "highlights": ["Otomatik kapatma", "Doluluk algılama", "Enerji panelleri", "Daha düşük fatura"]
+      },
+      "climate": {
+        "name": "İklim ve HVAC",
+        "description": "Oda bazında hassas sıcaklık ve nem kontrolü. Isıtma ve soğutmayı programlayın, akıllı termostatlarla entegre edin, enerji israfını azaltarak konfor sağlayın.",
+        "highlights": ["Oda bazında kontrol", "Akıllı termostatlar", "Programlar ve ön ayarlar", "Nem yönetimi"]
+      }
+    },
     "serviceTechnologies": {
       "title": "Kullandığımız Sistemler ve Teknolojiler",
       "intro": "Akıllı ev otomasyonu için sektör lideri protokoller kullanıyoruz. Aşağıda kısa açıklama ve avantaj/dezavantajlarıyla birlikte ana sistemlerimiz yer alıyor.",

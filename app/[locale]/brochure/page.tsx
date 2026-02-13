@@ -42,6 +42,9 @@ import {
   HardDrive,
   Mail,
   Globe,
+  Lightbulb,
+  PanelTop,
+  Thermometer,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import html2canvas from 'html2canvas-pro';
@@ -90,6 +93,9 @@ const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>
   HardDrive,
   Mail,
   Globe,
+  Lightbulb,
+  PanelTop,
+  Thermometer,
 };
 
 function BrochureIcon({ name, className = 'w-5 h-5', style }: { name: string; className?: string; style?: React.CSSProperties }) {

@@ -133,6 +133,38 @@
     "dashboard": "Dashboard"
   },
   "Index": {
+    "smartHomeFeatures": {
+      "security": {
+        "name": "Security & Access Control",
+        "description": "Integrated smart security with door locks, cameras, motion sensors, and alarm systems. Control access remotely, receive instant alerts, and monitor your property from anywhere.",
+        "highlights": ["Remote monitoring", "Smart locks & access", "Motion & intrusion sensors", "Instant alerts"]
+      },
+      "lighting": {
+        "name": "Smart Lighting",
+        "description": "Automated and mood-based lighting control. Adjust brightness, color temperature, and schedules to match your lifestyle. Scenes for dining, relaxing, working, and more.",
+        "highlights": ["Dimmer & color control", "Scenes & schedules", "Motion-triggered lighting", "Energy-efficient LEDs"]
+      },
+      "control": {
+        "name": "Unified Control",
+        "description": "One app or panel to control your entire home—lighting, climate, security, entertainment. Voice commands, mobile control, and wall keypads for seamless operation.",
+        "highlights": ["Single app control", "Voice assistant integration", "Wall panels & keypads", "Remote access"]
+      },
+      "luxury": {
+        "name": "Luxury & Comfort",
+        "description": "Premium automation for curtains, blinds, audiovisual systems, and ambient control. Create the perfect atmosphere for every occasion with one-touch scenes.",
+        "highlights": ["Motorized curtains & blinds", "AV & entertainment control", "Ambient mood settings", "Premium finishes"]
+      },
+      "powerSavings": {
+        "name": "Power & Energy Savings",
+        "description": "Reduce electricity bills with smart scheduling, occupancy-based control, and energy monitoring. Automatically turn off unused devices and optimize heating and cooling.",
+        "highlights": ["Automated shut-off", "Occupancy detection", "Energy dashboards", "Lower utility costs"]
+      },
+      "climate": {
+        "name": "Climate & HVAC",
+        "description": "Precise temperature and humidity control per room. Schedule heating and cooling, integrate with smart thermostats, and ensure comfort while minimizing energy waste.",
+        "highlights": ["Room-by-room control", "Smart thermostats", "Schedules & presets", "Humidity management"]
+      }
+    },
     "serviceTechnologies": {
       "title": "Systems & Technologies We Use",
       "intro": "We deploy industry-leading protocols for smart home automation. Below are the main systems we use, with a brief description and their advantages and disadvantages.",
