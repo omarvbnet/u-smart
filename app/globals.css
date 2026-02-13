@@ -50,3 +50,44 @@ body {
 .admin-nav-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 0.6);
 }
+
+/* Brochure: professional print-grade styling */
+.brochure-content {
+  --brochure-accent: #1e40af;
+  --brochure-accent-light: #3b82f6;
+  --brochure-dark: #0a0f2e;
+  --brochure-card-bg: rgba(255, 255, 255, 0.95);
+  --brochure-card-border: rgba(0, 0, 0, 0.06);
+  --brochure-shadow-soft: 0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  --brochure-shadow-elevated: 0 12px 40px -8px rgba(0, 0, 0, 0.12), 0 4px 16px -4px rgba(0, 0, 0, 0.06);
+  --brochure-gradient-mesh: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 50%, rgba(30, 64, 175, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(59, 130, 246, 0.06), transparent);
+}
+
+.brochure-section-title {
+  font-size: clamp(0.65rem, 2.5vw, 0.75rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.brochure-h2 {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.brochure-card {
+  background: var(--brochure-card-bg);
+  border: 1px solid var(--brochure-card-border);
+  border-radius: 1rem;
+  box-shadow: var(--brochure-shadow-soft);
+  backdrop-filter: blur(8px);
+}
+
+.brochure-card-featured {
+  box-shadow: var(--brochure-shadow-elevated), 0 0 0 2px var(--brochure-accent);
+}
