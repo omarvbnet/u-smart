@@ -12,11 +12,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const count = await prisma.cvExport.count();
+    const rows = await prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(*)::bigint as count FROM cv_exports
+    `;
+    const count = Number(rows[0]?.count ?? 0);
     return NextResponse.json({ success: true, count });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('cv_exports') || msg.includes('CvExport') || (e as { code?: string })?.code === 'P2021') {
+    if (msg.includes('cv_exports') || (e as { code?: string })?.code === 'P2021') {
       return NextResponse.json({ success: true, count: 0 });
     }
     console.error('GET /api/admin/cv-stats:', e);
