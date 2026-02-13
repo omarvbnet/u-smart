@@ -78,7 +78,11 @@ export default function BrochurePage() {
   const config = serviceSlug ? BROCHURE_SERVICE_CONFIG[serviceSlug] : null;
   const accent = config?.accent ?? '#1e40af';
   const accentLight = config?.accentLight ?? '#3b82f6';
-  const accentBg = config?.accentBg ?? 'rgba(59, 130, 246, 0.08)';
+  const accentDark = config?.accentDark ?? '#1e3a8a';
+  const accentBg = config?.accentBg ?? 'rgba(59, 130, 246, 0.12)';
+  const gradientFrom = config?.gradientFrom ?? '#1e40af';
+  const gradientTo = config?.gradientTo ?? '#3b82f6';
+  const pageTint = config?.pageTint ?? 'rgba(59, 130, 246, 0.06)';
 
   const handleDownloadPdf = async () => {
     const el = brochureRef.current;
@@ -190,51 +194,55 @@ export default function BrochurePage() {
           ['--brochure-accent-light' as string]: accentLight,
         }}
       >
-        {/* Page 1 – Cover: Premium dark gradient + mesh + refined patterns */}
+        {/* Page 1 – Cover: Service-specific vibrant gradient + mesh + textures */}
         <section
           className="relative flex flex-col items-center justify-center px-10 py-20 text-center overflow-hidden"
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            background: `linear-gradient(152deg, #050816 0%, #0a0f2e 25%, ${accent}18 55%, #0f1629 85%, #050816 100%)`,
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+            background: `linear-gradient(152deg, #030712 0%, ${gradientFrom}22 20%, ${accent}28 45%, ${accentLight}18 65%, #0f1629 90%, #030712 100%)`,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
           }}
         >
-          {/* Mesh glow */}
+          {/* Colorful mesh glow */}
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              background: `radial-gradient(ellipse 90% 60% at 50% -10%, ${accent}20, transparent 55%),
-                radial-gradient(ellipse 70% 50% at 85% 60%, ${accent}08, transparent 50%),
-                radial-gradient(ellipse 70% 50% at 15% 80%, ${accent}06, transparent 50%)`,
+              background: `radial-gradient(ellipse 100% 70% at 50% -15%, ${accentLight}35, transparent 50%),
+                radial-gradient(ellipse 60% 45% at 90% 50%, ${accent}25, transparent 45%),
+                radial-gradient(ellipse 60% 45% at 10% 85%, ${accent}15, transparent 45%)`,
             }}
           />
-          {/* Technical grid – finer, subtler */}
+          {/* Technical grid */}
           <div
-            className="absolute inset-0 opacity-[0.09]"
+            className="absolute inset-0 opacity-[0.12]"
             style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px)',
-              backgroundSize: '24px 24px',
+              backgroundImage: `linear-gradient(${accentLight}22 1px, transparent 1px), linear-gradient(90deg, ${accentLight}22 1px, transparent 1px)`,
+              backgroundSize: '20px 20px',
             }}
           />
-          {/* Hexagon pattern */}
-          <div className="absolute inset-0 opacity-[0.05]" aria-hidden>
+          {/* Hexagon + accent dots texture */}
+          <div className="absolute inset-0 opacity-[0.08]" aria-hidden>
             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <pattern id="cover-hex" x="0" y="0" width="56" height="48" patternUnits="userSpaceOnUse">
-                  <path d="M28 0L56 14v28L28 56 0 42V14L28 0z" fill="none" stroke="currentColor" strokeWidth="0.5" />
+                <pattern id="br-cover-hex" x="0" y="0" width="56" height="48" patternUnits="userSpaceOnUse">
+                  <path d="M28 0L56 14v28L28 56 0 42V14L28 0z" fill="none" stroke="currentColor" strokeWidth="0.6" />
+                </pattern>
+                <pattern id="br-cover-dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <circle cx="20" cy="20" r="1" fill="currentColor" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#cover-hex)" style={{ color: '#94a3b8' }} />
+              <rect width="100%" height="100%" fill="url(#br-cover-hex)" style={{ color: accentLight }} />
+              <rect width="100%" height="100%" fill="url(#br-cover-dots)" style={{ color: accentLight }} />
             </svg>
           </div>
-          {/* Logo container – glass style */}
+          {/* Logo container – glass with accent glow */}
           <div
-            className="relative z-10 w-32 h-32 rounded-2xl flex items-center justify-center mb-12 ring-1 ring-white/10"
+            className="relative z-10 w-32 h-32 rounded-2xl flex items-center justify-center mb-12 ring-1"
             style={{
-              background: 'linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)',
-              boxShadow: '0 8px 32px -8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+              background: 'linear-gradient(145deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)',
+              boxShadow: `0 8px 32px -8px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1), 0 0 40px -8px ${accentLight}40`,
             }}
           >
             <img
@@ -267,7 +275,7 @@ export default function BrochurePage() {
               {featuredTitle}
             </p>
           )}
-          <p className="relative z-10 text-blue-200/95 text-base font-medium mb-6 tracking-wide">
+          <p className="relative z-10 text-base font-medium mb-6 tracking-wide" style={{ color: `${accentLight}ee` }}>
             {t('tagline')}
           </p>
           <p className="relative z-10 text-white/80 text-[0.95rem] max-w-2xl leading-[1.65] font-light">
@@ -279,30 +287,35 @@ export default function BrochurePage() {
           />
         </section>
 
-        {/* Page 2 – About Us: Clean editorial layout */}
+        {/* Page 2 – About Us: Service-tinted editorial with rich textures */}
         <section
           className="relative py-16 px-10 md:px-14 overflow-hidden flex flex-col justify-center"
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            background: 'linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8fafc 100%)',
+            background: `linear-gradient(175deg, #ffffff 0%, ${pageTint} 30%, #fafbfc 60%, ${pageTint} 100%)`,
             color: '#1e293b',
           }}
         >
-          <div className="absolute inset-0 opacity-[0.04]" aria-hidden>
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          {/* L-corner grid + concentric circles + diagonal lines */}
+          <div className="absolute inset-0" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.08 }}>
               <defs>
-                <pattern id="about-grid" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
-                  <path d="M 48 0 L 0 0 0 48" fill="none" stroke={accent} strokeWidth="0.6" />
+                <pattern id="br-about-grid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke={accent} strokeWidth="0.8" />
                 </pattern>
-                <pattern id="about-circles" x="0" y="0" width="160" height="160" patternUnits="userSpaceOnUse">
-                  <circle cx="80" cy="80" r="32" fill="none" stroke="#94a3b8" strokeWidth="0.35" />
-                  <circle cx="80" cy="80" r="16" fill="none" stroke="#94a3b8" strokeWidth="0.25" />
+                <pattern id="br-about-circles" x="0" y="0" width="140" height="140" patternUnits="userSpaceOnUse">
+                  <circle cx="70" cy="70" r="36" fill="none" stroke={accent} strokeWidth="0.4" />
+                  <circle cx="70" cy="70" r="20" fill="none" stroke={accentLight} strokeWidth="0.35" />
+                </pattern>
+                <pattern id="br-about-diag" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line x1="0" y1="0" x2="0" y2="16" stroke={accent} strokeWidth="0.3" strokeOpacity="0.7" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#about-grid)" />
-              <rect width="100%" height="100%" fill="url(#about-circles)" />
+              <rect width="100%" height="100%" fill="url(#br-about-grid)" />
+              <rect width="100%" height="100%" fill="url(#br-about-circles)" />
+              <rect width="100%" height="100%" fill="url(#br-about-diag)" />
             </svg>
           </div>
           <div className="relative z-10 max-w-3xl">
@@ -338,22 +351,27 @@ export default function BrochurePage() {
               width: '100%',
               height: `${A4_HEIGHT_CM}cm`,
               minHeight: `${A4_HEIGHT_CM}cm`,
-              background: `linear-gradient(135deg, ${accentBg} 0%, rgba(255,255,255,0.6) 50%, ${accentBg} 100%)`,
+              background: `linear-gradient(140deg, ${accentBg} 0%, rgba(255,255,255,0.85) 35%, ${pageTint} 70%, ${accentBg} 100%)`,
               color: '#1e293b',
             }}
           >
-            <div className="absolute inset-0 opacity-[0.05]" aria-hidden>
-              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            {/* Diagonal stripes + diamonds + dots */}
+            <div className="absolute inset-0" aria-hidden>
+              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.1 }}>
                 <defs>
-                  <pattern id="featured-diag" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(12)">
-                    <line x1="0" y1="0" x2="0" y2="20" stroke={accent} strokeWidth="0.35" />
+                  <pattern id="br-featured-diag" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">
+                    <line x1="0" y1="0" x2="0" y2="24" stroke={accent} strokeWidth="0.5" />
                   </pattern>
-                  <pattern id="featured-tri" x="0" y="0" width="96" height="84" patternUnits="userSpaceOnUse">
-                    <path d="M48 0L96 42 48 84 0 42z" fill="none" stroke="#94a3b8" strokeWidth="0.3" />
+                  <pattern id="br-featured-diamond" x="0" y="0" width="72" height="72" patternUnits="userSpaceOnUse">
+                    <path d="M36 0L72 36 36 72 0 36z" fill="none" stroke={accentLight} strokeWidth="0.4" />
+                  </pattern>
+                  <pattern id="br-featured-dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+                    <circle cx="14" cy="14" r="1" fill={accent} fillOpacity="0.6" />
                   </pattern>
                 </defs>
-                <rect width="100%" height="100%" fill="url(#featured-diag)" />
-                <rect width="100%" height="100%" fill="url(#featured-tri)" />
+                <rect width="100%" height="100%" fill="url(#br-featured-diag)" />
+                <rect width="100%" height="100%" fill="url(#br-featured-diamond)" />
+                <rect width="100%" height="100%" fill="url(#br-featured-dots)" />
               </svg>
             </div>
             <div className="relative z-10 max-w-4xl mx-auto">
@@ -383,7 +401,11 @@ export default function BrochurePage() {
                   {featureItems.map((item, i) => (
                     <div
                       key={i}
-                      className="p-6 rounded-2xl bg-white/95 border border-gray-100/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] backdrop-blur-sm"
+                      className="p-6 rounded-2xl bg-white/95 backdrop-blur-sm"
+                      style={{
+                        border: `1px solid ${accent}20`,
+                        boxShadow: `0 4px 20px -4px ${accent}25, 0 2px 8px -2px rgba(0,0,0,0.06)`,
+                      }}
                     >
                       <div className="flex items-start gap-3 mb-2">
                         <span
@@ -427,36 +449,37 @@ export default function BrochurePage() {
           </section>
         )}
 
-        {/* Page 3 – Services: Modern card grid */}
+        {/* Page 3 – Services: Colorful card grid with service tint */}
         <section
           className="relative py-16 px-10 md:px-14 overflow-hidden flex flex-col justify-center"
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%)',
+            background: `linear-gradient(175deg, #f8fafc 0%, ${pageTint} 25%, #f1f5f9 55%, ${pageTint} 85%, #e2e8f0 100%)`,
             color: '#1e293b',
           }}
         >
-          <div className="absolute inset-0 opacity-[0.06]" aria-hidden>
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          {/* Dots + isometric grid + subtle waves */}
+          <div className="absolute inset-0" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.12 }}>
               <defs>
-                <pattern id="services-dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-                  <circle cx="12" cy="12" r="0.6" fill="#64748b" />
+                <pattern id="br-services-dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <circle cx="10" cy="10" r="0.8" fill={accent} />
                 </pattern>
-                <pattern id="services-iso" x="0" y="0" width="64" height="56" patternUnits="userSpaceOnUse">
-                  <path d="M0 28h64M0 0l32 28M32 28l32-28" fill="none" stroke="#94a3b8" strokeWidth="0.25" />
+                <pattern id="br-services-iso" x="0" y="0" width="56" height="48" patternUnits="userSpaceOnUse">
+                  <path d="M0 24h56M0 0l28 24M28 24l28-24" fill="none" stroke={accent} strokeWidth="0.35" strokeOpacity="0.8" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#services-dots)" />
-              <rect width="100%" height="100%" fill="url(#services-iso)" />
+              <rect width="100%" height="100%" fill="url(#br-services-dots)" />
+              <rect width="100%" height="100%" fill="url(#br-services-iso)" />
             </svg>
           </div>
           <div className="relative z-10">
             <span className="brochure-section-title block" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
               {t('pageServicesTitle')}
             </span>
-            <h2 className="brochure-h2 mt-2 mb-10 pb-4 text-gray-900" style={{ borderBottom: '2px solid #e2e8f0' }}>
+            <h2 className="brochure-h2 mt-2 mb-10 pb-4 text-gray-900" style={{ borderBottom: `3px solid ${accent}40` }}>
               {t('pageServicesTitle')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl">
@@ -505,30 +528,34 @@ export default function BrochurePage() {
           </div>
         </section>
 
-        {/* Page 4 – Why Choose: Clean list with accent highlights */}
+        {/* Page 4 – Why Choose: Rich chevrons + grid + accent streaks */}
         <section
           className="relative py-16 px-10 md:px-14 overflow-hidden flex flex-col justify-center"
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            background: 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)',
+            background: `linear-gradient(175deg, #ffffff 0%, ${pageTint} 40%, #fafbfc 80%, ${pageTint} 100%)`,
             color: '#1e293b',
           }}
         >
-          <div className="absolute inset-0 opacity-[0.04]" aria-hidden>
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <div className="absolute inset-0" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.1 }}>
               <defs>
-                <pattern id="why-chevron" x="0" y="0" width="72" height="36" patternUnits="userSpaceOnUse">
-                  <path d="M0 18h24l14-18 14 18h24" fill="none" stroke={accent} strokeWidth="0.4" />
+                <pattern id="br-why-chevron" x="0" y="0" width="64" height="32" patternUnits="userSpaceOnUse">
+                  <path d="M0 16h18l12-16 12 16h22" fill="none" stroke={accent} strokeWidth="0.6" />
                 </pattern>
-                <pattern id="why-lines" x="0" y="0" width="56" height="56" patternUnits="userSpaceOnUse">
-                  <line x1="0" y1="28" x2="56" y2="28" stroke="#94a3b8" strokeWidth="0.25" />
-                  <line x1="28" y1="0" x2="28" y2="56" stroke="#94a3b8" strokeWidth="0.25" />
+                <pattern id="br-why-lines" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
+                  <line x1="0" y1="24" x2="48" y2="24" stroke={accentLight} strokeWidth="0.3" strokeOpacity="0.8" />
+                  <line x1="24" y1="0" x2="24" y2="48" stroke={accentLight} strokeWidth="0.3" strokeOpacity="0.8" />
+                </pattern>
+                <pattern id="br-why-stripe" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
+                  <rect x="0" y="0" width="2" height="8" fill={accent} fillOpacity="0.15" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#why-chevron)" />
-              <rect width="100%" height="100%" fill="url(#why-lines)" />
+              <rect width="100%" height="100%" fill="url(#br-why-chevron)" />
+              <rect width="100%" height="100%" fill="url(#br-why-lines)" />
+              <rect width="100%" height="100%" fill="url(#br-why-stripe)" />
             </svg>
           </div>
           <div className="relative z-10 max-w-3xl">
@@ -557,38 +584,42 @@ export default function BrochurePage() {
           </div>
         </section>
 
-        {/* Page 5 – Contact: Tech-forward layout with QR */}
+        {/* Page 5 – Contact: Circuit board + arcs + service accent */}
         <section
           className="relative py-16 px-10 md:px-14 overflow-hidden flex flex-col justify-center"
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            background: 'linear-gradient(165deg, #f8fafc 0%, #f1f5f9 40%, #e2e8f0 100%)',
+            background: `linear-gradient(160deg, #f8fafc 0%, ${pageTint} 30%, #f1f5f9 60%, ${pageTint} 90%, #e2e8f0 100%)`,
             color: '#1e293b',
           }}
         >
-          <div className="absolute inset-0 opacity-[0.05]" aria-hidden>
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <div className="absolute inset-0" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.12 }}>
               <defs>
-                <pattern id="contact-circuit" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <rect x="0" y="0" width="40" height="40" fill="none" stroke="#64748b" strokeWidth="0.3" />
-                  <circle cx="20" cy="20" r="2.5" fill="none" stroke="#94a3b8" strokeWidth="0.35" />
+                <pattern id="br-contact-circuit" x="0" y="0" width="44" height="44" patternUnits="userSpaceOnUse">
+                  <rect x="0" y="0" width="44" height="44" fill="none" stroke={accent} strokeWidth="0.4" strokeOpacity="0.7" />
+                  <circle cx="22" cy="22" r="3" fill="none" stroke={accentLight} strokeWidth="0.45" strokeOpacity="0.8" />
                 </pattern>
-                <pattern id="contact-arcs" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
-                  <path d="M0 60 Q 60 0 120 60 Q 60 120 0 60" fill="none" stroke="#64748b" strokeWidth="0.3" />
-                  <path d="M60 0 Q 120 60 60 120 Q 0 60 60 0" fill="none" stroke="#64748b" strokeWidth="0.3" />
+                <pattern id="br-contact-arcs" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                  <path d="M0 50 Q 50 0 100 50 Q 50 100 0 50" fill="none" stroke={accent} strokeWidth="0.35" strokeOpacity="0.6" />
+                  <path d="M50 0 Q 100 50 50 100 Q 0 50 50 0" fill="none" stroke={accent} strokeWidth="0.35" strokeOpacity="0.6" />
+                </pattern>
+                <pattern id="br-contact-nodes" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
+                  <circle cx="30" cy="30" r="1.5" fill={accent} fillOpacity="0.5" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#contact-circuit)" />
-              <rect width="100%" height="100%" fill="url(#contact-arcs)" />
+              <rect width="100%" height="100%" fill="url(#br-contact-circuit)" />
+              <rect width="100%" height="100%" fill="url(#br-contact-arcs)" />
+              <rect width="100%" height="100%" fill="url(#br-contact-nodes)" />
             </svg>
           </div>
           <div className="relative z-10 max-w-3xl">
             <span className="brochure-section-title block" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
               {t('pageContactTitle')}
             </span>
-            <h2 className="brochure-h2 mt-2 mb-6 pb-4 text-gray-900 inline-block" style={{ borderBottom: '2px solid #cbd5e1' }}>
+            <h2 className="brochure-h2 mt-2 mb-6 pb-4 text-gray-900 inline-block" style={{ borderBottom: `3px solid ${accent}50` }}>
               {t('pageContactTitle')}
             </h2>
             <p className="text-[1rem] text-gray-700 mb-10 max-w-2xl leading-[1.65]">
