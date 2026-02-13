@@ -15,6 +15,14 @@ import {
 
 const WEBSITE_URL = 'https://www.usmart-iot.com';
 
+// A4 print: 21 × 29.7 cm → 300 DPI = 2480 × 3508 px
+const A4_WIDTH_CM = 21;
+const A4_HEIGHT_CM = 29.7;
+const PRINT_DPI = 300;
+const A4_WIDTH_PX = Math.round((A4_WIDTH_CM / 2.54) * PRINT_DPI);   // 2480
+const A4_HEIGHT_PX = Math.round((A4_HEIGHT_CM / 2.54) * PRINT_DPI); // 3508
+const CANVAS_SCALE = PRINT_DPI / 96; // ~3.125 for 300 DPI from 96-DPI CSS
+
 type FetchedService = {
   title: string;
   description: string;
@@ -79,7 +87,7 @@ export default function BrochurePage() {
     try {
       const canvas = await html2canvas(el, {
         backgroundColor: '#0a0f2e',
-        scale: 2,
+        scale: CANVAS_SCALE,
         useCORS: true,
         logging: false,
         width: el.scrollWidth,
@@ -90,10 +98,10 @@ export default function BrochurePage() {
       const pdfH = pdf.internal.pageSize.getHeight();
       const imgW = canvas.width;
       const imgH = canvas.height;
-      const scale = pdfW / imgW;
-      const totalPdfH = imgH * scale;
-      const pageCount = Math.ceil(totalPdfH / pdfH) || 1;
-      const pageHeightPx = pdfH / scale;
+      // Each brochure section = one A4 page at 300 DPI → slice height = A4_HEIGHT_PX
+      const pageHeightPx = A4_HEIGHT_PX;
+      const pageCount = Math.ceil(imgH / pageHeightPx) || 1;
+      const scaleToPdf = pdfW / imgW;
       for (let i = 0; i < pageCount; i++) {
         if (i > 0) pdf.addPage();
         const sy = i * pageHeightPx;
@@ -108,7 +116,7 @@ export default function BrochurePage() {
           ctx.drawImage(canvas, 0, sy, imgW, sh, 0, 0, imgW, sh);
         }
         const sliceData = sliceCanvas.toDataURL('image/png');
-        const sliceH = sh * scale;
+        const sliceH = sh * scaleToPdf;
         pdf.addImage(sliceData, 'PNG', 0, 0, pdfW, sliceH);
       }
       const name = serviceSlug ? `U-Smart-Profile-${serviceSlug}-${locale}` : `U-Smart-Profile-${locale}`;
@@ -172,25 +180,41 @@ export default function BrochurePage() {
         className="brochure-content mx-auto"
         style={{
           fontFamily: isRtl ? "'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', Tahoma, Arial, sans-serif" : 'system-ui, sans-serif',
-          maxWidth: 800,
+          width: `${A4_WIDTH_CM}cm`,
           minWidth: 320,
         }}
       >
-        {/* Page 1 – Cover (expert design) */}
+        {/* Page 1 – Cover: A4 21×29.7 cm */}
         <section
-          className="relative min-h-[100vh] flex flex-col items-center justify-center px-8 py-20 text-center overflow-hidden"
+          className="relative flex flex-col items-center justify-center px-8 py-16 text-center overflow-hidden"
           style={{
+            width: '100%',
+            height: `${A4_HEIGHT_CM}cm`,
+            minHeight: `${A4_HEIGHT_CM}cm`,
             background: `linear-gradient(165deg, #0a0f2e 0%, ${accent}22 40%, #0f172a 100%)`,
             boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)',
           }}
         >
+          {/* Blueprint-style grid */}
           <div
-            className="absolute inset-0 opacity-30"
+            className="absolute inset-0 opacity-[0.12]"
             style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-              backgroundSize: '48px 48px',
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)',
+              backgroundSize: '32px 32px',
             }}
           />
+          {/* Hexagon pattern – engineering / technical */}
+          <div className="absolute inset-0 opacity-[0.06]" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="cover-hex" x="0" y="0" width="56" height="48" patternUnits="userSpaceOnUse">
+                  <path d="M28 0L56 14v28L28 56 0 42V14L28 0z" fill="none" stroke="currentColor" strokeWidth="0.6" />
+                  <path d="M56 14L28 28v28M0 14l28 14v28" fill="none" stroke="currentColor" strokeWidth="0.4" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#cover-hex)" style={{ color: '#94a3b8' }} />
+            </svg>
+          </div>
           <div className="relative z-10 w-28 h-28 rounded-2xl flex items-center justify-center mb-10" style={{ backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <img
               src="/logo/usmart.PNG"
@@ -231,9 +255,27 @@ export default function BrochurePage() {
           <div className="absolute bottom-8 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         </section>
 
-        {/* Page 2 – About Us (refined) */}
-        <section className="py-20 px-8 md:px-16 bg-white text-gray-800">
-          <div className="max-w-3xl">
+        {/* Page 2 – About Us: A4 21×29.7 cm */}
+        <section
+          className="relative py-16 px-8 md:px-12 bg-white text-gray-800 overflow-hidden flex flex-col justify-center"
+          style={{ width: '100%', height: `${A4_HEIGHT_CM}cm`, minHeight: `${A4_HEIGHT_CM}cm` }}
+        >
+          <div className="absolute inset-0 opacity-[0.05]" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="about-grid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e40af" strokeWidth="0.5" />
+                </pattern>
+                <pattern id="about-circles" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
+                  <circle cx="60" cy="60" r="24" fill="none" stroke="#64748b" strokeWidth="0.4" />
+                  <circle cx="60" cy="60" r="12" fill="none" stroke="#64748b" strokeWidth="0.3" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#about-grid)" />
+              <rect width="100%" height="100%" fill="url(#about-circles)" />
+            </svg>
+          </div>
+          <div className="relative z-10 max-w-3xl">
             <span className="text-xs font-semibold uppercase tracking-widest text-gray-400" style={{ letterSpacing: isRtl ? 0 : '0.15em' }}>
               {t('pageAboutTitle')}
             </span>
@@ -252,13 +294,32 @@ export default function BrochurePage() {
           </div>
         </section>
 
-        {/* Featured Service – only when service selected (expert section) */}
+        {/* Featured Service: diagonal technical lines + triangles */}
         {featuredTitle && (featureItems.length > 0 || useApiFeatures || featuredDescription) && (
           <section
-            className="py-20 px-8 md:px-16"
-            style={{ backgroundColor: accentBg }}
+            className="relative py-16 px-8 md:px-12 overflow-hidden flex flex-col justify-center"
+            style={{
+              width: '100%',
+              height: `${A4_HEIGHT_CM}cm`,
+              minHeight: `${A4_HEIGHT_CM}cm`,
+              backgroundColor: accentBg,
+            }}
           >
-            <div className="max-w-4xl mx-auto">
+            <div className="absolute inset-0 opacity-[0.06]" aria-hidden>
+              <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <pattern id="featured-diag" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">
+                    <line x1="0" y1="0" x2="0" y2="24" stroke="#475569" strokeWidth="0.4" />
+                  </pattern>
+                  <pattern id="featured-tri" x="0" y="0" width="80" height="70" patternUnits="userSpaceOnUse">
+                    <path d="M40 0L80 35 40 70 0 35z" fill="none" stroke="#64748b" strokeWidth="0.35" />
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#featured-diag)" />
+                <rect width="100%" height="100%" fill="url(#featured-tri)" />
+              </svg>
+            </div>
+            <div className="relative z-10 max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: accent }}>
                   <Layers className="w-5 h-5" />
@@ -318,8 +379,26 @@ export default function BrochurePage() {
           </section>
         )}
 
-        {/* Page 3 – All Services Overview (professional cards) */}
-        <section className="py-20 px-8 md:px-16 bg-gray-50 text-gray-800">
+        {/* Page 3 – Services: A4 21×29.7 cm */}
+        <section
+          className="relative py-16 px-8 md:px-12 bg-gray-50 text-gray-800 overflow-hidden flex flex-col justify-center"
+          style={{ width: '100%', height: `${A4_HEIGHT_CM}cm`, minHeight: `${A4_HEIGHT_CM}cm` }}
+        >
+          <div className="absolute inset-0 opacity-[0.07]" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="services-dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+                  <circle cx="14" cy="14" r="0.8" fill="#475569" />
+                </pattern>
+                <pattern id="services-iso" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+                  <path d="M0 26h60M0 0l30 26M30 26l30-26" fill="none" stroke="#94a3b8" strokeWidth="0.3" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#services-dots)" />
+              <rect width="100%" height="100%" fill="url(#services-iso)" />
+            </svg>
+          </div>
+          <div className="relative z-10">
 <span className="text-xs font-semibold uppercase tracking-widest text-gray-400" style={{ letterSpacing: isRtl ? 0 : '0.15em' }}>
               {t('pageServicesTitle')}
             </span>
@@ -364,11 +443,30 @@ export default function BrochurePage() {
               );
             })}
           </div>
+          </div>
         </section>
 
-        {/* Page 4 – Why Choose U Smart (elegant list) */}
-        <section className="py-20 px-8 md:px-16 bg-white text-gray-800">
-          <div className="max-w-3xl">
+        {/* Page 4 – Why Choose: A4 21×29.7 cm */}
+        <section
+          className="relative py-16 px-8 md:px-12 bg-white text-gray-800 overflow-hidden flex flex-col justify-center"
+          style={{ width: '100%', height: `${A4_HEIGHT_CM}cm`, minHeight: `${A4_HEIGHT_CM}cm` }}
+        >
+          <div className="absolute inset-0 opacity-[0.05]" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="why-chevron" x="0" y="0" width="64" height="32" patternUnits="userSpaceOnUse">
+                  <path d="M0 16h20l12-16 12 16h20" fill="none" stroke="#1e40af" strokeWidth="0.45" />
+                </pattern>
+                <pattern id="why-lines" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
+                  <line x1="0" y1="24" x2="48" y2="24" stroke="#64748b" strokeWidth="0.3" />
+                  <line x1="24" y1="0" x2="24" y2="48" stroke="#64748b" strokeWidth="0.3" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#why-chevron)" />
+              <rect width="100%" height="100%" fill="url(#why-lines)" />
+            </svg>
+          </div>
+          <div className="relative z-10 max-w-3xl">
             <span className="text-xs font-semibold uppercase tracking-widest text-gray-400" style={{ letterSpacing: isRtl ? 0 : '0.15em' }}>
               {t('pageWhyTitle')}
             </span>
@@ -391,9 +489,28 @@ export default function BrochurePage() {
           </div>
         </section>
 
-        {/* Page 5 – Contact & QR (professional footer) */}
-        <section className="py-20 px-8 md:px-16 bg-gray-50 text-gray-800">
-          <div className="max-w-3xl">
+        {/* Page 5 – Contact: A4 21×29.7 cm */}
+        <section
+          className="relative py-16 px-8 md:px-12 bg-gray-50 text-gray-800 overflow-hidden flex flex-col justify-center"
+          style={{ width: '100%', height: `${A4_HEIGHT_CM}cm`, minHeight: `${A4_HEIGHT_CM}cm` }}
+        >
+          <div className="absolute inset-0 opacity-[0.06]" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="contact-circuit" x="0" y="0" width="36" height="36" patternUnits="userSpaceOnUse">
+                  <rect x="0" y="0" width="36" height="36" fill="none" stroke="#94a3b8" strokeWidth="0.35" />
+                  <circle cx="18" cy="18" r="2" fill="none" stroke="#64748b" strokeWidth="0.4" />
+                </pattern>
+                <pattern id="contact-arcs" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                  <path d="M0 50 Q 50 0 100 50 Q 50 100 0 50" fill="none" stroke="#475569" strokeWidth="0.35" />
+                  <path d="M50 0 Q 100 50 50 100 Q 0 50 50 0" fill="none" stroke="#475569" strokeWidth="0.35" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#contact-circuit)" />
+              <rect width="100%" height="100%" fill="url(#contact-arcs)" />
+            </svg>
+          </div>
+          <div className="relative z-10 max-w-3xl">
             <span className="text-xs font-semibold uppercase tracking-widest text-gray-400" style={{ letterSpacing: isRtl ? 0 : '0.15em' }}>
               {t('pageContactTitle')}
             </span>
