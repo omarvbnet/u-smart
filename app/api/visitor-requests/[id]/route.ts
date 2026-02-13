@@ -184,7 +184,7 @@ export async function PATCH(
             if (ncrReason !== undefined) parsed.ncrReason = ncrReason || null;
             if (ncrImageUrls !== undefined) parsed.ncrImageUrls = ncrImageUrls || [];
             // NCR result: ticket must stay IN_PROGRESS until admin explicitly accepts (ncrAction: 'accept')
-            const resultIsNcr = (parsed.inspectionResult || '').toLowerCase() === 'ncr';
+            const resultIsNcr = String(parsed.inspectionResult ?? '').toLowerCase() === 'ncr';
             if (resultIsNcr) {
               parsed.status = 'IN_PROGRESS';
               statusToApply = 'IN_PROGRESS';
