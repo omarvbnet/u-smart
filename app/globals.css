@@ -80,6 +80,13 @@ body {
   letter-spacing: -0.025em;
 }
 
+/* RTL: reset letter-spacing and uppercase for Arabic/Kurdish */
+[dir="rtl"] .brochure-h2,
+[dir="rtl"] .brochure-section-title {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .brochure-card {
   background: var(--brochure-card-bg);
   border: 1px solid var(--brochure-card-border);

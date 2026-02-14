@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, FileDown } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
@@ -76,10 +76,9 @@ export default function ServiceDetailPage() {
   const params = useParams();
   const t = useTranslations('Index');
   const tBrochure = useTranslations('Brochure');
+  const locale = useLocale();
   const slug = typeof params.slug === 'string' ? params.slug : '';
-  const locale = (typeof params.locale === 'string' && LOCALES.includes(params.locale))
-    ? params.locale
-    : 'en';
+  const isRtl = locale === 'ar' || locale === 'ku';
   const showTechnologies = slug === SMART_HOME_SLUG;
   const showProgrammingTechnologies = (PROGRAMMING_SLUGS as readonly string[]).includes(slug);
   const showEnterpriseNetworkingTechnologies = slug === ENTERPRISE_NETWORKING_SLUG;
@@ -442,7 +441,7 @@ export default function ServiceDetailPage() {
                   </p>
                   <div className="space-y-3">
                     <div>
-                      <h4 className="text-xs font-semibold text-emerald-400/90 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <h4 className={`text-xs font-semibold text-emerald-400/90 mb-2 flex items-center gap-1.5 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         {t('serviceTechnologies.advantagesLabel')}
                       </h4>
@@ -456,7 +455,7 @@ export default function ServiceDetailPage() {
                       </ul>
                     </div>
                     <div>
-                      <h4 className="text-xs font-semibold text-amber-400/90 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <h4 className={`text-xs font-semibold text-amber-400/90 mb-2 flex items-center gap-1.5 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
                         <XCircle className="w-3.5 h-3.5" />
                         {t('serviceTechnologies.disadvantagesLabel')}
                       </h4>

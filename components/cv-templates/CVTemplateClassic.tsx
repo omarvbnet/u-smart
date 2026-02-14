@@ -45,7 +45,7 @@ export default function CVTemplateClassic({ data, locale, labels }: { data: CVDa
         {data.summary && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase text-gray-900"
+              className={`text-sm font-bold ${!rtl ? 'uppercase' : ''} text-gray-900`}
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               {labels.summary}
@@ -59,7 +59,7 @@ export default function CVTemplateClassic({ data, locale, labels }: { data: CVDa
         {data.experience.length > 0 && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase text-gray-900"
+              className={`text-sm font-bold ${!rtl ? 'uppercase' : ''} text-gray-900`}
               style={{ margin: '0 0 8px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               {labels.experience}
@@ -88,7 +88,7 @@ export default function CVTemplateClassic({ data, locale, labels }: { data: CVDa
         {data.education.length > 0 && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase text-gray-900"
+              className={`text-sm font-bold ${!rtl ? 'uppercase' : ''} text-gray-900`}
               style={{ margin: '0 0 8px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               {labels.education}
@@ -112,7 +112,7 @@ export default function CVTemplateClassic({ data, locale, labels }: { data: CVDa
         {skillsList.length > 0 && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase text-gray-900"
+              className={`text-sm font-bold ${!rtl ? 'uppercase' : ''} text-gray-900`}
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               {labels.skills}
@@ -126,7 +126,7 @@ export default function CVTemplateClassic({ data, locale, labels }: { data: CVDa
         {data.languages && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase text-gray-900"
+              className={`text-sm font-bold ${!rtl ? 'uppercase' : ''} text-gray-900`}
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               {labels.languages}
@@ -140,7 +140,7 @@ export default function CVTemplateClassic({ data, locale, labels }: { data: CVDa
         {data.certifications && (
           <section className="mt-6">
             <h2
-              className="text-sm font-bold uppercase text-gray-900"
+              className={`text-sm font-bold ${!rtl ? 'uppercase' : ''} text-gray-900`}
               style={{ margin: '0 0 6px 0', fontFamily: rtl ? ARABIC_FONT : 'system-ui, sans-serif', letterSpacing: 0 }}
             >
               {labels.certifications}

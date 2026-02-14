@@ -44,7 +44,7 @@ export default function CVTemplateMinimal({ data, locale, labels }: { data: CVDa
         {data.summary && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase text-gray-400"
+              className={`text-[10px] font-semibold ${!rtl ? 'uppercase' : ''} text-gray-400`}
               style={{ margin: '0 0 8px 0' }}
             >
               {labels.summary}
@@ -58,7 +58,7 @@ export default function CVTemplateMinimal({ data, locale, labels }: { data: CVDa
         {data.experience.length > 0 && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase text-gray-400"
+              className={`text-[10px] font-semibold ${!rtl ? 'uppercase' : ''} text-gray-400`}
               style={{ margin: '0 0 10px 0' }}
             >
               {labels.experience}
@@ -92,7 +92,7 @@ export default function CVTemplateMinimal({ data, locale, labels }: { data: CVDa
         {data.education.length > 0 && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase text-gray-400"
+              className={`text-[10px] font-semibold ${!rtl ? 'uppercase' : ''} text-gray-400`}
               style={{ margin: '0 0 10px 0' }}
             >
               {labels.education}
@@ -116,7 +116,7 @@ export default function CVTemplateMinimal({ data, locale, labels }: { data: CVDa
         {skillsList.length > 0 && (
           <section className="mt-8">
             <h2
-              className="text-[10px] font-semibold uppercase text-gray-400"
+              className={`text-[10px] font-semibold ${!rtl ? 'uppercase' : ''} text-gray-400`}
               style={{ margin: '0 0 8px 0' }}
             >
               {labels.skills}
@@ -132,7 +132,7 @@ export default function CVTemplateMinimal({ data, locale, labels }: { data: CVDa
             {data.languages && (
               <section>
                 <h2
-                  className="text-[10px] font-semibold uppercase text-gray-400"
+                  className={`text-[10px] font-semibold ${!rtl ? 'uppercase' : ''} text-gray-400`}
                   style={{ margin: '0 0 6px 0' }}
                 >
                   {labels.languages}
@@ -145,7 +145,7 @@ export default function CVTemplateMinimal({ data, locale, labels }: { data: CVDa
             {data.certifications && (
               <section>
                 <h2
-                  className="text-[10px] font-semibold uppercase text-gray-400"
+                  className={`text-[10px] font-semibold ${!rtl ? 'uppercase' : ''} text-gray-400`}
                   style={{ margin: '0 0 6px 0' }}
                 >
                   {labels.certifications}

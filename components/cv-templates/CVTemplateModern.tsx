@@ -56,7 +56,7 @@ export default function CVTemplateModern({ data, locale, labels }: { data: CVDat
         {data.summary && (
           <section className="mb-5">
             <h2
-              className="text-xs font-bold uppercase mb-2"
+              className={`text-xs font-bold ${!rtl ? 'uppercase' : ''} mb-2`}
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
               {labels.summary}
@@ -70,7 +70,7 @@ export default function CVTemplateModern({ data, locale, labels }: { data: CVDat
         {data.experience.length > 0 && (
           <section className="mb-5">
             <h2
-              className="text-xs font-bold uppercase mb-3"
+              className={`text-xs font-bold ${!rtl ? 'uppercase' : ''} mb-3`}
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
               {labels.experience}
@@ -104,7 +104,7 @@ export default function CVTemplateModern({ data, locale, labels }: { data: CVDat
         {data.education.length > 0 && (
           <section className="mb-5">
             <h2
-              className="text-xs font-bold uppercase mb-3"
+              className={`text-xs font-bold ${!rtl ? 'uppercase' : ''} mb-3`}
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
               {labels.education}
@@ -128,7 +128,7 @@ export default function CVTemplateModern({ data, locale, labels }: { data: CVDat
         {skillsList.length > 0 && (
           <section className="mb-5">
             <h2
-              className="text-xs font-bold uppercase mb-2"
+              className={`text-xs font-bold ${!rtl ? 'uppercase' : ''} mb-2`}
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
               {labels.skills}
@@ -144,7 +144,7 @@ export default function CVTemplateModern({ data, locale, labels }: { data: CVDat
             {data.languages && (
               <div className="mb-3">
                 <h2
-              className="text-xs font-bold uppercase mb-1"
+              className={`text-xs font-bold ${!rtl ? 'uppercase' : ''} mb-1`}
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
               {labels.languages}
@@ -157,7 +157,7 @@ export default function CVTemplateModern({ data, locale, labels }: { data: CVDat
             {data.certifications && (
               <div>
                 <h2
-              className="text-xs font-bold uppercase mb-1"
+              className={`text-xs font-bold ${!rtl ? 'uppercase' : ''} mb-1`}
               style={{ color: '#1e40af', borderBottom: '2px solid #1e40af', paddingBottom: 4, display: 'inline-block', letterSpacing: 0 }}
             >
               {labels.certifications}

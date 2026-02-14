@@ -157,11 +157,24 @@ export default function BrochurePage() {
 
   useEffect(() => {
     if (!isRtl) return;
+    const preconnect = document.createElement('link');
+    preconnect.rel = 'preconnect';
+    preconnect.href = 'https://fonts.googleapis.com';
+    document.head.appendChild(preconnect);
+    const preconnect2 = document.createElement('link');
+    preconnect2.rel = 'preconnect';
+    preconnect2.href = 'https://fonts.gstatic.com';
+    preconnect2.crossOrigin = 'anonymous';
+    document.head.appendChild(preconnect2);
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
-    return () => { document.head.removeChild(link); };
+    return () => {
+      link.parentNode?.removeChild(link);
+      preconnect2.parentNode?.removeChild(preconnect2);
+      preconnect.parentNode?.removeChild(preconnect);
+    };
   }, [isRtl]);
 
   const config = serviceSlug ? BROCHURE_SERVICE_CONFIG[serviceSlug] : null;
@@ -178,6 +191,15 @@ export default function BrochurePage() {
     if (!el) return;
     setExporting(true);
     try {
+      // RTL: wait for Arabic/Kurdish fonts to load before capture (fixes broken text in PDF)
+      if (isRtl && typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready;
+        // Extra brief delay for Google Fonts (Amiri) to paint
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      // Scroll brochure into view and ensure full content is laid out
+      el.scrollIntoView({ behavior: 'instant', block: 'start' });
+      await new Promise((r) => requestAnimationFrame(r));
       const canvas = await html2canvas(el, {
         backgroundColor: coverBg,
         scale: CANVAS_SCALE,

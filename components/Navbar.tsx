@@ -348,7 +348,7 @@ export default function ProfessionalNavbar() {
               {/* Footer: Language + CTA */}
               <div className="p-4 sm:p-5 border-t border-white/10 space-y-4">
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">
+                  <p className={`text-xs font-semibold text-gray-500 mb-2 px-1 ${!isRTL ? 'uppercase tracking-wider' : ''}`}>
                     {t("language") || "Language"}
                   </p>
                   <div className="grid grid-cols-4 gap-2">

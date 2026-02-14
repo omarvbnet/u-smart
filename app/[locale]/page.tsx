@@ -79,7 +79,7 @@ const Section = ({
 }) => {
   const ref = useRef(null);
   const locale = useLocale();
-  const isRTL = locale === "ar";
+  const isRTL = locale === "ar" || locale === "ku";
 
   return (
     <section
@@ -129,7 +129,7 @@ const SectionHeader = ({
   gradient?: string;
 }) => {
   const locale = useLocale();
-  const isRTL = locale === "ar";
+  const isRTL = locale === "ar" || locale === "ku";
   
   return (
     <div className={`${centered ? 'text-center' : 'text-left'} mb-10 sm:mb-14 md:mb-20`}>
@@ -141,7 +141,7 @@ const SectionHeader = ({
         className={`inline-flex items-center gap-2 mb-4 sm:mb-5 px-3 py-2 sm:px-4 rounded-full bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 backdrop-blur-sm ${centered ? '' : ''}`}
       >
         {Icon && <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />}
-        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-blue-300/90">
+        <span className={`text-[10px] sm:text-xs font-bold text-blue-300/90 ${!isRTL ? 'uppercase tracking-[0.15em] sm:tracking-[0.2em]' : ''}`}>
           {subtitle}
         </span>
       </motion.div>
@@ -337,35 +337,43 @@ const PrimaryButton = ({ children, icon: Icon, href }: {
   children: string;
   icon?: any;
   href: string;
-}) => (
+}) => {
+  const locale = useLocale();
+  const isRTL = locale === "ar" || locale === "ku";
+  return (
   <Link href={href}>
     <motion.button
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg font-medium text-sm uppercase tracking-wider hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 flex items-center justify-center gap-2"
+      className={`px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg font-medium text-sm hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 flex items-center justify-center gap-2 ${!isRTL ? 'uppercase tracking-wider' : ''}`}
     >
       {children}
       {Icon && <Icon className="w-4 h-4" />}
     </motion.button>
   </Link>
-);
+  );
+};
 
 const SecondaryButton = ({ children, icon: Icon, href }: {
   children: string;
   icon?: any;
   href: string;
-}) => (
+}) => {
+  const locale = useLocale();
+  const isRTL = locale === "ar" || locale === "ku";
+  return (
   <Link href={href}>
     <motion.button
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      className="px-6 py-3 border border-white/20 rounded-lg font-medium text-sm uppercase tracking-wider hover:bg-white/5 transition-all duration-200 flex items-center justify-center gap-2"
+      className={`px-6 py-3 border border-white/20 rounded-lg font-medium text-sm hover:bg-white/5 transition-all duration-200 flex items-center justify-center gap-2 ${!isRTL ? 'uppercase tracking-wider' : ''}`}
     >
       {children}
       {Icon && <Icon className="w-4 h-4" />}
     </motion.button>
   </Link>
-);
+  );
+};
 
 /* ================= LANGUAGE SWITCHER ================= */
 const LanguageSwitcher = () => {
@@ -435,6 +443,8 @@ const LanguageSwitcher = () => {
 /* ================= SCROLL INDICATOR ================= */
 const ScrollIndicator = () => {
   const [isVisible, setIsVisible] = useState(true);
+  const locale = useLocale();
+  const isRTL = locale === "ar" || locale === "ku";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -451,7 +461,7 @@ const ScrollIndicator = () => {
       transition={{ duration: 0.2 }}
       className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 hidden md:flex flex-col items-center gap-2"
     >
-      <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">
+      <span className={`text-xs font-mono text-gray-500 ${!isRTL ? 'uppercase tracking-wider' : ''}`}>
         Scroll
       </span>
       <motion.div
@@ -486,7 +496,7 @@ export default function ProfessionalHomePage() {
   const tNav = useTranslations("Navbar");
   const tBrochure = useTranslations("Brochure");
   const locale = useLocale();
-  const isRTL = locale === "ar";
+  const isRTL = locale === "ar" || locale === "ku";
   const { scrollYProgress } = useScroll();
   const [heroData, setHeroData] = useState<HeroData | null>(null);
   const [heroDataLoading, setHeroDataLoading] = useState(true);
@@ -602,7 +612,7 @@ export default function ProfessionalHomePage() {
               className="inline-flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-gradient-to-r from-blue-500/15 to-cyan-500/10 border border-blue-500/25 shadow-lg shadow-blue-500/5"
             >
               <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-blue-300">
+              <span className={`text-[10px] sm:text-xs font-bold text-blue-300 ${!isRTL ? 'uppercase tracking-[0.15em] sm:tracking-[0.2em]' : ''}`}>
                 {t("hero.subtitle")}
               </span>
             </motion.div>
@@ -629,7 +639,7 @@ export default function ProfessionalHomePage() {
                 <motion.span
                   whileHover={{ scale: 1.02, y: -2 }}
                   whileTap={{ scale: 0.98 }}
-                  className="relative w-full sm:w-auto inline-flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 py-4 min-h-[48px] bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 rounded-2xl font-semibold text-sm uppercase tracking-wider text-white overflow-hidden shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300"
+                  className={`relative w-full sm:w-auto inline-flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 py-4 min-h-[48px] bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 rounded-2xl font-semibold text-sm text-white overflow-hidden shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300 ${!isRTL ? 'uppercase tracking-wider' : ''}`}
                 >
                   <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <span className="relative">{t("hero.ctaPrimary")}</span>
@@ -641,7 +651,7 @@ export default function ProfessionalHomePage() {
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => document.getElementById("services")?.scrollIntoView({ behavior: "smooth" })}
-                className="w-full sm:w-auto px-6 sm:px-8 py-4 min-h-[48px] rounded-2xl font-semibold text-sm uppercase tracking-wider border-2 border-white/20 bg-white/5 backdrop-blur-sm hover:border-cyan-400/50 hover:bg-white/10 text-white transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3"
+                className={`w-full sm:w-auto px-6 sm:px-8 py-4 min-h-[48px] rounded-2xl font-semibold text-sm border-2 border-white/20 bg-white/5 backdrop-blur-sm hover:border-cyan-400/50 hover:bg-white/10 text-white transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3 ${!isRTL ? 'uppercase tracking-wider' : ''}`}
               >
                 {t("hero.ctaSecondary")}
                 <ChevronDown className="w-5 h-5 shrink-0" />
@@ -1115,7 +1125,7 @@ export default function ProfessionalHomePage() {
 
             {/* Links */}
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
+              <h3 className={`text-sm font-semibold text-gray-400 mb-4 ${!isRTL ? 'uppercase tracking-wider' : ''}`}>
                 {t("footer.links")}
               </h3>
               <div className="space-y-2">
@@ -1139,7 +1149,7 @@ export default function ProfessionalHomePage() {
 
             {/* Contact */}
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
+              <h3 className={`text-sm font-semibold text-gray-400 mb-4 ${!isRTL ? 'uppercase tracking-wider' : ''}`}>
                 {t("footer.contact")}
               </h3>
               <div className="space-y-3 text-sm text-gray-300">
@@ -1171,7 +1181,7 @@ export default function ProfessionalHomePage() {
 
             {/* Newsletter */}
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
+              <h3 className={`text-sm font-semibold text-gray-400 mb-4 ${!isRTL ? 'uppercase tracking-wider' : ''}`}>
                 {t("footer.newsletter")}
               </h3>
               <div className="space-y-4">

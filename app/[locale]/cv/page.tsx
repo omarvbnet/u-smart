@@ -181,7 +181,7 @@ export default function CVBuilderPage() {
 
         {/* Template selector */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className={`text-sm font-semibold text-gray-400 mb-4 flex items-center gap-2 ${locale === 'ar' || locale === 'ku' ? '' : 'uppercase tracking-wider'}`}>
             <LayoutTemplate className="w-4 h-4" />
             {t('template')}
           </h2>
