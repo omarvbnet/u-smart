@@ -276,6 +276,7 @@ export default function BrochurePage() {
           fontFamily: isRtl ? "'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', Tahoma, Arial, sans-serif" : "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
           width: `${A4_WIDTH_CM}cm`,
           minWidth: 320,
+          letterSpacing: isRtl ? 0 : undefined,
           ['--brochure-accent' as string]: accent,
           ['--brochure-accent-light' as string]: accentLight,
         }}
@@ -360,7 +361,7 @@ export default function BrochurePage() {
                 <BrochureIcon name="Building2" className="w-7 h-7" style={{ color: accent }} />
               </span>
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
+                <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
                   {t('pageAboutTitle')}
                 </span>
                 <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
@@ -401,7 +402,7 @@ export default function BrochurePage() {
                   <Layers className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
+                  <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
                     {t('pageServicesTitle')}
                   </span>
                   <h2 className="brochure-h2 mt-0.5" style={{ color: accent }}>
@@ -466,7 +467,7 @@ export default function BrochurePage() {
           </section>
         )}
 
-        {/* Systems We Use page – Smart Home only: KNX, Buspro, Zigbee with ideal-for per customer */}
+        {/* Systems We Use page – Smart Home only: KNX, Buspro, Zigbee, Electrical Solutions */}
         {config?.systemsPageKey && config?.systemsKeys && config.systemsKeys.length > 0 && (() => {
           const systemsObj = tIndex.raw(config.systemsPageKey) as Record<string, unknown> | undefined;
           if (!systemsObj || typeof systemsObj !== 'object') return null;
@@ -477,10 +478,9 @@ export default function BrochurePage() {
           const disadvantagesLabel = (systemsObj.disadvantagesLabel as string) || 'Disadvantages';
           return (
             <section
-              className="relative py-12 px-8 overflow-hidden flex flex-col justify-center"
+              className="relative py-12 px-8 overflow-visible flex flex-col justify-start"
               style={{
                 width: '100%',
-                height: `${A4_HEIGHT_CM}cm`,
                 minHeight: `${A4_HEIGHT_CM}cm`,
                 backgroundColor: pageBg,
                 color: '#1e293b',
@@ -492,7 +492,7 @@ export default function BrochurePage() {
                     <BrochureIcon name="Cpu" className="w-7 h-7" style={{ color: accent }} />
                   </span>
                   <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
+                    <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.1em' }}>
                       {t('pageServicesTitle')}
                     </span>
                     <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
@@ -505,8 +505,8 @@ export default function BrochurePage() {
                     <p className="text-[0.9rem] leading-[1.65] text-gray-700">{intro}</p>
                   </div>
                 )}
-                <div className="space-y-4">
-                  {config.systemsKeys.map((key, i) => {
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {config.systemsKeys.map((key) => {
                     const sys = (systemsObj as Record<string, Record<string, unknown>>)[key];
                     if (!sys || typeof sys !== 'object') return null;
                     const name = String(sys.name ?? key);
@@ -517,33 +517,33 @@ export default function BrochurePage() {
                     return (
                       <div
                         key={key}
-                        className="p-5 rounded-xl border-2"
+                        className="p-4 rounded-xl border-2"
                         style={{ borderColor: `${accent}50`, backgroundColor: boxBg }}
                       >
-                        <div className="flex items-start gap-3 mb-2">
+                        <div className="flex items-start gap-2 mb-1.5">
                           <span
-                            className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white"
+                            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white"
                             style={{ backgroundColor: accent }}
                           >
-                            <BrochureIcon name={FEATURE_ICONS[key] ?? 'Cpu'} className="w-5 h-5" />
+                            <BrochureIcon name={FEATURE_ICONS[key] ?? 'Cpu'} className="w-4 h-4" />
                           </span>
-                          <h3 className="font-bold text-gray-900 text-[1.05rem] leading-tight">{name}</h3>
+                          <h3 className="font-bold text-gray-900 text-[0.95rem] leading-tight">{name}</h3>
                         </div>
-                        <p className="text-gray-600 text-[0.9rem] leading-relaxed mb-2 pl-12">{description}</p>
+                        <p className="text-gray-600 text-[0.8rem] leading-relaxed mb-1.5 pl-10">{description}</p>
                         {idealFor && (
-                          <p className="text-[0.875rem] pl-12 mb-3 font-medium" style={{ color: accent }}>
+                          <p className="text-[0.75rem] pl-10 mb-2 font-medium" style={{ color: accent }}>
                             <span className="text-gray-600 font-normal">{idealForLabel}: </span>
                             {idealFor}
                           </p>
                         )}
-                        <div className={`flex flex-wrap gap-4 pl-12 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                        <div className={`flex flex-col gap-2 pl-10 ${isRtl ? 'items-end' : ''}`}>
                           {advantages.length > 0 && (
-                            <div className="min-w-0 flex-1">
-                              <span className="text-xs font-semibold uppercase text-gray-500 block mb-1">{advantagesLabel}</span>
-                              <ul className="space-y-1 list-none p-0 m-0">
-                                {advantages.map((a, j) => (
-                                  <li key={j} className="flex items-center gap-2 text-[0.8rem] text-gray-600">
-                                    <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accent }} />
+                            <div className="min-w-0 w-full">
+                              <span className={`text-[0.65rem] font-semibold text-gray-500 block mb-0.5 ${!isRtl ? 'uppercase' : ''}`}>{advantagesLabel}</span>
+                              <ul className="space-y-0.5 list-none p-0 m-0">
+                                {advantages.slice(0, 4).map((a, j) => (
+                                  <li key={j} className="flex items-start gap-1.5 text-[0.7rem] text-gray-600">
+                                    <Check className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: accent }} />
                                     {a}
                                   </li>
                                 ))}
@@ -551,12 +551,12 @@ export default function BrochurePage() {
                             </div>
                           )}
                           {disadvantages.length > 0 && (
-                            <div className="min-w-0 flex-1">
-                              <span className="text-xs font-semibold uppercase text-gray-500 block mb-1">{disadvantagesLabel}</span>
-                              <ul className="space-y-1 list-none p-0 m-0">
-                                {disadvantages.map((d, j) => (
-                                  <li key={j} className="flex items-start gap-2 text-[0.8rem] text-gray-600">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: accent }} />
+                            <div className="min-w-0 w-full">
+                              <span className={`text-[0.65rem] font-semibold text-gray-500 block mb-0.5 ${!isRtl ? 'uppercase' : ''}`}>{disadvantagesLabel}</span>
+                              <ul className="space-y-0.5 list-none p-0 m-0">
+                                {disadvantages.slice(0, 3).map((d, j) => (
+                                  <li key={j} className="flex items-start gap-1.5 text-[0.7rem] text-gray-600">
+                                    <span className="inline-block w-1 h-1 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: accent }} />
                                     {d}
                                   </li>
                                 ))}
@@ -590,7 +590,7 @@ export default function BrochurePage() {
                 <BrochureIcon name="Layers" className="w-7 h-7" style={{ color: accent }} />
               </span>
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
                   {t('pageServicesTitle')}
                 </span>
                 <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
@@ -623,7 +623,7 @@ export default function BrochurePage() {
                         </span>
                         {isFeatured && (
                           <span
-                            className="inline-block mt-1 px-2.5 py-0.5 rounded-lg text-[0.7rem] font-bold uppercase tracking-wider text-white"
+                            className={`inline-block mt-1 px-2.5 py-0.5 rounded-lg text-[0.7rem] font-bold text-white ${!isRtl ? 'uppercase tracking-wider' : ''}`}
                             style={{ backgroundColor: accent }}
                           >
                             Featured
@@ -655,7 +655,7 @@ export default function BrochurePage() {
                 <BrochureIcon name="Target" className="w-7 h-7" style={{ color: accent }} />
               </span>
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
                   {t('pageWhyTitle')}
                 </span>
                 <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
@@ -700,7 +700,7 @@ export default function BrochurePage() {
                 <BrochureIcon name="Mail" className="w-7 h-7" style={{ color: accent }} />
               </span>
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
                   {t('pageContactTitle')}
                 </span>
                 <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
