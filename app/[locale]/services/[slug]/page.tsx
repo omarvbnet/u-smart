@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, FileDown } from 'lucide-react';
+import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2 } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
+import ServicePdfExport from '@/components/ServicePdfExport';
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
@@ -75,7 +76,6 @@ type Project = {
 export default function ServiceDetailPage() {
   const params = useParams();
   const t = useTranslations('Index');
-  const tBrochure = useTranslations('Brochure');
   const locale = useLocale();
   const slug = typeof params.slug === 'string' ? params.slug : '';
   const isRtl = locale === 'ar' || locale === 'ku';
@@ -207,13 +207,13 @@ export default function ServiceDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             {t('serviceDetail.backToServices')}
           </Link>
-          <Link
-            href={`/brochure?service=${encodeURIComponent(slug)}`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm font-medium transition-colors"
-          >
-            <FileDown className="w-4 h-4" />
-            {tBrochure('downloadPdf')}
-          </Link>
+          {service && (
+            <ServicePdfExport
+              serviceTitle={service.title}
+              serviceDescription={service.description}
+              slug={slug}
+            />
+          )}
         </div>
 
         {/* Service brief - description first */}

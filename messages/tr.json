@@ -32,6 +32,20 @@
     "qrScan": "Web sitemizi veya müşteri panosunu ziyaret etmek için tarayın",
     "downloadPdf": "Broşür İndir (PDF)"
   },
+  "ServicePdf": {
+    "exportAsPdf": "PDF Olarak Dışa Aktar",
+    "exporting": "PDF oluşturuluyor…",
+    "coverSubtitle": "Hizmet Özeti",
+    "featuresTitle": "Neler Sunuyoruz",
+    "systemsTitle": "Kullandığımız Sistemler",
+    "coverTagline": {
+      "quality-control-supervision": "Kapsamlı kalite güvencesi, denetim ve gözetim—en yüksek standartları karşılayan projeler için sertifikalı denetim.",
+      "enterprise-networking": "Kurumsal ve fiber ağların tasarımı, kurulumu ve bakımı. Dayanıklı altyapı için FOA sertifikalı uzmanlık.",
+      "smart-home-automation": "Uçtan uca akıllı ev ve bina otomasyonu. Aydınlatma, iklim, güvenlik ve enerji yönetimi—güvenilirlik ve kesintisiz kontrol.",
+      "custom-software": "Modern teknolojilerle ölçeklenebilir, güvenli yazılım. Web, mobil, API—işinizle büyüyen çözümler.",
+      "programming": "Node.js, Flutter, Python ile özel yazılım geliştirme. Web, mobil ve otomasyon için tam yığın çözümler."
+    }
+  },
   "CV": {
     "title": "Profesyonel CV Oluşturucu",
     "subtitle": "Dakikalar içinde öne çıkan bir özgeçmiş oluşturun. Şablon seçin, bilgilerinizi girin, PDF indirin.",

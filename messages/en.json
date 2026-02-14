@@ -32,6 +32,20 @@
     "qrScan": "Scan to visit our website or client dashboard",
     "downloadPdf": "Download Brochure (PDF)"
   },
+  "ServicePdf": {
+    "exportAsPdf": "Export as PDF",
+    "exporting": "Generating PDF…",
+    "coverSubtitle": "Service Overview",
+    "featuresTitle": "What We Offer",
+    "systemsTitle": "Systems We Use",
+    "coverTagline": {
+      "quality-control-supervision": "Comprehensive quality assurance, inspection, and supervision—certified oversight for projects that meet the highest standards.",
+      "enterprise-networking": "Design, installation, and maintenance of enterprise and fiber networks. FOA-certified expertise for resilient infrastructure.",
+      "smart-home-automation": "End-to-end smart home and building automation. Lighting, climate, security, and energy management—reliability and seamless control.",
+      "custom-software": "Scalable, secure software built with modern stacks. Web, mobile, APIs—solutions that grow with your business.",
+      "programming": "Custom software development with Node.js, Flutter, Python. Full-stack solutions for web, mobile, and automation."
+    }
+  },
   "CV": {
     "title": "Professional CV Builder",
     "subtitle": "Create a standout resume in minutes. Choose a template, fill in your details, and download as PDF.",
@@ -136,7 +150,7 @@
     "smartHomeFeatures": {
       "security": {
         "name": "Security & Access Control",
-        "description": "Integrated smart security with door locks, cameras, motion sensors, and alarm systems. Control access remotely, receive instant alerts, and monitor your property from anywhere.",
+        "description": "Integrated smart security with door locks, cameras, motion sensors, and alarm systems. Control access remotely, receive instant alerts, and monitor your property from anywhere. We deploy solutions that integrate with KNX, HDL Buspro, and Zigbee—giving you flexible, scalable security for residential and commercial properties with mobile app control and automation rules.",
         "highlights": ["Remote monitoring", "Smart locks & access", "Motion & intrusion sensors", "Instant alerts"]
       },
       "lighting": {
@@ -233,7 +247,7 @@
       "intro": "Our team has more than 12 years of experience and holds special certifications from FOA (Fiber Optic Association). We design and maintain your networks with a dedicated system for tracking and monitoring our team's performance. Choose the SLA that fits your needs and benefit from transparent delivery. Below are the techniques and features we offer.",
       "fiber": {
         "name": "Fiber Optics",
-        "description": "High-capacity fiber optic cabling for ultra-fast data transmission. We design, install, and maintain fiber networks for enterprise and data centers with minimal signal loss and maximum reliability."
+        "description": "High-capacity fiber optic cabling for ultra-fast data transmission. We design, install, and maintain fiber networks for enterprise and data centers with minimal signal loss and maximum reliability. Our FOA-certified team delivers end-to-end solutions from planning and route survey to fusion splicing, testing, and documentation—ensuring your infrastructure meets industry standards for years to come."
       },
       "cable_systemization": {
         "name": "Cable Systemization",
@@ -265,7 +279,7 @@
       "intro": "We provide comprehensive quality assurance, inspection, and supervision services to ensure your projects meet the highest standards. Our certified team delivers rigorous oversight across every phase, from on-site inspection to compliance tracking.",
       "inspection": {
         "name": "Inspection",
-        "description": "Thorough on-site and off-site inspections to verify compliance with specifications, standards, and best practices. We document findings with detailed reports and photographic evidence for full traceability.",
+        "description": "Thorough on-site and off-site inspections to verify compliance with specifications, standards, and best practices. We document findings with detailed reports and photographic evidence for full traceability. Our certified inspectors cover materials, workmanship, structural integrity, and finishing—providing actionable feedback and clear documentation for stakeholders and regulatory compliance.",
         "highlights": ["Detailed compliance reports", "Photographic documentation", "Full traceability", "Standards verification"]
       },
       "supervision": {
