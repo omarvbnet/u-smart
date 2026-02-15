@@ -595,65 +595,92 @@ export default function BrochurePage() {
           );
         })()}
 
-        {/* Page 3 – Services: Solid background, service boxes */}
+        {/* Page 3 – Services: Full descriptions, responsive footer */}
         <section
-          className="relative py-12 px-8 overflow-hidden flex flex-col justify-center"
+          className="relative py-10 sm:py-12 px-5 sm:px-8 overflow-hidden flex flex-col justify-center"
           style={{
             width: '100%',
-            height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
             backgroundColor: pageBg,
             color: '#1e293b',
           }}
         >
-          <div className="relative z-10 space-y-4">
-            <div className="p-4 rounded-xl border-2 flex items-center gap-4" style={{ borderColor: accent, backgroundColor: boxBg }}>
-              <span className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${accent}15` }}>
-                <BrochureIcon name="Layers" className="w-7 h-7" style={{ color: accent }} />
+          <div className="relative z-10 max-w-5xl mx-auto w-full space-y-6 sm:space-y-8">
+            <div
+              className="p-4 sm:p-5 rounded-2xl border-2 flex items-center gap-4 shadow-sm"
+              style={{ borderColor: accent, backgroundColor: boxBg }}
+            >
+              <span
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${accent}15` }}
+              >
+                <BrochureIcon name="Layers" className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: accent }} />
               </span>
               <div>
-                <span className={`text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
+                <span className={`text-[0.65rem] sm:text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
                   {t('pageServicesTitle')}
                 </span>
-                <h2 className="brochure-h2 mt-1 text-gray-900" style={{ color: accent }}>
+                <h2 className="text-lg sm:text-xl font-bold mt-0.5 text-gray-900" style={{ color: accent }}>
                   {t('pageServicesTitle')}
                 </h2>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
-              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }, i) => {
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
+                const svcConfig = BROCHURE_SERVICE_CONFIG[slug];
                 const isFeatured = serviceSlug === slug;
+                const svcTitle = svcConfig ? tAbout(svcConfig.aboutTitleKey) : t(brochureKey);
+                const svcDesc = svcConfig ? tAbout(svcConfig.aboutDescKey) : '';
+                const cardAccent = svcConfig?.accent ?? accent;
+                const cardAccentLight = svcConfig?.accentLight ?? accentLight;
                 return (
-                  <div
+                  <Link
                     key={slug}
-                    className="p-5 rounded-xl border-2"
+                    href={`/services/${slug}`}
+                    className={`block group rounded-2xl border-2 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 ${
+                      isFeatured ? 'ring-2 ring-offset-2' : ''
+                    }`}
                     style={{
-                      borderColor: isFeatured ? accent : `${accent}40`,
+                      borderColor: isFeatured ? cardAccent : `${cardAccent}40`,
                       backgroundColor: boxBg,
+                      ...(isFeatured ? { ['--tw-ring-color' as string]: cardAccent } : {}),
                     }}
                   >
-                    <div className="flex items-center gap-4">
-                      <span
-                        className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-white"
-                        style={{ backgroundColor: isFeatured ? accent : accentDark }}
-                      >
-                        <BrochureIcon name={icon} className="w-6 h-6" />
-                      </span>
-                      <div className="min-w-0">
-                        <span className={`text-[0.95rem] font-medium block ${isFeatured ? 'text-gray-900' : 'text-gray-600'}`}>
-                          {isFeatured ? (featuredTitle || t(brochureKey)) : t(brochureKey)}
+                    <div className="p-5 sm:p-6 h-full flex flex-col">
+                      <div className="flex items-start gap-4 mb-3">
+                        <span
+                          className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-md"
+                          style={{ backgroundColor: cardAccent }}
+                        >
+                          <BrochureIcon name={icon} className="w-6 h-6 sm:w-7 sm:h-7" />
                         </span>
-                        {isFeatured && (
-                          <span
-                            className={`inline-block mt-1 px-2.5 py-0.5 rounded-lg text-[0.7rem] font-bold text-white ${!isRtl ? 'uppercase tracking-wider' : ''}`}
-                            style={{ backgroundColor: accent }}
-                          >
-                            Featured
-                          </span>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base sm:text-lg font-bold text-gray-900 leading-tight group-hover:opacity-90 transition-opacity">
+                            {svcTitle}
+                          </h3>
+                          {isFeatured && (
+                            <span
+                              className={`inline-block mt-2 px-3 py-1 rounded-lg text-[0.65rem] sm:text-xs font-bold text-white ${!isRtl ? 'uppercase tracking-wider' : ''}`}
+                              style={{ backgroundColor: cardAccent }}
+                            >
+                              Featured
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-[0.85rem] sm:text-[0.9rem] text-gray-600 leading-relaxed flex-1">
+                        {svcDesc}
+                      </p>
+                      <div
+                        className={`mt-4 flex items-center gap-1.5 text-sm font-semibold ${isRtl ? 'justify-start' : 'justify-end'}`}
+                        style={{ color: cardAccentLight }}
+                      >
+                        <span>{tAbout('learnMore')}</span>
+                        <ArrowLeft className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
