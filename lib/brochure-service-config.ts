@@ -118,16 +118,44 @@ export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string; icon:
   { slug: 'custom-software', brochureKey: 'serviceCleanEnergy', icon: 'Code2' },
 ];
 
+/** Feature-specific image URLs – one per feature key (Unsplash – free to use) */
+export const FEATURE_IMAGES: Record<string, string> = {
+  inspection: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=400&q=80',
+  supervision: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&q=80',
+  hse: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=400&q=80',
+  investigation: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=400&q=80',
+  tracking: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80',
+  fiber: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=400&q=80',
+  cable_systemization: 'https://images.unsplash.com/photo-1597852074816-d933c7d2b988?w=400&q=80',
+  closures: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&q=80',
+  splice: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&q=80',
+  qgis: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=400&q=80',
+  asbuilt_design: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&q=80',
+  maintenance: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=400&q=80',
+  security: 'https://images.unsplash.com/photo-1558002038-10559092d310?w=400&q=80',
+  lighting: 'https://images.unsplash.com/photo-1565814329452-e1efa11c5b89?w=400&q=80',
+  control: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=400&q=80',
+  luxury: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&q=80',
+  powerSavings: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400&q=80',
+  climate: 'https://images.unsplash.com/photo-1631545914464-fcd6ef60f01e?w=400&q=80',
+  nodejs: 'https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=400&q=80',
+  flutter: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&q=80',
+  python: 'https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=400&q=80',
+  mysql: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&q=80',
+  postgresql: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&q=80',
+  nosql: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&q=80',
+};
+
 /** Service image URLs – one per service (Unsplash – free to use) */
 export const SERVICE_IMAGES: Record<string, string> = {
   'quality-control-supervision':
-    'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&q=85',
+    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=900&q=85',
   'smart-home-automation':
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=85',
+    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=900&q=85',
   'enterprise-networking':
-    'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=85',
+    'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=900&q=85',
   'custom-software':
-    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=85',
+    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=900&q=85',
 };
 
 /** Icons for Why Choose strengths (7 items) */

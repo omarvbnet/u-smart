@@ -53,6 +53,7 @@ import {
   BROCHURE_SERVICE_CONFIG,
   BROCHURE_SERVICES_ORDER,
   SERVICE_IMAGES,
+  FEATURE_IMAGES,
   WHY_CHOOSE_ICONS,
   FEATURE_ICONS,
 } from '@/lib/brochure-service-config';
@@ -610,12 +611,13 @@ export default function BrochurePage() {
           const pageDesc = (pageDescs?.[slug] ?? (svcConfig ? tAbout(svcConfig.aboutDescKey) : '')) as string;
           const highlights = (pageHighlights?.[slug] ?? []) as string[];
           const indexObj = svcConfig ? (tIndex.raw(svcConfig.indexKey) as Record<string, unknown>) : null;
-          const featureItems: { name: string; description: string; highlights?: string[] }[] = [];
+          const featureItems: { key: string; name: string; description: string; highlights?: string[] }[] = [];
           if (svcConfig && indexObj && typeof indexObj === 'object') {
             for (const key of svcConfig.featureKeys) {
               const item = (indexObj as Record<string, Record<string, unknown>>)[key];
               if (item && typeof item === 'object' && item.name) {
                 featureItems.push({
+                  key,
                   name: String(item.name),
                   description: typeof item.description === 'string' ? item.description : '',
                   highlights: Array.isArray(item.highlights) ? (item.highlights as string[]) : undefined,
@@ -635,14 +637,14 @@ export default function BrochurePage() {
                 color: '#1e293b',
               }}
             >
-              {/* Hero image */}
-              <div className="relative h-20 sm:h-24 shrink-0 overflow-hidden">
+              {/* Hero image - larger, responsive */}
+              <div className="relative h-32 sm:h-40 md:h-44 shrink-0 overflow-hidden">
                 {imgUrl ? (
                   <img
                     src={imgUrl}
                     alt=""
                     crossOrigin="anonymous"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover object-center"
                   />
                 ) : (
                   <div
@@ -698,23 +700,42 @@ export default function BrochurePage() {
                     <p className={`text-[0.6rem] sm:text-[0.65rem] font-semibold text-gray-600 mb-2 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
                       {t('pageServicesTitle')} — {t('featuresLabel')}
                     </p>
-                    <div className="space-y-2">
-                      {featureItems.map((f, i) => (
-                        <div key={i} className="border-l-2 pl-2" style={{ borderColor: `${svcAccent}60` }}>
-                          <h4 className="text-[0.75rem] sm:text-[0.8rem] font-bold text-gray-900">{f.name}</h4>
-                          <p className="text-[0.7rem] sm:text-[0.72rem] text-gray-600 leading-[1.45] mt-0.5">{f.description}</p>
-                          {f.highlights && f.highlights.length > 0 && (
-                            <ul className="mt-1 space-y-0.5 list-none p-0 m-0">
-                              {f.highlights.slice(0, 3).map((h, j) => (
-                                <li key={j} className="flex items-center gap-1.5 text-[0.65rem] sm:text-[0.68rem] text-gray-500">
-                                  <Check className="w-2.5 h-2.5 flex-shrink-0" style={{ color: svcAccent }} />
-                                  {h}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      {featureItems.map((f, i) => {
+                        const featureImg = FEATURE_IMAGES[f.key];
+                        return (
+                          <div
+                            key={i}
+                            className={`flex gap-3 rounded-lg border overflow-hidden ${isRtl ? 'flex-row-reverse' : ''}`}
+                            style={{ borderColor: `${svcAccent}40`, backgroundColor: 'rgba(255,255,255,0.6)' }}
+                          >
+                            {featureImg && (
+                              <div className="w-20 sm:w-24 h-16 sm:h-20 shrink-0 overflow-hidden bg-gray-100">
+                                <img
+                                  src={featureImg}
+                                  alt=""
+                                  crossOrigin="anonymous"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className={`flex-1 min-w-0 py-1.5 sm:py-2 ${isRtl ? 'pl-2 pr-0' : 'pr-2 pl-0'}`}>
+                              <h4 className="text-[0.75rem] sm:text-[0.8rem] font-bold text-gray-900">{f.name}</h4>
+                              <p className="text-[0.7rem] sm:text-[0.72rem] text-gray-600 leading-[1.45] mt-0.5">{f.description}</p>
+                              {f.highlights && f.highlights.length > 0 && (
+                                <ul className="mt-1 space-y-0.5 list-none p-0 m-0">
+                                  {f.highlights.slice(0, 3).map((h, j) => (
+                                    <li key={j} className="flex items-center gap-1.5 text-[0.65rem] sm:text-[0.68rem] text-gray-500">
+                                      <Check className="w-2.5 h-2.5 flex-shrink-0" style={{ color: svcAccent }} />
+                                      {h}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : highlights.length > 0 && (
@@ -745,14 +766,33 @@ export default function BrochurePage() {
                   </div>
                 )}
 
-                <Link
-                  href={`/services/${slug}`}
-                  className={`shrink-0 flex items-center gap-1.5 text-xs font-semibold w-fit py-1 ${isRtl ? 'self-start' : 'self-end'}`}
-                  style={{ color: svcAccentLight }}
+                {/* Footer - never empty */}
+                <div
+                  className={`shrink-0 mt-2 flex flex-wrap items-center justify-between gap-2 sm:gap-4 p-3 rounded-xl border-2 ${isRtl ? 'flex-row-reverse' : ''}`}
+                  style={{
+                    borderColor: `${svcAccent}35`,
+                    backgroundColor: `${svcAccent}08`,
+                  }}
                 >
-                  <span>{tAbout('learnMore')}</span>
-                  <ArrowLeft className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
-                </Link>
+                  <div className="flex items-center gap-3 sm:gap-4 text-[0.7rem] sm:text-[0.75rem] text-gray-600">
+                    <span className="flex items-center gap-1.5">
+                      <BrochureIcon name="Globe" className="w-3.5 h-3.5 shrink-0" style={{ color: svcAccent }} />
+                      {t('websiteUrl')}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <BrochureIcon name="Mail" className="w-3.5 h-3.5 shrink-0" style={{ color: svcAccent }} />
+                      {t('email')}
+                    </span>
+                  </div>
+                  <Link
+                    href={`/services/${slug}`}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors hover:opacity-90"
+                    style={{ color: svcAccentLight, backgroundColor: `${svcAccent}20` }}
+                  >
+                    <span>{tAbout('learnMore')}</span>
+                    <ArrowLeft className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
+                  </Link>
+                </div>
               </div>
             </section>
           );
