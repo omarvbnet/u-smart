@@ -1,4 +1,22 @@
 {
+  "Products": {
+    "title": "Ürünlerimiz",
+    "subtitle": "Akıllı ev ve bina otomasyonu için KNX, Buspro ve Zigbee cihaz ve sistemleri.",
+    "all": "Tümü",
+    "viewProduct": "Ürünü görüntüle",
+    "noProducts": "Henüz ürün yok.",
+    "orderNow": "Sipariş Ver",
+    "orderSuccess": "Sipariş talebiniz alındı. En kısa sürede size fiyat teklifi ile dönüş yapacağız.",
+    "orderError": "Gönderilemedi. Lütfen tekrar deneyin veya doğrudan bize ulaşın.",
+    "specifications": "Özellikler",
+    "userManual": "Kullanım Kılavuzu",
+    "nameLabel": "Adınız",
+    "emailLabel": "E-posta",
+    "phoneLabel": "Telefon",
+    "messageLabel": "Mesaj (isteğe bağlı)",
+    "submitOrder": "Sipariş Talebi Gönder",
+    "sending": "Gönderiliyor..."
+  },
   "Brochure": {
     "title": "U Smart Entegre Çözümler Profili",
     "tagline": "Akıllı İnovasyon. Güvenilir Performans.",
@@ -155,6 +173,7 @@
   "Navbar": {
     "language": "Dil",
     "home": "Ana Sayfa",
+    "products": "Ürünler",
     "services": "Hizmetler",
     "projects": "Projeler",
     "industry": "Endüstri",
@@ -439,6 +458,12 @@
       "description": "Akıllı evler, ağ ve özel yazılım geliştirme için en ileri teknoloji çözümleri sunuyoruz. Uzmanlığımız endüstrilerde dijital dönüşümü yönlendiriyor.",
       "ctaPrimary": "Projeleri Görüntüle",
       "ctaSecondary": "Çözümleri Keşfet"
+    },
+    "products": {
+      "subtitle": "KNX • Buspro • Zigbee",
+      "title": "Ürünlerimiz",
+      "tagline": "Akıllı ev ve bina otomasyon cihazları—fiyat teklifi isteyin, fiyat gösterilmez.",
+      "browseProducts": "Ürünlere Göz At"
     },
     "services": {
       "subtitle": "Uzmanlığımız",

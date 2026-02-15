@@ -50,11 +50,15 @@ export default function ProfessionalNavbar() {
       setActiveLink('about');
       return;
     }
+    if (pathname?.includes('/products')) {
+      setActiveLink('products');
+      return;
+    }
     if (pathname?.includes('/cv')) {
       setActiveLink('cv');
       return;
     }
-    const sections = ['home', 'hero', 'services', 'industry', 'development', 'training', 'careers'];
+    const sections = ['home', 'hero', 'services', 'products', 'industry', 'development', 'training', 'careers'];
     const currentScroll = window.scrollY + 100;
 
     for (const section of sections) {
@@ -73,6 +77,7 @@ export default function ProfessionalNavbar() {
   const navLinks = [
     { key: "home", href: "#home", label: t("home") },
     { key: "about", href: "/about", label: t("about") },
+    { key: "products", href: "/products", label: t("products") },
     { key: "services", href: "#services", label: t("services") },
     { key: "industry", href: "#industry", label: t("industry") },
     { key: "development", href: "#development", label: t("development") },

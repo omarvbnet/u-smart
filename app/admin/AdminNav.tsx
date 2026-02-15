@@ -7,6 +7,7 @@ import {
   Home,
   FolderKanban,
   Boxes,
+  Package,
   Users,
   Briefcase,
   FileText,
@@ -26,6 +27,7 @@ const links = [
   { href: '/admin', label: 'Hero / Home', icon: Home },
   { href: '/admin/projects', label: 'Projects', icon: FolderKanban },
   { href: '/admin/services', label: 'Services', icon: Boxes },
+  { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/clients', label: 'Clients', icon: Users },
   { href: '/admin/careers', label: 'Careers', icon: Briefcase },
   { href: '/admin/applications', label: 'Applications', icon: FileText },
@@ -33,6 +35,7 @@ const links = [
   { href: '/admin/enterprise-networking-requests', label: 'Enterprise Networking', icon: Network, badgeType: 'pending_enterprise' as const },
   { href: '/admin/quality-requests', label: 'Quality Requests', icon: ClipboardCheck, badgeType: 'pending_qc' as const },
   { href: '/admin/training-requests', label: 'Training', icon: GraduationCap, badgeType: 'pending_training' as const },
+  { href: '/admin/product-requests', label: 'Product Orders', icon: Package, badgeType: 'pending_product' as const },
   { href: '/admin/checklists', label: 'Checklists', icon: CheckSquare },
   { href: '/admin/teams', label: 'Teams', icon: UsersRound },
   { href: '/admin/employees', label: 'Employees', icon: UserCog },
@@ -48,24 +51,28 @@ export default function AdminNav() {
   const [enterprisePendingCount, setEnterprisePendingCount] = useState(0);
   const [qcPendingCount, setQcPendingCount] = useState(0);
   const [trainingPendingCount, setTrainingPendingCount] = useState(0);
+  const [productPendingCount, setProductPendingCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [visitorRes, enterpriseRes, qcRes, trainingRes] = await Promise.all([
+        const [visitorRes, enterpriseRes, qcRes, trainingRes, productRes] = await Promise.all([
           fetch('/api/notifications/count?type=pending_visitor_tickets'),
           fetch('/api/notifications/count?type=pending_tickets'),
           fetch('/api/notifications/count?type=pending_qc_tickets'),
           fetch('/api/notifications/count?type=pending_training_requests'),
+          fetch('/api/notifications/count?type=pending_product_requests'),
         ]);
         const visitorData = await visitorRes.json();
         const enterpriseData = await enterpriseRes.json();
         const qcData = await qcRes.json();
         const trainingData = await trainingRes.json();
+        const productData = await productRes.json();
         if (visitorData.success && typeof visitorData.count === 'number') setVisitorPendingCount(visitorData.count);
         if (enterpriseData.success && typeof enterpriseData.count === 'number') setEnterprisePendingCount(enterpriseData.count);
         if (qcData.success && typeof qcData.count === 'number') setQcPendingCount(qcData.count);
         if (trainingData.success && typeof trainingData.count === 'number') setTrainingPendingCount(trainingData.count);
+        if (productData.success && typeof productData.count === 'number') setProductPendingCount(productData.count);
       } catch {
         /* ignore */
       }
@@ -86,12 +93,14 @@ export default function AdminNav() {
           (href === '/admin/visitor-requests' && badgeType === 'pending_visitor' && visitorPendingCount > 0) ||
           (href === '/admin/enterprise-networking-requests' && badgeType === 'pending_enterprise' && enterprisePendingCount > 0) ||
           (href === '/admin/quality-requests' && badgeType === 'pending_qc' && qcPendingCount > 0) ||
-          (href === '/admin/training-requests' && badgeType === 'pending_training' && trainingPendingCount > 0);
+          (href === '/admin/training-requests' && badgeType === 'pending_training' && trainingPendingCount > 0) ||
+          (href === '/admin/product-requests' && badgeType === 'pending_product' && productPendingCount > 0);
         const badgeCount =
           href === '/admin/visitor-requests' ? visitorPendingCount :
           href === '/admin/enterprise-networking-requests' ? enterprisePendingCount :
           href === '/admin/quality-requests' ? qcPendingCount :
-          href === '/admin/training-requests' ? trainingPendingCount : 0;
+          href === '/admin/training-requests' ? trainingPendingCount :
+          href === '/admin/product-requests' ? productPendingCount : 0;
         return (
           <Link
             key={href}

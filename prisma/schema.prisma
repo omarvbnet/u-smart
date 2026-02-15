@@ -35,6 +35,7 @@ model User {
     projects      Project[]
     services      Service[]
     testimonials  Testimonial[]
+    products      Product[]
     @@map("users")
   }
   
@@ -508,4 +509,61 @@ model User {
     id        String   @id @default(cuid())
     createdAt DateTime @default(now())
     @@map("cv_exports")
+  }
+
+  // Products (KNX, Buspro, Zigbee) – posted from admin, no price, order button only
+  model Product {
+    id              String       @id @default(cuid())
+    title           String
+    slug            String       @unique
+    description     String
+    specifications  Json?        // { "key": "value" } or array of specs
+    userManualUrl   String?      // PDF or doc URL
+    imageUrls       String[]     @default([])
+    productType     ProductType  // KNX | Buspro | Zigbee
+    featured        Boolean      @default(false)
+    translations    Json?        // { "ar": { "title", "description", "specifications" }, ... }
+    userId          String
+    user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+    requests        ProductRequest[]
+    createdAt       DateTime     @default(now())
+    updatedAt       DateTime     @updatedAt
+
+    @@index([productType])
+    @@index([featured])
+    @@map("products")
+  }
+
+  enum ProductType {
+    KNX
+    Buspro
+    Zigbee
+  }
+
+  // Product order requests (from Order button on product detail)
+  model ProductRequest {
+    id          String              @id @default(cuid())
+    productId   String
+    product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+    productSlug String
+    productTitle String
+    productType ProductType
+    name        String
+    email       String
+    phone       String
+    message     String?
+    status      ProductRequestStatus @default(PENDING)
+    createdAt   DateTime             @default(now())
+    updatedAt   DateTime             @updatedAt
+
+    @@index([productId])
+    @@index([status])
+    @@map("product_requests")
+  }
+
+  enum ProductRequestStatus {
+    PENDING
+    CONTACTED
+    QUOTED
+    CLOSED
   }

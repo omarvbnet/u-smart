@@ -761,6 +761,27 @@ export default function ProfessionalHomePage() {
         ) : null}
       </Section>
 
+      {/* ================= PRODUCTS SECTION (KNX, Buspro, Zigbee) ================= */}
+      <Section id="products">
+        <SectionHeader
+          subtitle={t("products.subtitle")}
+          title={t("products.title")}
+          description={t("products.tagline")}
+          icon={Boxes}
+        />
+        <div className="text-center">
+          <Link href="/products">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 mx-auto"
+            >
+              {t("products.browseProducts")} <ArrowRight className="w-5 h-5" />
+            </motion.button>
+          </Link>
+        </div>
+      </Section>
+
       {/* ================= INDUSTRY SECTION ================= */}
       <Section id="industry">
         <div className="grid lg:grid-cols-2 gap-10 sm:gap-12 md:gap-16 items-center">

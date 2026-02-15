@@ -50,6 +50,16 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, count: 0 });
       }
     }
+    if (type === 'pending_product_requests') {
+      try {
+        const count = await prisma.productRequest.count({
+          where: { status: 'PENDING' },
+        });
+        return NextResponse.json({ success: true, count });
+      } catch {
+        return NextResponse.json({ success: true, count: 0 });
+      }
+    }
     if (type === 'admin_unread') {
       const count = await prisma.notification.count({
         where: { forAdmin: true, read: false },

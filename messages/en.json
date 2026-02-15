@@ -1,4 +1,22 @@
 {
+  "Products": {
+    "title": "Our Products",
+    "subtitle": "KNX, Buspro, and Zigbee devices and systems for smart home and building automation.",
+    "all": "All",
+    "viewProduct": "View product",
+    "noProducts": "No products yet.",
+    "orderNow": "Order Now",
+    "orderSuccess": "Your order request has been submitted. We will contact you soon with a quote.",
+    "orderError": "Failed to submit. Please try again or contact us directly.",
+    "specifications": "Specifications",
+    "userManual": "User Manual",
+    "nameLabel": "Your name",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone",
+    "messageLabel": "Message (optional)",
+    "submitOrder": "Submit Order",
+    "sending": "Sending..."
+  },
   "Brochure": {
     "title": "U Smart Integrated Solutions Profile",
     "tagline": "Smart Innovation. Trusted Performance.",
@@ -155,6 +173,7 @@
   "Navbar": {
     "language": "Language",
     "home": "Home",
+    "products": "Products",
     "services": "Services",
     "projects": "Projects",
     "industry": "Industry",
@@ -498,6 +517,12 @@
       "description": "We deliver cutting-edge technology solutions for smart homes, networking, and custom software development. Our expertise drives digital transformation across industries.",
       "ctaPrimary": "View Projects",
       "ctaSecondary": "Explore Solutions"
+    },
+    "products": {
+      "subtitle": "KNX • Buspro • Zigbee",
+      "title": "Our Products",
+      "tagline": "Smart home and building automation devices—order a quote, no prices listed.",
+      "browseProducts": "Browse Products"
     },
     "services": {
       "subtitle": "Our Expertise",
