@@ -305,9 +305,9 @@ export default function BrochurePage() {
           ['--brochure-accent-light' as string]: accentLight,
         }}
       >
-        {/* Page 1 – Cover: Solid background, text in boxes */}
+        {/* Page 1 – Cover: Services & features showcase */}
         <section
-          className="relative flex flex-col items-center justify-center px-8 py-14 overflow-hidden"
+          className="relative flex flex-col px-6 sm:px-8 py-8 overflow-hidden"
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
@@ -316,54 +316,81 @@ export default function BrochurePage() {
           }}
         >
           <div
-            className="absolute inset-0 opacity-[0.06]"
+            className="absolute inset-0 opacity-[0.05]"
             style={{
-              backgroundImage: `linear-gradient(${accentLight}44 1px, transparent 1px), linear-gradient(90deg, ${accentLight}44 1px, transparent 1px)`,
-              backgroundSize: '24px 24px',
+              backgroundImage: `radial-gradient(circle at 20% 30%, ${accentLight}66 0%, transparent 50%), radial-gradient(circle at 80% 70%, ${accent}44 0%, transparent 50%)`,
             }}
           />
-          <div className="relative z-10 w-full max-w-xl space-y-4">
-            <div
-              className="w-28 h-28 mx-auto rounded-2xl flex items-center justify-center mb-6 border-2"
-              style={{ borderColor: `${accent}60`, backgroundColor: 'rgba(255,255,255,0.08)' }}
-            >
-              <img
-                src="/logo/usmart.PNG"
-                alt="U Smart"
-                className="h-20 w-auto object-contain rounded-xl"
-                onError={(e) => {
-                  const el = e.target as HTMLImageElement;
-                  if (el) {
-                    el.style.display = 'none';
-                    (el.nextElementSibling as HTMLElement)?.classList.remove('hidden');
-                  }
-                }}
-              />
-              <div className="hidden w-16 h-16 rounded-xl bg-white/10 flex items-center justify-center">
-                <span className="text-3xl font-bold text-white/90">U</span>
+          <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: `linear-gradient(${accentLight}44 1px, transparent 1px), linear-gradient(90deg, ${accentLight}44 1px, transparent 1px)`, backgroundSize: '20px 20px' }} />
+          <div className="relative z-10 flex flex-col h-full">
+            <div className="flex items-center justify-between gap-4 mb-6 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center border-2 shrink-0" style={{ borderColor: `${accent}60`, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                  <img src="/logo/usmart.PNG" alt="U Smart" className="h-12 sm:h-14 w-auto object-contain rounded-lg" onError={(e) => { const el = e.target as HTMLImageElement; if (el) { el.style.display = 'none'; (el.nextElementSibling as HTMLElement)?.classList.remove('hidden'); } }} />
+                  <div className="hidden w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center"><span className="text-xl font-bold text-white">U</span></div>
+                </div>
+                <div>
+                  <h1 className="text-lg sm:text-xl font-bold text-white" style={{ letterSpacing: isRtl ? 0 : '-0.02em' }}>{t('title')}</h1>
+                  <p className="text-xs sm:text-sm text-white/80 mt-0.5 flex items-center gap-1.5">
+                    <BrochureIcon name="Sparkles" className="w-3.5 h-3.5" style={{ color: accentLight }} />
+                    {t('tagline')}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="p-6 rounded-xl border-2 text-center" style={{ borderColor: accent, backgroundColor: `${accent}15` }}>
-              <div className="flex justify-center mb-3">
-                <span className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${accentLight}30` }}>
-                  <BrochureIcon name="Sparkles" className="w-6 h-6" style={{ color: accentLight }} />
-                </span>
-              </div>
-              <h1 className="text-xl font-bold text-white mb-2" style={{ letterSpacing: isRtl ? 0 : '-0.03em' }}>
-                {t('title')}
-              </h1>
               {featuredTitle && (
-                <p className="text-base font-semibold mb-2" style={{ color: accentLight }}>
-                  {featuredTitle}
-                </p>
+                <span className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0" style={{ backgroundColor: `${accent}40`, color: accentLight }}>{featuredTitle}</span>
               )}
-              <p className="text-sm font-medium text-white/90 flex items-center justify-center gap-2">
-                <BrochureIcon name="Sparkles" className="w-4 h-4" style={{ color: accentLight }} />
-                {t('tagline')}
-              </p>
             </div>
-            <div className="p-5 rounded-xl border" style={{ borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
-              <p className="text-sm text-white/85 leading-relaxed">{t('headline')}</p>
+
+            <p className="text-sm text-white/90 leading-relaxed mb-6 shrink-0">{t('headline')}</p>
+
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 flex-1 min-h-0">
+              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
+                const svcCfg = BROCHURE_SERVICE_CONFIG[slug];
+                const svcAccent = svcCfg?.accent ?? accent;
+                const svcTitle = svcCfg ? tAbout(svcCfg.aboutTitleKey) : t(brochureKey);
+                const svcImg = SERVICE_IMAGES[slug];
+                const firstFeature = svcCfg?.featureKeys?.[0];
+                const featureImg = firstFeature ? FEATURE_IMAGES[firstFeature] : null;
+                return (
+                  <div
+                    key={slug}
+                    className="rounded-xl border-2 overflow-hidden flex flex-col min-h-0"
+                    style={{ borderColor: `${svcAccent}60`, backgroundColor: 'rgba(255,255,255,0.08)' }}
+                  >
+                    <div className="relative h-14 sm:h-16 shrink-0 overflow-hidden">
+                      {(svcImg || featureImg) ? (
+                        <img src={svcImg || featureImg || ''} alt="" crossOrigin="anonymous" className="w-full h-full object-cover opacity-80" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: `${svcAccent}30` }}>
+                          <BrochureIcon name={icon} className="w-8 h-8 opacity-70" style={{ color: svcAccent }} />
+                        </div>
+                      )}
+                      <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent 40%, ${svcAccent}dd 100%)` }} />
+                      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0" style={{ backgroundColor: svcAccent }}>
+                          <BrochureIcon name={icon} className="w-4 h-4" />
+                        </span>
+                        <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">{svcTitle}</span>
+                      </div>
+                    </div>
+                    <div className="p-2 sm:p-3 flex-1 min-h-0">
+                      <p className="text-[0.65rem] sm:text-[0.7rem] text-white/85 line-clamp-3 leading-relaxed">
+                        {svcCfg ? tAbout(svcCfg.aboutDescKey) : t('headline')}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-4 shrink-0">
+              {(t.raw('strengths') as string[]).slice(0, 4).map((s, i) => (
+                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[0.6rem] sm:text-[0.65rem] font-medium" style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.95)' }}>
+                  <Check className="w-3 h-3 shrink-0" style={{ color: accentLight }} />
+                  <span className="line-clamp-1">{s}</span>
+                </span>
+              ))}
             </div>
           </div>
         </section>
@@ -637,7 +664,7 @@ export default function BrochurePage() {
                 color: '#1e293b',
               }}
             >
-              {/* Hero image - larger, responsive */}
+              {/* Hero image - larger, responsive - logo stacked on top */}
               <div className="relative h-32 sm:h-40 md:h-44 shrink-0 overflow-hidden">
                 {imgUrl ? (
                   <img
@@ -658,6 +685,26 @@ export default function BrochurePage() {
                   className="absolute inset-0"
                   style={{ background: `linear-gradient(to bottom, transparent 30%, ${svcAccent}ee 100%)` }}
                 />
+                {/* Logo badge - stacked on hero */}
+                <div
+                  className={`absolute top-3 sm:top-4 z-10 flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg backdrop-blur-sm border ${
+                    isRtl ? 'right-3 sm:right-4' : 'left-3 sm:left-4'
+                  }`}
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderColor: `${svcAccent}40`,
+                    boxShadow: `0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px ${svcAccent}30`,
+                  }}
+                >
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden" style={{ backgroundColor: `${svcAccent}15` }}>
+                    <img src="/logo/usmart.PNG" alt="U Smart" className="h-6 sm:h-7 w-auto object-contain" onError={(e) => { const el = e.target as HTMLImageElement; if (el) { el.style.display = 'none'; (el.nextElementSibling as HTMLElement)?.classList.remove('hidden'); } }} />
+                    <div className="hidden w-6 h-6 rounded bg-white/20 flex items-center justify-center"><span className="text-sm font-bold text-white">U</span></div>
+                  </div>
+                  <div>
+                    <span className="block text-[0.6rem] sm:text-[0.65rem] font-bold text-gray-500" style={{ letterSpacing: isRtl ? 0 : '0.08em' }}>U SMART</span>
+                    <span className="block text-[0.55rem] sm:text-[0.6rem] font-medium text-gray-400">{t('servicesShowcaseTitle')}</span>
+                  </div>
+                </div>
                 <div className="absolute inset-0 flex items-end p-3 sm:p-4">
                   <div className="flex items-center gap-2">
                     <span
@@ -703,22 +750,33 @@ export default function BrochurePage() {
                     <div className="space-y-3">
                       {featureItems.map((f, i) => {
                         const featureImg = FEATURE_IMAGES[f.key];
+                        const FeatureIcon = FEATURE_ICONS[f.key] ? ICON_MAP[FEATURE_ICONS[f.key]] : null;
                         return (
                           <div
                             key={i}
                             className={`flex gap-3 rounded-lg border overflow-hidden ${isRtl ? 'flex-row-reverse' : ''}`}
                             style={{ borderColor: `${svcAccent}40`, backgroundColor: 'rgba(255,255,255,0.6)' }}
                           >
-                            {featureImg && (
-                              <div className="w-20 sm:w-24 h-16 sm:h-20 shrink-0 overflow-hidden bg-gray-100">
+                            <div className="w-20 sm:w-24 h-16 sm:h-20 shrink-0 overflow-hidden bg-gray-100 flex items-center justify-center relative">
+                              {featureImg && (
                                 <img
                                   src={featureImg}
                                   alt=""
                                   crossOrigin="anonymous"
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover absolute inset-0"
+                                  onError={(e) => {
+                                    const el = e.target as HTMLImageElement;
+                                    if (el) { el.style.display = 'none'; (el.nextElementSibling as HTMLElement)?.classList.remove('hidden'); }
+                                  }}
                                 />
+                              )}
+                              <div
+                                className={`w-full h-full flex items-center justify-center ${featureImg ? 'hidden' : ''}`}
+                                style={{ backgroundColor: `${svcAccent}20` }}
+                              >
+                                {FeatureIcon ? <FeatureIcon className="w-8 h-8 opacity-70" style={{ color: svcAccent }} /> : <BrochureIcon name="Layers" className="w-8 h-8 opacity-70" style={{ color: svcAccent }} />}
                               </div>
-                            )}
+                            </div>
                             <div className={`flex-1 min-w-0 py-1.5 sm:py-2 ${isRtl ? 'pl-2 pr-0' : 'pr-2 pl-0'}`}>
                               <h4 className="text-[0.75rem] sm:text-[0.8rem] font-bold text-gray-900">{f.name}</h4>
                               <p className="text-[0.7rem] sm:text-[0.72rem] text-gray-600 leading-[1.45] mt-0.5">{f.description}</p>
