@@ -8,9 +8,14 @@ import {
   ArrowPathIcon,
   XMarkIcon,
   CheckIcon,
+  PhotoIcon,
+  XMarkIcon as XIcon,
 } from '@heroicons/react/24/outline';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 const PRODUCT_TYPES = ['KNX', 'Buspro', 'Zigbee'] as const;
+const LOCALES = ['ar', 'en', 'ku', 'tr'] as const;
+type TranslationsMap = Partial<Record<(typeof LOCALES)[number], { title?: string; description?: string; specifications?: string }>>;
 
 type Product = {
   id: string;
@@ -22,7 +27,15 @@ type Product = {
   imageUrls: string[];
   productType: string;
   featured: boolean;
+  translations?: TranslationsMap | null;
 };
+
+const emptyTranslations = (): TranslationsMap => ({
+  ar: { title: '', description: '', specifications: '' },
+  en: { title: '', description: '', specifications: '' },
+  ku: { title: '', description: '', specifications: '' },
+  tr: { title: '', description: '', specifications: '' },
+});
 
 const emptyForm = {
   title: '',
@@ -30,9 +43,10 @@ const emptyForm = {
   description: '',
   specifications: '',
   userManualUrl: '',
-  imageUrls: '' as string,
+  imageUrls: [] as string[],
   productType: 'KNX' as typeof PRODUCT_TYPES[number],
   featured: false,
+  translations: emptyTranslations(),
 };
 
 export default function AdminProductsPage() {
@@ -66,7 +80,7 @@ export default function AdminProductsPage() {
   }, [typeFilter]);
 
   const openAdd = () => {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, translations: emptyTranslations() });
     setEditingId(null);
     setShowForm(true);
   };
@@ -78,15 +92,22 @@ export default function AdminProductsPage() {
           ? p.specifications
           : JSON.stringify(p.specifications, null, 2)
         : '';
+    const t = (p.translations as TranslationsMap | null) ?? {};
     setForm({
       title: p.title,
       slug: p.slug,
       description: p.description,
       specifications: specs,
       userManualUrl: p.userManualUrl ?? '',
-      imageUrls: Array.isArray(p.imageUrls) ? p.imageUrls.join('\n') : '',
+      imageUrls: Array.isArray(p.imageUrls) ? [...p.imageUrls] : [],
       productType: (['KNX', 'Buspro', 'Zigbee'].includes(p.productType) ? p.productType : 'KNX') as (typeof PRODUCT_TYPES)[number],
       featured: p.featured,
+      translations: {
+        ar: { title: t.ar?.title ?? '', description: t.ar?.description ?? '', specifications: t.ar?.specifications != null ? (typeof t.ar.specifications === 'string' ? t.ar.specifications : JSON.stringify(t.ar.specifications, null, 2)) : '' },
+        en: { title: t.en?.title ?? '', description: t.en?.description ?? '', specifications: t.en?.specifications != null ? (typeof t.en.specifications === 'string' ? t.en.specifications : JSON.stringify(t.en.specifications, null, 2)) : '' },
+        ku: { title: t.ku?.title ?? '', description: t.ku?.description ?? '', specifications: t.ku?.specifications != null ? (typeof t.ku.specifications === 'string' ? t.ku.specifications : JSON.stringify(t.ku.specifications, null, 2)) : '' },
+        tr: { title: t.tr?.title ?? '', description: t.tr?.description ?? '', specifications: t.tr?.specifications != null ? (typeof t.tr.specifications === 'string' ? t.tr.specifications : JSON.stringify(t.tr.specifications, null, 2)) : '' },
+      },
     });
     setEditingId(p.id);
     setShowForm(true);
@@ -106,27 +127,56 @@ export default function AdminProductsPage() {
     }
   };
 
-  const parseImageUrls = (s: string): string[] => {
-    if (!s.trim()) return [];
-    return s
-      .split(/\n|,/)
-      .map((u) => u.trim())
-      .filter(Boolean);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const data = await uploadWithProgress('/api/upload/product-image', file, { credentials: 'include' });
+      if (data.url) {
+        setForm((f) => ({ ...f, imageUrls: [...f.imageUrls, data.url!] }));
+      }
+    } catch (err) {
+      window.alert((err as Error)?.message || 'Upload failed');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setForm((f) => ({ ...f, imageUrls: f.imageUrls.filter((_, i) => i !== index) }));
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
     try {
+      const translationsClean: Record<string, { title?: string; description?: string; specifications?: unknown }> = {};
+      LOCALES.forEach((loc) => {
+        const t = form.translations?.[loc];
+        if (t && (t.title?.trim() || t.description?.trim() || t.specifications?.trim())) {
+          const specsVal = t.specifications?.trim();
+          translationsClean[loc] = {
+            title: t.title?.trim() || undefined,
+            description: t.description?.trim() || undefined,
+            specifications: specsVal ? parseSpecs(specsVal) : undefined,
+          };
+        }
+      });
+
       const payload = {
         title: form.title,
         slug: form.slug || undefined,
         description: form.description,
         specifications: parseSpecs(form.specifications),
         userManualUrl: form.userManualUrl || null,
-        imageUrls: parseImageUrls(form.imageUrls),
+        imageUrls: form.imageUrls,
         productType: form.productType,
         featured: form.featured,
+        translations: Object.keys(translationsClean).length > 0 ? translationsClean : undefined,
       };
       if (editingId) {
         const res = await fetch(`/api/admin/products/${editingId}`, {
@@ -298,16 +348,35 @@ export default function AdminProductsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Image URLs (one per line or comma-separated)
-              </label>
-              <textarea
-                value={form.imageUrls}
-                onChange={(e) => setForm((f) => ({ ...f, imageUrls: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
-                rows={3}
-                placeholder="https://..."
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Product Images</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {form.imageUrls.map((url, i) => (
+                  <div key={i} className="relative group">
+                    <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <XIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                <label className="w-20 h-20 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-500 cursor-pointer">
+                  <PhotoIcon className="w-8 h-8 text-gray-400" />
+                  <span className="text-xs text-gray-500 mt-1">
+                    {uploadingImage ? '…' : 'Upload'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={handleImageUpload}
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">JPEG, PNG or WebP. Max 5MB per image.</p>
             </div>
             <label className="flex items-center gap-2">
               <input
@@ -317,6 +386,65 @@ export default function AdminProductsPage() {
               />
               <span className="text-sm font-medium text-gray-700">Featured (shown first)</span>
             </label>
+
+            <div className="border-t border-gray-200 pt-6 mt-6">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Translations (title, description, specifications per language)</h3>
+              <p className="text-xs text-gray-500 mb-4">Leave blank to use the default values above.</p>
+              <div className="space-y-6">
+                {LOCALES.map((loc) => (
+                  <div key={loc} className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+                    <span className="text-xs font-medium text-gray-600 uppercase">{loc}</span>
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        placeholder={`Title (${loc})`}
+                        value={form.translations?.[loc]?.title ?? ''}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            translations: {
+                              ...f.translations,
+                              [loc]: { ...f.translations?.[loc], title: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 border rounded-lg text-sm"
+                      />
+                      <textarea
+                        placeholder={`Description (${loc})`}
+                        value={form.translations?.[loc]?.description ?? ''}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            translations: {
+                              ...f.translations,
+                              [loc]: { ...f.translations?.[loc], description: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 border rounded-lg text-sm"
+                        rows={2}
+                      />
+                      <textarea
+                        placeholder={`Specifications JSON (${loc})`}
+                        value={form.translations?.[loc]?.specifications ?? ''}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            translations: {
+                              ...f.translations,
+                              [loc]: { ...f.translations?.[loc], specifications: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="flex gap-2">
               <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">

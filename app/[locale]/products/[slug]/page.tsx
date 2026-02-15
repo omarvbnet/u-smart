@@ -11,7 +11,7 @@ type Props = {
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug, locale } = await params;
   const normalizedSlug = slug?.toLowerCase().trim() || '';
   const product = await prisma.product.findUnique({
     where: { slug: normalizedSlug },
@@ -22,8 +22,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const imageUrl = Array.isArray(product.imageUrls) && product.imageUrls.length > 0 ? product.imageUrls[0] : null;
   const ogImage = imageUrl ? (imageUrl.startsWith('http') ? imageUrl : `${SITE_URL}${imageUrl}`) : `${SITE_URL}/logo/usmart.PNG`;
 
-  const title = `${product.title} | U Smart Products`;
-  const description = product.description.slice(0, 160);
+  type TranslationsMap = Record<string, { title?: string; description?: string }>;
+  const translations = (product.translations as TranslationsMap | null) ?? {};
+  const loc = translations[locale];
+  const metaTitle = (loc?.title?.trim() || product.title) as string;
+  const metaDesc = (loc?.description?.trim() || product.description || '').slice(0, 160);
+  const title = `${metaTitle} | U Smart Products`;
+  const description = metaDesc;
 
   return {
     title,
@@ -31,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      images: [{ url: ogImage, width: 1200, height: 630, alt: product.title }],
+      images: [{ url: ogImage, width: 1200, height: 630, alt: metaTitle }],
       type: 'website',
       siteName: 'U Smart',
     },
@@ -56,8 +61,19 @@ export default async function ProductDetailPage({ params }: Props) {
 
   const t = await getTranslations('Products');
 
+  // Resolve localized content from translations
+  type TranslationsMap = Record<string, { title?: string; description?: string; specifications?: unknown }>;
+  const translations = (product.translations as TranslationsMap | null) ?? {};
+  const loc = translations[locale];
+  const title = (loc?.title?.trim() || product.title) as string;
+  const description = (loc?.description?.trim() || product.description) as string;
+  const specifications = (loc?.specifications ?? product.specifications) as unknown;
+
   const serialized = {
     ...product,
+    title,
+    description,
+    specifications,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
   };
