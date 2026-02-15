@@ -596,119 +596,122 @@ export default function BrochurePage() {
           );
         })()}
 
-        {/* Page – Services Showcase: Images + extended descriptions (1 page) */}
-        <section
-          className="relative py-8 sm:py-10 px-5 sm:px-8 overflow-hidden flex flex-col justify-center"
-          style={{
-            width: '100%',
-            height: `${A4_HEIGHT_CM}cm`,
-            minHeight: `${A4_HEIGHT_CM}cm`,
-            backgroundColor: '#f8fafc',
-            color: '#1e293b',
-          }}
-        >
-          <div className="relative z-10 max-w-5xl mx-auto w-full h-full flex flex-col">
-            <div
-              className="p-3 sm:p-4 rounded-2xl border-2 flex items-center gap-3 mb-4 sm:mb-5 shrink-0"
-              style={{ borderColor: accent, backgroundColor: boxBg, boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}
+        {/* One full page per service: hero image + extended description + highlights */}
+        {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
+          const svcConfig = BROCHURE_SERVICE_CONFIG[slug];
+          const svcTitle = svcConfig ? tAbout(svcConfig.aboutTitleKey) : t(brochureKey);
+          const svcAccent = svcConfig?.accent ?? accent;
+          const svcAccentLight = svcConfig?.accentLight ?? accentLight;
+          const svcPageBg = svcConfig?.pageBg ?? '#f8fafc';
+          const svcBoxBg = svcConfig?.boxBg ?? '#ffffff';
+          const imgUrl = SERVICE_IMAGES[slug];
+          const pageDescs = t.raw('servicePageDesc') as Record<string, string> | undefined;
+          const pageHighlights = t.raw('servicePageHighlights') as Record<string, string[]> | undefined;
+          const pageDesc = (pageDescs?.[slug] ?? (svcConfig ? tAbout(svcConfig.aboutDescKey) : '')) as string;
+          const highlights = (pageHighlights?.[slug] ?? []) as string[];
+          return (
+            <section
+              key={slug}
+              className="relative overflow-hidden flex flex-col"
+              style={{
+                width: '100%',
+                height: `${A4_HEIGHT_CM}cm`,
+                minHeight: `${A4_HEIGHT_CM}cm`,
+                backgroundColor: svcPageBg,
+                color: '#1e293b',
+              }}
             >
-              <span
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${accent}18` }}
-              >
-                <BrochureIcon name="Layers" className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: accent }} />
-              </span>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-gray-900" style={{ color: accent }}>
-                  {t('servicesShowcaseTitle')}
-                </h2>
-                <p className="text-[0.7rem] sm:text-xs text-gray-600 mt-0.5">
-                  {t('servicesShowcaseSubtitle')}
-                </p>
+              {/* Hero image */}
+              <div className="relative h-28 sm:h-32 shrink-0 overflow-hidden">
+                {imgUrl ? (
+                  <img
+                    src={imgUrl}
+                    alt=""
+                    crossOrigin="anonymous"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center"
+                    style={{ backgroundColor: `${svcAccent}20` }}
+                  >
+                    <BrochureIcon name={icon} className="w-16 h-16 opacity-50" style={{ color: svcAccent }} />
+                  </div>
+                )}
+                <div
+                  className="absolute inset-0"
+                  style={{ background: `linear-gradient(to bottom, transparent 30%, ${svcAccent}ee 100%)` }}
+                />
+                <div className="absolute inset-0 flex items-end p-4 sm:p-5">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg shrink-0"
+                      style={{ backgroundColor: svcAccent }}
+                    >
+                      <BrochureIcon name={icon} className="w-6 h-6" />
+                    </span>
+                    <h2 className="text-lg sm:text-xl font-bold text-white drop-shadow-lg">
+                      {svcTitle}
+                    </h2>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 min-h-0">
-              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
-                const svcConfig = BROCHURE_SERVICE_CONFIG[slug];
-                const isFeatured = serviceSlug === slug;
-                const svcTitle = svcConfig ? tAbout(svcConfig.aboutTitleKey) : t(brochureKey);
-                const serviceDetails = t.raw('serviceDetail') as Record<string, string> | undefined;
-                const svcDetail = (serviceDetails?.[slug] ?? svcConfig ? tAbout(svcConfig.aboutDescKey) : '') as string;
-                const cardAccent = svcConfig?.accent ?? accent;
-                const imgUrl = SERVICE_IMAGES[slug];
-                return (
-                  <Link
-                    key={slug}
-                    href={`/services/${slug}`}
-                    className={`group block rounded-2xl overflow-hidden border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 flex flex-col min-h-0 ${
-                      isFeatured ? 'ring-2 ring-offset-2' : ''
-                    }`}
+              {/* Content */}
+              <div className="flex-1 p-4 sm:p-6 flex flex-col min-h-0 overflow-hidden">
+                <div
+                  className="p-4 sm:p-5 rounded-2xl border-2 mb-4 flex-1 min-h-0 overflow-auto"
+                  style={{
+                    borderColor: `${svcAccent}50`,
+                    backgroundColor: svcBoxBg,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  <p className="text-[0.9rem] sm:text-[1rem] text-gray-700 leading-[1.7]">
+                    {pageDesc}
+                  </p>
+                </div>
+
+                {highlights.length > 0 && (
+                  <div
+                    className="rounded-2xl border-2 p-4 sm:p-5 shrink-0"
                     style={{
-                      borderColor: isFeatured ? cardAccent : `${cardAccent}35`,
-                      backgroundColor: boxBg,
+                      borderColor: `${svcAccent}40`,
+                      backgroundColor: svcBoxBg,
                       boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                      ...(isFeatured ? { ['--tw-ring-color' as string]: cardAccent } : {}),
                     }}
                   >
-                    <div className="relative h-24 sm:h-28 shrink-0 overflow-hidden bg-gray-100">
-                      {imgUrl ? (
-                        <img
-                          src={imgUrl}
-                          alt=""
-                          crossOrigin="anonymous"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                      ) : (
-                        <div
-                          className="w-full h-full flex items-center justify-center"
-                          style={{ backgroundColor: `${cardAccent}25` }}
-                        >
-                          <BrochureIcon name={icon} className="w-12 h-12 opacity-60" style={{ color: cardAccent }} />
-                        </div>
-                      )}
-                      <div
-                        className="absolute inset-0 opacity-40"
-                        style={{ background: `linear-gradient(to bottom, transparent 40%, ${cardAccent}99 100%)` }}
-                      />
-                      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2">
-                        <span
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0"
-                          style={{ backgroundColor: cardAccent }}
-                        >
-                          <BrochureIcon name={icon} className="w-4 h-4" />
-                        </span>
-                        <h3 className="text-sm sm:text-base font-bold text-white leading-tight drop-shadow-md truncate">
-                          {svcTitle}
-                        </h3>
-                        {isFeatured && (
+                    <p className={`text-[0.65rem] sm:text-xs font-semibold text-gray-600 mb-3 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
+                      {t('pageServicesTitle')}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {highlights.map((h, i) => (
+                        <div key={i} className="flex items-center gap-2">
                           <span
-                            className={`ml-auto px-2 py-0.5 rounded text-[0.6rem] font-bold text-white shrink-0 ${!isRtl ? 'uppercase tracking-wider' : ''}`}
-                            style={{ backgroundColor: cardAccent }}
+                            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: `${svcAccent}25` }}
                           >
-                            Featured
+                            <Check className="w-3 h-3" style={{ color: svcAccent }} />
                           </span>
-                        )}
-                      </div>
+                          <span className="text-[0.8rem] sm:text-[0.85rem] text-gray-700">{h}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
-                      <p className="text-[0.75rem] sm:text-[0.8rem] text-gray-600 leading-relaxed flex-1 line-clamp-4">
-                        {svcDetail}
-                      </p>
-                      <div
-                        className={`mt-2 flex items-center gap-1.5 text-xs font-semibold shrink-0 ${isRtl ? 'justify-start' : 'justify-end'}`}
-                        style={{ color: cardAccent }}
-                      >
-                        <span>{tAbout('learnMore')}</span>
-                        <ArrowLeft className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+                  </div>
+                )}
+
+                <Link
+                  href={`/services/${slug}`}
+                  className={`mt-3 flex items-center gap-2 text-sm font-semibold w-fit ${isRtl ? 'self-start' : 'self-end'}`}
+                  style={{ color: svcAccentLight }}
+                >
+                  <span>{tAbout('learnMore')}</span>
+                  <ArrowLeft className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                </Link>
+              </div>
+            </section>
+          );
+        })}
 
         {/* Page 4 – Why Choose: Solid background, strengths in boxes */}
         <section

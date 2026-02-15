@@ -38,6 +38,18 @@
       "smart-home-automation": "KNX, HDL Buspro, Zigbee ve elektrik çözümleriyle aydınlatma, iklim, güvenlik ve enerji yönetimi. Güvenilirlik, birlikte çalışabilirlik ve kesintisiz bağlı deneyim için tasarlandı.",
       "enterprise-networking": "Fiber optik, füzyon birleştirme, kablo sistemi, GIS haritalama ve SLA destekli bakım konusunda FOA sertifikalı uzmanlık. Kurumsal ve fiber ağlarınızı zirvede tutuyoruz.",
       "custom-software": "Node.js, Flutter, Python ve güçlü veritabanlarıyla ölçeklenebilir, güvenli yazılım. Web ve mobil uygulamalardan API ve otomasyona—işinizle büyüyen çözümler."
+    },
+    "servicePageDesc": {
+      "quality-control-supervision": "Sertifikalı ekibimiz saha denetimi ve HSE'den uyum takibine ve kök neden analizine kadar titiz gözetim sunar. Gerçek zamanlı dijital panolar, otomatik raporlama ve QR tabanlı doğrulama araçlarıyla her projede şeffaflık, doğruluk ve ölçülebilir uyumluluk sağlıyoruz.",
+      "smart-home-automation": "KNX, HDL Buspro, Zigbee ve elektrik çözümleriyle uçtan uca akıllı ev ve bina otomasyonu. Aydınlatma, iklim, güvenlik ve enerji yönetimini güvenilirlik, birlikte çalışabilirlik ve kesintisiz bağlı deneyim için tasarlıyoruz.",
+      "enterprise-networking": "FOA sertifikalı uzmanlıkla kurumsal ve fiber ağların tasarımı, kurulumu ve bakımı. Fiber optik, füzyon birleştirme, kablo sistemi, GIS haritalama ve SLA destekli bakımda uzmanız.",
+      "custom-software": "Node.js, Flutter, Python ve güçlü veritabanlarıyla ölçeklenebilir, güvenli yazılım. Web ve mobil uygulamalardan API ve otomasyona, işinizle büyüyen çözümler sunuyoruz."
+    },
+    "servicePageHighlights": {
+      "quality-control-supervision": ["Saha denetimi ve HSE", "Gerçek zamanlı panolar", "QR tabanlı doğrulama", "Uyum takibi", "Kök neden analizi"],
+      "smart-home-automation": ["KNX, HDL Buspro, Zigbee", "Aydınlatma ve iklim kontrolü", "Güvenlik ve erişim", "Enerji yönetimi", "Birleşik uygulama kontrolü"],
+      "enterprise-networking": ["Fiber optik tasarım ve kurulum", "Füzyon birleştirme ve kapaklar", "Kablo sistemi", "GIS haritalama", "SLA destekli bakım"],
+      "custom-software": ["Web ve mobil uygulamalar", "Node.js, Flutter, Python", "API ve mikro hizmetler", "Veritabanı tasarımı", "DevOps ve dağıtım"]
     }
   },
   "ServicePdf": {

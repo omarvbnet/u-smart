@@ -38,6 +38,18 @@
       "smart-home-automation": "Lighting, climate, security, and energy management with KNX, HDL Buspro, Zigbee, and electrical solutions. Designed for reliability, interoperability, and a seamless connected experience.",
       "enterprise-networking": "FOA-certified expertise in fiber optics, fusion splice, cable systemization, GIS mapping, and SLA-backed maintenance. We keep your enterprise and fiber networks running at peak performance.",
       "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business."
+    },
+    "servicePageDesc": {
+      "quality-control-supervision": "Our certified team delivers rigorous oversight from on-site inspection and HSE to compliance tracking and root-cause investigation. We combine real-time digital dashboards, automated reporting, and QR-based verification tools to ensure transparency, accuracy, and measurable compliance across every project. Whether government contracts or enterprise builds, we digitize performance and optimize operations.",
+      "smart-home-automation": "End-to-end smart home and building automation with KNX, HDL Buspro, Zigbee, and electrical solutions. We design and install lighting, climate, security, and energy management systems for reliability, interoperability, and a seamless connected experience. From luxury villas to commercial buildings, we deliver control that fits your lifestyle.",
+      "enterprise-networking": "Design, installation, and maintenance of enterprise and fiber networks with FOA-certified expertise. We specialize in fiber optics, fusion splice, cable systemization, GIS mapping, closures, and SLA-backed maintenance. Our dedicated tracking system and over 12 years of experience keep your infrastructure running at peak performance.",
+      "custom-software": "Scalable, secure software built with modern stacks—Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation, we deliver solutions that grow with your business. Full-stack development with clean architecture, testing, and deployment."
+    },
+    "servicePageHighlights": {
+      "quality-control-supervision": ["On-site inspection & HSE", "Real-time dashboards", "QR-based verification", "Compliance tracking", "Root-cause investigation"],
+      "smart-home-automation": ["KNX, HDL Buspro, Zigbee", "Lighting & climate control", "Security & access", "Energy management", "Unified app control"],
+      "enterprise-networking": ["Fiber optic design & install", "Fusion splice & closures", "Cable systemization", "GIS mapping & as-built", "SLA-backed maintenance"],
+      "custom-software": ["Web & mobile apps", "Node.js, Flutter, Python", "APIs & microservices", "Database design", "DevOps & deployment"]
     }
   },
   "ServicePdf": {
