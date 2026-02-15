@@ -2,7 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendSubscriptionConfirmation } from '@/lib/email';
 
+function isPrismaInitError(err: unknown): boolean {
+  return (
+    err != null &&
+    typeof err === 'object' &&
+    'name' in err &&
+    (err as { name?: string }).name === 'PrismaClientInitializationError'
+  );
+}
+
 export async function POST(req: NextRequest) {
+  if (!process.env.DATABASE_URL) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Newsletter signup is temporarily unavailable. Please try again later.',
+      },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await req.json();
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -51,6 +70,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'Subscribed successfully' });
   } catch (error) {
     console.error('POST /api/subscribe:', error);
+    if (isPrismaInitError(error)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Newsletter signup is temporarily unavailable. Please try again later.',
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { success: false, message: 'Failed to subscribe. Please try again.' },
       { status: 500 }
