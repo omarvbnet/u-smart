@@ -305,92 +305,99 @@ export default function BrochurePage() {
           ['--brochure-accent-light' as string]: accentLight,
         }}
       >
-        {/* Page 1 – Cover: Services & features showcase */}
+        {/* Page 1 – Cover: Creative agency style (main image + curved branding, Our Services, About Us, Contact) */}
         <section
-          className="relative flex flex-col px-6 sm:px-8 py-8 overflow-hidden"
+          className={`relative flex flex-col overflow-hidden ${isRtl ? '' : ''}`}
           style={{
             width: '100%',
             height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            backgroundColor: coverBg,
+            backgroundColor: '#f8fafc',
+            color: '#1e293b',
           }}
         >
-          <div
-            className="absolute inset-0 opacity-[0.05]"
-            style={{
-              backgroundImage: `radial-gradient(circle at 20% 30%, ${accentLight}66 0%, transparent 50%), radial-gradient(circle at 80% 70%, ${accent}44 0%, transparent 50%)`,
-            }}
-          />
-          <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: `linear-gradient(${accentLight}44 1px, transparent 1px), linear-gradient(90deg, ${accentLight}44 1px, transparent 1px)`, backgroundSize: '20px 20px' }} />
-          <div className="relative z-10 flex flex-col h-full">
-            <div className="flex items-center justify-between gap-4 mb-6 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center border-2 shrink-0" style={{ borderColor: `${accent}60`, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                  <img src="/logo/usmart.PNG" alt="U Smart" className="h-12 sm:h-14 w-auto object-contain rounded-lg" onError={(e) => { const el = e.target as HTMLImageElement; if (el) { el.style.display = 'none'; (el.nextElementSibling as HTMLElement)?.classList.remove('hidden'); } }} />
-                  <div className="hidden w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center"><span className="text-xl font-bold text-white">U</span></div>
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-white" style={{ letterSpacing: isRtl ? 0 : '-0.02em' }}>{t('title')}</h1>
-                  <p className="text-xs sm:text-sm text-white/80 mt-0.5 flex items-center gap-1.5">
-                    <BrochureIcon name="Sparkles" className="w-3.5 h-3.5" style={{ color: accentLight }} />
-                    {t('tagline')}
-                  </p>
-                </div>
-              </div>
-              {featuredTitle && (
-                <span className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0" style={{ backgroundColor: `${accent}40`, color: accentLight }}>{featuredTitle}</span>
-              )}
+          {/* Top: main image (left) + curved accent with logo (right) */}
+          <div className={`flex shrink-0 ${isRtl ? 'flex-row-reverse' : ''}`} style={{ height: '42%', minHeight: 140 }}>
+            <div className="relative w-[55%] overflow-hidden rounded-br-[20%] rounded-bl-[8%]" style={{ backgroundColor: '#e2e8f0' }}>
+              <img
+                src={SERVICE_IMAGES[BROCHURE_SERVICES_ORDER[0]?.slug] || ''}
+                alt=""
+                crossOrigin="anonymous"
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
             </div>
+            <div
+              className="relative w-[45%] flex items-center justify-center pl-6 pr-8 py-6"
+              style={{ backgroundColor: accent }}
+            >
+              <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                <path d="M0,0 L100,0 L100,100 Q0,100 0,0 Z" fill={accent} />
+              </svg>
+              <div className="relative z-10 flex flex-col items-center text-center">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center bg-white/20 border-2 border-white/40 mb-3">
+                  <img src="/logo/usmart.PNG" alt="U Smart" className="h-12 sm:h-14 w-auto object-contain" onError={(e) => { const el = e.target as HTMLImageElement; if (el) { el.style.display = 'none'; (el.nextElementSibling as HTMLElement)?.classList.remove('hidden'); } }} />
+                  <div className="hidden w-12 h-12 rounded-xl bg-white/30 flex items-center justify-center"><span className="text-2xl font-bold text-white">U</span></div>
+                </div>
+                <h1 className="text-base sm:text-lg font-bold text-white leading-tight" style={{ letterSpacing: isRtl ? 0 : '0.02em' }}>
+                  U SMART
+                </h1>
+                <p className="text-xs text-white/95 mt-1">{t('title')}</p>
+              </div>
+            </div>
+          </div>
 
-            <p className="text-sm text-white/90 leading-relaxed mb-6 shrink-0">{t('headline')}</p>
-
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 flex-1 min-h-0">
-              {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
-                const svcCfg = BROCHURE_SERVICE_CONFIG[slug];
-                const svcAccent = svcCfg?.accent ?? accent;
-                const svcTitle = svcCfg ? tAbout(svcCfg.aboutTitleKey) : t(brochureKey);
-                const svcImg = SERVICE_IMAGES[slug];
-                const firstFeature = svcCfg?.featureKeys?.[0];
-                const featureImg = firstFeature ? FEATURE_IMAGES[firstFeature] : null;
-                return (
-                  <div
-                    key={slug}
-                    className="rounded-xl border-2 overflow-hidden flex flex-col min-h-0"
-                    style={{ borderColor: `${svcAccent}60`, backgroundColor: 'rgba(255,255,255,0.08)' }}
-                  >
-                    <div className="relative h-14 sm:h-16 shrink-0 overflow-hidden">
-                      {(svcImg || featureImg) ? (
-                        <img src={svcImg || featureImg || ''} alt="" crossOrigin="anonymous" className="w-full h-full object-cover opacity-80" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: `${svcAccent}30` }}>
-                          <BrochureIcon name={icon} className="w-8 h-8 opacity-70" style={{ color: svcAccent }} />
-                        </div>
-                      )}
-                      <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent 40%, ${svcAccent}dd 100%)` }} />
-                      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0" style={{ backgroundColor: svcAccent }}>
-                          <BrochureIcon name={icon} className="w-4 h-4" />
-                        </span>
-                        <span className="text-xs sm:text-sm font-bold text-white truncate drop-shadow-md">{svcTitle}</span>
+          {/* Mid: Our Services (left) + About Us (right) */}
+          <div className={`flex flex-1 min-h-0 px-6 py-4 gap-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
+            <div className="flex-1 min-w-0">
+              <h2 className={`text-sm font-bold text-gray-800 mb-3 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>{t('coverOurServices')}</h2>
+              <div className="space-y-2.5">
+                {BROCHURE_SERVICES_ORDER.slice(0, 3).map(({ slug, brochureKey, icon }) => {
+                  const svcCfg = BROCHURE_SERVICE_CONFIG[slug];
+                  const svcAccent = svcCfg?.accent ?? accent;
+                  const svcTitle = svcCfg ? tAbout(svcCfg.aboutTitleKey) : t(brochureKey);
+                  const shortDesc = svcCfg ? (tAbout(svcCfg.aboutDescKey) as string).slice(0, 65) + '…' : t('headline');
+                  return (
+                    <div key={slug} className="flex gap-3">
+                      <span className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: svcAccent }}>
+                        <BrochureIcon name={icon} className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-900">{svcTitle}</p>
+                        <p className="text-[0.65rem] text-gray-600 leading-snug mt-0.5">{shortDesc}</p>
                       </div>
                     </div>
-                    <div className="p-2 sm:p-3 flex-1 min-h-0">
-                      <p className="text-[0.65rem] sm:text-[0.7rem] text-white/85 line-clamp-3 leading-relaxed">
-                        {svcCfg ? tAbout(svcCfg.aboutDescKey) : t('headline')}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+            <div className="flex-1 min-w-0">
+              <h2 className={`text-sm font-bold text-gray-800 mb-3 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>{t('coverAboutUs')}</h2>
+              <p className="text-[0.7rem] sm:text-[0.75rem] text-gray-600 leading-relaxed">{t('description')}</p>
+            </div>
+          </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-4 shrink-0">
-              {(t.raw('strengths') as string[]).slice(0, 4).map((s, i) => (
-                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[0.6rem] sm:text-[0.65rem] font-medium" style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.95)' }}>
-                  <Check className="w-3 h-3 shrink-0" style={{ color: accentLight }} />
-                  <span className="line-clamp-1">{s}</span>
+          {/* Bottom: curved Contact strip + web */}
+          <div className="relative shrink-0 h-20 overflow-hidden">
+            <div className="absolute inset-0 flex items-center" style={{ backgroundColor: accent }}>
+              <svg className="absolute top-0 left-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                <path d="M0,100 L0,40 Q50,0 100,40 L100,100 Z" fill={accent} />
+              </svg>
+              <div className={`relative z-10 w-full flex flex-wrap items-center justify-between gap-3 px-6 py-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                <div className="flex flex-wrap items-center gap-4 text-white text-[0.7rem] sm:text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <BrochureIcon name="Mail" className="w-4 h-4" />
+                    {t('email')}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <BrochureIcon name="Globe" className="w-4 h-4" />
+                    {t('contactUs')}
+                  </span>
+                </div>
+                <span className="text-white/95 text-[0.65rem] sm:text-xs font-medium">
+                  {t('visit')}: {t('websiteUrl')}
                 </span>
-              ))}
+              </div>
             </div>
           </div>
         </section>
@@ -949,6 +956,33 @@ export default function BrochurePage() {
                 <span className="text-[0.75rem] text-gray-500 text-center mt-2 max-w-[140px] font-medium">{t('qrScan')}</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* End cover – logo, tagline, thank you */}
+        <section
+          className="relative flex flex-col items-center justify-center overflow-hidden"
+          style={{
+            width: '100%',
+            height: `${A4_HEIGHT_CM}cm`,
+            minHeight: `${A4_HEIGHT_CM}cm`,
+            backgroundColor: coverBg,
+            color: '#fff',
+          }}
+        >
+          <div
+            className="absolute inset-0 opacity-[0.06]"
+            style={{ backgroundImage: `radial-gradient(circle at 50% 50%, ${accent} 0%, transparent 70%)` }}
+          />
+          <div className="relative z-10 flex flex-col items-center justify-center text-center px-8">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center border-2 mb-6" style={{ borderColor: `${accent}80`, backgroundColor: 'rgba(255,255,255,0.08)' }}>
+              <img src="/logo/usmart.PNG" alt="U Smart" className="h-16 sm:h-20 w-auto object-contain" onError={(e) => { const el = e.target as HTMLImageElement; if (el) { el.style.display = 'none'; (el.nextElementSibling as HTMLElement)?.classList.remove('hidden'); } }} />
+              <div className="hidden w-16 h-16 rounded-xl bg-white/20 flex items-center justify-center"><span className="text-3xl font-bold text-white">U</span></div>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">U SMART</h2>
+            <p className="text-sm text-white/90 mb-6 max-w-sm">{t('endCoverTagline')}</p>
+            <p className="text-sm text-white/80 mb-4">{t('endCoverThanks')}</p>
+            <p className="text-xs text-white/70">{new Date().getFullYear()} · {t('visit')}: {t('websiteUrl')}</p>
           </div>
         </section>
       </div>

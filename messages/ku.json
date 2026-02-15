@@ -32,6 +32,10 @@
     "serviceCleanEnergy": "وزەی پاک و سیستەمی خۆر",
     "qrScan": "سکان بکە بۆ سەردانی ماڵپەڕەکەمان یان تەختەی موشتەری",
     "downloadPdf": "داگرتنی برۆشۆر (PDF)",
+    "coverOurServices": "خزمەتگوزاریەکانمان",
+    "coverAboutUs": "دەربارەی ئێمە",
+    "endCoverTagline": "داهێنانی زیرەک. کارکردنی متمانەپێکراو.",
+    "endCoverThanks": "سوپاس بۆ سەرنجدان.",
     "servicesShowcaseTitle": "خزمەتگوزاریەکانمان",
     "servicesShowcaseSubtitle": "چارەسەری تەواو بۆ کوالیتی، پەیوەندی، ئۆتۆماتیک و نەرمەکاڵا.",
     "serviceDetail": {

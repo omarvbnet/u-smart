@@ -32,6 +32,10 @@
     "serviceCleanEnergy": "Temiz Enerji ve Güneş Sistemleri",
     "qrScan": "Web sitemizi veya müşteri panosunu ziyaret etmek için tarayın",
     "downloadPdf": "Broşür İndir (PDF)",
+    "coverOurServices": "Hizmetlerimiz",
+    "coverAboutUs": "Hakkımızda",
+    "endCoverTagline": "Akıllı İnovasyon. Güvenilir Performans.",
+    "endCoverThanks": "İlginiz için teşekkür ederiz.",
     "servicesShowcaseTitle": "Hizmetlerimiz",
     "servicesShowcaseSubtitle": "Kalite, bağlantı, otomasyon ve yazılım için uçtan uca çözümler.",
     "serviceDetail": {

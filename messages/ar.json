@@ -32,6 +32,10 @@
     "serviceCleanEnergy": "الطاقة النظيفة والطاقة الشمسية",
     "qrScan": "امسح لزيارة موقعنا أو لوحة العملاء",
     "downloadPdf": "تحميل البروشور (PDF)",
+    "coverOurServices": "خدماتنا",
+    "coverAboutUs": "من نحن",
+    "endCoverTagline": "ابتكار ذكي. أداء موثوق.",
+    "endCoverThanks": "شكراً لاهتمامكم.",
     "servicesShowcaseTitle": "خدماتنا",
     "servicesShowcaseSubtitle": "حلول متكاملة للجودة والاتصال والأتمتة والبرمجيات.",
     "serviceDetail": {
