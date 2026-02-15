@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { FileDown, Check, Building2, Mail, Globe, Layers, Cpu } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
 import { BROCHURE_SERVICE_CONFIG } from '@/lib/brochure-service-config';
@@ -65,7 +66,7 @@ export default function ServicePdfExport({
 
   const accent = config.accent ?? '#1e40af';
   const accentLight = config.accentLight ?? '#3b82f6';
-  const coverBg = config.coverBg ?? '#0f172a';
+  const accentDark = config.accentDark ?? '#1e3a8a';
   const pageBg = config.pageBg ?? '#f8fafc';
   const boxBg = config.boxBg ?? '#ffffff';
 
@@ -111,7 +112,7 @@ export default function ServicePdfExport({
       el.scrollIntoView({ behavior: 'instant', block: 'start' });
       await new Promise((r) => requestAnimationFrame(r));
       const canvas = await html2canvas(el, {
-        backgroundColor: coverBg,
+        backgroundColor: '#ffffff',
         scale: CANVAS_SCALE,
         useCORS: true,
         logging: false,
@@ -134,7 +135,7 @@ export default function ServicePdfExport({
         sliceCanvas.height = sh;
         const ctx = sliceCanvas.getContext('2d');
         if (ctx) {
-          ctx.fillStyle = coverBg;
+          ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, imgW, sh);
           ctx.drawImage(canvas, 0, sy, imgW, sh, 0, 0, imgW, sh);
         }
@@ -173,122 +174,218 @@ export default function ServicePdfExport({
           letterSpacing: isRtl ? 0 : undefined,
         }}
       >
-        {/* PAGE 1: Professional Cover */}
+        {/* PAGE 1: Abstract Modern Cover - per service colors */}
         <section
           style={{
             width: '100%',
             minHeight: `${A4_HEIGHT_CM}cm`,
-            backgroundColor: coverBg,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '2.5rem 2rem 2rem',
+            backgroundColor: '#ffffff',
             position: 'relative',
             overflow: 'hidden',
+            padding: '2rem 1.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
           }}
         >
-          {/* Top accent stripe */}
+          {/* Flowing abstract wave shapes - colored per service */}
+          <svg
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+            preserveAspectRatio="none"
+            viewBox="0 0 210 297"
+          >
+            <defs>
+              <linearGradient id={`wave1-${slug}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={accentLight} stopOpacity="0.55" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0.25" />
+              </linearGradient>
+              <linearGradient id={`wave2-${slug}`} x1="100%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor={accent} stopOpacity="0.5" />
+                <stop offset="100%" stopColor={accentDark} stopOpacity="0.35" />
+              </linearGradient>
+              <linearGradient id={`wave3-${slug}`} x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor={accentDark} stopOpacity="0.5" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0.2" />
+              </linearGradient>
+              <linearGradient id={`wave4-${slug}`} x1="100%" y1="100%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#f8fafc" stopOpacity="0.4" />
+              </linearGradient>
+            </defs>
+            {/* Top left flowing wave - organic curve */}
+            <path d="M0,0 C30,60 20,120 50,180 C80,240 40,297 0,297 V0 Z" fill={`url(#wave1-${slug})`} />
+            <path d="M0,40 C25,100 30,160 45,220 C60,260 35,297 0,297 V0 Z" fill={`url(#wave4-${slug})`} />
+            {/* Top right / middle wave */}
+            <path d="M210,0 C180,80 190,150 170,220 C150,270 200,297 210,297 V0 Z" fill={`url(#wave2-${slug})`} />
+            {/* Bottom shapes - flowing curves */}
+            <path d="M0,220 Q60,250 120,270 Q180,285 210,297 H0 Z" fill={`url(#wave3-${slug})`} />
+            <path d="M90,250 Q140,265 210,297 H120 Z" fill={`url(#wave4-${slug})`} />
+          </svg>
+
+          {/* Top left identifier box */}
           <div
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 6,
-              backgroundColor: accent,
+              position: 'relative',
+              zIndex: 5,
+              display: 'inline-flex',
+              flexDirection: 'column',
+              padding: '0.4rem 0.7rem',
+              backgroundColor: accentLight,
+              borderRadius: 4,
+              width: 'fit-content',
             }}
-          />
-          {/* Geometric accent - bottom left corner */}
+          >
+            <span style={{ fontSize: '0.5rem', fontWeight: 600, color: '#fff', letterSpacing: '0.1em' }}>U SMART</span>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff' }}>{tPdf('coverSubtitle')}</span>
+          </div>
+
+          {/* Central content with open-corner frame */}
           <div
             style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              width: '40%',
-              height: '30%',
-              background: `linear-gradient(135deg, ${accent}22 0%, transparent 70%)`,
-              borderRadius: '0 80px 0 0',
+              position: 'relative',
+              zIndex: 5,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              flex: 1,
+              justifyContent: 'center',
+              marginTop: '-1rem',
             }}
-          />
-          {/* Grid pattern */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              opacity: 0.04,
-              backgroundImage: `linear-gradient(${accentLight} 1px, transparent 1px), linear-gradient(90deg, ${accentLight} 1px, transparent 1px)`,
-              backgroundSize: '24px 24px',
-            }}
-          />
-          <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', width: '100%' }}>
+          >
+            {/* Open-corner frame */}
             <div
               style={{
-                width: 72,
-                height: 72,
-                margin: '0 auto 1.25rem',
-                borderRadius: 16,
-                border: `2px solid ${accent}aa`,
-                backgroundColor: 'rgba(255,255,255,0.08)',
+                position: 'relative',
+                padding: '1.5rem 2rem',
+                borderLeft: `2px solid ${accentLight}`,
+                borderRight: `2px solid ${accentLight}`,
+                borderTop: `2px solid ${accentLight}`,
+                borderBottom: 'none',
+                maxWidth: 320,
+              }}
+            >
+              {/* Decorative dots - right side */}
+              <div
+                style={{
+                  position: 'absolute',
+                  right: -24,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                }}
+              >
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ width: 3, height: 3, backgroundColor: accentLight, borderRadius: 1 }} />
+                    <div style={{ width: 3, height: 3, backgroundColor: accentLight, borderRadius: 1 }} />
+                  </div>
+                ))}
+              </div>
+              <h1
+                style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 700,
+                  color: accentDark,
+                  margin: 0,
+                  lineHeight: 1.3,
+                  letterSpacing: isRtl ? 0 : '-0.02em',
+                  textAlign: 'center',
+                }}
+              >
+                {serviceTitle}
+              </h1>
+              {/* Dotted line */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: 4,
+                  margin: '0.6rem 0',
+                }}
+              >
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} style={{ width: 3, height: 2, backgroundColor: accentLight, borderRadius: 1 }} />
+                ))}
+              </div>
+              <p
+                style={{
+                  fontSize: '0.75rem',
+                  color: accentLight,
+                  margin: 0,
+                  textAlign: 'center',
+                  fontWeight: 500,
+                }}
+              >
+                {tPdf('featuresTitle')}
+              </p>
+              <div
+                style={{
+                  width: 40,
+                  height: 1,
+                  backgroundColor: accentLight,
+                  margin: '0.4rem auto 0',
+                  opacity: 0.7,
+                }}
+              />
+              <p
+                style={{
+                  fontSize: '0.65rem',
+                  color: accentLight,
+                  lineHeight: 1.6,
+                  margin: '0.5rem 0 0',
+                  opacity: 0.9,
+                }}
+              >
+                {coverTaglineResolved}
+              </p>
+            </div>
+          </div>
+
+          {/* Bottom row: year + features left, contact + QR right */}
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 5,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              marginTop: 'auto',
+            }}
+          >
+            {/* Bottom left - year and features */}
+            <div>
+              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: accentDark, margin: '0 0 0.4rem' }}>
+                {new Date().getFullYear()}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {featureItems.slice(0, 2).map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 4, height: 4, backgroundColor: accentLight, borderRadius: 1 }} />
+                    <span style={{ fontSize: '0.55rem', color: accentLight, opacity: 0.9 }}>{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom right - contact on dark shape + QR code */}
+            <div
+              style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: 12,
+                padding: '0.6rem 1rem',
+                backgroundColor: accentDark,
+                borderRadius: 8,
               }}
             >
-              <img src="/logo/usmart.PNG" alt="U Smart" style={{ height: 48, width: 'auto', objectFit: 'contain' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: '0.55rem', color: '#fff', fontWeight: 500 }}>www.usmart-iot.com</span>
+                <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.9)' }}>info@usmart-iot.com</span>
+              </div>
+              <QRCodeSVG value={WEBSITE_URL} size={44} level="M" bgColor="#fff" fgColor={accentDark} />
             </div>
-            <p
-              style={{
-                fontSize: '0.6rem',
-                fontWeight: 700,
-                letterSpacing: isRtl ? 0 : '0.25em',
-                color: accentLight,
-                marginBottom: '0.5rem',
-                textTransform: isRtl ? 'none' : 'uppercase',
-              }}
-            >
-              {tPdf('coverSubtitle')}
-            </p>
-            <h1
-              style={{
-                fontSize: '1.75rem',
-                fontWeight: 700,
-                color: '#fff',
-                marginBottom: '1rem',
-                lineHeight: 1.25,
-                letterSpacing: isRtl ? 0 : '-0.02em',
-                maxWidth: 400,
-                marginLeft: 'auto',
-                marginRight: 'auto',
-              }}
-            >
-              {serviceTitle}
-            </h1>
-            <p
-              style={{
-                fontSize: '0.85rem',
-                color: 'rgba(255,255,255,0.9)',
-                lineHeight: 1.65,
-                maxWidth: 380,
-                margin: '0 auto',
-              }}
-            >
-              {coverTaglineResolved}
-            </p>
-          </div>
-          <div style={{ position: 'relative', zIndex: 10, textAlign: 'center' }}>
-            <div
-              style={{
-                width: 56,
-                height: 3,
-                backgroundColor: accent,
-                margin: '0 auto',
-                borderRadius: 2,
-              }}
-            />
-            <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.45)', marginTop: '1rem' }}>
-              U Smart Integrated Solutions · {new Date().getFullYear()}
-            </p>
           </div>
         </section>
 
