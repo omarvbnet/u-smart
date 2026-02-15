@@ -75,7 +75,7 @@ export default function ProfessionalNavbar() {
   };
 
   const navLinks = [
-    { key: "home", href: "#home", label: t("home") },
+    { key: "home", href: "/", label: t("home") },
     { key: "about", href: "/about", label: t("about") },
     { key: "products", href: "/products", label: t("products") },
     { key: "services", href: "#services", label: t("services") },
@@ -138,13 +138,16 @@ export default function ProfessionalNavbar() {
 
         {/* Main Navigation Bar */}
         <div className="max-w-7xl mx-auto h-16 sm:h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {/* Logo */}
+          {/* Logo - navigate to home; if already on home, scroll to top */}
           <Link
             href="/"
             className="shrink-0"
             onClick={(e) => {
-              e.preventDefault();
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              const isHome = !pathname || pathname === '/' || pathname === `/${locale}` || pathname === `/${locale}/` || pathname.match(/^\/[a-z]{2}\/?$/);
+              if (isHome) {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             }}
           >
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
