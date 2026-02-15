@@ -30,7 +30,15 @@
     "serviceTelecom": "Telekomünikasyon Bakımı",
     "serviceCleanEnergy": "Temiz Enerji ve Güneş Sistemleri",
     "qrScan": "Web sitemizi veya müşteri panosunu ziyaret etmek için tarayın",
-    "downloadPdf": "Broşür İndir (PDF)"
+    "downloadPdf": "Broşür İndir (PDF)",
+    "servicesShowcaseTitle": "Hizmetlerimiz",
+    "servicesShowcaseSubtitle": "Kalite, bağlantı, otomasyon ve yazılım için uçtan uca çözümler.",
+    "serviceDetail": {
+      "quality-control-supervision": "Saha denetimi ve HSE'den uyum takibine ve kök neden analizine kadar sertifikalı gözetim. Şeffaflık ve ölçülebilir uyumluluk için gerçek zamanlı panolar, otomatik raporlama ve QR tabanlı doğrulama.",
+      "smart-home-automation": "KNX, HDL Buspro, Zigbee ve elektrik çözümleriyle aydınlatma, iklim, güvenlik ve enerji yönetimi. Güvenilirlik, birlikte çalışabilirlik ve kesintisiz bağlı deneyim için tasarlandı.",
+      "enterprise-networking": "Fiber optik, füzyon birleştirme, kablo sistemi, GIS haritalama ve SLA destekli bakım konusunda FOA sertifikalı uzmanlık. Kurumsal ve fiber ağlarınızı zirvede tutuyoruz.",
+      "custom-software": "Node.js, Flutter, Python ve güçlü veritabanlarıyla ölçeklenebilir, güvenli yazılım. Web ve mobil uygulamalardan API ve otomasyona—işinizle büyüyen çözümler."
+    }
   },
   "ServicePdf": {
     "exportAsPdf": "PDF Olarak Dışa Aktar",

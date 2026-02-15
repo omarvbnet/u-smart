@@ -118,6 +118,18 @@ export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string; icon:
   { slug: 'custom-software', brochureKey: 'serviceCleanEnergy', icon: 'Code2' },
 ];
 
+/** Service image URLs for brochure showcase (Unsplash - free to use) */
+export const SERVICE_IMAGES: Record<string, string> = {
+  'quality-control-supervision':
+    'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=600&q=80',
+  'smart-home-automation':
+    'https://images.unsplash.com/photo-1558002038-10559092d310?w=600&q=80',
+  'enterprise-networking':
+    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&q=80',
+  'custom-software':
+    'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=600&q=80',
+};
+
 /** Icons for Why Choose strengths (7 items) */
 export const WHY_CHOOSE_ICONS = ['Target', 'BarChart3', 'ShieldCheck', 'Zap', 'Home', 'Cable', 'Leaf'];
 

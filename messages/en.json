@@ -30,7 +30,15 @@
     "serviceTelecom": "Telecommunications Maintenance",
     "serviceCleanEnergy": "Clean Energy & Solar Systems",
     "qrScan": "Scan to visit our website or client dashboard",
-    "downloadPdf": "Download Brochure (PDF)"
+    "downloadPdf": "Download Brochure (PDF)",
+    "servicesShowcaseTitle": "Our Services",
+    "servicesShowcaseSubtitle": "End-to-end solutions for quality, connectivity, automation, and software.",
+    "serviceDetail": {
+      "quality-control-supervision": "Certified oversight from on-site inspection and HSE to compliance tracking and root-cause investigation. Real-time dashboards, automated reporting, and QR-based verification ensure transparency and measurable compliance.",
+      "smart-home-automation": "Lighting, climate, security, and energy management with KNX, HDL Buspro, Zigbee, and electrical solutions. Designed for reliability, interoperability, and a seamless connected experience.",
+      "enterprise-networking": "FOA-certified expertise in fiber optics, fusion splice, cable systemization, GIS mapping, and SLA-backed maintenance. We keep your enterprise and fiber networks running at peak performance.",
+      "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business."
+    }
   },
   "ServicePdf": {
     "exportAsPdf": "Export as PDF",

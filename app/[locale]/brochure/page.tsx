@@ -52,6 +52,7 @@ import { jsPDF } from 'jspdf';
 import {
   BROCHURE_SERVICE_CONFIG,
   BROCHURE_SERVICES_ORDER,
+  SERVICE_IMAGES,
   WHY_CHOOSE_ICONS,
   FEATURE_ICONS,
 } from '@/lib/brochure-service-config';
@@ -595,89 +596,111 @@ export default function BrochurePage() {
           );
         })()}
 
-        {/* Page 3 – Services: Full descriptions, responsive footer */}
+        {/* Page – Services Showcase: Images + extended descriptions (1 page) */}
         <section
-          className="relative py-10 sm:py-12 px-5 sm:px-8 overflow-hidden flex flex-col justify-center"
+          className="relative py-8 sm:py-10 px-5 sm:px-8 overflow-hidden flex flex-col justify-center"
           style={{
             width: '100%',
+            height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
-            backgroundColor: pageBg,
+            backgroundColor: '#f8fafc',
             color: '#1e293b',
           }}
         >
-          <div className="relative z-10 max-w-5xl mx-auto w-full space-y-6 sm:space-y-8">
+          <div className="relative z-10 max-w-5xl mx-auto w-full h-full flex flex-col">
             <div
-              className="p-4 sm:p-5 rounded-2xl border-2 flex items-center gap-4 shadow-sm"
-              style={{ borderColor: accent, backgroundColor: boxBg }}
+              className="p-3 sm:p-4 rounded-2xl border-2 flex items-center gap-3 mb-4 sm:mb-5 shrink-0"
+              style={{ borderColor: accent, backgroundColor: boxBg, boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}
             >
               <span
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${accent}15` }}
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${accent}18` }}
               >
-                <BrochureIcon name="Layers" className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: accent }} />
+                <BrochureIcon name="Layers" className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: accent }} />
               </span>
               <div>
-                <span className={`text-[0.65rem] sm:text-xs font-semibold text-gray-500 ${!isRtl ? 'uppercase tracking-wider' : ''}`} style={{ letterSpacing: isRtl ? 0 : '0.12em' }}>
-                  {t('pageServicesTitle')}
-                </span>
-                <h2 className="text-lg sm:text-xl font-bold mt-0.5 text-gray-900" style={{ color: accent }}>
-                  {t('pageServicesTitle')}
+                <h2 className="text-base sm:text-lg font-bold text-gray-900" style={{ color: accent }}>
+                  {t('servicesShowcaseTitle')}
                 </h2>
+                <p className="text-[0.7rem] sm:text-xs text-gray-600 mt-0.5">
+                  {t('servicesShowcaseSubtitle')}
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 min-h-0">
               {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
                 const svcConfig = BROCHURE_SERVICE_CONFIG[slug];
                 const isFeatured = serviceSlug === slug;
                 const svcTitle = svcConfig ? tAbout(svcConfig.aboutTitleKey) : t(brochureKey);
-                const svcDesc = svcConfig ? tAbout(svcConfig.aboutDescKey) : '';
+                const serviceDetails = t.raw('serviceDetail') as Record<string, string> | undefined;
+                const svcDetail = (serviceDetails?.[slug] ?? svcConfig ? tAbout(svcConfig.aboutDescKey) : '') as string;
                 const cardAccent = svcConfig?.accent ?? accent;
-                const cardAccentLight = svcConfig?.accentLight ?? accentLight;
+                const imgUrl = SERVICE_IMAGES[slug];
                 return (
                   <Link
                     key={slug}
                     href={`/services/${slug}`}
-                    className={`block group rounded-2xl border-2 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 ${
+                    className={`group block rounded-2xl overflow-hidden border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 flex flex-col min-h-0 ${
                       isFeatured ? 'ring-2 ring-offset-2' : ''
                     }`}
                     style={{
-                      borderColor: isFeatured ? cardAccent : `${cardAccent}40`,
+                      borderColor: isFeatured ? cardAccent : `${cardAccent}35`,
                       backgroundColor: boxBg,
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
                       ...(isFeatured ? { ['--tw-ring-color' as string]: cardAccent } : {}),
                     }}
                   >
-                    <div className="p-5 sm:p-6 h-full flex flex-col">
-                      <div className="flex items-start gap-4 mb-3">
+                    <div className="relative h-24 sm:h-28 shrink-0 overflow-hidden bg-gray-100">
+                      {imgUrl ? (
+                        <img
+                          src={imgUrl}
+                          alt=""
+                          crossOrigin="anonymous"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div
+                          className="w-full h-full flex items-center justify-center"
+                          style={{ backgroundColor: `${cardAccent}25` }}
+                        >
+                          <BrochureIcon name={icon} className="w-12 h-12 opacity-60" style={{ color: cardAccent }} />
+                        </div>
+                      )}
+                      <div
+                        className="absolute inset-0 opacity-40"
+                        style={{ background: `linear-gradient(to bottom, transparent 40%, ${cardAccent}99 100%)` }}
+                      />
+                      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2">
                         <span
-                          className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-md"
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0"
                           style={{ backgroundColor: cardAccent }}
                         >
-                          <BrochureIcon name={icon} className="w-6 h-6 sm:w-7 sm:h-7" />
+                          <BrochureIcon name={icon} className="w-4 h-4" />
                         </span>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-base sm:text-lg font-bold text-gray-900 leading-tight group-hover:opacity-90 transition-opacity">
-                            {svcTitle}
-                          </h3>
-                          {isFeatured && (
-                            <span
-                              className={`inline-block mt-2 px-3 py-1 rounded-lg text-[0.65rem] sm:text-xs font-bold text-white ${!isRtl ? 'uppercase tracking-wider' : ''}`}
-                              style={{ backgroundColor: cardAccent }}
-                            >
-                              Featured
-                            </span>
-                          )}
-                        </div>
+                        <h3 className="text-sm sm:text-base font-bold text-white leading-tight drop-shadow-md truncate">
+                          {svcTitle}
+                        </h3>
+                        {isFeatured && (
+                          <span
+                            className={`ml-auto px-2 py-0.5 rounded text-[0.6rem] font-bold text-white shrink-0 ${!isRtl ? 'uppercase tracking-wider' : ''}`}
+                            style={{ backgroundColor: cardAccent }}
+                          >
+                            Featured
+                          </span>
+                        )}
                       </div>
-                      <p className="text-[0.85rem] sm:text-[0.9rem] text-gray-600 leading-relaxed flex-1">
-                        {svcDesc}
+                    </div>
+                    <div className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
+                      <p className="text-[0.75rem] sm:text-[0.8rem] text-gray-600 leading-relaxed flex-1 line-clamp-4">
+                        {svcDetail}
                       </p>
                       <div
-                        className={`mt-4 flex items-center gap-1.5 text-sm font-semibold ${isRtl ? 'justify-start' : 'justify-end'}`}
-                        style={{ color: cardAccentLight }}
+                        className={`mt-2 flex items-center gap-1.5 text-xs font-semibold shrink-0 ${isRtl ? 'justify-start' : 'justify-end'}`}
+                        style={{ color: cardAccent }}
                       >
                         <span>{tAbout('learnMore')}</span>
-                        <ArrowLeft className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                        <ArrowLeft className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
                       </div>
                     </div>
                   </Link>
