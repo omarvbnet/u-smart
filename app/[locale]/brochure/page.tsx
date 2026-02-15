@@ -596,7 +596,7 @@ export default function BrochurePage() {
           );
         })()}
 
-        {/* One full page per service: hero image + extended description + highlights */}
+        {/* One full page per service: hero image + description + detailed features (no blank space) */}
         {BROCHURE_SERVICES_ORDER.map(({ slug, brochureKey, icon }) => {
           const svcConfig = BROCHURE_SERVICE_CONFIG[slug];
           const svcTitle = svcConfig ? tAbout(svcConfig.aboutTitleKey) : t(brochureKey);
@@ -609,6 +609,20 @@ export default function BrochurePage() {
           const pageHighlights = t.raw('servicePageHighlights') as Record<string, string[]> | undefined;
           const pageDesc = (pageDescs?.[slug] ?? (svcConfig ? tAbout(svcConfig.aboutDescKey) : '')) as string;
           const highlights = (pageHighlights?.[slug] ?? []) as string[];
+          const indexObj = svcConfig ? (tIndex.raw(svcConfig.indexKey) as Record<string, unknown>) : null;
+          const featureItems: { name: string; description: string; highlights?: string[] }[] = [];
+          if (svcConfig && indexObj && typeof indexObj === 'object') {
+            for (const key of svcConfig.featureKeys) {
+              const item = (indexObj as Record<string, Record<string, unknown>>)[key];
+              if (item && typeof item === 'object' && item.name) {
+                featureItems.push({
+                  name: String(item.name),
+                  description: typeof item.description === 'string' ? item.description : '',
+                  highlights: Array.isArray(item.highlights) ? (item.highlights as string[]) : undefined,
+                });
+              }
+            }
+          }
           return (
             <section
               key={slug}
@@ -622,7 +636,7 @@ export default function BrochurePage() {
               }}
             >
               {/* Hero image */}
-              <div className="relative h-28 sm:h-32 shrink-0 overflow-hidden">
+              <div className="relative h-20 sm:h-24 shrink-0 overflow-hidden">
                 {imgUrl ? (
                   <img
                     src={imgUrl}
@@ -635,65 +649,96 @@ export default function BrochurePage() {
                     className="w-full h-full flex items-center justify-center"
                     style={{ backgroundColor: `${svcAccent}20` }}
                   >
-                    <BrochureIcon name={icon} className="w-16 h-16 opacity-50" style={{ color: svcAccent }} />
+                    <BrochureIcon name={icon} className="w-14 h-14 opacity-50" style={{ color: svcAccent }} />
                   </div>
                 )}
                 <div
                   className="absolute inset-0"
                   style={{ background: `linear-gradient(to bottom, transparent 30%, ${svcAccent}ee 100%)` }}
                 />
-                <div className="absolute inset-0 flex items-end p-4 sm:p-5">
-                  <div className="flex items-center gap-3">
+                <div className="absolute inset-0 flex items-end p-3 sm:p-4">
+                  <div className="flex items-center gap-2">
                     <span
-                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg shrink-0"
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg shrink-0"
                       style={{ backgroundColor: svcAccent }}
                     >
-                      <BrochureIcon name={icon} className="w-6 h-6" />
+                      <BrochureIcon name={icon} className="w-5 h-5" />
                     </span>
-                    <h2 className="text-lg sm:text-xl font-bold text-white drop-shadow-lg">
+                    <h2 className="text-base sm:text-lg font-bold text-white drop-shadow-lg">
                       {svcTitle}
                     </h2>
                   </div>
                 </div>
               </div>
 
-              {/* Content */}
-              <div className="flex-1 p-4 sm:p-6 flex flex-col min-h-0 overflow-hidden">
+              {/* Content - fills all space */}
+              <div className="flex-1 p-3 sm:p-4 flex flex-col gap-2 min-h-0 overflow-hidden">
                 <div
-                  className="p-4 sm:p-5 rounded-2xl border-2 mb-4 flex-1 min-h-0 overflow-auto"
+                  className="rounded-xl border-2 p-3 shrink-0"
                   style={{
                     borderColor: `${svcAccent}50`,
                     backgroundColor: svcBoxBg,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
                   }}
                 >
-                  <p className="text-[0.9rem] sm:text-[1rem] text-gray-700 leading-[1.7]">
+                  <p className="text-[0.78rem] sm:text-[0.85rem] text-gray-700 leading-[1.6]">
                     {pageDesc}
                   </p>
                 </div>
 
-                {highlights.length > 0 && (
+                {featureItems.length > 0 ? (
                   <div
-                    className="rounded-2xl border-2 p-4 sm:p-5 shrink-0"
+                    className="flex-1 min-h-0 overflow-auto rounded-xl border-2 p-3"
                     style={{
                       borderColor: `${svcAccent}40`,
                       backgroundColor: svcBoxBg,
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                     }}
                   >
-                    <p className={`text-[0.65rem] sm:text-xs font-semibold text-gray-600 mb-3 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
+                    <p className={`text-[0.6rem] sm:text-[0.65rem] font-semibold text-gray-600 mb-2 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
+                      {t('pageServicesTitle')} — {t('featuresLabel')}
+                    </p>
+                    <div className="space-y-2">
+                      {featureItems.map((f, i) => (
+                        <div key={i} className="border-l-2 pl-2" style={{ borderColor: `${svcAccent}60` }}>
+                          <h4 className="text-[0.75rem] sm:text-[0.8rem] font-bold text-gray-900">{f.name}</h4>
+                          <p className="text-[0.7rem] sm:text-[0.72rem] text-gray-600 leading-[1.45] mt-0.5">{f.description}</p>
+                          {f.highlights && f.highlights.length > 0 && (
+                            <ul className="mt-1 space-y-0.5 list-none p-0 m-0">
+                              {f.highlights.slice(0, 3).map((h, j) => (
+                                <li key={j} className="flex items-center gap-1.5 text-[0.65rem] sm:text-[0.68rem] text-gray-500">
+                                  <Check className="w-2.5 h-2.5 flex-shrink-0" style={{ color: svcAccent }} />
+                                  {h}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : highlights.length > 0 && (
+                  <div
+                    className="flex-1 min-h-0 overflow-auto rounded-xl border-2 p-3"
+                    style={{
+                      borderColor: `${svcAccent}40`,
+                      backgroundColor: svcBoxBg,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    }}
+                  >
+                    <p className={`text-[0.6rem] sm:text-[0.65rem] font-semibold text-gray-600 mb-2 ${!isRtl ? 'uppercase tracking-wider' : ''}`}>
                       {t('pageServicesTitle')}
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {highlights.map((h, i) => (
-                        <div key={i} className="flex items-center gap-2">
+                        <div key={i} className="flex items-start gap-1.5">
                           <span
-                            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                            className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
                             style={{ backgroundColor: `${svcAccent}25` }}
                           >
-                            <Check className="w-3 h-3" style={{ color: svcAccent }} />
+                            <Check className="w-2.5 h-2.5" style={{ color: svcAccent }} />
                           </span>
-                          <span className="text-[0.8rem] sm:text-[0.85rem] text-gray-700">{h}</span>
+                          <span className="text-[0.7rem] sm:text-[0.75rem] text-gray-700 leading-tight">{h}</span>
                         </div>
                       ))}
                     </div>
@@ -702,11 +747,11 @@ export default function BrochurePage() {
 
                 <Link
                   href={`/services/${slug}`}
-                  className={`mt-3 flex items-center gap-2 text-sm font-semibold w-fit ${isRtl ? 'self-start' : 'self-end'}`}
+                  className={`shrink-0 flex items-center gap-1.5 text-xs font-semibold w-fit py-1 ${isRtl ? 'self-start' : 'self-end'}`}
                   style={{ color: svcAccentLight }}
                 >
                   <span>{tAbout('learnMore')}</span>
-                  <ArrowLeft className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                  <ArrowLeft className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
                 </Link>
               </div>
             </section>

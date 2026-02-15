@@ -23,6 +23,7 @@
     "websiteUrl": "www.usmart-iot.com",
     "pageAboutTitle": "About Us",
     "pageServicesTitle": "Services Overview",
+    "featuresLabel": "Features",
     "pageWhyTitle": "Why Choose U Smart",
     "pageContactTitle": "Contact & QR Code",
     "serviceQuality": "Quality & Safety Management",
@@ -40,16 +41,16 @@
       "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business."
     },
     "servicePageDesc": {
-      "quality-control-supervision": "Our certified team delivers rigorous oversight from on-site inspection and HSE to compliance tracking and root-cause investigation. We combine real-time digital dashboards, automated reporting, and QR-based verification tools to ensure transparency, accuracy, and measurable compliance across every project. Whether government contracts or enterprise builds, we digitize performance and optimize operations.",
-      "smart-home-automation": "End-to-end smart home and building automation with KNX, HDL Buspro, Zigbee, and electrical solutions. We design and install lighting, climate, security, and energy management systems for reliability, interoperability, and a seamless connected experience. From luxury villas to commercial buildings, we deliver control that fits your lifestyle.",
-      "enterprise-networking": "Design, installation, and maintenance of enterprise and fiber networks with FOA-certified expertise. We specialize in fiber optics, fusion splice, cable systemization, GIS mapping, closures, and SLA-backed maintenance. Our dedicated tracking system and over 12 years of experience keep your infrastructure running at peak performance.",
-      "custom-software": "Scalable, secure software built with modern stacks—Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation, we deliver solutions that grow with your business. Full-stack development with clean architecture, testing, and deployment."
+      "quality-control-supervision": "Our certified team delivers rigorous oversight from on-site inspection and HSE to compliance tracking and root-cause investigation. We combine real-time digital dashboards, automated reporting, and QR-based verification tools to ensure transparency, accuracy, and measurable compliance across every project.",
+      "smart-home-automation": "End-to-end smart home and building automation with KNX, HDL Buspro, Zigbee, and electrical solutions. We design and install lighting, climate, security, and energy management systems for reliability, interoperability, and a seamless connected experience.",
+      "enterprise-networking": "Design, installation, and maintenance of enterprise and fiber networks with FOA-certified expertise. We specialize in fiber optics, fusion splice, cable systemization, GIS mapping, closures, and SLA-backed maintenance. Over 12 years of experience.",
+      "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business. Full-stack development with clean architecture and deployment."
     },
     "servicePageHighlights": {
-      "quality-control-supervision": ["On-site inspection & HSE", "Real-time dashboards", "QR-based verification", "Compliance tracking", "Root-cause investigation"],
-      "smart-home-automation": ["KNX, HDL Buspro, Zigbee", "Lighting & climate control", "Security & access", "Energy management", "Unified app control"],
-      "enterprise-networking": ["Fiber optic design & install", "Fusion splice & closures", "Cable systemization", "GIS mapping & as-built", "SLA-backed maintenance"],
-      "custom-software": ["Web & mobile apps", "Node.js, Flutter, Python", "APIs & microservices", "Database design", "DevOps & deployment"]
+      "quality-control-supervision": ["On-site inspection & HSE—certified oversight of construction quality", "Real-time dashboards—live project monitoring and reporting", "QR-based verification—instant field compliance checks", "Compliance tracking—audit-ready documentation", "Root-cause investigation—systematic problem resolution"],
+      "smart-home-automation": ["KNX, HDL Buspro, Zigbee—wired and wireless protocols for flexibility", "Lighting & climate—room-by-room control and schedules", "Security & access—smart locks, cameras, motion sensors", "Energy management—automated shut-off and monitoring", "Unified app control—one interface for your entire home"],
+      "enterprise-networking": ["Fiber optic design & install—end-to-end network deployment", "Fusion splice & closures—reliable connections and protection", "Cable systemization—structured cabling and labeling", "GIS mapping & as-built—accurate documentation", "SLA-backed maintenance—uptime and rapid response"],
+      "custom-software": ["Web & mobile apps—responsive and native solutions", "Node.js, Flutter, Python—modern, scalable stacks", "APIs & microservices—integration and extensibility", "Database design—MySQL, PostgreSQL, NoSQL", "DevOps & deployment—CI/CD and cloud hosting"]
     }
   },
   "ServicePdf": {

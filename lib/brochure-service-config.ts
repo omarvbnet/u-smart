@@ -121,9 +121,9 @@ export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string; icon:
 /** Service image URLs – one per service (Unsplash – free to use) */
 export const SERVICE_IMAGES: Record<string, string> = {
   'quality-control-supervision':
-    'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&q=85',
+    'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&q=85',
   'smart-home-automation':
-    'https://images.unsplash.com/photo-1558002038-10559092d310?w=800&q=85',
+    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=85',
   'enterprise-networking':
     'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=85',
   'custom-software':

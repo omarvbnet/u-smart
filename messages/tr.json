@@ -22,6 +22,7 @@
     "email": "info@usmart-iot.com",
     "websiteUrl": "www.usmart-iot.com",
     "pageAboutTitle": "Hakkımızda",
+    "featuresLabel": "Özellikler",
     "pageServicesTitle": "Hizmetlere Genel Bakış",
     "pageWhyTitle": "Neden U Smart",
     "pageContactTitle": "İletişim ve QR Kod",
@@ -46,10 +47,10 @@
       "custom-software": "Node.js, Flutter, Python ve güçlü veritabanlarıyla ölçeklenebilir, güvenli yazılım. Web ve mobil uygulamalardan API ve otomasyona, işinizle büyüyen çözümler sunuyoruz."
     },
     "servicePageHighlights": {
-      "quality-control-supervision": ["Saha denetimi ve HSE", "Gerçek zamanlı panolar", "QR tabanlı doğrulama", "Uyum takibi", "Kök neden analizi"],
-      "smart-home-automation": ["KNX, HDL Buspro, Zigbee", "Aydınlatma ve iklim kontrolü", "Güvenlik ve erişim", "Enerji yönetimi", "Birleşik uygulama kontrolü"],
-      "enterprise-networking": ["Fiber optik tasarım ve kurulum", "Füzyon birleştirme ve kapaklar", "Kablo sistemi", "GIS haritalama", "SLA destekli bakım"],
-      "custom-software": ["Web ve mobil uygulamalar", "Node.js, Flutter, Python", "API ve mikro hizmetler", "Veritabanı tasarımı", "DevOps ve dağıtım"]
+      "quality-control-supervision": ["Saha denetimi ve HSE—yapı kalitesinde sertifikalı gözetim", "Gerçek zamanlı panolar—canlı proje izleme ve raporlama", "QR tabanlı doğrulama—anında saha uyumluluk kontrolleri", "Uyum takibi—denetime hazır belgeler", "Kök neden analizi—sistematik sorun çözümü"],
+      "smart-home-automation": ["KNX, HDL Buspro, Zigbee—esneklik için kablolu ve kablosuz protokoller", "Aydınlatma ve iklim—oda bazlı kontrol ve programlar", "Güvenlik ve erişim—akıllı kilitler, kameralar, sensörler", "Enerji yönetimi—otomatik kapatma ve izleme", "Birleşik uygulama kontrolü—evinizin tek arayüzü"],
+      "enterprise-networking": ["Fiber optik tasarım ve kurulum—uçtan uca ağ dağıtımı", "Füzyon birleştirme ve kapaklar—güvenilir bağlantılar ve koruma", "Kablo sistemi—yapılandırılmış kablo ve etiketleme", "GIS haritalama ve as-built—doğru belgeler", "SLA destekli bakım—çalışma süresi ve hızlı yanıt"],
+      "custom-software": ["Web ve mobil uygulamalar—duyarlı ve yerel çözümler", "Node.js, Flutter, Python—modern, ölçeklenebilir yığınlar", "API ve mikro hizmetler—entegrasyon ve genişletilebilirlik", "Veritabanı tasarımı—MySQL, PostgreSQL, NoSQL", "DevOps ve dağıtım—CI/CD ve bulut barındırma"]
     }
   },
   "ServicePdf": {
