@@ -163,29 +163,35 @@ export default function ServicePdfExport({
         {exporting ? '…' : tPdf('exportAsPdf')}
       </button>
 
-      {/* Hidden PDF content - positioned off-screen */}
+      {/* Hidden PDF content - fixed A4 width, off-screen */}
       <div
         ref={pdfRef}
         dir={isRtl ? 'rtl' : 'ltr'}
         lang={locale}
-        className="absolute left-[-9999px] top-0 w-[21cm]"
+        className="absolute left-[-9999px] top-0"
         style={{
+          width: '21cm',
+          minWidth: '21cm',
+          maxWidth: '21cm',
           fontFamily: isRtl ? "'Amiri', 'Noto Naskh Arabic', Tahoma, Arial, sans-serif" : "ui-sans-serif, system-ui, sans-serif",
           letterSpacing: isRtl ? 0 : undefined,
+          boxSizing: 'border-box',
         }}
       >
-        {/* PAGE 1: Abstract Modern Cover - per service colors */}
+        {/* PAGE 1: Abstract Modern Cover - exact A4 */}
         <section
           style={{
             width: '100%',
+            height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
             backgroundColor: '#ffffff',
             position: 'relative',
             overflow: 'hidden',
-            padding: '2rem 1.75rem',
+            padding: '1.5rem 1.5rem',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
+            boxSizing: 'border-box',
           }}
         >
           {/* Flowing abstract wave shapes - colored per service */}
@@ -331,11 +337,13 @@ export default function ServicePdfExport({
               />
               <p
                 style={{
-                  fontSize: '0.65rem',
+                  fontSize: '0.6rem',
                   color: accentLight,
-                  lineHeight: 1.6,
-                  margin: '0.5rem 0 0',
+                  lineHeight: 1.5,
+                  margin: '0.4rem 0 0',
                   opacity: 0.9,
+                  maxHeight: '4.5em',
+                  overflow: 'hidden',
                 }}
               >
                 {coverTaglineResolved}
@@ -389,27 +397,29 @@ export default function ServicePdfExport({
           </div>
         </section>
 
-        {/* PAGE 2: Service Overview + Features */}
+        {/* PAGE 2: Service Overview + Features - responsive 2-col grid */}
         <section
           style={{
             width: '100%',
             minHeight: `${A4_HEIGHT_CM}cm`,
             backgroundColor: pageBg,
             color: '#1e293b',
-            padding: '2rem',
+            padding: '1.25rem 1.5rem',
+            boxSizing: 'border-box',
           }}
         >
-          <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <div style={{ maxWidth: '100%', margin: 0 }}>
             <div
               style={{
-                padding: '1rem',
-                borderRadius: 12,
+                padding: '0.85rem 1rem',
+                borderRadius: 10,
                 border: `2px solid ${accent}`,
                 backgroundColor: boxBg,
-                marginBottom: '1.25rem',
+                marginBottom: '1rem',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '1rem',
+                gap: '0.85rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
               }}
             >
               <div
@@ -435,27 +445,34 @@ export default function ServicePdfExport({
                 </p>
               </div>
             </div>
-            <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: '#475569', marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '0.8rem', lineHeight: 1.6, color: '#475569', marginBottom: '1rem' }}>
               {serviceDescription}
             </p>
-            {featureItems.length > 0 && (
-              <div style={{ display: 'grid', gap: '1rem' }}>
+            {featureItems.length > 0 ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0.75rem',
+                }}
+              >
                 {featureItems.map((item, i) => (
                   <div
                     key={i}
                     style={{
-                      padding: '1rem',
-                      borderRadius: 12,
-                      border: `1px solid ${accent}40`,
+                      padding: '0.75rem',
+                      borderRadius: 10,
+                      border: `1px solid ${accent}35`,
                       backgroundColor: boxBg,
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', marginBottom: '0.35rem' }}>
                       <div
                         style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 10,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
                           backgroundColor: accent,
                           color: '#fff',
                           display: 'flex',
@@ -464,20 +481,20 @@ export default function ServicePdfExport({
                           flexShrink: 0,
                         }}
                       >
-                        <Check style={{ width: 18, height: 18 }} />
+                        <Check style={{ width: 14, height: 14 }} />
                       </div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                      <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', margin: 0, lineHeight: 1.3 }}>
                         {item.name}
                       </h3>
                     </div>
-                    <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: '#475569', margin: '0 0 0 2.75rem' }}>
+                    <p style={{ fontSize: '0.72rem', lineHeight: 1.5, color: '#475569', margin: '0 0 0 2.1rem' }}>
                       {item.description}
                     </p>
                     {item.highlights && item.highlights.length > 0 && (
-                      <ul style={{ margin: '0.5rem 0 0 2.75rem', padding: 0, listStyle: 'none', fontSize: '0.8rem', color: '#64748b' }}>
-                        {item.highlights.map((h, j) => (
-                          <li key={j} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                            <Check style={{ width: 14, height: 14, color: accent, flexShrink: 0 }} />
+                      <ul style={{ margin: '0.35rem 0 0 2.1rem', padding: 0, listStyle: 'none', fontSize: '0.68rem', color: '#64748b' }}>
+                        {item.highlights.slice(0, 3).map((h, j) => (
+                          <li key={j} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.15rem' }}>
+                            <Check style={{ width: 10, height: 10, color: accent, flexShrink: 0 }} />
                             {h}
                           </li>
                         ))}
@@ -486,11 +503,15 @@ export default function ServicePdfExport({
                   </div>
                 ))}
               </div>
+            ) : (
+              <div style={{ padding: '1rem', borderRadius: 10, backgroundColor: `${accent}08`, border: `1px solid ${accent}25` }}>
+                <p style={{ fontSize: '0.85rem', color: '#475569', margin: 0 }}>{serviceDescription}</p>
+              </div>
             )}
           </div>
         </section>
 
-        {/* PAGE 3: Systems (Smart Home only) */}
+        {/* PAGE 3: Systems (Smart Home only) - 2-col responsive */}
         {systemsObj && systemsKeys.length > 0 && (
           <section
             style={{
@@ -498,17 +519,24 @@ export default function ServicePdfExport({
               minHeight: `${A4_HEIGHT_CM}cm`,
               backgroundColor: pageBg,
               color: '#1e293b',
-              padding: '2rem',
+              padding: '1.25rem 1.5rem',
+              boxSizing: 'border-box',
             }}
           >
-            <div style={{ maxWidth: 640, margin: '0 auto' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: accent, marginBottom: '1rem' }}>
+            <div style={{ maxWidth: '100%', margin: 0 }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: accent, marginBottom: '0.6rem' }}>
                 {(systemsObj.title as string) || tPdf('systemsTitle')}
               </h2>
-              <p style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+              <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.55, marginBottom: '1rem' }}>
                 {(systemsObj.intro as string) || ''}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0.75rem',
+                }}
+              >
                 {systemsKeys.map((key) => {
                   const sys = (systemsObj as Record<string, Record<string, unknown>>)[key];
                   if (!sys || typeof sys !== 'object') return null;
@@ -516,16 +544,17 @@ export default function ServicePdfExport({
                     <div
                       key={key}
                       style={{
-                        padding: '1rem',
-                        borderRadius: 12,
-                        border: `1px solid ${accent}50`,
+                        padding: '0.75rem',
+                        borderRadius: 10,
+                        border: `1px solid ${accent}40`,
                         backgroundColor: boxBg,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
                       }}
                     >
-                      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem' }}>
+                      <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.4rem' }}>
                         {String(sys.name ?? key)}
                       </h3>
-                      <p style={{ fontSize: '0.8rem', lineHeight: 1.5, color: '#64748b', margin: 0 }}>
+                      <p style={{ fontSize: '0.72rem', lineHeight: 1.5, color: '#64748b', margin: 0 }}>
                         {String(sys.description ?? '')}
                       </p>
                     </div>
@@ -536,24 +565,26 @@ export default function ServicePdfExport({
           </section>
         )}
 
-        {/* PAGE: Contact */}
+        {/* PAGE: Contact - exact A4 */}
         <section
           style={{
             width: '100%',
+            height: `${A4_HEIGHT_CM}cm`,
             minHeight: `${A4_HEIGHT_CM}cm`,
             backgroundColor: pageBg,
             color: '#1e293b',
-            padding: '2rem',
+            padding: '2rem 1.5rem',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
+            boxSizing: 'border-box',
           }}
         >
-          <div style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: accent, marginBottom: '1rem' }}>
+          <div style={{ maxWidth: '100%', margin: '0 auto', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: accent, marginBottom: '0.85rem' }}>
               {t('pageContactTitle')}
             </h2>
-            <p style={{ fontSize: '0.95rem', color: '#475569', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.6, marginBottom: '1.25rem' }}>
               {t('cta')}
             </p>
             <div
@@ -562,6 +593,7 @@ export default function ServicePdfExport({
                 borderRadius: 12,
                 border: `2px solid ${accent}50`,
                 backgroundColor: boxBg,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
               }}
             >
               <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', margin: '0 0 0.5rem' }}>
