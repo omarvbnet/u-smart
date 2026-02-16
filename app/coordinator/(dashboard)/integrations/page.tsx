@@ -75,6 +75,7 @@ export default function CoordinatorIntegrationsPage() {
       });
       const data = await res.json();
       if (data.success) alert('تم تنفيذ الإجراء');
+      else if (res.status === 501) alert('هذا التكامل غير مُهيأ بعد.');
       else alert(data.message || data.error || 'فشل التنفيذ');
     } finally {
       setRunningId(null);

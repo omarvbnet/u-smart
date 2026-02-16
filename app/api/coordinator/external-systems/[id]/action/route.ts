@@ -82,9 +82,17 @@ export async function POST(
       ip: getClientIp(req),
     });
 
+    const errMsg = lastError ?? '';
+    const isNotImplemented =
+      errMsg.toLowerCase().includes('not configured') ||
+      errMsg.toLowerCase().includes('not implemented');
     return NextResponse.json(
-      { success: false, message: 'Action failed after retries', error: lastError },
-      { status: 500 }
+      {
+        success: false,
+        message: isNotImplemented ? 'Integration not configured yet' : 'Action failed after retries',
+        error: lastError,
+      },
+      { status: isNotImplemented ? 501 : 500 }
     );
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };

@@ -13,7 +13,7 @@ type Task = {
   dueAt: string | null;
   createdAt: string;
   createdBy: { name: string | null; email: string };
-  _count: { comments: number };
+  _count?: { comments: number };
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -178,7 +178,7 @@ export default function CoordinatorTasksPage() {
                   )}
                   <p className="text-xs text-slate-400 mt-2">
                     {task.createdBy.name || task.createdBy.email} · {formatDate(task.createdAt)}
-                    {task._count.comments > 0 && ` · ${task._count.comments} تعليق`}
+                    {(task._count?.comments ?? 0) > 0 && ` · ${task._count?.comments ?? 0} تعليق`}
                   </p>
                 </div>
                 <span

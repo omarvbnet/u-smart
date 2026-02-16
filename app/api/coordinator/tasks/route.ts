@@ -56,7 +56,10 @@ export async function POST(req: NextRequest) {
         checklist: Array.isArray(body.checklist) ? body.checklist : undefined,
         fileUrls: Array.isArray(body.fileUrls) ? body.fileUrls : [],
       },
-      include: { createdBy: { select: { id: true, name: true, email: true } } },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        _count: { select: { comments: true } },
+      },
     });
 
     await logAudit({
