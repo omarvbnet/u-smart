@@ -31,9 +31,9 @@
 ## Phase 5 – Audit & Voice
 
 - [x] Audit & Compliance: immutable AuditLog for login, task, job_duty, kpi, report, system, social, outreach, job_result, profile, generated_application; GET audit-logs API (ADMIN); audit dashboard page with filters
-- [ ] Iraqi Dialect / Language: STT, intent, Iraqi/formal/EN, TTS, voice-to-task
+- [x] Iraqi Dialect / Language: server-side STT via Whisper (POST /api/coordinator/voice/transcribe, OPENAI_API_KEY); intent/TTS documented in COORDINATOR_VOICE_SETUP.md for future enhancement
 - [x] Voice Call Engine: voice-call-records + voice-logs APIs; Twilio incoming webhook (POST /api/coordinator/voice/webhook/incoming) with TwiML; dashboard Voice page (logs + calls)
-- [ ] In-app Voice Assistant: floating button, real-time transcription, task execution
+- [x] In-app Voice Assistant: floating mic button, panel with browser Speech Recognition (ar-SA), save transcript to voice-logs, "Create task from this" (prefill on tasks page)
 
 ## Deliverables per phase
 

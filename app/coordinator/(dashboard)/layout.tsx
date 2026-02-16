@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, ListTodo, LogOut, Menu, CalendarClock, TrendingUp, FileText, Plug, CreditCard, Bell, Share2, Briefcase, User, FileCheck, Shield, Phone } from 'lucide-react';
+import VoiceAssistant from './VoiceAssistant';
 
 type User = { id: string; email: string; name: string | null; role: string; companyName: string };
 type NotificationItem = { id: string; title: string; body: string | null; linkUrl: string | null; read: boolean; createdAt: string };
@@ -250,6 +251,8 @@ export default function CoordinatorDashboardLayout({
           aria-label="إغلاق"
         />
       )}
+
+      <VoiceAssistant />
     </div>
   );
 }

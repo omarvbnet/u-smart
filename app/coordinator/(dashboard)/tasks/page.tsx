@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, ListTodo } from 'lucide-react';
 
 type Task = {
@@ -25,6 +26,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function CoordinatorTasksPage() {
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -45,6 +47,19 @@ export default function CoordinatorTasksPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('create') === '1' && typeof window !== 'undefined') {
+      try {
+        const voice = sessionStorage.getItem('voiceTranscript');
+        if (voice) {
+          setNewTitle(voice.slice(0, 200));
+          setShowForm(true);
+          sessionStorage.removeItem('voiceTranscript');
+        }
+      } catch {}
+    }
+  }, [searchParams]);
 
   const createTask = async (e: React.FormEvent) => {
     e.preventDefault();
