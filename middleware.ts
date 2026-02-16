@@ -61,6 +61,6 @@ export default composedMiddleware
 
 export const config = {
   matcher: [
-    '/((?!api|admin|_next|.*\\..*).*)',
+    '/((?!api|admin|coordinator|_next|.*\\..*).*)',
   ]
 }

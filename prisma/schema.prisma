@@ -567,3 +567,418 @@ model User {
     QUOTED
     CLOSED
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // U-Smart Digital Project Coordinator Platform (multi-tenant SaaS)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  enum CoordinatorRole {
+    ADMIN
+    COORDINATOR
+    CLIENT
+  }
+
+  enum CoordinatorTaskStatus {
+    PENDING
+    APPROVED
+    IN_PROGRESS
+    UNDER_REVIEW
+    COMPLETED
+    ARCHIVED
+  }
+
+  enum ExternalSystemType {
+    API
+    PLAYWRIGHT
+    OAUTH2
+  }
+
+  enum KPIStatus {
+    ON_TRACK
+    AT_RISK
+    FAILED
+  }
+
+  enum SubscriptionPlanTier {
+    BASIC
+    PROFESSIONAL
+    ENTERPRISE
+  }
+
+  enum SubscriptionStatus {
+    ACTIVE
+    PAST_DUE
+    CANCELED
+    SUSPENDED
+  }
+
+  enum VoiceCallDirection {
+    INCOMING
+    OUTGOING
+  }
+
+  model CoordinatorCompany {
+    id                String    @id @default(cuid())
+    name              String
+    slug              String    @unique
+    stripeCustomerId  String?
+    subscriptionPlanId String?
+    subscriptionPlan  CoordinatorSubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
+    subscriptions     CoordinatorSubscription[]
+    users             CoordinatorUser[]
+    tasks             CoordinatorTask[]
+    kpis              CoordinatorKPI[]
+    reports           CoordinatorReport[]
+    externalSystems   CoordinatorExternalSystem[]
+    socialAccounts   CoordinatorSocialAccount[]
+    jobDutyTemplates  CoordinatorJobDutyTemplate[]
+    auditLogs         CoordinatorAuditLog[]
+    voiceCallRecords  CoordinatorVoiceCallRecord[]
+    createdAt         DateTime  @default(now())
+    updatedAt        DateTime  @updatedAt
+
+    @@map("coordinator_companies")
+  }
+
+  model CoordinatorUser {
+    id          String            @id @default(cuid())
+    email       String
+    name        String?
+    passwordHash String
+    role        CoordinatorRole   @default(COORDINATOR)
+    companyId   String
+    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    profile     CoordinatorProfile?
+    tasksCreated CoordinatorTask[] @relation("TaskCreator")
+    auditLogs   CoordinatorAuditLog[]
+    voiceLogs   CoordinatorVoiceLog[]
+    createdAt   DateTime         @default(now())
+    updatedAt   DateTime         @updatedAt
+
+    @@unique([companyId, email])
+    @@index([companyId])
+    @@index([email])
+    @@map("coordinator_users")
+  }
+
+  model CoordinatorTask {
+    id          String               @id @default(cuid())
+    title       String
+    description String?
+    status      CoordinatorTaskStatus @default(PENDING)
+    companyId   String
+    company     CoordinatorCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    createdById String
+    createdBy   CoordinatorUser      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+    dueAt       DateTime?
+    completedAt DateTime?
+    checklist  Json?                 // [{ "id": "uuid", "label": "...", "checked": bool }]
+    fileUrls   String[]             @default([])
+    subTasks   CoordinatorSubtask[]
+    comments    CoordinatorComment[]
+    createdAt   DateTime           @default(now())
+    updatedAt   DateTime           @updatedAt
+
+    @@index([companyId])
+    @@index([status])
+    @@index([dueAt])
+    @@map("coordinator_tasks")
+  }
+
+  model CoordinatorSubtask {
+    id        String          @id @default(cuid())
+    title     String
+    done      Boolean         @default(false)
+    taskId    String
+    task      CoordinatorTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+    createdAt DateTime        @default(now())
+    updatedAt DateTime        @updatedAt
+
+    @@index([taskId])
+    @@map("coordinator_subtasks")
+  }
+
+  model CoordinatorComment {
+    id        String          @id @default(cuid())
+    body      String
+    taskId    String
+    task      CoordinatorTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+    authorId  String          // CoordinatorUser id (optional relation to avoid circular)
+    createdAt DateTime        @default(now())
+
+    @@index([taskId])
+    @@map("coordinator_comments")
+  }
+
+  model CoordinatorKPI {
+    id          String    @id @default(cuid())
+    name        String
+    targetValue Float
+    actualValue Float    @default(0)
+    unit        String?  // e.g. "%", "count"
+    status      KPIStatus @default(ON_TRACK)
+    companyId   String
+    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    reportedAt  DateTime?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@index([companyId])
+    @@map("coordinator_kpis")
+  }
+
+  model CoordinatorReport {
+    id        String             @id @default(cuid())
+    title     String
+    type      String             // daily | weekly | monthly | custom
+    pdfUrl    String?
+    companyId String
+    company   CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    periodFrom DateTime
+    periodTo   DateTime
+    createdAt DateTime           @default(now())
+
+    @@index([companyId])
+    @@map("coordinator_reports")
+  }
+
+  model CoordinatorExternalSystem {
+    id          String              @id @default(cuid())
+    name        String
+    type        ExternalSystemType
+    configEnc   String?             // AES-256 encrypted config (credentials, endpoints)
+    companyId   String
+    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    actionLogs  CoordinatorSystemActionLog[]
+    createdAt   DateTime           @default(now())
+    updatedAt   DateTime           @updatedAt
+
+    @@index([companyId])
+    @@map("coordinator_external_systems")
+  }
+
+  model CoordinatorSystemActionLog {
+    id         String                 @id @default(cuid())
+    systemId   String
+    system     CoordinatorExternalSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
+    action     String
+    status     String                 // success | failure
+    retryCount Int                    @default(0)
+    errorMessage String?
+    payload    Json?
+    createdAt  DateTime               @default(now())
+
+    @@index([systemId])
+    @@map("coordinator_system_action_logs")
+  }
+
+  model CoordinatorSocialAccount {
+    id          String             @id @default(cuid())
+    platform    String             // linkedin | meta | whatsapp
+    accountId   String
+    tokenEnc    String?            // encrypted access token
+    companyId   String
+    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    messages    CoordinatorOutreachMessage[]
+    createdAt   DateTime          @default(now())
+    updatedAt   DateTime          @updatedAt
+
+    @@index([companyId])
+    @@map("coordinator_social_accounts")
+  }
+
+  model CoordinatorOutreachMessage {
+    id         String                 @id @default(cuid())
+    accountId  String
+    account    CoordinatorSocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+    recipient  String
+    body       String
+    sentAt     DateTime?
+    replyAt    DateTime?
+    taskId     String?
+    createdAt  DateTime               @default(now())
+
+    @@index([accountId])
+    @@map("coordinator_outreach_messages")
+  }
+
+  model CoordinatorConversation {
+    id        String   @id @default(cuid())
+    channel   String   // in_app | email | push
+    threadId  String?
+    createdAt DateTime @default(now())
+
+    @@map("coordinator_conversations")
+  }
+
+  model CoordinatorSubscriptionPlan {
+    id          String                 @id @default(cuid())
+    tier        SubscriptionPlanTier    @unique
+    name        String
+    stripePriceId String?
+    amountCents Int
+    interval    String                 // month | year
+    companies   CoordinatorCompany[]
+    subscriptions CoordinatorSubscription[]
+    createdAt   DateTime               @default(now())
+    updatedAt   DateTime               @updatedAt
+
+    @@map("coordinator_subscription_plans")
+  }
+
+  model CoordinatorSubscription {
+    id             String               @id @default(cuid())
+    companyId      String
+    company        CoordinatorCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    planId         String
+    plan           CoordinatorSubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+    stripeSubId    String?
+    status         SubscriptionStatus    @default(ACTIVE)
+    currentPeriodEnd DateTime?
+    payments       CoordinatorPayment[]
+    invoices       CoordinatorInvoice[]
+    createdAt      DateTime             @default(now())
+    updatedAt      DateTime             @updatedAt
+
+    @@index([companyId])
+    @@map("coordinator_subscriptions")
+  }
+
+  model CoordinatorPayment {
+    id             String               @id @default(cuid())
+    subscriptionId String
+    subscription   CoordinatorSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+    stripePaymentIntentId String?
+    amountCents    Int
+    status         String
+    createdAt      DateTime             @default(now())
+
+    @@index([subscriptionId])
+    @@map("coordinator_payments")
+  }
+
+  model CoordinatorInvoice {
+    id             String               @id @default(cuid())
+    subscriptionId String
+    subscription   CoordinatorSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+    pdfUrl         String?
+    amountCents    Int
+    periodFrom     DateTime
+    periodTo       DateTime
+    createdAt      DateTime             @default(now())
+
+    @@index([subscriptionId])
+    @@map("coordinator_invoices")
+  }
+
+  model CoordinatorNotification {
+    id        String   @id @default(cuid())
+    userId    String   // CoordinatorUser id
+    title     String
+    body      String?
+    channel   String   // in_app | email | push
+    read      Boolean  @default(false)
+    linkUrl   String?
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@map("coordinator_notifications")
+  }
+
+  model CoordinatorJobDutyTemplate {
+    id       String   @id @default(cuid())
+    name     String
+    cron     String   // e.g. "0 9 * * *" daily 9am
+    frequency String  // daily | weekly | monthly | yearly
+    companyId String
+    company  CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    taskTemplate Json  // { title, description, checklist }
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([companyId])
+    @@map("coordinator_job_duty_templates")
+  }
+
+  model CoordinatorJobResult {
+    id          String   @id @default(cuid())
+    keyword     String
+    source      String?
+    rawResult   Json?
+    extractedSkills String[]
+    createdAt   DateTime @default(now())
+
+    @@map("coordinator_job_results")
+  }
+
+  model CoordinatorProfile {
+    id          String   @id @default(cuid())
+    userId      String   @unique
+    user        CoordinatorUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+    skills      String[] @default([])
+    cvUrl       String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@map("coordinator_profiles")
+  }
+
+  model CoordinatorGeneratedApplication {
+    id          String   @id @default(cuid())
+    jobResultId String?
+    cvUrl       String?
+    coverLetterUrl String?
+    createdAt   DateTime @default(now())
+
+    @@map("coordinator_generated_applications")
+  }
+
+  model CoordinatorAuditLog {
+    id         String             @id @default(cuid())
+    companyId  String
+    company    CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    userId     String?
+    user       CoordinatorUser?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+    action     String             // login | task_create | task_update | system_action | payment_update | ...
+    resource   String?            // task | kpi | report | ...
+    resourceId String?
+    payload    Json?
+    ip         String?
+    createdAt  DateTime           @default(now())
+
+    @@index([companyId])
+    @@index([userId])
+    @@index([action])
+    @@index([createdAt])
+    @@map("coordinator_audit_logs")
+  }
+
+  model CoordinatorVoiceLog {
+    id               String   @id @default(cuid())
+    userId           String
+    user             CoordinatorUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+    transcript       String?
+    detectedLanguage String?
+    intent           String?
+    actionTaken      String?
+    audioFileUrl     String?
+    createdAt        DateTime @default(now())
+
+    @@index([userId])
+    @@map("coordinator_voice_logs")
+  }
+
+  model CoordinatorVoiceCallRecord {
+    id          String               @id @default(cuid())
+    direction   VoiceCallDirection
+    duration    Int?                 // seconds
+    transcript  String?
+    taskLinked  String?               // taskId if linked
+    status      String
+    companyId   String
+    company     CoordinatorCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    createdAt   DateTime             @default(now())
+
+    @@index([companyId])
+    @@map("coordinator_voice_call_records")
+  }
