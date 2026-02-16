@@ -1,7 +1,5 @@
 import { prisma } from '@/lib/prisma';
 
-const RESEND_API = 'https://api.resend.com/emails';
-
 function getSiteUrl(): string {
   const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
   if (url) {
@@ -60,27 +58,7 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-async function sendViaResend(to: string, subject: string, html: string): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL || 'U-SMART <contact@usmart-iot.com>';
-  if (!apiKey) return false;
-  try {
-    const res = await fetch(RESEND_API, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ from, to, subject, html }),
-    });
-    return res.ok;
-  } catch (e) {
-    console.error('Resend send error:', e);
-    return false;
-  }
-}
-
-/** Notify all active subscribers about new content. Call after creating a project or service. */
+/** Notify all active subscribers about new content. Call after creating a project or service. Uses SMTP (Nodemailer). */
 export async function notifySubscribers(
   type: 'project' | 'service',
   item: NewProject | NewService
@@ -96,8 +74,9 @@ export async function notifySubscribers(
       ? buildProjectEmail(item as NewProject)
       : buildServiceEmail(item as NewService);
 
+    const { sendEmail } = await import('@/lib/email');
     for (const { email } of subscribers) {
-      await sendViaResend(email, subject, html);
+      await sendEmail({ to: email, subject, html });
     }
   } catch (error) {
     console.error('notifySubscribers error:', error);
