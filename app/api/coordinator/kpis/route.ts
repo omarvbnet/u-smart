@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
 import { computeKPIStatus } from '@/lib/coordinator/kpi';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole, KPIStatus } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -45,6 +46,15 @@ export async function POST(req: NextRequest) {
         status,
         companyId: payload.companyId,
       },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'kpi_create',
+      resource: 'kpi',
+      resourceId: kpi.id,
+      payload: { name: kpi.name },
+      ip: getClientIp(req),
     });
     return NextResponse.json({ success: true, kpi });
   } catch (e: unknown) {

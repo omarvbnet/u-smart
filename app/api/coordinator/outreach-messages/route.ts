@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -62,6 +63,15 @@ export async function POST(req: NextRequest) {
     const taskId = typeof body.taskId === 'string' ? body.taskId.trim() || null : null;
     const message = await prisma.coordinatorOutreachMessage.create({
       data: { accountId, recipient, body: bodyText, taskId },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'outreach_message_create',
+      resource: 'outreach_message',
+      resourceId: message.id,
+      payload: { accountId, recipient },
+      ip: getClientIp(req),
     });
     return NextResponse.json({
       success: true,

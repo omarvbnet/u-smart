@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -40,6 +41,15 @@ export async function POST(req: NextRequest) {
     const coverLetterUrl = typeof body.coverLetterUrl === 'string' ? body.coverLetterUrl.trim() || null : null;
     const app = await prisma.coordinatorGeneratedApplication.create({
       data: { companyId: payload.companyId, userId: payload.sub, jobResultId, cvUrl, coverLetterUrl },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'generated_application_create',
+      resource: 'generated_application',
+      resourceId: app.id,
+      payload: { jobResultId: app.jobResultId },
+      ip: getClientIp(req),
     });
     return NextResponse.json({
       success: true,

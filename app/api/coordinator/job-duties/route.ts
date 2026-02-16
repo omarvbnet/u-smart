@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -45,6 +46,15 @@ export async function POST(req: NextRequest) {
         companyId: payload.companyId,
         taskTemplate,
       },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'job_duty_create',
+      resource: 'job_duty',
+      resourceId: template.id,
+      payload: { name: template.name },
+      ip: getClientIp(req),
     });
     return NextResponse.json({ success: true, template });
   } catch (e: unknown) {

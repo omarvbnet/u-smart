@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
 import { computeKPIStatus } from '@/lib/coordinator/kpi';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function PATCH(
@@ -39,6 +40,15 @@ export async function PATCH(
         ...(typeof body.unit === 'string' && { unit: body.unit.trim() || null }),
       },
     });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'kpi_update',
+      resource: 'kpi',
+      resourceId: id,
+      payload: { targetValue, actualValue, status },
+      ip: getClientIp(req),
+    });
     return NextResponse.json({ success: true, kpi });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };
@@ -63,6 +73,15 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: 'KPI not found' }, { status: 404 });
     }
     await prisma.coordinatorKPI.delete({ where: { id } });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'kpi_delete',
+      resource: 'kpi',
+      resourceId: id,
+      payload: { name: existing.name },
+      ip: getClientIp(_req),
+    });
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };

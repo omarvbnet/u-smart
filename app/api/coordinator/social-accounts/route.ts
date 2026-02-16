@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -45,6 +46,15 @@ export async function POST(req: NextRequest) {
     const tokenEnc = typeof body.tokenEnc === 'string' ? body.tokenEnc.trim() || null : null;
     const account = await prisma.coordinatorSocialAccount.create({
       data: { companyId: payload.companyId, platform, accountId, tokenEnc },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'social_account_create',
+      resource: 'social_account',
+      resourceId: account.id,
+      payload: { platform: account.platform, accountId: account.accountId },
+      ip: getClientIp(req),
     });
     return NextResponse.json({ success: true, account: { id: account.id, platform: account.platform, accountId: account.accountId, createdAt: account.createdAt } });
   } catch (e: unknown) {

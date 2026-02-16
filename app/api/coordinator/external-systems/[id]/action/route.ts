@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 const MAX_RETRIES = 3;
@@ -43,6 +44,15 @@ export async function POST(
             payload: payload_data ?? undefined,
           },
         });
+        await logAudit({
+          companyId: payload.companyId,
+          userId: payload.sub,
+          action: 'system_action',
+          resource: 'external_system',
+          resourceId: system.id,
+          payload: { action, status: 'success', retryCount: i },
+          ip: getClientIp(req),
+        });
         return NextResponse.json({ success: true, message: 'Action completed', retryCount: i });
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
@@ -61,6 +71,15 @@ export async function POST(
         errorMessage: lastError,
         payload: payload_data ?? undefined,
       },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'system_action',
+      resource: 'external_system',
+      resourceId: system.id,
+      payload: { action, status: 'failure', retryCount, error: lastError },
+      ip: getClientIp(req),
     });
 
     return NextResponse.json(

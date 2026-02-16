@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function PATCH(
@@ -21,6 +22,15 @@ export async function PATCH(
     const account = await prisma.coordinatorSocialAccount.update({
       where: { id },
       data,
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'social_account_update',
+      resource: 'social_account',
+      resourceId: id,
+      payload: data,
+      ip: getClientIp(req),
     });
     return NextResponse.json({ success: true, account: { id: account.id, platform: account.platform, accountId: account.accountId } });
   } catch (e: unknown) {
@@ -44,6 +54,15 @@ export async function DELETE(
     });
     if (!existing) return NextResponse.json({ success: false, message: 'Not found' }, { status: 404 });
     await prisma.coordinatorSocialAccount.delete({ where: { id } });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'social_account_delete',
+      resource: 'social_account',
+      resourceId: id,
+      payload: { platform: existing.platform, accountId: existing.accountId },
+      ip: getClientIp(_req),
+    });
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };

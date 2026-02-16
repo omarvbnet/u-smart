@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -48,6 +49,15 @@ export async function POST(req: NextRequest) {
         periodFrom,
         periodTo,
       },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'report_create',
+      resource: 'report',
+      resourceId: report.id,
+      payload: { title: report.title, type: report.type },
+      ip: getClientIp(req),
     });
     return NextResponse.json({ success: true, report });
   } catch (e: unknown) {

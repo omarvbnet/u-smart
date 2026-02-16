@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole, ExternalSystemType } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -52,6 +53,15 @@ export async function POST(req: NextRequest) {
         companyId: payload.companyId,
         configEnc: typeof body.configEnc === 'string' ? body.configEnc : null,
       },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'system_create',
+      resource: 'external_system',
+      resourceId: system.id,
+      payload: { name: system.name, type: system.type },
+      ip: getClientIp(req),
     });
     return NextResponse.json({
       success: true,

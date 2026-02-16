@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
@@ -43,6 +44,15 @@ export async function POST(req: NextRequest) {
     const extractedSkills = Array.isArray(body.extractedSkills) ? (body.extractedSkills as string[]).filter((s): s is string => typeof s === 'string') : [];
     const result = await prisma.coordinatorJobResult.create({
       data: { companyId: payload.companyId, keyword, source, rawResult: rawResult ?? undefined, extractedSkills },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'job_result_create',
+      resource: 'job_result',
+      resourceId: result.id,
+      payload: { keyword: result.keyword },
+      ip: getClientIp(req),
     });
     return NextResponse.json({
       success: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -32,6 +33,15 @@ export async function PATCH(req: NextRequest) {
       where: { userId: payload.sub },
       create: { userId: payload.sub, skills: skills ?? [], cvUrl: cvUrl ?? null },
       update: { ...(skills !== undefined && { skills }), ...(cvUrl !== undefined && { cvUrl }) },
+    });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'profile_update',
+      resource: 'profile',
+      resourceId: profile.id,
+      payload: { skillsCount: profile.skills.length },
+      ip: getClientIp(req),
     });
     return NextResponse.json({ success: true, profile: { id: profile.id, skills: profile.skills, cvUrl: profile.cvUrl } });
   } catch (e: unknown) {

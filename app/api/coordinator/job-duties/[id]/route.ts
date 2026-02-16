@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
+import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole, Prisma } from '@prisma/client';
 
 export async function PATCH(
@@ -28,6 +29,15 @@ export async function PATCH(
       where: { id },
       data,
     });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'job_duty_update',
+      resource: 'job_duty',
+      resourceId: id,
+      payload: data,
+      ip: getClientIp(req),
+    });
     return NextResponse.json({ success: true, template });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };
@@ -52,6 +62,15 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: 'Template not found' }, { status: 404 });
     }
     await prisma.coordinatorJobDutyTemplate.delete({ where: { id } });
+    await logAudit({
+      companyId: payload.companyId,
+      userId: payload.sub,
+      action: 'job_duty_delete',
+      resource: 'job_duty',
+      resourceId: id,
+      payload: { name: existing.name },
+      ip: getClientIp(_req),
+    });
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };
