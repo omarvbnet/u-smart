@@ -632,6 +632,8 @@ model User {
     externalSystems   CoordinatorExternalSystem[]
     socialAccounts   CoordinatorSocialAccount[]
     jobDutyTemplates  CoordinatorJobDutyTemplate[]
+    jobResults       CoordinatorJobResult[]
+    generatedApplications CoordinatorGeneratedApplication[]
     auditLogs         CoordinatorAuditLog[]
     voiceCallRecords  CoordinatorVoiceCallRecord[]
     createdAt         DateTime  @default(now())
@@ -901,13 +903,16 @@ model User {
   }
 
   model CoordinatorJobResult {
-    id          String   @id @default(cuid())
-    keyword     String
-    source      String?
-    rawResult   Json?
-    extractedSkills String[]
-    createdAt   DateTime @default(now())
+    id             String   @id @default(cuid())
+    companyId      String
+    company        CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    keyword        String
+    source         String?
+    rawResult      Json?
+    extractedSkills String[]  @default([])
+    createdAt      DateTime @default(now())
 
+    @@index([companyId])
     @@map("coordinator_job_results")
   }
 
@@ -924,12 +929,16 @@ model User {
   }
 
   model CoordinatorGeneratedApplication {
-    id          String   @id @default(cuid())
-    jobResultId String?
-    cvUrl       String?
+    id             String   @id @default(cuid())
+    companyId      String
+    company        CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    userId         String?
+    jobResultId    String?
+    cvUrl          String?
     coverLetterUrl String?
-    createdAt   DateTime @default(now())
+    createdAt      DateTime @default(now())
 
+    @@index([companyId])
     @@map("coordinator_generated_applications")
   }
 

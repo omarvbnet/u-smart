@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ListTodo, LogOut, Menu, CalendarClock, TrendingUp, FileText, Plug, CreditCard, Bell } from 'lucide-react';
+import { LayoutDashboard, ListTodo, LogOut, Menu, CalendarClock, TrendingUp, FileText, Plug, CreditCard, Bell, Share2, Briefcase, User, FileCheck } from 'lucide-react';
 
 type User = { id: string; email: string; name: string | null; role: string; companyName: string };
 type NotificationItem = { id: string; title: string; body: string | null; linkUrl: string | null; read: boolean; createdAt: string };
@@ -109,6 +109,10 @@ export default function CoordinatorDashboardLayout({
     { href: '/coordinator/kpis', label: 'مؤشرات الأداء', icon: TrendingUp },
     { href: '/coordinator/reports', label: 'التقارير', icon: FileText },
     { href: '/coordinator/integrations', label: 'التكاملات', icon: Plug },
+    { href: '/coordinator/social', label: 'التواصل الاجتماعي', icon: Share2 },
+    { href: '/coordinator/job-results', label: 'نتائج الوظائف', icon: Briefcase },
+    { href: '/coordinator/profile', label: 'الملف الشخصي', icon: User },
+    { href: '/coordinator/applications', label: 'الطلبات المولدة', icon: FileCheck },
     { href: '/coordinator/billing', label: 'الفواتير والاشتراك', icon: CreditCard },
   ];
 

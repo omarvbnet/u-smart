@@ -19,14 +19,14 @@
 
 ## Phase 3 – Communication & Intelligence
 
-- [ ] Social Communication Engine: connect accounts, send/track, follow-up, link to tasks, AI composer
-- [ ] Job Intelligence Engine: search jobs, extract skills, store results, compare with profile
-- [ ] AI CV Engine: analyze JD, rewrite CV, cover letter, PDF export (OpenAI)
+- [x] Social Communication Engine: connect accounts (LinkedIn/Meta/WhatsApp), outreach messages CRUD, link to tasks, dashboard (AI composer in Phase 3b)
+- [x] Job Intelligence Engine: job results CRUD (keyword, source, extracted skills), coordinator profile (skills, cvUrl), dashboard
+- [x] AI CV Engine: generated applications CRUD (cvUrl, coverLetterUrl, jobResultId), dashboard (OpenAI analyze/rewrite in Phase 3b)
 
 ## Phase 4 – Billing & Notifications
 
-- [ ] Subscription & Billing: Stripe checkout, webhooks, Basic/Professional/Enterprise, invoices, billing dashboard
-- [ ] Notification Engine: in-app, email, push (PWA), trigger-based, escalation
+- [x] Subscription & Billing: Stripe checkout, webhooks, Basic/Professional/Enterprise, invoices, billing dashboard
+- [x] Notification Engine: in-app, email, push (PWA), trigger-based, escalation
 
 ## Phase 5 – Audit & Voice
 
