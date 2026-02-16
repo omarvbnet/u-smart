@@ -11,13 +11,13 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
 
     const list = await prisma.coordinatorNotification.findMany({
-      where: { userId: payload.userId, ...(unreadOnly ? { read: false } : {}) },
+      where: { userId: payload.sub, ...(unreadOnly ? { read: false } : {}) },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
 
     const unreadCount = await prisma.coordinatorNotification.count({
-      where: { userId: payload.userId, read: false },
+      where: { userId: payload.sub, read: false },
     });
 
     return NextResponse.json({

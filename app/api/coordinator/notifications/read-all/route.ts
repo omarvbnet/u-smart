@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const payload = requireCoordinatorRole(req, [CoordinatorRole.ADMIN, CoordinatorRole.COORDINATOR, CoordinatorRole.CLIENT]);
 
     await prisma.coordinatorNotification.updateMany({
-      where: { userId: payload.userId },
+      where: { userId: payload.sub },
       data: { read: true },
     });
 

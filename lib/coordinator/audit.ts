@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { CoordinatorPayload } from './auth';
+import type { Prisma } from '@prisma/client';
 
 export async function logAudit(params: {
   companyId: string;
@@ -18,7 +19,7 @@ export async function logAudit(params: {
         action: params.action,
         resource: params.resource ?? null,
         resourceId: params.resourceId ?? null,
-        payload: params.payload ?? undefined,
+        payload: (params.payload ?? undefined) as Prisma.InputJsonValue | undefined,
         ip: params.ip ?? null,
       },
     });
@@ -28,6 +29,7 @@ export async function logAudit(params: {
 }
 
 export function getClientIp(request: Request): string | undefined {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip') ?? undefined;
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const realIp = request.headers.get('x-real-ip');
+  return (forwarded || realIp) ?? undefined;
 }

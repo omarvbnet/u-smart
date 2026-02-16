@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
 import { logAudit, getClientIp } from '@/lib/coordinator/audit';
-import { CoordinatorRole, CoordinatorTaskStatus } from '@prisma/client';
+import { CoordinatorRole, CoordinatorTaskStatus, Prisma } from '@prisma/client';
 
 async function getTaskAndCheckCompany(
   taskId: string,
@@ -59,7 +59,7 @@ export async function PATCH(
       status?: CoordinatorTaskStatus;
       dueAt?: Date | null;
       completedAt?: Date | null;
-      checklist?: unknown;
+      checklist?: Prisma.InputJsonValue;
       fileUrls?: string[];
     } = {};
 
@@ -72,7 +72,7 @@ export async function PATCH(
       }
     }
     if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null;
-    if (Array.isArray(body.checklist)) data.checklist = body.checklist;
+    if (Array.isArray(body.checklist)) data.checklist = body.checklist as Prisma.InputJsonValue;
     if (Array.isArray(body.fileUrls)) data.fileUrls = body.fileUrls;
 
     const updated = await prisma.coordinatorTask.update({

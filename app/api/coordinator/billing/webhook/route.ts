@@ -36,9 +36,10 @@ export async function POST(req: NextRequest) {
         const existing = await prisma.coordinatorSubscription.findFirst({
           where: { stripeSubId: sub.id },
         });
+        const periodEnd = (sub as { current_period_end?: number }).current_period_end;
         const data = {
           status: mapStripeStatus(sub.status),
-          currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+          currentPeriodEnd: periodEnd != null ? new Date(periodEnd * 1000) : null,
         };
         if (existing) {
           await prisma.coordinatorSubscription.update({
@@ -73,18 +74,19 @@ export async function POST(req: NextRequest) {
       }
       case 'invoice.paid': {
         const inv = event.data.object as Stripe.Invoice;
-        const subId = inv.subscription as string | null;
+        const subId = (inv as { subscription?: string | null }).subscription ?? null;
         if (!subId) break;
         const sub = await prisma.coordinatorSubscription.findFirst({
           where: { stripeSubId: subId },
         });
         if (!sub) break;
+        const invPayload = inv as { amount_paid?: number; period_start?: number; period_end?: number };
         await prisma.coordinatorInvoice.create({
           data: {
             subscriptionId: sub.id,
-            amountCents: inv.amount_paid ?? 0,
-            periodFrom: inv.period_start ? new Date(inv.period_start * 1000) : new Date(),
-            periodTo: inv.period_end ? new Date(inv.period_end * 1000) : new Date(),
+            amountCents: invPayload.amount_paid ?? 0,
+            periodFrom: invPayload.period_start != null ? new Date(invPayload.period_start * 1000) : new Date(),
+            periodTo: invPayload.period_end != null ? new Date(invPayload.period_end * 1000) : new Date(),
           },
         });
         break;

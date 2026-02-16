@@ -17,6 +17,24 @@ function getTransporter() {
   });
 }
 
+/** Send a confirmation email after newsletter subscription. */
+export async function sendSubscriptionConfirmation(
+  to: string,
+  name?: string
+): Promise<boolean> {
+  const greeting = name ? escapeHtml(name) : 'عزيزنا المشترك';
+  const html = `
+    <p>مرحباً ${greeting}،</p>
+    <p>شكراً لاشتراكك في نشرتنا. سنرسل لك آخر الأخبار والمحتوى الجديد.</p>
+    <p>شكراً،<br/>فريق U-SMART</p>
+  `.trim();
+  return sendEmail({
+    to,
+    subject: 'تأكيد الاشتراك في النشرة - U-SMART',
+    html,
+  });
+}
+
 /** Send an HTML email. Returns true if sent, false if SMTP not configured or send failed. */
 export async function sendEmail(options: {
   to: string;

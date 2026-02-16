@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
-import { CoordinatorRole } from '@prisma/client';
+import { CoordinatorRole, Prisma } from '@prisma/client';
 
 export async function PATCH(
   req: NextRequest,
@@ -18,11 +18,11 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const data: { name?: string; cron?: string; frequency?: string; taskTemplate?: unknown } = {};
+    const data: { name?: string; cron?: string; frequency?: string; taskTemplate?: Prisma.InputJsonValue } = {};
     if (typeof body.name === 'string' && body.name.trim()) data.name = body.name.trim();
     if (typeof body.cron === 'string') data.cron = body.cron.trim() || existing.cron;
     if (['daily', 'weekly', 'monthly', 'yearly'].includes(body.frequency)) data.frequency = body.frequency;
-    if (body.taskTemplate && typeof body.taskTemplate === 'object') data.taskTemplate = body.taskTemplate;
+    if (body.taskTemplate != null && typeof body.taskTemplate === 'object') data.taskTemplate = body.taskTemplate as Prisma.InputJsonValue;
 
     const template = await prisma.coordinatorJobDutyTemplate.update({
       where: { id },

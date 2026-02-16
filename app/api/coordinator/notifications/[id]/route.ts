@@ -12,7 +12,7 @@ export async function PATCH(
     const { id } = await params;
 
     const n = await prisma.coordinatorNotification.findFirst({
-      where: { id, userId: payload.userId },
+      where: { id, userId: payload.sub },
     });
     if (!n) {
       return NextResponse.json({ success: false, message: 'Not found' }, { status: 404 });

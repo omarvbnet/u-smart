@@ -1,4 +1,3 @@
-import { Request } from 'next/server';
 import {
   getCoordinatorTokenFromRequest,
   verifyCoordinatorToken,
