@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
 import { logAudit, getClientIp } from '@/lib/coordinator/audit';
+import { createCoordinatorNotification } from '@/lib/coordinator/notifications';
 import { CoordinatorRole, CoordinatorTaskStatus } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -67,6 +68,14 @@ export async function POST(req: NextRequest) {
       payload: { title: task.title },
       ip: getClientIp(req),
     });
+
+    await createCoordinatorNotification({
+      userId: payload.sub,
+      title: 'تم إنشاء مهمة جديدة',
+      body: task.title,
+      channel: 'in_app',
+      linkUrl: `/coordinator/tasks/${task.id}`,
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, task });
   } catch (e: unknown) {

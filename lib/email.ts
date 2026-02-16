@@ -41,3 +41,44 @@ export async function sendEmail(options: {
     return false;
   }
 }
+
+type TrainingConfirmationParams = {
+  requesterName: string;
+  requesterEmail: string;
+  serviceTitle: string;
+  serviceSlug: string;
+  company: string | null;
+  message: string | null;
+  budget: string | null;
+};
+
+/** Send a confirmation email to the requester after they submit a training request. */
+export async function sendTrainingRequestConfirmation(
+  to: string,
+  params: TrainingConfirmationParams
+): Promise<boolean> {
+  const { requesterName, serviceTitle, serviceSlug, company, message, budget } = params;
+  const html = `
+    <p>مرحباً ${escapeHtml(requesterName)}،</p>
+    <p>تم استلام طلبك للتدريب على الخدمة: <strong>${escapeHtml(serviceTitle)}</strong>.</p>
+    ${company ? `<p>الشركة: ${escapeHtml(company)}</p>` : ''}
+    ${message ? `<p>الرسالة: ${escapeHtml(message)}</p>` : ''}
+    ${budget ? `<p>الميزانية: ${escapeHtml(budget)}</p>` : ''}
+    <p>سنتواصل معك قريباً.</p>
+    <p>شكراً،<br/>فريق U-SMART</p>
+  `.trim();
+  return sendEmail({
+    to,
+    subject: `تأكيد طلب التدريب - ${serviceTitle}`,
+    html,
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ListTodo, LogOut, Menu, CalendarClock, TrendingUp, FileText, Plug } from 'lucide-react';
+import { LayoutDashboard, ListTodo, LogOut, Menu, CalendarClock, TrendingUp, FileText, Plug, CreditCard, Bell } from 'lucide-react';
 
 type User = { id: string; email: string; name: string | null; role: string; companyName: string };
+type NotificationItem = { id: string; title: string; body: string | null; linkUrl: string | null; read: boolean; createdAt: string };
 
 export default function CoordinatorDashboardLayout({
   children,
@@ -17,6 +18,10 @@ export default function CoordinatorDashboardLayout({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifUnread, setNotifUnread] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifList, setNotifList] = useState<NotificationItem[]>([]);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/coordinator/auth/login', { method: 'GET', credentials: 'include' })
@@ -31,6 +36,55 @@ export default function CoordinatorDashboardLayout({
       .catch(() => router.replace('/coordinator/login'))
       .finally(() => setLoading(false));
   }, [router]);
+
+  const fetchNotifCount = () => {
+    fetch('/api/coordinator/notifications?limit=1', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((d) => { if (d.success && typeof d.unreadCount === 'number') setNotifUnread(d.unreadCount); });
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    fetchNotifCount();
+  }, [user]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    fetch('/api/coordinator/notifications?limit=20', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((d) => { if (d.success && d.notifications) setNotifList(d.notifications); });
+  }, [notifOpen]);
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+    };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
+
+  const markOneRead = (id: string) => {
+    fetch(`/api/coordinator/notifications/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ read: true }),
+    }).then(() => {
+      setNotifList((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      setNotifUnread((c) => Math.max(0, c - 1));
+    });
+  };
+
+  const markAllRead = () => {
+    fetch('/api/coordinator/notifications/read-all', { method: 'POST', credentials: 'include' })
+      .then((res) => res.json())
+      .then((d) => {
+        if (d.success) {
+          setNotifUnread(0);
+          setNotifList((prev) => prev.map((n) => ({ ...n, read: true })));
+        }
+      });
+  };
 
   const logout = async () => {
     await fetch('/api/coordinator/auth/logout', { method: 'POST', credentials: 'include' });
@@ -55,6 +109,7 @@ export default function CoordinatorDashboardLayout({
     { href: '/coordinator/kpis', label: 'مؤشرات الأداء', icon: TrendingUp },
     { href: '/coordinator/reports', label: 'التقارير', icon: FileText },
     { href: '/coordinator/integrations', label: 'التكاملات', icon: Plug },
+    { href: '/coordinator/billing', label: 'الفواتير والاشتراك', icon: CreditCard },
   ];
 
   return (
@@ -96,16 +151,87 @@ export default function CoordinatorDashboardLayout({
       </aside>
 
       <div className="flex-1 lg:mr-64">
-        <header className="sticky top-0 z-30 flex items-center gap-4 h-14 px-4 bg-white border-b border-slate-200">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((o) => !o)}
-            className="p-2 rounded-lg hover:bg-slate-100 lg:hidden"
-            aria-label="القائمة"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <span className="text-sm text-slate-600">{user.name || user.email}</span>
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 h-14 px-4 bg-white border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((o) => !o)}
+              className="p-2 rounded-lg hover:bg-slate-100 lg:hidden"
+              aria-label="القائمة"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="text-sm text-slate-600">{user.name || user.email}</span>
+          </div>
+          <div className="relative" ref={notifRef}>
+            <button
+              type="button"
+              onClick={() => setNotifOpen((o) => !o)}
+              className="relative p-2 rounded-lg hover:bg-slate-100"
+              aria-label="الإشعارات"
+            >
+              <Bell className="w-5 h-5 text-slate-600" />
+              {notifUnread > 0 && (
+                <span className="absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-xs">
+                  {notifUnread > 99 ? '99+' : notifUnread}
+                </span>
+              )}
+            </button>
+            {notifOpen && (
+              <div className="absolute left-0 top-full mt-1 w-80 max-h-[320px] overflow-auto bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-50">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+                  <span className="font-medium text-slate-800">الإشعارات</span>
+                  {notifUnread > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllRead}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      تحديد الكل كمقروء
+                    </button>
+                  )}
+                </div>
+                {notifList.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-slate-500">لا توجد إشعارات</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {notifList.map((n) => (
+                      <li key={n.id}>
+                        <div
+                          className={`px-3 py-2 hover:bg-slate-50 ${!n.read ? 'bg-blue-50/50' : ''}`}
+                        >
+                          {n.linkUrl ? (
+                            <Link
+                              href={n.linkUrl}
+                              className="block"
+                              onClick={() => { markOneRead(n.id); setNotifOpen(false); }}
+                            >
+                              <p className="text-sm font-medium text-slate-800">{n.title}</p>
+                              {n.body && <p className="text-xs text-slate-500 line-clamp-2">{n.body}</p>}
+                            </Link>
+                          ) : (
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{n.title}</p>
+                              {n.body && <p className="text-xs text-slate-500 line-clamp-2">{n.body}</p>}
+                              {!n.read && (
+                                <button
+                                  type="button"
+                                  onClick={() => markOneRead(n.id)}
+                                  className="text-xs text-blue-600 mt-1 hover:underline"
+                                >
+                                  تحديد كمقروء
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         </header>
         <main className="p-4 md:p-6">{children}</main>
       </div>
