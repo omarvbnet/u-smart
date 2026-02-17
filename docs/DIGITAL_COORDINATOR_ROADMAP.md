@@ -9,7 +9,7 @@
 - [x] Task Management Engine: CRUD, lifecycle (PENDING→…→ARCHIVED), subtasks, checklist/fileUrls in schema; APIs: GET/POST /api/coordinator/tasks, GET/PATCH/DELETE /api/coordinator/tasks/[id]
 - [x] Dashboard layout: RTL-ready (dir=rtl, lang=ar), nav, role-based menu, login page, tasks list and task detail
 
-**Setup:** Run `npx prisma migrate dev` to create coordinator_* tables (if your DB allows; otherwise apply migration manually). Then `npx prisma db seed` to create demo company and user (admin@coordinator.usmart.com / Admin@Coordinator123). Set `COORDINATOR_JWT_SECRET` and `COORDINATOR_PASSWORD_SALT` in .env for production.
+**Setup:** Run `npx prisma migrate dev` to create coordinator_* tables (if your DB allows; otherwise apply migration manually). Then `npx prisma db seed` to create demo company and user (admin@coordinator.usmart.com / Admin@Coordinator123). Set `COORDINATOR_JWT_SECRET` and `COORDINATOR_PASSWORD_SALT` in .env for production. See [COORDINATOR_ENV.md](./COORDINATOR_ENV.md) for all coordinator env vars.
 
 ## Phase 2 – Automation & Integrations
 
