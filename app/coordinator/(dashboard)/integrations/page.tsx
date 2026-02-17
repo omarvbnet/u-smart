@@ -184,9 +184,21 @@ export default function CoordinatorIntegrationsPage() {
         body: JSON.stringify({ action: 'run' }),
       });
       const data = await res.json();
-      if (data.success) alert('تم تنفيذ الإجراء');
-      else if (res.status === 501) alert('هذا التكامل غير مُهيأ بعد.');
-      else alert(data.message || data.error || 'فشل التنفيذ');
+      if (data.success) {
+        alert('تم تنفيذ الإجراء');
+        load();
+        if (logsOpenId === id) {
+          const logRes = await fetch(`/api/coordinator/external-systems/${id}/action-logs`, {
+            credentials: 'include',
+          });
+          const logData = await logRes.json();
+          if (logData.success && logData.logs) setLogsList(logData.logs);
+        }
+      } else if (res.status === 501) {
+        alert('هذا التكامل غير مُهيأ بعد.');
+      } else {
+        alert(data.message || data.error || 'فشل التنفيذ');
+      }
     } finally {
       setRunningId(null);
     }
