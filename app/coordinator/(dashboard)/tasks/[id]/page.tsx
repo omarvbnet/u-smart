@@ -222,7 +222,9 @@ export default function CoordinatorTaskDetailPage() {
           <h3 className="text-sm font-medium text-slate-700 mb-2">تغذية راجعة منسق (بعد المتابعة أو الاتصال)</h3>
           {(task.source === 'voice' || task.source === 'email' || task.source === 'whatsapp') && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
-              مهمة واردة — أضف نتيجة المتابعة أو الاتصال أدناه (يُحفظ تلقائياً).
+              {task.source === 'whatsapp'
+                ? 'مهمة واردة من واتساب — أضف نتيجة المتابعة أدناه. عند الحفظ تُرسل التغذية الراجعة تلقائياً إلى المرسل على واتساب.'
+                : 'مهمة واردة — أضف نتيجة المتابعة أو الاتصال أدناه (يُحفظ تلقائياً).'}
             </p>
           )}
           <textarea

@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
         createdById: admin.id,
         source: 'whatsapp',
         coordinatorFeedback: `تم استلام رسالة واتساب — ${new Date().toLocaleDateString('ar-IQ', { dateStyle: 'short' })}. بانتظار المتابعة وإضافة التغذية الراجعة.`,
+        inboundReplyTo: from ? String(from).trim() : null,
       },
     });
 

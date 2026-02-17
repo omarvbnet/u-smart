@@ -678,6 +678,7 @@ model User {
     fileUrls             String[]             @default([])
     source               String?              // voice | email | whatsapp | manual
     coordinatorFeedback  String?              // coordinator's feedback after action (e.g. "Called Ahmed, he said...")
+    inboundReplyTo       String?              // for inbound tasks: WhatsApp/email to send feedback to (e.g. whatsapp:+964...)
     priority             String?             @default("normal") // normal | high | urgent (for escalation)
     subTasks             CoordinatorSubtask[]
     comments             CoordinatorComment[]
