@@ -80,8 +80,26 @@ So when you say “check all team performance on daily basis,” the coordinator
 
 ---
 
-## 7. Checklist
+## 7. AI coordinator agent
 
+The **AI coordinator** (OpenAI) helps manage tasks and reply to requesters in the same way a human coordinator would:
+
+- **Scope:** Acts as a coordinator: updates task status from feedback and sends reply messages to the requester (e.g. on WhatsApp).
+- **Flow:** On the task detail page, after the coordinator adds **تغذية راجعة منسق** (feedback), they click **معالجة بالذكاء الاصطناعي**. The app:
+  1. Saves the feedback.
+  2. Calls `POST /api/coordinator/tasks/[id]/ai-process` (requires `OPENAI_API_KEY`).
+  3. The AI reads the task (title, description, feedback) and returns:
+     - **suggested_status** — e.g. `COMPLETED`, `IN_PROGRESS`, `PENDING`, `UNDER_REVIEW` (based on the actual outcome in the feedback).
+     - **reply_message** — a short, professional Arabic message to send to the person who requested (e.g. via WhatsApp).
+  4. The app updates the task status (and `completedAt` if set to COMPLETED).
+  5. If the task has **inboundReplyTo** (WhatsApp), the AI-generated reply is sent to the sender (with the tracking ref prefix).
+- **Result:** Task status reflects the real outcome; the requester gets a clear, consistent reply. Audit action: `task_ai_process`.
+
+---
+
+## 8. Checklist
+
+- [ ] AI coordinator: Set OPENAI_API_KEY; on task detail add feedback and click "معالجة بالذكاء الاصطناعي" to update status and send AI-generated reply to WhatsApp sender.
 - [ ] Voice: Twilio webhook for incoming calls pointing to the coordinator voice incoming route (see COORDINATOR_VOICE_SETUP.md).
 - [ ] Email: Configure your provider to POST to `/api/coordinator/inbound/email` with `from`, `subject`, `text` (or `body`); set `COORDINATOR_INBOUND_SECRET` if you want to secure the webhook.
 - [ ] WhatsApp: Configure Twilio (or provider) to POST to `/api/coordinator/inbound/whatsapp` with `From`/`Body` (or `from`/`body`); set `COORDINATOR_INBOUND_SECRET` and optionally `TWILIO_COORDINATOR_COMPANY_ID`.

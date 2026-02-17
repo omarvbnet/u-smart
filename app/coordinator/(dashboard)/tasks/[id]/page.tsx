@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, RefreshCw, AlertTriangle, Phone, Mail, MessageCircle } from 'lucide-react';
+import { ArrowRight, RefreshCw, AlertTriangle, Phone, Mail, MessageCircle, Sparkles } from 'lucide-react';
 
 type Task = {
   id: string;
@@ -44,6 +44,8 @@ export default function CoordinatorTaskDetailPage() {
   const [feedbackDraft, setFeedbackDraft] = useState('');
   const [escalating, setEscalating] = useState(false);
   const [sendFeedbackResult, setSendFeedbackResult] = useState<'sent' | 'saved' | null>(null);
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [aiResult, setAiResult] = useState<{ statusUpdated?: boolean; replySent?: boolean; replyMessage?: string } | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -106,6 +108,42 @@ export default function CoordinatorTaskDetailPage() {
         }
       })
       .finally(() => setUpdating(false));
+  };
+
+  const runAiProcess = () => {
+    if (!task || !feedbackDraft.trim()) {
+      alert('أضف التغذية الراجعة أولاً.');
+      return;
+    }
+    setAiResult(null);
+    setAiProcessing(true);
+    // Save feedback first so AI and WhatsApp use latest text
+    fetch(`/api/coordinator/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ coordinatorFeedback: feedbackDraft }),
+    })
+      .then((res) => res.json())
+      .then((saveData) => {
+        if (saveData.success && saveData.task) setTask(saveData.task);
+        return fetch(`/api/coordinator/tasks/${id}/ai-process`, { method: 'POST', credentials: 'include' });
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          if (data.task) setTask(data.task);
+          setAiResult({
+            statusUpdated: data.statusUpdated,
+            replySent: data.replySent,
+            replyMessage: data.replyMessage,
+          });
+        } else {
+          alert(data.message || 'فشلت المعالجة.');
+        }
+      })
+      .catch(() => alert('خطأ في الاتصال.'))
+      .finally(() => setAiProcessing(false));
   };
 
   const escalate = () => {
@@ -262,6 +300,25 @@ export default function CoordinatorTaskDetailPage() {
             )}
             {sendFeedbackResult === 'saved' && (
               <span className="text-xs text-slate-600">تم الحفظ.</span>
+            )}
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <p className="text-xs text-slate-600 mb-2">منسق ذكي: يحدّث حالة المهمة حسب التغذية الراجعة ويكتب رسالة رد للمرسل (واتساب إن وُجد).</p>
+            <button
+              type="button"
+              onClick={runAiProcess}
+              disabled={aiProcessing || !feedbackDraft.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50"
+            >
+              <Sparkles className="w-4 h-4" />
+              {aiProcessing ? 'جاري المعالجة...' : 'معالجة بالذكاء الاصطناعي'}
+            </button>
+            {aiResult && (
+              <div className="mt-2 text-xs text-slate-700 space-y-1">
+                {aiResult.statusUpdated && <p className="text-emerald-700">تم تحديث حالة المهمة.</p>}
+                {aiResult.replySent && <p className="text-emerald-700">تم إرسال الرد إلى المرسل على واتساب.</p>}
+                {aiResult.replyMessage && <p className="text-slate-600">الرد: {aiResult.replyMessage}</p>}
+              </div>
             )}
           </div>
         </div>

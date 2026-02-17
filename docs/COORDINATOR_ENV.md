@@ -8,7 +8,7 @@ Single reference for all environment variables used by the Digital Coordinator (
 | `COORDINATOR_JWT_SECRET` | Yes (prod) | Coordinator login; signs JWT. Falls back to `JWT_SECRET` if unset. |
 | `COORDINATOR_PASSWORD_SALT` | Yes (prod) | Password hashing on coordinator login. |
 | `COORDINATOR_CRON_SECRET` or `CRON_SECRET` | Yes (prod) | `GET /api/coordinator/cron/generate-tasks`, `GET /api/coordinator/cron/monthly-report`, `GET /api/coordinator/cron/daily-performance`. Send as `Authorization: Bearer <secret>` or `?secret=<secret>`. |
-| `OPENAI_API_KEY` | Optional | Voice: `POST /api/coordinator/voice/transcribe` (Whisper). AI: `POST /api/coordinator/ai/compose-message`, `POST /api/coordinator/ai/rewrite`. |
+| `OPENAI_API_KEY` | Optional | Voice (Whisper), AI compose/rewrite, and **AI coordinator agent**: `POST /api/coordinator/tasks/[id]/ai-process` (suggests task status and generates WhatsApp reply from feedback). |
 | `BLOB_READ_WRITE_TOKEN` | Optional | Report PDF: when set, `POST .../reports/[id]/generate-pdf` uploads PDF to Vercel Blob and sets `report.pdfUrl`. Without it, PDF is only returned in the response. |
 | `STRIPE_SECRET_KEY` | Optional | Coordinator billing (checkout, subscriptions). |
 | `STRIPE_WEBHOOK_SECRET_COORDINATOR` | Optional | Stripe webhook for coordinator billing. |
