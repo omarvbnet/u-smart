@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ListTodo, TrendingUp, ChevronLeft, CalendarClock, Plug, Phone, FileText, Activity } from 'lucide-react';
+import { ListTodo, TrendingUp, ChevronLeft, CalendarClock, Plug, Phone, FileText, Activity, Sparkles } from 'lucide-react';
 
 type TaskItem = { id: string; title: string; status: string };
 
@@ -18,6 +18,9 @@ const STATUS_LABELS: Record<string, string> = {
 export default function CoordinatorDashboardPage() {
   const [stats, setStats] = useState<{ tasks: number; pending: number; inProgress: number } | null>(null);
   const [recentTasks, setRecentTasks] = useState<TaskItem[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResult, setAiResult] = useState<{ summary: string; recommendations?: string; answer: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/coordinator/tasks', { credentials: 'include' })
@@ -35,6 +38,31 @@ export default function CoordinatorDashboardPage() {
       })
       .catch(() => {});
   }, []);
+
+  const askAgent = () => {
+    setAiLoading(true);
+    setAiResult(null);
+    fetch('/api/coordinator/ai/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ query: aiQuery.trim() || undefined }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setAiResult({
+            summary: data.summary ?? '',
+            recommendations: data.recommendations,
+            answer: data.answer ?? data.summary ?? '',
+          });
+        } else {
+          setAiResult({ summary: '', answer: data.message || 'فشل تحميل المنسق الذكي.' });
+        }
+      })
+      .catch(() => setAiResult({ summary: '', answer: 'خطأ في الاتصال.' }))
+      .finally(() => setAiLoading(false));
+  };
 
   return (
     <div>
@@ -73,6 +101,50 @@ export default function CoordinatorDashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl bg-white border border-violet-200 p-6 shadow-sm mb-8">
+        <h2 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-violet-600" />
+          المنسق الذكي — يقرأ كل البيانات ويعطيك ملخصاً وتوصيات
+        </h2>
+        <p className="text-sm text-slate-600 mb-3">
+          يطلع على المهام، المؤشرات، التقارير، السجل والصوت ويعطيك ملخصاً وتوصيات. اسأل سؤالاً (اختياري) أو اضغط لتحصل على الملخص.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <input
+            type="text"
+            value={aiQuery}
+            onChange={(e) => setAiQuery(e.target.value)}
+            placeholder="مثال: ما أولوياتي اليوم؟ أو اترك فارغاً للملخص"
+            className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-slate-300 text-sm"
+          />
+          <button
+            type="button"
+            onClick={askAgent}
+            disabled={aiLoading}
+            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50"
+          >
+            {aiLoading ? 'جاري التحليل...' : 'اسأل المنسق الذكي'}
+          </button>
+        </div>
+        {aiResult && (
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm space-y-2">
+            {aiResult.summary && (
+              <div>
+                <p className="font-medium text-slate-700 mb-1">الملخص</p>
+                <p className="text-slate-600 whitespace-pre-wrap">{aiResult.summary}</p>
+              </div>
+            )}
+            {aiResult.recommendations && (
+              <div>
+                <p className="font-medium text-slate-700 mb-1">التوصيات</p>
+                <p className="text-slate-600 whitespace-pre-wrap">{aiResult.recommendations}</p>
+              </div>
+            )}
+            {aiResult.answer && !aiResult.summary && <p className="text-slate-600 whitespace-pre-wrap">{aiResult.answer}</p>}
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl bg-white border border-slate-200 p-6 shadow-sm mb-8">

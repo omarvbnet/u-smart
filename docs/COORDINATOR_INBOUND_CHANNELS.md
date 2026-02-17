@@ -80,20 +80,29 @@ So when you say “check all team performance on daily basis,” the coordinator
 
 ---
 
-## 7. AI coordinator agent
+## 7. AI coordinator agent (reads and uses all data)
 
-The **AI coordinator** (OpenAI) helps manage tasks and reply to requesters in the same way a human coordinator would:
+The **AI coordinator** (OpenAI) can **read all company data** and give feedback accordingly. It acts like a coordinator: manages task status, sends replies, and gives recommendations based on the full picture.
 
-- **Scope:** Acts as a coordinator: updates task status from feedback and sends reply messages to the requester (e.g. on WhatsApp).
-- **Flow:** On the task detail page, after the coordinator adds **تغذية راجعة منسق** (feedback), they click **معالجة بالذكاء الاصطناعي**. The app:
-  1. Saves the feedback.
-  2. Calls `POST /api/coordinator/tasks/[id]/ai-process` (requires `OPENAI_API_KEY`).
-  3. The AI reads the task (title, description, feedback) and returns:
-     - **suggested_status** — e.g. `COMPLETED`, `IN_PROGRESS`, `PENDING`, `UNDER_REVIEW` (based on the actual outcome in the feedback).
-     - **reply_message** — a short, professional Arabic message to send to the person who requested (e.g. via WhatsApp).
-  4. The app updates the task status (and `completedAt` if set to COMPLETED).
-  5. If the task has **inboundReplyTo** (WhatsApp), the AI-generated reply is sent to the sender (with the tracking ref prefix).
-- **Result:** Task status reflects the real outcome; the requester gets a clear, consistent reply. Audit action: `task_ai_process`.
+### Data the AI can read (per company)
+
+- **Tasks:** Counts by status, source, priority; recent tasks (title, status, whether they have feedback or WhatsApp reply-to).
+- **KPIs:** List with actual vs target and status (ON_TRACK, AT_RISK, FAILED).
+- **Reports:** Recent report titles and types.
+- **Audit:** Recent actions (task_create, task_update, task_ai_process, etc.).
+- **Voice:** Call records (last 7 days), voice logs count.
+- **Job duty templates** count, **social accounts** (platforms).
+
+### Endpoints
+
+- **GET /api/coordinator/ai/context** — Returns the full company context (for the current user’s company). Used by the agent.
+- **POST /api/coordinator/ai/agent** — Body: `{ "query": "optional question" }`. The AI reads the full context and returns **summary**, **recommendations**, and **answer** (in Arabic). Does not modify data. Use this from the dashboard “المنسق الذكي” section.
+- **POST /api/coordinator/tasks/[id]/ai-process** — For one task: the AI gets the **full company context** plus the task and its feedback. It returns suggested status, reply message, and optional **feedback** (e.g. “لديك 3 مهام عاجلة أخرى”). The app updates the task status and sends the reply to WhatsApp if applicable.
+
+### Dashboard
+
+- **لوحة التحكم:** The “المنسق الذكي” card lets you ask a question (or leave blank) and click “اسأل المنسق الذكي”. You get a summary and recommendations based on all tasks, KPIs, reports, and recent activity.
+- **Task detail:** When you click “معالجة بالذكاء الاصطناعي”, the AI uses the full context and can add a note (e.g. priority or other tasks to watch).
 
 ---
 

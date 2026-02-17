@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
 import { logAudit, getClientIp } from '@/lib/coordinator/audit';
+import { buildCompanyContext, contextToPromptText } from '@/lib/coordinator/ai-context';
 import { CoordinatorRole, CoordinatorTaskStatus } from '@prisma/client';
 import OpenAI from 'openai';
 import twilio from 'twilio';
@@ -45,20 +46,26 @@ export async function POST(
       );
     }
 
-    const openai = new OpenAI({ apiKey });
-    const systemPrompt = `You are an AI coordinator agent. Given a task and the coordinator's feedback (actual outcome), you must:
+    const [openai, ctx] = await Promise.all([
+      Promise.resolve(new OpenAI({ apiKey })),
+      buildCompanyContext(payload.companyId),
+    ]);
+    const contextText = contextToPromptText(ctx);
+
+    const systemPrompt = `You are an AI coordinator agent with access to the full company data. Given the current task and the coordinator's feedback (actual outcome), you must:
 1. Suggest the appropriate task status based on the feedback. Status must be exactly one of: ${VALID_STATUSES.join(', ')}. Use COMPLETED when the matter is resolved, IN_PROGRESS when follow-up is ongoing, PENDING when waiting, UNDER_REVIEW when needs review.
 2. Write a short, professional reply in Arabic to send to the person who requested this (e.g. via WhatsApp). The reply should summarize the outcome and be friendly and clear. Do not expose internal details.
+3. Optionally add "feedback" (string): a brief note or recommendation in Arabic based on the rest of the company data (e.g. other tasks, KPIs, priorities). Leave empty if not needed.
 
 Respond with a single JSON object only, no other text:
-{"suggested_status":"STATUS","reply_message":"النص بالعربية"}`;
+{"suggested_status":"STATUS","reply_message":"النص بالعربية","feedback":"ملاحظة اختيارية أو توصية"}`;
 
-    const userContent = `Task title: ${task.title}
+    const userContent = `Company data (for context):\n${contextText}\n\n---\nCurrent task:\nTitle: ${task.title}
 ${task.description ? `Description: ${task.description}` : ''}
 Current status: ${task.status}
 Coordinator feedback (actual outcome): ${feedback}
 
-Output JSON with suggested_status and reply_message.`;
+Output JSON with suggested_status, reply_message, and optional feedback.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -72,6 +79,7 @@ Output JSON with suggested_status and reply_message.`;
     const raw = completion.choices[0]?.message?.content?.trim() ?? '';
     let suggestedStatus: CoordinatorTaskStatus | null = null;
     let replyMessage: string | null = null;
+    let feedbackNote: string | null = null;
 
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -81,6 +89,9 @@ Output JSON with suggested_status and reply_message.`;
       }
       if (typeof parsed.reply_message === 'string' && parsed.reply_message.trim()) {
         replyMessage = parsed.reply_message.trim();
+      }
+      if (typeof parsed.feedback === 'string' && parsed.feedback.trim()) {
+        feedbackNote = parsed.feedback.trim();
       }
     } catch {
       // fallback: try to extract status and message from raw text
@@ -152,6 +163,7 @@ Output JSON with suggested_status and reply_message.`;
       statusUpdated,
       replySent,
       replyMessage: replyMessage ?? undefined,
+      feedback: feedbackNote ?? undefined,
     });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };

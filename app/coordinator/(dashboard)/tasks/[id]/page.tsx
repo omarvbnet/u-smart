@@ -45,7 +45,7 @@ export default function CoordinatorTaskDetailPage() {
   const [escalating, setEscalating] = useState(false);
   const [sendFeedbackResult, setSendFeedbackResult] = useState<'sent' | 'saved' | null>(null);
   const [aiProcessing, setAiProcessing] = useState(false);
-  const [aiResult, setAiResult] = useState<{ statusUpdated?: boolean; replySent?: boolean; replyMessage?: string } | null>(null);
+  const [aiResult, setAiResult] = useState<{ statusUpdated?: boolean; replySent?: boolean; replyMessage?: string; feedback?: string } | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -137,6 +137,7 @@ export default function CoordinatorTaskDetailPage() {
             statusUpdated: data.statusUpdated,
             replySent: data.replySent,
             replyMessage: data.replyMessage,
+            feedback: data.feedback,
           });
         } else {
           alert(data.message || 'فشلت المعالجة.');
@@ -318,6 +319,9 @@ export default function CoordinatorTaskDetailPage() {
                 {aiResult.statusUpdated && <p className="text-emerald-700">تم تحديث حالة المهمة.</p>}
                 {aiResult.replySent && <p className="text-emerald-700">تم إرسال الرد إلى المرسل على واتساب.</p>}
                 {aiResult.replyMessage && <p className="text-slate-600">الرد: {aiResult.replyMessage}</p>}
+                {aiResult.feedback && (
+                  <p className="text-violet-700 bg-violet-50 rounded p-2 mt-1">ملاحظة من المنسق الذكي: {aiResult.feedback}</p>
+                )}
               </div>
             )}
           </div>
