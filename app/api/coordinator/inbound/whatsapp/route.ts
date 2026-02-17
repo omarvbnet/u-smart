@@ -97,12 +97,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // When Twilio called (form), return TwiML so the sender gets a WhatsApp reply
+    // When Twilio called (form), return TwiML so the sender gets a reply with tracking ref
     if (contentType.includes('application/x-www-form-urlencoded')) {
-      const replyText = 'تم استلام رسالتك. سنتابع معك قريباً.';
+      const ref = task.id.slice(-6).toUpperCase();
+      const replyText = `تم استلام طلبك.\nرقم المتابعة: #${ref}\nسنرسل لك التحديثات والتغذية الراجعة على هذا الرقم عند المتابعة. احتفظ بهذا الرقم للمراجعة.`;
+      const escaped = replyText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Message><Body>${replyText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Body></Message>
+  <Message><Body>${escaped}</Body></Message>
 </Response>`;
       return new NextResponse(twiml, {
         status: 200,

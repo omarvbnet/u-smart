@@ -6,7 +6,8 @@ This guide explains how to give the **coordinator a WhatsApp number** so she can
 
 ## 1. Overview
 
-- **Inbound:** When someone sends a WhatsApp message to the coordinator number, Twilio forwards it to your app. The app creates a **task** with `source: 'whatsapp'` so the coordinator can follow up and add feedback.
+- **Inbound:** When someone sends a WhatsApp message to the coordinator number, Twilio forwards it to your app. The app creates a **task** with `source: 'whatsapp'` and stores the sender’s number for follow-up. The sender gets an immediate reply with a **tracking reference** (e.g. `رقم المتابعة: #ABC123`) and a note that updates will be sent to that number.
+- **Tracking and follow-up:** Each request has a short reference (last 6 chars of task id). The coordinator sees the task in **المهام**, works on it (e.g. calls Ahmed), then adds **تغذية راجعة منسق** and clicks **حفظ وإرسال للمرسل**. That feedback is sent to the original sender on WhatsApp, prefixed with `[متابعة #ABC123]` so they can match it to their request.
 - **Outbound:** Admins can send WhatsApp messages from the dashboard (**المكالمات والصوت** → “إرسال رسالة واتساب”) using the same coordinator number.
 - **Contact:** The coordinator’s WhatsApp number is shown on the Voice page (“تواصل المنسق عبر واتساب”) with a link to open a chat (wa.me).
 

@@ -19,6 +19,7 @@ type Task = {
   fileUrls: string[];
   source?: string | null;
   coordinatorFeedback?: string | null;
+  inboundReplyTo?: string | null;
   priority?: string | null;
 };
 
@@ -42,6 +43,7 @@ export default function CoordinatorTaskDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [feedbackDraft, setFeedbackDraft] = useState('');
   const [escalating, setEscalating] = useState(false);
+  const [sendFeedbackResult, setSendFeedbackResult] = useState<'sent' | 'saved' | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -86,8 +88,9 @@ export default function CoordinatorTaskDetailPage() {
     }
   };
 
-  const saveFeedback = () => {
+  const saveFeedback = (showResult = false) => {
     if (!task) return;
+    setSendFeedbackResult(null);
     setUpdating(true);
     fetch(`/api/coordinator/tasks/${id}`, {
       method: 'PATCH',
@@ -97,7 +100,10 @@ export default function CoordinatorTaskDetailPage() {
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && data.task) setTask(data.task);
+        if (data.success && data.task) {
+          setTask(data.task);
+          if (showResult) setSendFeedbackResult(data.sentToSender ? 'sent' : 'saved');
+        }
       })
       .finally(() => setUpdating(false));
   };
@@ -197,6 +203,11 @@ export default function CoordinatorTaskDetailPage() {
           <p className="text-sm text-slate-500 mt-2">
             أنشأها {task.createdBy.name || task.createdBy.email} · {formatDate(task.createdAt)}
           </p>
+          {task.source === 'whatsapp' && task.inboundReplyTo && (
+            <p className="text-sm text-emerald-700 mt-1">
+              رقم المتابعة: #{task.id.slice(-6).toUpperCase()} · إرسال التحديثات إلى: {task.inboundReplyTo.replace(/^whatsapp:/i, '')}
+            </p>
+          )}
           {task.dueAt && (
             <p className="text-sm text-slate-500 mt-1">الموعد: {formatDate(task.dueAt)}</p>
           )}
@@ -223,19 +234,36 @@ export default function CoordinatorTaskDetailPage() {
           {(task.source === 'voice' || task.source === 'email' || task.source === 'whatsapp') && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
               {task.source === 'whatsapp'
-                ? 'مهمة واردة من واتساب — أضف نتيجة المتابعة أدناه. عند الحفظ تُرسل التغذية الراجعة تلقائياً إلى المرسل على واتساب.'
+                ? 'مهمة واردة من واتساب — أضف نتيجة المتابعة أدناه ثم اضغط «حفظ وإرسال للمرسل» لإرسال التغذية الراجعة إلى المرسل على واتساب.'
                 : 'مهمة واردة — أضف نتيجة المتابعة أو الاتصال أدناه (يُحفظ تلقائياً).'}
             </p>
           )}
           <textarea
             value={feedbackDraft}
-            onChange={(e) => setFeedbackDraft(e.target.value)}
-            onBlur={saveFeedback}
+            onChange={(e) => { setFeedbackDraft(e.target.value); setSendFeedbackResult(null); }}
+            onBlur={() => saveFeedback(false)}
             placeholder="مثال: تم الاتصال بأحمد، قال إن الوضع تحت السيطرة..."
             rows={4}
             className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm"
           />
-          <p className="text-xs text-slate-400 mt-1">يُحفظ تلقائياً عند الخروج من الحقل.</p>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => saveFeedback(true)}
+              disabled={updating}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <MessageCircle className="w-4 h-4" />
+              {updating ? 'جاري...' : task.source === 'whatsapp' && task.inboundReplyTo ? 'حفظ وإرسال للمرسل' : 'حفظ'}
+            </button>
+            <span className="text-xs text-slate-400">يُحفظ تلقائياً عند الخروج من الحقل.</span>
+            {sendFeedbackResult === 'sent' && (
+              <span className="text-xs text-emerald-700 font-medium">تم إرسال التغذية الراجعة إلى المرسل على واتساب.</span>
+            )}
+            {sendFeedbackResult === 'saved' && (
+              <span className="text-xs text-slate-600">تم الحفظ.</span>
+            )}
+          </div>
         </div>
         {task.subTasks.length > 0 && (
           <div className="p-6 border-b border-slate-100">

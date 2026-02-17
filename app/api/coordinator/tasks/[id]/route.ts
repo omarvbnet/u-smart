@@ -97,6 +97,7 @@ export async function PATCH(
     });
 
     // When coordinator adds feedback on an inbound WhatsApp task, send it to the sender (skip auto receipt line)
+    let sentToSender = false;
     const replyTo = task.inboundReplyTo;
     const newFeedback = updated.coordinatorFeedback?.trim() ?? '';
     const isAutoReceiptLine = /^تم استلام رسالة واتساب — .+ بانتظار المتابعة/.test(newFeedback);
@@ -113,18 +114,21 @@ export async function PATCH(
       if (accountSid && authToken && from) {
         try {
           const client = twilio(accountSid, authToken);
+          const ref = task.id.slice(-6).toUpperCase();
+          const bodyWithRef = `[متابعة #${ref}]\n${newFeedback}`.slice(0, 4096);
           await client.messages.create({
             from,
             to: replyTo.trim(),
-            body: newFeedback.slice(0, 4096),
+            body: bodyWithRef,
           });
+          sentToSender = true;
         } catch (sendErr) {
           console.error('Send WhatsApp feedback to sender:', sendErr);
         }
       }
     }
 
-    return NextResponse.json({ success: true, task: updated });
+    return NextResponse.json({ success: true, task: updated, sentToSender });
   } catch (e: unknown) {
     const err = e as { status?: number; json?: () => Promise<unknown> };
     if (err.status === 401) return NextResponse.json(await err.json!(), { status: 401 });
