@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plug, Plus, RefreshCw, Trash2, Play, Settings2 } from 'lucide-react';
+import { Plug, Plus, RefreshCw, Trash2, Play, Settings2, History } from 'lucide-react';
 
 type System = {
   id: string;
@@ -11,6 +11,15 @@ type System = {
   createdAt: string;
   configEnc: string | null;
   actionLogCount: number;
+};
+
+type ActionLog = {
+  id: string;
+  action: string;
+  status: string;
+  retryCount: number;
+  errorMessage: string | null;
+  createdAt: string;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -27,12 +36,19 @@ export default function CoordinatorIntegrationsPage() {
   const [type, setType] = useState('API');
   const [apiUrl, setApiUrl] = useState('');
   const [apiMethod, setApiMethod] = useState('GET');
+  const [apiHeaders, setApiHeaders] = useState('');
+  const [apiBody, setApiBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [configuringId, setConfiguringId] = useState<string | null>(null);
   const [editUrl, setEditUrl] = useState('');
   const [editMethod, setEditMethod] = useState('GET');
+  const [editHeaders, setEditHeaders] = useState('');
+  const [editBody, setEditBody] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
+  const [logsOpenId, setLogsOpenId] = useState<string | null>(null);
+  const [logsList, setLogsList] = useState<ActionLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -48,10 +64,39 @@ export default function CoordinatorIntegrationsPage() {
     load();
   }, []);
 
-  const buildApiConfigEnc = (url: string, method: string) => {
+  const parseHeadersJson = (s: string): Record<string, string> | undefined => {
+    const t = s.trim();
+    if (!t) return undefined;
+    try {
+      const o = JSON.parse(t) as unknown;
+      if (o && typeof o === 'object' && !Array.isArray(o)) {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(o)) if (typeof v === 'string') out[k] = v;
+        return Object.keys(out).length ? out : undefined;
+      }
+    } catch {
+      /* ignore */
+    }
+    return undefined;
+  };
+
+  const buildApiConfigEnc = (
+    url: string,
+    method: string,
+    headersStr?: string,
+    bodyStr?: string
+  ) => {
     const u = url.trim();
     if (!u) return null;
-    return JSON.stringify({ url: u, method: method || 'GET' });
+    const config: { url: string; method: string; headers?: Record<string, string>; body?: string } = {
+      url: u,
+      method: method || 'GET',
+    };
+    const headers = parseHeadersJson(headersStr ?? '');
+    if (headers) config.headers = headers;
+    const body = bodyStr?.trim();
+    if (body) config.body = body;
+    return JSON.stringify(config);
   };
 
   const create = async (e: React.FormEvent) => {
@@ -59,7 +104,7 @@ export default function CoordinatorIntegrationsPage() {
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      const configEnc = type === 'API' ? buildApiConfigEnc(apiUrl, apiMethod) : null;
+      const configEnc = type === 'API' ? buildApiConfigEnc(apiUrl, apiMethod, apiHeaders, apiBody) : null;
       const res = await fetch('/api/coordinator/external-systems', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,6 +117,8 @@ export default function CoordinatorIntegrationsPage() {
         setName('');
         setApiUrl('');
         setApiMethod('GET');
+        setApiHeaders('');
+        setApiBody('');
         setShowForm(false);
       }
     } finally {
@@ -80,7 +127,7 @@ export default function CoordinatorIntegrationsPage() {
   };
 
   const saveConfig = async (id: string) => {
-    const configEnc = buildApiConfigEnc(editUrl, editMethod);
+    const configEnc = buildApiConfigEnc(editUrl, editMethod, editHeaders, editBody);
     if (!configEnc) return;
     setSavingConfig(true);
     try {
@@ -99,10 +146,32 @@ export default function CoordinatorIntegrationsPage() {
     }
   };
 
-  const openConfig = (s: System) => {
-    setConfiguringId(s.id);
+  const openConfig = (_s: System) => {
+    setConfiguringId(_s.id);
     setEditUrl('');
     setEditMethod('GET');
+    setEditHeaders('');
+    setEditBody('');
+  };
+
+  const toggleLogs = async (id: string) => {
+    if (logsOpenId === id) {
+      setLogsOpenId(null);
+      return;
+    }
+    setLogsOpenId(id);
+    setLogsList([]);
+    setLoadingLogs(true);
+    try {
+      const res = await fetch(`/api/coordinator/external-systems/${id}/action-logs`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success && data.logs) setLogsList(data.logs);
+      else setLogsList([]);
+    } finally {
+      setLoadingLogs(false);
+    }
   };
 
   const runAction = async (id: string) => {
@@ -203,6 +272,20 @@ export default function CoordinatorIntegrationsPage() {
                 <option value="PATCH">PATCH</option>
                 <option value="DELETE">DELETE</option>
               </select>
+              <textarea
+                value={apiHeaders}
+                onChange={(e) => setApiHeaders(e.target.value)}
+                placeholder='هيدرات (JSON) مثل: {"Authorization":"Bearer ..."}'
+                rows={2}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
+              <textarea
+                value={apiBody}
+                onChange={(e) => setApiBody(e.target.value)}
+                placeholder="نص الطلب (اختياري، لـ POST/PUT/PATCH)"
+                rows={2}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
             </>
           )}
           <div className="flex gap-2">
@@ -239,7 +322,7 @@ export default function CoordinatorIntegrationsPage() {
             >
               {configuringId === s.id ? (
                 <div className="w-full space-y-2">
-                  <p className="text-sm font-medium text-slate-700">ضبط رابط API</p>
+                  <p className="text-sm font-medium text-slate-700">ضبط API</p>
                   <input
                     type="url"
                     value={editUrl}
@@ -258,6 +341,20 @@ export default function CoordinatorIntegrationsPage() {
                     <option value="PATCH">PATCH</option>
                     <option value="DELETE">DELETE</option>
                   </select>
+                  <textarea
+                    value={editHeaders}
+                    onChange={(e) => setEditHeaders(e.target.value)}
+                    placeholder='هيدرات (JSON) مثل: {"Authorization":"Bearer ..."}'
+                    rows={2}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                  <textarea
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                    placeholder="نص الطلب (اختياري)"
+                    rows={2}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -285,6 +382,14 @@ export default function CoordinatorIntegrationsPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleLogs(s.id)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm hover:bg-slate-50"
+                    >
+                      <History className="w-4 h-4" />
+                      سجل
+                    </button>
                     {s.type === 'API' && (
                       <button
                         type="button"
@@ -313,6 +418,43 @@ export default function CoordinatorIntegrationsPage() {
                     </button>
                   </div>
                 </>
+              )}
+              {logsOpenId === s.id && (
+                <div className="w-full mt-3 pt-3 border-t border-slate-200">
+                  {loadingLogs ? (
+                    <p className="text-sm text-slate-500">جاري التحميل...</p>
+                  ) : logsList.length === 0 ? (
+                    <p className="text-sm text-slate-500">لا توجد سجلات بعد.</p>
+                  ) : (
+                    <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {logsList.map((log) => (
+                        <li
+                          key={log.id}
+                          className="text-sm flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-slate-50"
+                        >
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                              log.status === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {log.status === 'success' ? 'نجاح' : 'فشل'}
+                          </span>
+                          <span className="text-slate-500">
+                            {new Date(log.createdAt).toLocaleString('ar-IQ', { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                          {log.retryCount > 0 && (
+                            <span className="text-slate-400 text-xs">محاولة {log.retryCount + 1}</span>
+                          )}
+                          {log.errorMessage && (
+                            <span className="w-full text-red-600 text-xs truncate" title={log.errorMessage}>
+                              {log.errorMessage}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
           ))}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarClock, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarClock, Plus, RefreshCw, Trash2, Play, Settings2 } from 'lucide-react';
 
 type Template = {
   id: string;
@@ -27,6 +27,13 @@ export default function CoordinatorJobDutiesPage() {
   const [frequency, setFrequency] = useState('daily');
   const [taskTitle, setTaskTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [runningNow, setRunningNow] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCron, setEditCron] = useState('');
+  const [editFrequency, setEditFrequency] = useState('daily');
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -78,6 +85,58 @@ export default function CoordinatorJobDutiesPage() {
     if (res.ok) setTemplates((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const runNow = async () => {
+    setRunningNow(true);
+    try {
+      const res = await fetch('/api/coordinator/cron/run-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`تم إنشاء ${data.generated} مهمة من القوالب.`);
+      } else {
+        alert(data.message || 'فشل التشغيل');
+      }
+    } finally {
+      setRunningNow(false);
+    }
+  };
+
+  const openEdit = (t: Template) => {
+    setEditingId(t.id);
+    setEditName(t.name);
+    setEditCron(t.cron);
+    setEditFrequency(t.frequency);
+    setEditTaskTitle((t.taskTemplate as { title?: string })?.title ?? t.name);
+  };
+
+  const saveEdit = async (id: string) => {
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/coordinator/job-duties/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: editName.trim(),
+          cron: editCron.trim() || undefined,
+          frequency: editFrequency,
+          taskTemplate: { title: editTaskTitle.trim() || editName.trim(), description: '' },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTemplates((prev) => prev.map((x) => (x.id === id ? { ...x, ...data.template } : x)));
+        setEditingId(null);
+      }
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -85,7 +144,16 @@ export default function CoordinatorJobDutiesPage() {
           <CalendarClock className="w-7 h-7" />
           واجبات الوظيفة
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={runNow}
+            disabled={runningNow || templates.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+          >
+            <Play className="w-4 h-4" />
+            {runningNow ? 'جاري...' : 'تشغيل الآن'}
+          </button>
           <button
             type="button"
             onClick={load}
@@ -168,25 +236,90 @@ export default function CoordinatorJobDutiesPage() {
               key={t.id}
               className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-2"
             >
-              <div>
-                <h3 className="font-medium text-slate-800">{t.name}</h3>
-                <p className="text-sm text-slate-500">
-                  {FREQ_LABELS[t.frequency] ?? t.frequency} · Cron: {t.cron}
-                </p>
-                {(t.taskTemplate as { title?: string })?.title && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    مهمة: {(t.taskTemplate as { title: string }).title}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(t.id)}
-                className="p-2 rounded-lg text-red-600 hover:bg-red-50"
-                title="حذف"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {editingId === t.id ? (
+                <div className="w-full space-y-2">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="اسم القالب"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="text"
+                    value={editTaskTitle}
+                    onChange={(e) => setEditTaskTitle(e.target.value)}
+                    placeholder="عنوان المهمة المُنشأة"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <select
+                    value={editFrequency}
+                    onChange={(e) => setEditFrequency(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+                  >
+                    {Object.entries(FREQ_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={editCron}
+                    onChange={(e) => setEditCron(e.target.value)}
+                    placeholder="Cron مثل: 0 9 * * *"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveEdit(t.id)}
+                      disabled={savingEdit || !editName.trim()}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {savingEdit ? 'جاري...' : 'حفظ'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="font-medium text-slate-800">{t.name}</h3>
+                    <p className="text-sm text-slate-500">
+                      {FREQ_LABELS[t.frequency] ?? t.frequency} · Cron: {t.cron}
+                    </p>
+                    {(t.taskTemplate as { title?: string })?.title && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        مهمة: {(t.taskTemplate as { title: string }).title}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(t)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                      title="تعديل"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                      ضبط
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(t.id)}
+                      className="p-2 rounded-lg text-red-600 hover:bg-red-50"
+                      title="حذف"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
