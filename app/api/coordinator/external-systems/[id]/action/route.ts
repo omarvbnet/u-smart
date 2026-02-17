@@ -103,21 +103,105 @@ export async function POST(
   }
 }
 
+const API_REQUEST_TIMEOUT_MS = 30_000;
+
+type ApiConfig = {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+};
+
+function parseApiConfig(configEnc: string | null): ApiConfig | null {
+  if (!configEnc || typeof configEnc !== 'string') return null;
+  const raw = configEnc.trim();
+  if (!raw) return null;
+  try {
+    let json: unknown;
+    if (raw.startsWith('{')) {
+      json = JSON.parse(raw) as unknown;
+    } else {
+      try {
+        json = JSON.parse(Buffer.from(raw, 'base64').toString('utf8')) as unknown;
+      } catch {
+        return null;
+      }
+    }
+    if (json && typeof json === 'object' && 'url' in json && typeof (json as ApiConfig).url === 'string') {
+      const c = json as ApiConfig;
+      return {
+        url: c.url,
+        method: typeof c.method === 'string' ? c.method.toUpperCase() : 'GET',
+        headers: c.headers && typeof c.headers === 'object' ? (c.headers as Record<string, string>) : undefined,
+        body: c.body,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 async function executeSystemAction(
   type: string,
-  _configEnc: string | null,
-  _action: string,
-  _payload: unknown
+  configEnc: string | null,
+  action: string,
+  payload: unknown
 ): Promise<void> {
   switch (type) {
-    case 'API':
-      // TODO: decrypt config, call external API
-      throw new Error('API integration not configured yet');
+    case 'API': {
+      const config = parseApiConfig(configEnc);
+      if (!config) {
+        throw new Error('API integration not configured yet: add config with url (and optional method, headers, body)');
+      }
+      const url = config.url.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        throw new Error('Invalid API config: url must be http or https');
+      }
+      const method = (config.method ?? 'GET').toUpperCase();
+      const headers: Record<string, string> = {
+        ...(config.headers ?? {}),
+      };
+      if (payload && typeof payload === 'object' && payload !== null && 'headers' in payload) {
+        const extra = (payload as { headers?: Record<string, string> }).headers;
+        if (extra && typeof extra === 'object') {
+          Object.assign(headers, extra);
+        }
+      }
+      let body: string | undefined;
+      if (payload && typeof payload === 'object' && payload !== null && 'body' in payload) {
+        const b = (payload as { body?: unknown }).body;
+        body = typeof b === 'string' ? b : JSON.stringify(b);
+      } else if (config.body !== undefined && method !== 'GET') {
+        body = typeof config.body === 'string' ? config.body : JSON.stringify(config.body);
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: Object.keys(headers).length ? headers : undefined,
+          body,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`External API returned ${res.status}: ${text.slice(0, 200)}`);
+        }
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (e instanceof Error) {
+          if (e.name === 'AbortError') throw new Error('Request timed out');
+          throw e;
+        }
+        throw e;
+      }
+      return;
+    }
     case 'PLAYWRIGHT':
-      // TODO: run browser automation
       throw new Error('Playwright integration not configured yet');
     case 'OAUTH2':
-      // TODO: refresh token, call OAuth2 API
       throw new Error('OAuth2 integration not configured yet');
     default:
       throw new Error(`Unsupported system type: ${type}`);

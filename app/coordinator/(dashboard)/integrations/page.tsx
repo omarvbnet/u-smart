@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plug, Plus, RefreshCw, Trash2, Play } from 'lucide-react';
+import { Plug, Plus, RefreshCw, Trash2, Play, Settings2 } from 'lucide-react';
 
 type System = {
   id: string;
@@ -25,8 +25,14 @@ export default function CoordinatorIntegrationsPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState('API');
+  const [apiUrl, setApiUrl] = useState('');
+  const [apiMethod, setApiMethod] = useState('GET');
   const [submitting, setSubmitting] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);
+  const [configuringId, setConfiguringId] = useState<string | null>(null);
+  const [editUrl, setEditUrl] = useState('');
+  const [editMethod, setEditMethod] = useState('GET');
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -42,26 +48,61 @@ export default function CoordinatorIntegrationsPage() {
     load();
   }, []);
 
+  const buildApiConfigEnc = (url: string, method: string) => {
+    const u = url.trim();
+    if (!u) return null;
+    return JSON.stringify({ url: u, method: method || 'GET' });
+  };
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     setSubmitting(true);
     try {
+      const configEnc = type === 'API' ? buildApiConfigEnc(apiUrl, apiMethod) : null;
       const res = await fetch('/api/coordinator/external-systems', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name: name.trim(), type }),
+        body: JSON.stringify({ name: name.trim(), type, configEnc }),
       });
       const data = await res.json();
       if (data.success) {
         setSystems((prev) => [data.system, ...prev]);
         setName('');
+        setApiUrl('');
+        setApiMethod('GET');
         setShowForm(false);
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const saveConfig = async (id: string) => {
+    const configEnc = buildApiConfigEnc(editUrl, editMethod);
+    if (!configEnc) return;
+    setSavingConfig(true);
+    try {
+      const res = await fetch(`/api/coordinator/external-systems/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ configEnc }),
+      });
+      if (res.ok) {
+        setConfiguringId(null);
+        load();
+      }
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const openConfig = (s: System) => {
+    setConfiguringId(s.id);
+    setEditUrl('');
+    setEditMethod('GET');
   };
 
   const runAction = async (id: string) => {
@@ -142,6 +183,28 @@ export default function CoordinatorIntegrationsPage() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+          {type === 'API' && (
+            <>
+              <input
+                type="url"
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                placeholder="رابط API (اختياري، يمكن ضبطه لاحقاً)"
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={apiMethod}
+                onChange={(e) => setApiMethod(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </>
+          )}
           <div className="flex gap-2">
             <button
               type="submit"
@@ -174,30 +237,83 @@ export default function CoordinatorIntegrationsPage() {
               key={s.id}
               className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-2"
             >
-              <div>
-                <h3 className="font-medium text-slate-800">{s.name}</h3>
-                <p className="text-sm text-slate-500">
-                  {TYPE_LABELS[s.type] ?? s.type} · {s.actionLogCount} سجل إجراء
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => runAction(s.id)}
-                  disabled={runningId === s.id}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm hover:bg-slate-200 disabled:opacity-50"
-                >
-                  <Play className="w-4 h-4" />
-                  {runningId === s.id ? 'جاري...' : 'تشغيل'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(s.id)}
-                  className="p-2 rounded-lg text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {configuringId === s.id ? (
+                <div className="w-full space-y-2">
+                  <p className="text-sm font-medium text-slate-700">ضبط رابط API</p>
+                  <input
+                    type="url"
+                    value={editUrl}
+                    onChange={(e) => setEditUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <select
+                    value={editMethod}
+                    onChange={(e) => setEditMethod(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="DELETE">DELETE</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveConfig(s.id)}
+                      disabled={savingConfig || !editUrl.trim()}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {savingConfig ? 'جاري...' : 'حفظ'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfiguringId(null)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="font-medium text-slate-800">{s.name}</h3>
+                    <p className="text-sm text-slate-500">
+                      {TYPE_LABELS[s.type] ?? s.type} · {s.actionLogCount} سجل إجراء
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.type === 'API' && (
+                      <button
+                        type="button"
+                        onClick={() => openConfig(s)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                        ضبط
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => runAction(s.id)}
+                      disabled={runningId === s.id}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm hover:bg-slate-200 disabled:opacity-50"
+                    >
+                      <Play className="w-4 h-4" />
+                      {runningId === s.id ? 'جاري...' : 'تشغيل'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(s.id)}
+                      className="p-2 rounded-lg text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
