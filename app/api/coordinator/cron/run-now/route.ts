@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const templates = await prisma.coordinatorJobDutyTemplate.findMany({
       where: { companyId: payload.companyId },
-      include: { company: { include: { users: { where: { role: 'ADMIN' }, take: 1 } } } },
+      include: { company: { include: { users: { where: { role: CoordinatorRole.ADMIN }, take: 1 } } } },
     });
 
     const created: string[] = [];
