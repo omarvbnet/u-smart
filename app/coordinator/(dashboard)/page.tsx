@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ListTodo, TrendingUp, ChevronLeft } from 'lucide-react';
+import { ListTodo, TrendingUp, ChevronLeft, CalendarClock, Plug, Phone, FileText, Activity } from 'lucide-react';
 
 type TaskItem = { id: string; title: string; status: string };
 
@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function CoordinatorDashboardPage() {
-  const [stats, setStats] = useState<{ tasks: number; pending: number } | null>(null);
+  const [stats, setStats] = useState<{ tasks: number; pending: number; inProgress: number } | null>(null);
   const [recentTasks, setRecentTasks] = useState<TaskItem[]>([]);
 
   useEffect(() => {
@@ -26,7 +26,10 @@ export default function CoordinatorDashboardPage() {
         if (data.success && Array.isArray(data.tasks)) {
           const tasks = data.tasks as TaskItem[];
           const pending = tasks.filter((t) => t.status === 'PENDING').length;
-          setStats({ tasks: tasks.length, pending });
+          const inProgress = tasks.filter(
+            (t) => t.status === 'IN_PROGRESS' || t.status === 'UNDER_REVIEW'
+          ).length;
+          setStats({ tasks: tasks.length, pending, inProgress });
           setRecentTasks(tasks.slice(0, 5));
         }
       })
@@ -36,7 +39,7 @@ export default function CoordinatorDashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">لوحة التحكم</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="rounded-xl bg-white border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-lg bg-blue-100">
@@ -58,6 +61,51 @@ export default function CoordinatorDashboardPage() {
               <p className="text-2xl font-bold text-slate-800">{stats?.pending ?? '—'}</p>
             </div>
           </div>
+        </div>
+        <div className="rounded-xl bg-white border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-emerald-100">
+              <Activity className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-slate-500 text-sm">قيد التنفيذ / المراجعة</p>
+              <p className="text-2xl font-bold text-slate-800">{stats?.inProgress ?? '—'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-white border border-slate-200 p-6 shadow-sm mb-8">
+        <h2 className="font-semibold text-slate-800 mb-4">روابط سريعة</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/coordinator/job-duties"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          >
+            <CalendarClock className="w-4 h-4" />
+            واجبات الوظيفة
+          </Link>
+          <Link
+            href="/coordinator/integrations"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          >
+            <Plug className="w-4 h-4" />
+            التكاملات
+          </Link>
+          <Link
+            href="/coordinator/voice"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          >
+            <Phone className="w-4 h-4" />
+            المكالمات والصوت
+          </Link>
+          <Link
+            href="/coordinator/reports"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            التقارير
+          </Link>
         </div>
       </div>
 
