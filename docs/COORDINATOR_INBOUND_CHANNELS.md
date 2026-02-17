@@ -99,6 +99,11 @@ The **AI coordinator** (OpenAI) can **read all company data** and give feedback 
 - **POST /api/coordinator/ai/agent** — Body: `{ "query": "optional question" }`. The AI reads the full context and returns **summary**, **recommendations**, and **answer** (in Arabic). Does not modify data. Use this from the dashboard “المنسق الذكي” section.
 - **POST /api/coordinator/tasks/[id]/ai-process** — For one task: the AI gets the **full company context** plus the task and its feedback. It returns suggested status, reply message, and optional **feedback** (e.g. “لديك 3 مهام عاجلة أخرى”). The app updates the task status and sends the reply to WhatsApp if applicable.
 
+### Automation (no human required)
+
+- When the coordinator saves feedback (PATCH) on a task with WhatsApp inboundReplyTo, the AI runs automatically: updates status, generates reply, sends to sender. No button click.
+- Cron GET /api/coordinator/cron/ai-agent runs every 15 min; uses CRON_SECRET.
+
 ### Dashboard
 
 - **لوحة التحكم:** The “المنسق الذكي” card lets you ask a question (or leave blank) and click “اسأل المنسق الذكي”. You get a summary and recommendations based on all tasks, KPIs, reports, and recent activity.

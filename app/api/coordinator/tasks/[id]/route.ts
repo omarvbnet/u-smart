@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { requireCoordinatorRole } from '@/lib/coordinator/rbac';
 import { logAudit, getClientIp } from '@/lib/coordinator/audit';
 import { CoordinatorRole, CoordinatorTaskStatus, Prisma } from '@prisma/client';
-import twilio from 'twilio';
 
 async function getTaskAndCheckCompany(
   taskId: string,
@@ -77,7 +76,10 @@ export async function PATCH(
     if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null;
     if (Array.isArray(body.checklist)) data.checklist = body.checklist as Prisma.InputJsonValue;
     if (Array.isArray(body.fileUrls)) data.fileUrls = body.fileUrls;
-    if (typeof body.coordinatorFeedback === 'string') data.coordinatorFeedback = body.coordinatorFeedback.trim() || null;
+    if (typeof body.coordinatorFeedback === 'string') {
+      data.coordinatorFeedback = body.coordinatorFeedback.trim() || null;
+      data.aiProcessedAt = null;
+    }
     if (['normal', 'high', 'urgent'].includes(body.priority)) data.priority = body.priority;
 
     const updated = await prisma.coordinatorTask.update({
@@ -96,35 +98,27 @@ export async function PATCH(
       ip: getClientIp(req),
     });
 
-    // When coordinator adds feedback on an inbound WhatsApp task, send it to the sender (skip auto receipt line)
+    // Auto-run AI when feedback is saved: update status and send WhatsApp reply (no human click required)
     let sentToSender = false;
     const replyTo = task.inboundReplyTo;
     const newFeedback = updated.coordinatorFeedback?.trim() ?? '';
     const isAutoReceiptLine = /^تم استلام رسالة واتساب — .+ بانتظار المتابعة/.test(newFeedback);
     if (
       typeof body.coordinatorFeedback === 'string' &&
-      replyTo &&
-      /^whatsapp:\+[0-9]{10,15}$/.test(replyTo.trim()) &&
       newFeedback.length > 0 &&
-      !isAutoReceiptLine
+      !isAutoReceiptLine &&
+      replyTo &&
+      /^whatsapp:\+[0-9]{10,15}$/.test(replyTo.trim())
     ) {
-      const accountSid = process.env.TWILIO_ACCOUNT_SID;
-      const authToken = process.env.TWILIO_AUTH_TOKEN;
-      const from = process.env.TWILIO_WHATSAPP_FROM;
-      if (accountSid && authToken && from) {
-        try {
-          const client = twilio(accountSid, authToken);
-          const ref = task.id.slice(-6).toUpperCase();
-          const bodyWithRef = `[متابعة #${ref}]\n${newFeedback}`.slice(0, 4096);
-          await client.messages.create({
-            from,
-            to: replyTo.trim(),
-            body: bodyWithRef,
-          });
-          sentToSender = true;
-        } catch (sendErr) {
-          console.error('Send WhatsApp feedback to sender:', sendErr);
-        }
+      const { runAiProcessForTask } = await import('@/lib/coordinator/ai-task-process');
+      const result = await runAiProcessForTask(id, payload.companyId);
+      sentToSender = result.replySent;
+      if (result.success && (result.statusUpdated || result.replySent)) {
+        const refreshed = await prisma.coordinatorTask.findFirst({
+          where: { id },
+          include: { createdBy: { select: { id: true, name: true, email: true } }, subTasks: true },
+        });
+        if (refreshed) return NextResponse.json({ success: true, task: refreshed, sentToSender });
       }
     }
 

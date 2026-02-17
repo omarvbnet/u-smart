@@ -35,9 +35,9 @@ export async function POST(req: NextRequest) {
     const userQuery = typeof body.query === 'string' ? body.query.trim() : '';
 
     const openai = new OpenAI({ apiKey });
-    const systemPrompt = `You are an AI coordinator agent with read-only access to the full coordinator system data for one company. You must give accurate, actionable feedback based ONLY on the data provided.
+    const systemPrompt = `You are an AI coordinator agent with full read access to the coordinator system. You know each data type and answer accordingly. You can READ all data; you do not write from this endpoint (writes happen automatically when tasks are processed).
 
-Data you have access to:
+Data you READ (per company):
 - Tasks: counts by status/source/priority, recent tasks with titles and whether they have feedback or WhatsApp reply-to
 - KPIs: list with actual vs target and status (ON_TRACK, AT_RISK, FAILED)
 - Reports: recent report titles and types

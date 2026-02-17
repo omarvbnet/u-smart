@@ -679,6 +679,7 @@ model User {
     source               String?              // voice | email | whatsapp | manual
     coordinatorFeedback  String?              // coordinator's feedback after action (e.g. "Called Ahmed, he said...")
     inboundReplyTo       String?              // for inbound tasks: WhatsApp/email to send feedback to (e.g. whatsapp:+964...)
+    aiProcessedAt        DateTime?            // when AI last processed this task (status + WhatsApp reply)
     priority             String?             @default("normal") // normal | high | urgent (for escalation)
     subTasks             CoordinatorSubtask[]
     comments             CoordinatorComment[]
