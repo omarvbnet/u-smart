@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarClock, Plus, RefreshCw, Trash2, Play, Settings2 } from 'lucide-react';
+import Link from 'next/link';
+import { CalendarClock, Plus, RefreshCw, Trash2, Play, Settings2, ListTodo } from 'lucide-react';
 
 type Template = {
   id: string;
@@ -34,6 +35,7 @@ export default function CoordinatorJobDutiesPage() {
   const [editFrequency, setEditFrequency] = useState('daily');
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [lastGenerated, setLastGenerated] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -96,7 +98,8 @@ export default function CoordinatorJobDutiesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`تم إنشاء ${data.generated} مهمة من القوالب.`);
+        setLastGenerated(data.generated);
+        if (data.generated === 0) alert('لا توجد قوالب أو لم يُنشأ أي مهمة.');
       } else {
         alert(data.message || 'فشل التشغيل');
       }
@@ -177,6 +180,28 @@ export default function CoordinatorJobDutiesPage() {
       <p className="text-slate-600 text-sm mb-6">
         قوالب المهام المتكررة (يومي / أسبوعي / شهري / سنوي). يتم إنشاء المهام تلقائياً عبر Cron عند تشغيله.
       </p>
+
+      {lastGenerated !== null && lastGenerated > 0 && (
+        <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-emerald-800">تم إنشاء {lastGenerated} مهمة من القوالب.</span>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/coordinator/tasks"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
+            >
+              <ListTodo className="w-4 h-4" />
+              عرض المهام
+            </Link>
+            <button
+              type="button"
+              onClick={() => setLastGenerated(null)}
+              className="px-2 py-1 text-emerald-600 hover:text-emerald-800 text-sm"
+            >
+              إخفاء
+            </button>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={create} className="mb-6 p-4 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
