@@ -33,10 +33,14 @@ export default function CoordinatorTasksPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('');
 
   const load = () => {
     setLoading(true);
-    fetch('/api/coordinator/tasks', { credentials: 'include' })
+    const url = statusFilter
+      ? `/api/coordinator/tasks?status=${encodeURIComponent(statusFilter)}`
+      : '/api/coordinator/tasks';
+    fetch(url, { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.tasks) setTasks(data.tasks);
@@ -46,7 +50,7 @@ export default function CoordinatorTasksPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     if (searchParams.get('create') === '1' && typeof window !== 'undefined') {
@@ -74,10 +78,10 @@ export default function CoordinatorTasksPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setTasks((prev) => [data.task, ...prev]);
         setNewTitle('');
         setNewDesc('');
         setShowForm(false);
+        load();
       }
     } finally {
       setSubmitting(false);
@@ -99,7 +103,17 @@ export default function CoordinatorTasksPage() {
           <ListTodo className="w-7 h-7" />
           المهام
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">كل الحالات</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={load}
