@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
             companyId: resolvedCompanyId,
             createdById: admin.id,
             source: 'voice',
+            coordinatorFeedback: `تم استلام المكالمة — ${new Date().toLocaleDateString('ar-IQ', { dateStyle: 'short' })}. بانتظار المتابعة وإضافة التغذية الراجعة.`,
           },
         });
         await prisma.coordinatorVoiceCallRecord.update({

@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
         companyId: company.id,
         createdById: admin.id,
         source: 'email',
+        coordinatorFeedback: `تم استلام البريد — ${new Date().toLocaleDateString('ar-IQ', { dateStyle: 'short' })}. بانتظار المتابعة وإضافة التغذية الراجعة.`,
       },
     });
     return NextResponse.json({ success: true, taskId: task.id });

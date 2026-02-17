@@ -220,12 +220,17 @@ export default function CoordinatorTaskDetailPage() {
         )}
         <div className="p-6 border-b border-slate-100">
           <h3 className="text-sm font-medium text-slate-700 mb-2">تغذية راجعة منسق (بعد المتابعة أو الاتصال)</h3>
+          {(task.source === 'voice' || task.source === 'email' || task.source === 'whatsapp') && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+              مهمة واردة — أضف نتيجة المتابعة أو الاتصال أدناه (يُحفظ تلقائياً).
+            </p>
+          )}
           <textarea
             value={feedbackDraft}
             onChange={(e) => setFeedbackDraft(e.target.value)}
             onBlur={saveFeedback}
             placeholder="مثال: تم الاتصال بأحمد، قال إن الوضع تحت السيطرة..."
-            rows={3}
+            rows={4}
             className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 text-sm"
           />
           <p className="text-xs text-slate-400 mt-1">يُحفظ تلقائياً عند الخروج من الحقل.</p>
