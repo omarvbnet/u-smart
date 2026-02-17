@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText, Plus, RefreshCw, Download } from 'lucide-react';
+import { FileText, Plus, RefreshCw, Download, Calendar } from 'lucide-react';
 
 type Report = {
   id: string;
@@ -28,6 +28,7 @@ export default function CoordinatorReportsPage() {
   const [type, setType] = useState('custom');
   const [submitting, setSubmitting] = useState(false);
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+  const [creatingMonthly, setCreatingMonthly] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -103,6 +104,25 @@ export default function CoordinatorReportsPage() {
     }
   };
 
+  const createMonthlyReport = async () => {
+    setCreatingMonthly(true);
+    try {
+      const res = await fetch('/api/coordinator/cron/monthly-report', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        load();
+        alert('تم إنشاء التقرير الشهري.');
+      } else {
+        alert(data.message || 'فشل الإنشاء');
+      }
+    } finally {
+      setCreatingMonthly(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -119,6 +139,15 @@ export default function CoordinatorReportsPage() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             تحديث
+          </button>
+          <button
+            type="button"
+            onClick={createMonthlyReport}
+            disabled={creatingMonthly}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+          >
+            <Calendar className="w-4 h-4" />
+            {creatingMonthly ? 'جاري...' : 'إنشاء التقرير الشهري الآن'}
           </button>
           <button
             type="button"
