@@ -95,6 +95,20 @@ export async function POST(req: NextRequest) {
         coordinatorFeedback: `تم استلام رسالة واتساب — ${new Date().toLocaleDateString('ar-IQ', { dateStyle: 'short' })}. بانتظار المتابعة وإضافة التغذية الراجعة.`,
       },
     });
+
+    // When Twilio called (form), return TwiML so the sender gets a WhatsApp reply
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const replyText = 'تم استلام رسالتك. سنتابع معك قريباً.';
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message><Body>${replyText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Body></Message>
+</Response>`;
+      return new NextResponse(twiml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+      });
+    }
+
     return NextResponse.json({ success: true, taskId: task.id });
   } catch (e) {
     console.error('POST /api/coordinator/inbound/whatsapp:', e);
