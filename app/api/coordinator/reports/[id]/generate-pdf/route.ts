@@ -30,6 +30,17 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Report not found' }, { status: 404 });
     }
 
+    const kpis = await prisma.coordinatorKPI.findMany({
+      where: { companyId: report.companyId },
+      orderBy: { name: 'asc' },
+    });
+
+    const STATUS_LABELS: Record<string, string> = {
+      ON_TRACK: 'على المسار',
+      AT_RISK: 'في خطر',
+      FAILED: 'فشل',
+    };
+
     const doc = new jsPDF();
     doc.setFont('helvetica');
     doc.setFontSize(18);
@@ -44,6 +55,25 @@ export async function POST(
     doc.text(`تاريخ التوليد: ${new Date().toLocaleDateString('ar-IQ')}`, 20, 49);
     doc.setFontSize(10);
     doc.text('— تقرير منسق المشاريع الرقمي —', 20, 60);
+
+    let y = 72;
+    if (kpis.length > 0) {
+      doc.setFontSize(12);
+      doc.text('ملخص مؤشرات الأداء', 20, y);
+      y += 8;
+      doc.setFontSize(9);
+      for (const k of kpis) {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        const statusLabel = STATUS_LABELS[k.status] ?? k.status;
+        const line = `${k.name}: ${k.actualValue} / ${k.targetValue} ${k.unit ?? ''} — ${statusLabel}`;
+        doc.text(line, 20, y);
+        y += 6;
+      }
+      y += 4;
+    }
 
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
 

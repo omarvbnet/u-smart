@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Share2, Plus, Send, Trash2, Loader2, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { Share2, Plus, Send, Trash2, Loader2, Sparkles, ListTodo } from 'lucide-react';
 
 type Account = { id: string; platform: string; accountId: string; messageCount: number; createdAt: string };
 type Message = { id: string; accountId: string; platform: string; recipient: string; body: string; sentAt: string | null; taskId: string | null; createdAt: string };
+type Task = { id: string; title: string };
 
 export default function CoordinatorSocialPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -17,18 +19,22 @@ export default function CoordinatorSocialPage() {
   const [msgAccountId, setMsgAccountId] = useState('');
   const [recipient, setRecipient] = useState('');
   const [body, setBody] = useState('');
+  const [taskId, setTaskId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const load = () => {
     setLoading(true);
     Promise.all([
       fetch('/api/coordinator/social-accounts', { credentials: 'include' }).then((r) => r.json()),
       fetch('/api/coordinator/outreach-messages', { credentials: 'include' }).then((r) => r.json()),
+      fetch('/api/coordinator/tasks', { credentials: 'include' }).then((r) => r.json()),
     ])
-      .then(([aRes, mRes]) => {
+      .then(([aRes, mRes, tRes]) => {
         if (aRes.success && aRes.accounts) setAccounts(aRes.accounts);
         if (mRes.success && mRes.messages) setMessages(mRes.messages);
+        if (tRes.success && Array.isArray(tRes.tasks)) setTasks((tRes.tasks as Task[]).slice(0, 100));
       })
       .finally(() => setLoading(false));
   };
@@ -92,12 +98,18 @@ export default function CoordinatorSocialPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ accountId: msgAccountId, recipient: recipient.trim(), body: body.trim() }),
+        body: JSON.stringify({
+          accountId: msgAccountId,
+          recipient: recipient.trim(),
+          body: body.trim(),
+          taskId: taskId.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (data.success) {
         setRecipient('');
         setBody('');
+        setTaskId('');
         setShowMessageForm(false);
         load();
       }
@@ -198,6 +210,16 @@ export default function CoordinatorSocialPage() {
               onChange={(e) => setRecipient(e.target.value)}
               className="border rounded px-3 py-2 w-full"
             />
+            <select
+              value={taskId}
+              onChange={(e) => setTaskId(e.target.value)}
+              className="border rounded px-3 py-2 w-full"
+            >
+              <option value="">ربط بمهمة (اختياري)</option>
+              {tasks.map((t) => (
+                <option key={t.id} value={t.id}>{t.title}</option>
+              ))}
+            </select>
             <div className="flex flex-col gap-1">
               <textarea
                 placeholder="نص الرسالة"
@@ -228,7 +250,17 @@ export default function CoordinatorSocialPage() {
               <li key={m.id} className="py-3">
                 <p className="text-sm text-slate-600">{m.platform} → {m.recipient}</p>
                 <p className="text-slate-800 mt-1">{m.body.slice(0, 120)}{m.body.length > 120 ? '…' : ''}</p>
-                <p className="text-xs text-slate-400 mt-1">{m.sentAt ? `أُرسلت: ${new Date(m.sentAt).toLocaleString('ar-SA')}` : `إنشاء: ${new Date(m.createdAt).toLocaleString('ar-SA')}`}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <p className="text-xs text-slate-400">{m.sentAt ? `أُرسلت: ${new Date(m.sentAt).toLocaleString('ar-SA')}` : `إنشاء: ${new Date(m.createdAt).toLocaleString('ar-SA')}`}</p>
+                  {m.taskId && (
+                    <Link
+                      href={`/coordinator/tasks/${m.taskId}`}
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                    >
+                      <ListTodo className="w-3 h-3" /> مرتبطة بمهمة
+                    </Link>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

@@ -46,6 +46,7 @@ export default function CoordinatorAuditPage() {
     job_duty_create: 'إنشاء واجب وظيفة',
     job_duty_update: 'تحديث واجب وظيفة',
     job_duty_delete: 'حذف واجب وظيفة',
+    cron_run_now: 'تشغيل إنشاء المهام الآن',
     kpi_create: 'إنشاء KPI',
     kpi_update: 'تحديث KPI',
     kpi_delete: 'حذف KPI',
