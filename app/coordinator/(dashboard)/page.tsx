@@ -21,8 +21,14 @@ export default function CoordinatorDashboardPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [aiResult, setAiResult] = useState<{ summary: string; recommendations?: string; answer: string } | null>(null);
+  const [createRequest, setCreateRequest] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createResult, setCreateResult] = useState<{ taskId?: string; error?: string } | null>(null);
+  const [executeCmd, setExecuteCmd] = useState('');
+  const [executeLoading, setExecuteLoading] = useState(false);
+  const [executeResult, setExecuteResult] = useState<{ executed?: number; results?: Array<{ action: string; success: boolean; taskId?: string; message?: string }> } | null>(null);
 
-  useEffect(() => {
+  const loadTasks = () => {
     fetch('/api/coordinator/tasks', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
@@ -37,6 +43,10 @@ export default function CoordinatorDashboardPage() {
         }
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadTasks();
   }, []);
 
   const askAgent = () => {
@@ -62,6 +72,53 @@ export default function CoordinatorDashboardPage() {
       })
       .catch(() => setAiResult({ summary: '', answer: 'خطأ في الاتصال.' }))
       .finally(() => setAiLoading(false));
+  };
+
+  const createTaskFromRequest = () => {
+    if (!createRequest.trim()) return;
+    setCreateLoading(true);
+    setCreateResult(null);
+    fetch('/api/coordinator/ai/create-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ request: createRequest.trim() }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.task) {
+          setCreateResult({ taskId: data.task.id });
+          setCreateRequest('');
+          loadTasks();
+        } else {
+          setCreateResult({ error: data.message || 'فشل الإنشاء' });
+        }
+      })
+      .catch(() => setCreateResult({ error: 'خطأ في الاتصال' }))
+      .finally(() => setCreateLoading(false));
+  };
+
+  const runExecute = () => {
+    if (!executeCmd.trim()) return;
+    setExecuteLoading(true);
+    setExecuteResult(null);
+    fetch('/api/coordinator/ai/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ command: executeCmd.trim() }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setExecuteResult({ executed: data.executed, results: data.results });
+          setExecuteCmd('');
+        } else {
+          setExecuteResult({ executed: 0, results: [{ action: 'execute', success: false, message: data.message }] });
+        }
+      })
+      .catch(() => setExecuteResult({ executed: 0, results: [{ action: 'execute', success: false, message: 'خطأ في الاتصال' }] }))
+      .finally(() => setExecuteLoading(false));
   };
 
   return (
@@ -143,6 +200,66 @@ export default function CoordinatorDashboardPage() {
               </div>
             )}
             {aiResult.answer && !aiResult.summary && <p className="text-slate-600 whitespace-pre-wrap">{aiResult.answer}</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl bg-white border border-emerald-200 p-6 shadow-sm mb-8">
+        <h2 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+          <ListTodo className="w-5 h-5 text-emerald-600" />
+          إنشاء مهمة من طلب العميل (الذكاء الاصطناعي)
+        </h2>
+        <p className="text-sm text-slate-600 mb-3">أدخل طلب العميل؛ الذكاء الاصطناعي ينشئ مهمة بعنوان ووصف وأولوية مناسبة.</p>
+        <textarea
+          value={createRequest}
+          onChange={(e) => setCreateRequest(e.target.value)}
+          placeholder="مثال: العميل طلب الاتصال بأحمد بخصوص الوضع"
+          rows={2}
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm mb-2"
+        />
+        <button
+          type="button"
+          onClick={createTaskFromRequest}
+          disabled={createLoading || !createRequest.trim()}
+          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {createLoading ? 'جاري الإنشاء...' : 'إنشاء المهمة'}
+        </button>
+        {createResult?.taskId && (
+          <p className="mt-2 text-sm text-emerald-700">
+            تم إنشاء المهمة.{' '}
+            <Link href={`/coordinator/tasks/${createResult.taskId}`} className="underline">
+              عرض المهمة
+            </Link>
+          </p>
+        )}
+        {createResult?.error && <p className="mt-2 text-sm text-red-600">{createResult.error}</p>}
+      </div>
+
+      <div className="rounded-xl bg-white border border-amber-200 p-6 shadow-sm mb-8">
+        <h2 className="font-semibold text-slate-800 mb-2">تحكم كامل بالذكاء الاصطناعي</h2>
+        <p className="text-sm text-slate-600 mb-3">أمر واحد لإنشاء مهام، تحديث حالة، أو تصعيد. مثال: أنشئ مهمة لطلب العميل X؛ حدّث المهمة #ABC123 إلى مكتملة.</p>
+        <input
+          type="text"
+          value={executeCmd}
+          onChange={(e) => setExecuteCmd(e.target.value)}
+          placeholder="أمرك بالعربية..."
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm mb-2"
+        />
+        <button
+          type="button"
+          onClick={runExecute}
+          disabled={executeLoading || !executeCmd.trim()}
+          className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+        >
+          {executeLoading ? 'جاري التنفيذ...' : 'تنفيذ الأمر'}
+        </button>
+        {executeResult && (
+          <div className="mt-2 text-sm text-slate-600">
+            تم تنفيذ {executeResult.executed ?? 0} إجراء.
+            {executeResult.results?.map((r, i) => (
+              <p key={i}>{r.action}: {r.success ? 'نجح' : r.message || 'فشل'}</p>
+            ))}
           </div>
         )}
       </div>

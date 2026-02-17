@@ -98,6 +98,8 @@ The **AI coordinator** (OpenAI) can **read all company data** and give feedback 
 - **GET /api/coordinator/ai/context** — Returns the full company context (for the current user’s company). Used by the agent.
 - **POST /api/coordinator/ai/agent** — Body: `{ "query": "optional question" }`. The AI reads the full context and returns **summary**, **recommendations**, and **answer** (in Arabic). Does not modify data. Use this from the dashboard “المنسق الذكي” section.
 - **POST /api/coordinator/tasks/[id]/ai-process** — For one task: the AI gets the **full company context** plus the task and its feedback. It returns suggested status, reply message, and optional **feedback** (e.g. “لديك 3 مهام عاجلة أخرى”). The app updates the task status and sends the reply to WhatsApp if applicable.
+- **POST /api/coordinator/ai/create-task** — Body: `{ "request": "وصف طلب العميل" }`. The AI suggests title, description, and priority; the app creates a task for the current company. Use from the dashboard card **"إنشاء مهمة من طلب العميل"**.
+- **POST /api/coordinator/ai/execute** — Body: `{ "command": "أمر بالعربية" }`. The AI returns **actions** (create_task, update_task, escalate). The app resolves task IDs (full id or last 6 chars) and executes them. Use from the dashboard **"تحكم كامل بالذكاء الاصطناعي"** (e.g. create task from customer request, update task by ref to completed, escalate).
 
 ### Automation (no human required)
 
@@ -107,6 +109,8 @@ The **AI coordinator** (OpenAI) can **read all company data** and give feedback 
 ### Dashboard
 
 - **لوحة التحكم:** The “المنسق الذكي” card lets you ask a question (or leave blank) and click “اسأل المنسق الذكي”. You get a summary and recommendations based on all tasks, KPIs, reports, and recent activity.
+- **Create task from request:** Use the "إنشاء مهمة من طلب العميل" card: enter customer request, click to create; AI suggests title/description/priority.
+- **Full control (execute):** Use "تحكم كامل بالذكاء الاصطناعي": enter a command in Arabic; AI runs create/update/escalate actions.
 - **Task detail:** When you click “معالجة بالذكاء الاصطناعي”, the AI uses the full context and can add a note (e.g. priority or other tasks to watch).
 
 ---
