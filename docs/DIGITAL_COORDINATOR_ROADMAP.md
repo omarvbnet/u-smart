@@ -15,13 +15,13 @@
 
 - [x] Job Duties Engine: templates CRUD, cron expression, GET /api/coordinator/cron/generate-tasks (CRON_SECRET), task generation from templates
 - [x] Enterprise Integration Layer: ExternalSystems CRUD, SystemActionsLog on run, POST .../action with retry (3x), placeholder for API/Playwright/OAuth2
-- [x] KPI & Reporting: KPI CRUD, target vs actual, status auto (On Track / At Risk / Failed), reports list/create; PDF export and monthly auto-report in Phase 2b
+- [x] KPI & Reporting: KPI CRUD, target vs actual, status auto (On Track / At Risk / Failed), reports list/create; PDF export (POST .../reports/[id]/generate-pdf) and monthly auto-report (GET .../cron/monthly-report, vercel.json 0 9 1 * *) — Phase 2b done
 
 ## Phase 3 – Communication & Intelligence
 
-- [x] Social Communication Engine: connect accounts (LinkedIn/Meta/WhatsApp), outreach messages CRUD, link to tasks, dashboard (AI composer in Phase 3b)
+- [x] Social Communication Engine: connect accounts (LinkedIn/Meta/WhatsApp), outreach messages CRUD, link to tasks, dashboard; AI composer (POST .../ai/compose-message, "تحسين النص بالذكاء الاصطناعي" on social page) — Phase 3b done
 - [x] Job Intelligence Engine: job results CRUD (keyword, source, extracted skills), coordinator profile (skills, cvUrl), dashboard
-- [x] AI CV Engine: generated applications CRUD (cvUrl, coverLetterUrl, jobResultId), dashboard (OpenAI analyze/rewrite in Phase 3b)
+- [x] AI CV Engine: generated applications CRUD (cvUrl, coverLetterUrl, jobResultId), dashboard; OpenAI analyze/rewrite (POST .../ai/rewrite, "تحسين النص بالذكاء الاصطناعي" on applications page for CV/cover) — Phase 3b done
 
 ## Phase 4 – Billing & Notifications
 

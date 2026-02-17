@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Share2, Plus, Send, Trash2, Loader2 } from 'lucide-react';
+import { Share2, Plus, Send, Trash2, Loader2, Sparkles } from 'lucide-react';
 
 type Account = { id: string; platform: string; accountId: string; messageCount: number; createdAt: string };
 type Message = { id: string; accountId: string; platform: string; recipient: string; body: string; sentAt: string | null; taskId: string | null; createdAt: string };
@@ -18,6 +18,7 @@ export default function CoordinatorSocialPage() {
   const [recipient, setRecipient] = useState('');
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [composing, setComposing] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -62,6 +63,24 @@ export default function CoordinatorSocialPage() {
     if (!confirm('حذف الحساب؟')) return;
     await fetch(`/api/coordinator/social-accounts/${id}`, { method: 'DELETE', credentials: 'include' });
     load();
+  };
+
+  const composeWithAi = async () => {
+    if (!body.trim()) return;
+    setComposing(true);
+    try {
+      const res = await fetch('/api/coordinator/ai/compose-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ draft: body }),
+      });
+      const data = await res.json();
+      if (data.success && data.composed) setBody(data.composed);
+      else alert(data.message || 'فشل التحسين');
+    } finally {
+      setComposing(false);
+    }
   };
 
   const addMessage = async (e: React.FormEvent) => {
@@ -179,12 +198,23 @@ export default function CoordinatorSocialPage() {
               onChange={(e) => setRecipient(e.target.value)}
               className="border rounded px-3 py-2 w-full"
             />
-            <textarea
-              placeholder="نص الرسالة"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              className="border rounded px-3 py-2 w-full min-h-[80px]"
-            />
+            <div className="flex flex-col gap-1">
+              <textarea
+                placeholder="نص الرسالة"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="border rounded px-3 py-2 w-full min-h-[80px]"
+              />
+              <button
+                type="button"
+                onClick={composeWithAi}
+                disabled={composing || !body.trim()}
+                className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-violet-300 text-violet-700 text-sm hover:bg-violet-50 disabled:opacity-50"
+              >
+                <Sparkles className="w-4 h-4" />
+                {composing ? 'جاري التحسين...' : 'تحسين النص بالذكاء الاصطناعي'}
+              </button>
+            </div>
             <button type="submit" disabled={submitting} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">
               إنشاء رسالة
             </button>

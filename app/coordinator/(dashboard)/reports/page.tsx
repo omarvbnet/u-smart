@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText, Plus, RefreshCw } from 'lucide-react';
+import { FileText, Plus, RefreshCw, Download } from 'lucide-react';
 
 type Report = {
   id: string;
@@ -27,6 +27,7 @@ export default function CoordinatorReportsPage() {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('custom');
   const [submitting, setSubmitting] = useState(false);
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -77,6 +78,31 @@ export default function CoordinatorReportsPage() {
     }
   };
 
+  const generatePdf = async (reportId: string) => {
+    setGeneratingPdfId(reportId);
+    try {
+      const res = await fetch(`/api/coordinator/reports/${reportId}/generate-pdf`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || 'فشل توليد PDF');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report-${reportId.slice(-8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (res.headers.get('X-Pdf-Url')) load();
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -106,7 +132,7 @@ export default function CoordinatorReportsPage() {
       </div>
 
       <p className="text-slate-600 text-sm mb-6">
-        سجلات التقارير. ربط التقرير التلقائي الشهري والتصدير PDF في مرحلة لاحقة.
+        سجلات التقارير. يمكن توليد وتحميل PDF لكل تقرير.
       </p>
 
       {showForm && (
@@ -167,7 +193,7 @@ export default function CoordinatorReportsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {r.pdfUrl ? (
+                {r.pdfUrl && (
                   <a
                     href={r.pdfUrl}
                     target="_blank"
@@ -176,9 +202,16 @@ export default function CoordinatorReportsPage() {
                   >
                     تحميل PDF
                   </a>
-                ) : (
-                  <span className="text-slate-400 text-sm">بدون PDF بعد</span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => generatePdf(r.id)}
+                  disabled={generatingPdfId === r.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  {generatingPdfId === r.id ? 'جاري...' : 'توليد PDF'}
+                </button>
               </div>
             </div>
           ))}

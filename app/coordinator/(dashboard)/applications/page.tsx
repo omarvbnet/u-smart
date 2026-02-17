@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileCheck, Plus, Loader2, ExternalLink } from 'lucide-react';
+import { FileCheck, Plus, Loader2, ExternalLink, Sparkles } from 'lucide-react';
 
 type Application = { id: string; jobResultId: string | null; cvUrl: string | null; coverLetterUrl: string | null; createdAt: string };
 
@@ -12,6 +12,11 @@ export default function CoordinatorApplicationsPage() {
   const [cvUrl, setCvUrl] = useState('');
   const [coverLetterUrl, setCoverLetterUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [rewriteType, setRewriteType] = useState<'cv' | 'cover'>('cv');
+  const [rewriteInput, setRewriteInput] = useState('');
+  const [rewriteJobDesc, setRewriteJobDesc] = useState('');
+  const [rewriteResult, setRewriteResult] = useState('');
+  const [rewriting, setRewriting] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -47,6 +52,29 @@ export default function CoordinatorApplicationsPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const rewriteWithAi = async () => {
+    if (!rewriteInput.trim()) return;
+    setRewriting(true);
+    setRewriteResult('');
+    try {
+      const res = await fetch('/api/coordinator/ai/rewrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          text: rewriteInput,
+          type: rewriteType,
+          jobDescription: rewriteJobDesc.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.text) setRewriteResult(data.text);
+      else alert(data.message || 'فشل التحسين');
+    } finally {
+      setRewriting(false);
     }
   };
 
@@ -115,6 +143,57 @@ export default function CoordinatorApplicationsPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="bg-white rounded-xl border border-slate-200 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-violet-500" />
+          تحسين النص بالذكاء الاصطناعي
+        </h2>
+        <p className="text-slate-600 text-sm mb-4">
+          الصق نص السيرة الذاتية أو خطاب التغطية لتحسين الصياغة. يمكنك إضافة وصف الوظيفة لتخصيص النص.
+        </p>
+        <div className="space-y-3">
+          <select
+            value={rewriteType}
+            onChange={(e) => setRewriteType(e.target.value as 'cv' | 'cover')}
+            className="border rounded px-3 py-2"
+          >
+            <option value="cv">سيرة ذاتية</option>
+            <option value="cover">خطاب تغطية</option>
+          </select>
+          <textarea
+            placeholder={rewriteType === 'cv' ? 'الصق نص السيرة هنا...' : 'الصق نص خطاب التغطية هنا...'}
+            value={rewriteInput}
+            onChange={(e) => setRewriteInput(e.target.value)}
+            className="border rounded px-3 py-2 w-full min-h-[100px]"
+          />
+          <textarea
+            placeholder="وصف الوظيفة (اختياري) — لتخصيص النص"
+            value={rewriteJobDesc}
+            onChange={(e) => setRewriteJobDesc(e.target.value)}
+            className="border rounded px-3 py-2 w-full min-h-[60px]"
+          />
+          <button
+            type="button"
+            onClick={rewriteWithAi}
+            disabled={rewriting || !rewriteInput.trim()}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+          >
+            <Sparkles className="w-4 h-4" />
+            {rewriting ? 'جاري التحسين...' : 'تحسين النص'}
+          </button>
+          {rewriteResult && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">النص المحسّن</label>
+              <textarea
+                readOnly
+                value={rewriteResult}
+                className="border rounded px-3 py-2 w-full min-h-[120px] bg-slate-50"
+              />
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
