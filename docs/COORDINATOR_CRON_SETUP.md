@@ -41,7 +41,9 @@ Use any long, random string (e.g. 32+ characters), different from your JWT or ot
 
 So: **value of COORDINATOR_CRON_SECRET** = the exact string you put in the env and the one you send in the cron request (header or query).
 
-**Monthly report cron:** `GET /api/coordinator/cron/monthly-report` uses the same secret. When called (e.g. 1st of each month at 9:00 UTC via `vercel.json`), it creates one **monthly** report per company for the previous month. You can add this path to your cron scheduler with schedule `0 9 1 * *`.
+**Monthly report cron:** `GET /api/coordinator/cron/monthly-report` uses the same secret. When called (e.g. 1st of each month at 9:00 UTC via `vercel.json`), it creates one **monthly** report per company for the previous month. Schedule: `0 9 1 * *`.
+
+**Daily performance cron:** `GET /api/coordinator/cron/daily-performance` uses the same secret. When called (e.g. daily at 8:00 UTC via `vercel.json`), it creates a **daily** report per company and notifies all company admins with a team performance and KPI summary. Schedule: `0 8 * * *`. Admins can also trigger it from the Reports page (“ملخص الأداء اليومي الآن”) via `POST /api/coordinator/cron/daily-performance`.
 
 ---
 

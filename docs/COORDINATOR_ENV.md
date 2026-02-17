@@ -7,13 +7,16 @@ Single reference for all environment variables used by the Digital Coordinator (
 | `DATABASE_URL` | Yes | All coordinator APIs (Prisma). |
 | `COORDINATOR_JWT_SECRET` | Yes (prod) | Coordinator login; signs JWT. Falls back to `JWT_SECRET` if unset. |
 | `COORDINATOR_PASSWORD_SALT` | Yes (prod) | Password hashing on coordinator login. |
-| `COORDINATOR_CRON_SECRET` or `CRON_SECRET` | Yes (prod) | `GET /api/coordinator/cron/generate-tasks` and `GET /api/coordinator/cron/monthly-report`. Send as `Authorization: Bearer <secret>` or `?secret=<secret>`. |
+| `COORDINATOR_CRON_SECRET` or `CRON_SECRET` | Yes (prod) | `GET /api/coordinator/cron/generate-tasks`, `GET /api/coordinator/cron/monthly-report`, `GET /api/coordinator/cron/daily-performance`. Send as `Authorization: Bearer <secret>` or `?secret=<secret>`. |
 | `OPENAI_API_KEY` | Optional | Voice: `POST /api/coordinator/voice/transcribe` (Whisper). AI: `POST /api/coordinator/ai/compose-message`, `POST /api/coordinator/ai/rewrite`. |
 | `BLOB_READ_WRITE_TOKEN` | Optional | Report PDF: when set, `POST .../reports/[id]/generate-pdf` uploads PDF to Vercel Blob and sets `report.pdfUrl`. Without it, PDF is only returned in the response. |
 | `STRIPE_SECRET_KEY` | Optional | Coordinator billing (checkout, subscriptions). |
 | `STRIPE_WEBHOOK_SECRET_COORDINATOR` | Optional | Stripe webhook for coordinator billing. |
-| `TWILIO_AUTH_TOKEN` | Optional | Validate Twilio webhook for `POST /api/coordinator/voice/webhook/incoming`. |
-| `TWILIO_COORDINATOR_COMPANY_ID` | Optional | Which company to attach incoming voice calls to. |
+| `TWILIO_ACCOUNT_SID` | Optional | Required for sending WhatsApp from coordinator (`POST /api/coordinator/whatsapp/send`). |
+| `TWILIO_AUTH_TOKEN` | Optional | Validate Twilio voice/WhatsApp webhooks; used to send WhatsApp. |
+| `TWILIO_WHATSAPP_FROM` | Optional | Coordinator’s WhatsApp number (e.g. `whatsapp:+14155238886`). Shown on Voice page; used for outbound messages. |
+| `TWILIO_COORDINATOR_COMPANY_ID` | Optional | Which company to attach incoming voice calls and WhatsApp tasks to; if unset, first company. |
+| `COORDINATOR_INBOUND_SECRET` | Optional | Inbound email/WhatsApp webhooks: send as `X-Inbound-Secret` or `Authorization: Bearer <secret>`. If set, requests without it get 401. |
 
 **Quick setup (minimal):**
 
@@ -27,5 +30,6 @@ Single reference for all environment variables used by the Digital Coordinator (
 - **Report PDF stored in Blob:** set `BLOB_READ_WRITE_TOKEN`.
 - **Billing:** set Stripe keys and webhook secret.
 - **Voice calls (Twilio):** set Twilio env and webhook URL in Twilio Console.
+- **Coordinator WhatsApp:** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` and configure WhatsApp webhook; see [COORDINATOR_WHATSAPP_SETUP.md](./COORDINATOR_WHATSAPP_SETUP.md).
 
-See also: [COORDINATOR_CRON_SETUP.md](./COORDINATOR_CRON_SETUP.md), [COORDINATOR_VOICE_SETUP.md](./COORDINATOR_VOICE_SETUP.md).
+See also: [COORDINATOR_CRON_SETUP.md](./COORDINATOR_CRON_SETUP.md), [COORDINATOR_VOICE_SETUP.md](./COORDINATOR_VOICE_SETUP.md), [COORDINATOR_WHATSAPP_SETUP.md](./COORDINATOR_WHATSAPP_SETUP.md), [COORDINATOR_INBOUND_CHANNELS.md](./COORDINATOR_INBOUND_CHANNELS.md).

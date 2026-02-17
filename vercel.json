@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/coordinator/cron/generate-tasks", "schedule": "0 9 * * *" },
-    { "path": "/api/coordinator/cron/monthly-report", "schedule": "0 9 1 * *" }
+    { "path": "/api/coordinator/cron/monthly-report", "schedule": "0 9 1 * *" },
+    { "path": "/api/coordinator/cron/daily-performance", "schedule": "0 8 * * *" }
   ]
 }

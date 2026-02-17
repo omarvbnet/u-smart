@@ -61,6 +61,8 @@ export async function PATCH(
       completedAt?: Date | null;
       checklist?: Prisma.InputJsonValue;
       fileUrls?: string[];
+      coordinatorFeedback?: string | null;
+      priority?: string | null;
     } = {};
 
     if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim();
@@ -74,6 +76,8 @@ export async function PATCH(
     if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null;
     if (Array.isArray(body.checklist)) data.checklist = body.checklist as Prisma.InputJsonValue;
     if (Array.isArray(body.fileUrls)) data.fileUrls = body.fileUrls;
+    if (typeof body.coordinatorFeedback === 'string') data.coordinatorFeedback = body.coordinatorFeedback.trim() || null;
+    if (['normal', 'high', 'urgent'].includes(body.priority)) data.priority = body.priority;
 
     const updated = await prisma.coordinatorTask.update({
       where: { id },

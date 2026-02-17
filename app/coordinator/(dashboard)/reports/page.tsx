@@ -29,6 +29,7 @@ export default function CoordinatorReportsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [creatingMonthly, setCreatingMonthly] = useState(false);
+  const [creatingDaily, setCreatingDaily] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -123,6 +124,25 @@ export default function CoordinatorReportsPage() {
     }
   };
 
+  const createDailyPerformance = async () => {
+    setCreatingDaily(true);
+    try {
+      const res = await fetch('/api/coordinator/cron/daily-performance', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        load();
+        alert(data.summary ? `تم إنشاء ملخص الأداء اليومي.\n\n${data.summary}` : 'تم إنشاء ملخص الأداء اليومي وإرسال إشعار للمسؤولين.');
+      } else {
+        alert(data.message || 'فشل الإنشاء');
+      }
+    } finally {
+      setCreatingDaily(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -139,6 +159,15 @@ export default function CoordinatorReportsPage() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             تحديث
+          </button>
+          <button
+            type="button"
+            onClick={createDailyPerformance}
+            disabled={creatingDaily}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-600 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+          >
+            <Calendar className="w-4 h-4" />
+            {creatingDaily ? 'جاري...' : 'ملخص الأداء اليومي الآن'}
           </button>
           <button
             type="button"

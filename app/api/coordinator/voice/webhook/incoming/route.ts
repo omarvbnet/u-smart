@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { VoiceCallDirection } from '@prisma/client';
+import { VoiceCallDirection, CoordinatorRole, CoordinatorTaskStatus } from '@prisma/client';
 
 /**
  * Twilio voice webhook: incoming call handler.
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       resolvedCompanyId = first?.id ?? null;
     }
     if (resolvedCompanyId) {
-      await prisma.coordinatorVoiceCallRecord.create({
+      const callRecord = await prisma.coordinatorVoiceCallRecord.create({
         data: {
           companyId: resolvedCompanyId,
           direction: VoiceCallDirection.INCOMING,
@@ -45,6 +45,26 @@ export async function POST(req: NextRequest) {
           taskLinked: null,
         },
       });
+      const admin = await prisma.coordinatorUser.findFirst({
+        where: { companyId: resolvedCompanyId, role: CoordinatorRole.ADMIN },
+        select: { id: true },
+      });
+      if (admin) {
+        const task = await prisma.coordinatorTask.create({
+          data: {
+            title: 'مكالمة واردة',
+            description: 'تم استلام مكالمة. أضف الملاحظات أو التغذية الراجعة بعد المتابعة.',
+            status: CoordinatorTaskStatus.PENDING,
+            companyId: resolvedCompanyId,
+            createdById: admin.id,
+            source: 'voice',
+          },
+        });
+        await prisma.coordinatorVoiceCallRecord.update({
+          where: { id: callRecord.id },
+          data: { taskLinked: task.id },
+        });
+      }
     }
 
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>

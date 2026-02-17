@@ -43,6 +43,7 @@ export default function CoordinatorAuditPage() {
     task_create: 'إنشاء مهمة',
     task_update: 'تحديث مهمة',
     task_delete: 'حذف مهمة',
+    task_escalate: 'تصعيد مهمة',
     job_duty_create: 'إنشاء واجب وظيفة',
     job_duty_update: 'تحديث واجب وظيفة',
     job_duty_delete: 'حذف واجب وظيفة',

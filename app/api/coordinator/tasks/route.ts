@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Title is required' }, { status: 400 });
     }
 
+    const source = ['voice', 'email', 'whatsapp', 'manual'].includes(body.source) ? body.source : null;
     const task = await prisma.coordinatorTask.create({
       data: {
         title,
@@ -55,6 +56,8 @@ export async function POST(req: NextRequest) {
         dueAt: body.dueAt ? new Date(body.dueAt) : null,
         checklist: Array.isArray(body.checklist) ? body.checklist : undefined,
         fileUrls: Array.isArray(body.fileUrls) ? body.fileUrls : [],
+        source: source ?? undefined,
+        priority: ['normal', 'high', 'urgent'].includes(body.priority) ? body.priority : undefined,
       },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },

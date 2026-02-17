@@ -664,26 +664,30 @@ model User {
   }
 
   model CoordinatorTask {
-    id          String               @id @default(cuid())
-    title       String
-    description String?
-    status      CoordinatorTaskStatus @default(PENDING)
-    companyId   String
-    company     CoordinatorCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    createdById String
-    createdBy   CoordinatorUser      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
-    dueAt       DateTime?
-    completedAt DateTime?
-    checklist  Json?                 // [{ "id": "uuid", "label": "...", "checked": bool }]
-    fileUrls   String[]             @default([])
-    subTasks   CoordinatorSubtask[]
-    comments    CoordinatorComment[]
-    createdAt   DateTime           @default(now())
-    updatedAt   DateTime           @updatedAt
+    id                   String               @id @default(cuid())
+    title                String
+    description          String?
+    status               CoordinatorTaskStatus @default(PENDING)
+    companyId            String
+    company              CoordinatorCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    createdById          String
+    createdBy            CoordinatorUser      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+    dueAt                DateTime?
+    completedAt          DateTime?
+    checklist            Json?                 // [{ "id": "uuid", "label": "...", "checked": bool }]
+    fileUrls             String[]             @default([])
+    source               String?              // voice | email | whatsapp | manual
+    coordinatorFeedback  String?              // coordinator's feedback after action (e.g. "Called Ahmed, he said...")
+    priority             String?             @default("normal") // normal | high | urgent (for escalation)
+    subTasks             CoordinatorSubtask[]
+    comments             CoordinatorComment[]
+    createdAt            DateTime             @default(now())
+    updatedAt            DateTime             @updatedAt
 
     @@index([companyId])
     @@index([status])
     @@index([dueAt])
+    @@index([priority])
     @@map("coordinator_tasks")
   }
 

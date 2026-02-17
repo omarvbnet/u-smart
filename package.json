@@ -34,7 +34,8 @@
     "react-dom": "19.2.3",
     "routing": "^0.0.2",
     "stripe": "^20.3.1",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "twilio": "^5.12.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
