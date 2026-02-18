@@ -142,6 +142,84 @@ function parseApiConfig(configEnc: string | null): ApiConfig | null {
   return null;
 }
 
+type OAuth2Config = {
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken?: string;
+  accessToken?: string;
+  apiUrl?: string;
+};
+
+function parseOAuth2Config(configEnc: string | null): OAuth2Config | null {
+  if (!configEnc || typeof configEnc !== 'string') return null;
+  const raw = configEnc.trim();
+  if (!raw) return null;
+  try {
+    let json: unknown;
+    if (raw.startsWith('{')) {
+      json = JSON.parse(raw) as unknown;
+    } else {
+      try {
+        json = JSON.parse(Buffer.from(raw, 'base64').toString('utf8')) as unknown;
+      } catch {
+        return null;
+      }
+    }
+    if (
+      json &&
+      typeof json === 'object' &&
+      'tokenUrl' in json &&
+      typeof (json as OAuth2Config).tokenUrl === 'string' &&
+      'clientId' in json &&
+      typeof (json as OAuth2Config).clientId === 'string' &&
+      'clientSecret' in json &&
+      typeof (json as OAuth2Config).clientSecret === 'string'
+    ) {
+      const c = json as OAuth2Config;
+      return {
+        tokenUrl: c.tokenUrl,
+        clientId: c.clientId,
+        clientSecret: c.clientSecret,
+        refreshToken: typeof c.refreshToken === 'string' ? c.refreshToken : undefined,
+        accessToken: typeof c.accessToken === 'string' ? c.accessToken : undefined,
+        apiUrl: typeof c.apiUrl === 'string' ? c.apiUrl : undefined,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+async function getOAuth2AccessToken(config: OAuth2Config): Promise<string> {
+  if (config.accessToken) return config.accessToken;
+  if (!config.refreshToken) {
+    throw new Error('OAuth2 config must include accessToken or refreshToken');
+  }
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    refresh_token: config.refreshToken,
+  });
+  const res = await fetch(config.tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+    signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OAuth2 token refresh failed ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { access_token?: string };
+  if (typeof data.access_token !== 'string') {
+    throw new Error('OAuth2 response missing access_token');
+  }
+  return data.access_token;
+}
+
 async function executeSystemAction(
   type: string,
   configEnc: string | null,
@@ -201,8 +279,42 @@ async function executeSystemAction(
     }
     case 'PLAYWRIGHT':
       throw new Error('Playwright integration not configured yet');
-    case 'OAUTH2':
-      throw new Error('OAuth2 integration not configured yet');
+    case 'OAUTH2': {
+      const oauthConfig = parseOAuth2Config(configEnc);
+      if (!oauthConfig) {
+        throw new Error(
+          'OAuth2 integration not configured: add config with tokenUrl, clientId, clientSecret, and refreshToken or accessToken (optional: apiUrl)'
+        );
+      }
+      const accessToken = await getOAuth2AccessToken(oauthConfig);
+      const url =
+        (payload && typeof payload === 'object' && payload !== null && 'url' in payload && typeof (payload as { url: string }).url === 'string')
+          ? (payload as { url: string }).url
+          : oauthConfig.apiUrl;
+      if (!url || !url.startsWith('http')) {
+        throw new Error('OAuth2: provide apiUrl in config or url in action payload to call');
+      }
+      const method =
+        payload && typeof payload === 'object' && payload !== null && 'method' in payload && typeof (payload as { method: string }).method === 'string'
+          ? ((payload as { method: string }).method as string).toUpperCase()
+          : 'GET';
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: method !== 'GET' && payload && typeof payload === 'object' && payload !== null && 'body' in payload
+          ? JSON.stringify((payload as { body: unknown }).body)
+          : undefined,
+        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`OAuth2 API returned ${res.status}: ${text.slice(0, 200)}`);
+      }
+      return;
+    }
     default:
       throw new Error(`Unsupported system type: ${type}`);
   }

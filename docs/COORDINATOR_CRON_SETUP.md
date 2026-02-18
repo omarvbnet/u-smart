@@ -201,3 +201,15 @@ Stored in each Job Duty template (e.g. in dashboard “واجبات الوظيف
 - **Value:** A long random string **you generate** (e.g. 64-char hex from `openssl rand -hex 32`).
 - **Purpose:** So only your cron job (or you) can call the task-generation endpoint.
 - **Where:** In environment variables (local and production). Same value is used in the cron request as `?secret=...` or `Authorization: Bearer ...`.
+
+---
+
+## 9. Prisma warning during build/cron
+
+If you see:
+
+```text
+prisma:warn In production, we recommend using `prisma generate --no-engine`
+```
+
+**You can ignore it.** It is a recommendation for setups that use Prisma’s serverless/edge driver adapters. This project uses the default Prisma Client with the bundled engine, which works on Vercel. Do **not** add `--no-engine` to your build script unless you switch to a driver adapter (e.g. `@prisma/adapter-pg`), or the app may fail at runtime with “Engine not found”.
