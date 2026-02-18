@@ -67,6 +67,8 @@ So:
 
 ## 4. Vercel Cron (recommended if you host on Vercel)
 
+**Vercel Hobby limitation:** Cron jobs can run **at most once per day**. Expressions like `*/15 * * * *` (every 15 minutes) require the Pro plan. All schedules in `vercel.json` use daily or less frequent expressions for Hobby compatibility. For more frequent runs (e.g. ai-agent every 15 min), use an external cron service.
+
 **→ For a full step-by-step guide:** [Add Cron Job to Vercel – Step by Step](./VERCEL_CRON_STEP_BY_STEP.md)
 
 ### Step 1: Add the cron schedule

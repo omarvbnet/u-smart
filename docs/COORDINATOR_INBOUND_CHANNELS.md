@@ -104,7 +104,7 @@ The **AI coordinator** (OpenAI) can **read all company data** and give feedback 
 ### Automation (no human required)
 
 - When the coordinator saves feedback (PATCH) on a task with WhatsApp inboundReplyTo, the AI runs automatically: updates status, generates reply, sends to sender. No button click.
-- Cron GET /api/coordinator/cron/ai-agent runs every 15 min; uses CRON_SECRET.
+- Cron GET /api/coordinator/cron/ai-agent runs daily at 10:00 UTC (Vercel Hobby allows only 1x/day; for more frequent runs use external cron or Pro).
 
 ### Dashboard
 
