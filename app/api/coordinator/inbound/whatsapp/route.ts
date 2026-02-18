@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { CoordinatorRole, CoordinatorTaskStatus } from '@prisma/client';
+import { generateAiReplyForInboundMessage } from '@/lib/coordinator/ai-task-process';
 
 const INBOUND_SECRET = process.env.COORDINATOR_INBOUND_SECRET;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -97,10 +98,22 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // When Twilio called (form), return TwiML so the sender gets a reply with tracking ref
+    const ref = task.id.slice(-6).toUpperCase();
+    // AI generates reply directly from company data + message (no human needed)
+    let replyText: string;
+    const aiReply = await generateAiReplyForInboundMessage(company.id, messageText, ref);
+    if (aiReply && aiReply.trim().length > 10) {
+      replyText = aiReply.trim();
+      await prisma.coordinatorTask.update({
+        where: { id: task.id },
+        data: { coordinatorFeedback: replyText, aiProcessedAt: new Date() },
+      });
+    } else {
+      replyText = `تم استلام طلبك.\nرقم المتابعة: #${ref}\nسنرسل لك التحديثات والتغذية الراجعة على هذا الرقم عند المتابعة. احتفظ بهذا الرقم للمراجعة.`;
+    }
+
+    // When Twilio called (form), return TwiML so the sender gets the reply
     if (contentType.includes('application/x-www-form-urlencoded')) {
-      const ref = task.id.slice(-6).toUpperCase();
-      const replyText = `تم استلام طلبك.\nرقم المتابعة: #${ref}\nسنرسل لك التحديثات والتغذية الراجعة على هذا الرقم عند المتابعة. احتفظ بهذا الرقم للمراجعة.`;
       const escaped = replyText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>

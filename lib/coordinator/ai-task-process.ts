@@ -85,3 +85,41 @@ export async function runAiProcessForTask(taskId: string, companyId: string): Pr
 
   return { success: true, suggestedStatus: suggestedStatus ?? task.status, statusUpdated: !!(suggestedStatus && suggestedStatus !== task.status), replySent, replyMessage, feedback: feedbackNote };
 }
+
+/**
+ * Generate an AI reply for an inbound WhatsApp message using company context.
+ * No human required. Returns the reply text or null if AI fails / not configured.
+ */
+export async function generateAiReplyForInboundMessage(
+  companyId: string,
+  messageText: string,
+  taskRef: string
+): Promise<string | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
+
+  const [openai, ctx] = await Promise.all([
+    Promise.resolve(new OpenAI({ apiKey: process.env.OPENAI_API_KEY })),
+    buildCompanyContext(companyId),
+  ]);
+  const contextText = contextToPromptText(ctx);
+
+  const systemPrompt = `You are an autonomous AI coordinator. You have company data (tasks, KPIs, reports, etc.). A customer just sent a WhatsApp message. Generate a helpful, professional Arabic reply. Include the tracking reference "[متابعة #${taskRef}]" at the start. Keep it concise (2-4 sentences). Be friendly and action-oriented. If they're asking for status, reference relevant tasks. If it's a new request, acknowledge and say you're on it.`;
+  const userContent = `Company data:\n${contextText}\n\n---\nIncoming WhatsApp message:\n${messageText || '(empty)'}\n\nGenerate the Arabic reply (include [متابعة #${taskRef}] at start).`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      max_tokens: 300,
+    });
+    const raw = completion.choices[0]?.message?.content?.trim() ?? '';
+    if (!raw) return null;
+    return raw.slice(0, 3500); // WhatsApp limit
+  } catch (e) {
+    console.error('generateAiReplyForInboundMessage:', e);
+    return null;
+  }
+}

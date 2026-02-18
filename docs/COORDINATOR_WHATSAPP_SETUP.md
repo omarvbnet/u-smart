@@ -47,6 +47,7 @@ Set these in `.env` (local) and in your host (e.g. Vercel):
 | `TWILIO_AUTH_TOKEN` | Yes (for send + webhook validation) | From Twilio Console → Account. |
 | `TWILIO_WHATSAPP_FROM` | Yes (for send + display) | The coordinator’s WhatsApp “From” (e.g. `whatsapp:+14155238886` for sandbox). |
 | `TWILIO_COORDINATOR_COMPANY_ID` | Optional | Company to attach inbound WhatsApp tasks to; if unset, first company is used. |
+| `OPENAI_API_KEY` | Optional | Enables AI auto-reply: OpenAI generates WhatsApp replies from company data + message, no human needed. |
 
 Same `TWILIO_AUTH_TOKEN` is used to **validate** incoming webhooks (so only Twilio can trigger task creation).
 
@@ -72,6 +73,7 @@ Twilio sends `application/x-www-form-urlencoded` with `From`, `To`, `Body`, etc.
   - Accepts Twilio’s form body and optional JSON (for other providers).  
   - Validates Twilio signature when `TWILIO_AUTH_TOKEN` is set.  
   - Creates one **CoordinatorTask** per message (title from first line of body, description includes sender and full text).
+  - **AI auto-reply:** When `OPENAI_API_KEY` is set, OpenAI generates the WhatsApp reply directly from company data (tasks, KPIs, reports) and the incoming message. No human needed—the sender gets an intelligent, contextual reply immediately.
 
 - **Contact (display):** `GET /api/coordinator/whatsapp/contact`  
   - Returns the coordinator number (from `TWILIO_WHATSAPP_FROM`, stripped of `whatsapp:` for display and wa.me links).  
