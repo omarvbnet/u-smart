@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { CoordinatorRole, CoordinatorTaskStatus } from '@prisma/client';
-import { generateAiReplyForInboundMessage } from '@/lib/coordinator/ai-task-process';
+import { generateAiReplyForInboundMessage, executeInboundAiActions, runAiProcessForTask } from '@/lib/coordinator/ai-task-process';
 
 const INBOUND_SECRET = process.env.COORDINATOR_INBOUND_SECRET;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -57,13 +57,12 @@ export async function POST(req: NextRequest) {
     params = { From: body.From ?? body.from ?? '', Body: body.Body ?? body.body ?? '' };
   }
 
-  const from = params.From ?? params.from ?? '';
+  let from = (params.From ?? params.from ?? '').trim();
   const messageText = (params.Body ?? params.body ?? '').trim();
+  const fromNormalized = from.startsWith('whatsapp:') ? from : (from ? `whatsapp:${from.startsWith('+') ? from : `+${from}`}` : '');
 
   try {
-    const title = messageText ? messageText.slice(0, 200).split('\n')[0] : 'رسالة واتساب';
-    const description = messageText ? (from ? `من: ${from}\n\n${messageText}` : messageText) : (from ? `من: ${from}` : null);
-
+    // Resolve company and admin first (needed for both flows)
     const companyId = process.env.TWILIO_COORDINATOR_COMPANY_ID;
     let company = companyId
       ? await prisma.coordinatorCompany.findFirst({ where: { id: companyId }, select: { id: true } })
@@ -85,6 +84,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'No admin user' }, { status: 400 });
     }
 
+    // Check if this is feedback from an external contact we messaged for a task
+    const awaitingTask = fromNormalized
+      ? await prisma.coordinatorTask.findFirst({
+          where: {
+            companyId: company.id,
+            awaitingFeedbackFrom: fromNormalized,
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, inboundReplyTo: true },
+        })
+      : null;
+
+    if (awaitingTask) {
+      const feedbackLine = `تغذية راجعة من جهة الاتصال (${new Date().toLocaleDateString('ar-IQ', { dateStyle: 'short' })}):\n${messageText}`;
+      await prisma.coordinatorTask.update({
+        where: { id: awaitingTask.id },
+        data: {
+          coordinatorFeedback: feedbackLine,
+          awaitingFeedbackFrom: null,
+        },
+      });
+      // Forward feedback to original requester: AI summarizes and sends to inboundReplyTo
+      runAiProcessForTask(awaitingTask.id, company.id).catch(() => {});
+      const replyToContact = `شكراً! تم تسجيل ملاحظتك على المهمة #${awaitingTask.id.slice(-6).toUpperCase()}.`;
+      if (contentType.includes('application/x-www-form-urlencoded')) {
+        const escaped = replyToContact.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return new NextResponse(
+          `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escaped}</Body></Message></Response>`,
+          { status: 200, headers: { 'Content-Type': 'text/xml; charset=utf-8' } }
+        );
+      }
+      return NextResponse.json({ success: true, feedbackReceived: true, taskId: awaitingTask.id });
+    }
+
+    const title = messageText ? messageText.slice(0, 200).split('\n')[0] : 'رسالة واتساب';
+    const description = messageText ? (from ? `من: ${from}\n\n${messageText}` : messageText) : (from ? `من: ${from}` : null);
+
     const task = await prisma.coordinatorTask.create({
       data: {
         title: title.slice(0, 500),
@@ -99,11 +135,12 @@ export async function POST(req: NextRequest) {
     });
 
     const ref = task.id.slice(-6).toUpperCase();
-    // AI generates reply directly from company data + message (no human needed)
+    // AI generates reply + can execute: send WhatsApp to contacts, ask for number if unknown, create/update tasks
     let replyText: string;
-    const aiReply = await generateAiReplyForInboundMessage(company.id, messageText, ref);
-    if (aiReply && aiReply.trim().length > 10) {
-      replyText = aiReply.trim();
+    const aiResult = await generateAiReplyForInboundMessage(company.id, messageText, ref, { taskId: task.id, adminId: admin.id });
+    if (aiResult && aiResult.reply.trim().length > 10) {
+      replyText = aiResult.reply.trim();
+      await executeInboundAiActions(company.id, task.id, admin.id, aiResult);
       await prisma.coordinatorTask.update({
         where: { id: task.id },
         data: { coordinatorFeedback: replyText, aiProcessedAt: new Date() },

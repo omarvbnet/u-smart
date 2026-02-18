@@ -86,15 +86,24 @@ export async function runAiProcessForTask(taskId: string, companyId: string): Pr
   return { success: true, suggestedStatus: suggestedStatus ?? task.status, statusUpdated: !!(suggestedStatus && suggestedStatus !== task.status), replySent, replyMessage, feedback: feedbackNote };
 }
 
+export type InboundAiActionResult = {
+  reply: string;
+  sendWhatsAppTo?: { phone: string; body: string };
+  askForNumber?: string;
+  createTask?: { title: string; description?: string };
+  updateTask?: { taskRef: string; status?: string; feedback?: string };
+};
+
 /**
- * Generate an AI reply for an inbound WhatsApp message using company context.
- * No human required. Returns the reply text or null if AI fails / not configured.
+ * Generate AI reply and actions for inbound WhatsApp. AI can: answer questions, send WhatsApp to contacts,
+ * ask for number if contact unknown, create/update tasks. No human required.
  */
 export async function generateAiReplyForInboundMessage(
   companyId: string,
   messageText: string,
-  taskRef: string
-): Promise<string | null> {
+  taskRef: string,
+  options?: { taskId?: string; adminId?: string }
+): Promise<InboundAiActionResult | null> {
   if (!process.env.OPENAI_API_KEY) return null;
 
   const [openai, ctx] = await Promise.all([
@@ -103,18 +112,21 @@ export async function generateAiReplyForInboundMessage(
   ]);
   const contextText = contextToPromptText(ctx);
 
-  const systemPrompt = `You are an autonomous AI coordinator. You MUST answer the customer's question DIRECTLY using the company data—do NOT give generic replies like "we're processing" or "we'll update you soon".
+  const systemPrompt = `You are an autonomous AI coordinator with FULL CONTROL. You can:
+- Answer questions directly from company data (tasks, KPIs, reports, contacts)
+- SEND WhatsApp to a contact when request is "call X" / "راسل X" / "أتصل بـ X" — use contacts list for phone
+- ASK for phone if someone is requested but NOT in contacts — set ask_for_number and reply with "رقم X غير متوفر. يرجى إرسال رقمه للتواصل."
+- CREATE or UPDATE tasks
+
+Output JSON only. Include only fields you need:
+{"reply":"Arabic reply, start with [متابعة #${taskRef}]","send_whatsapp":{"phone":"+9647712345678","body":"رسالة"},"ask_for_number":"أحمد","create_task":{"title":"...","description":"..."},"update_task":{"task_ref":"ABC123","status":"COMPLETED","feedback":"..."}}
 
 RULES:
-1. READ the incoming message and understand what they are asking.
-2. SEARCH the company data (tasks, KPIs, reports) for the answer.
-3. REPLY with a concrete answer: actual task statuses, KPI values, report summaries, or a clear action taken.
-4. If they ask for status → give real status (e.g. "لديك 3 مهام مكتملة، 2 قيد التنفيذ").
-5. If they ask for a report or summary → summarize from the data.
-6. If it's a new request → create a clear next step, e.g. "تم تسجيل طلبك وسيتم المتابعة".
-7. NEVER say "قيد المعالجة" or "سأحدثك لاحقاً" without giving actual information first.
-8. Start with "[متابعة #${taskRef}]" and keep it concise (2-5 sentences). Professional Arabic.`;
-  const userContent = `Company data:\n${contextText}\n\n---\nIncoming WhatsApp message:\n${messageText || '(empty)'}\n\nAnswer the question directly using the data above. Output Arabic reply only (start with [متابعة #${taskRef}]).`;
+1. "call Ahmed" / "أتصل بأحمد" / "راسل أحمد" → check contacts. If found: set send_whatsapp with that phone and body. If NOT: set ask_for_number "أحمد", reply must say "رقم أحمد غير متوفر. يرجى إرسال رقمه للتواصل."
+2. send_whatsapp phone = E.164 from contacts OR from inbound (e.g. task #ABC123's number). body = message to send.
+3. reply is always required. Answer directly, never generic "قيد المعالجة".`;
+
+  const userContent = `Company data:\n${contextText}\n\n---\nIncoming message:\n${messageText || '(empty)'}\n\nOutput JSON.`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -123,13 +135,111 @@ RULES:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
-      max_tokens: 450,
+      max_tokens: 600,
     });
     const raw = completion.choices[0]?.message?.content?.trim() ?? '';
     if (!raw) return null;
-    return raw.slice(0, 3500); // WhatsApp limit
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    const reply = typeof parsed.reply === 'string' && parsed.reply.trim()
+      ? parsed.reply.trim().slice(0, 3500)
+      : null;
+    if (!reply) return null;
+
+    const result: InboundAiActionResult = { reply };
+
+    if (parsed.send_whatsapp && typeof parsed.send_whatsapp === 'object') {
+      const p = parsed.send_whatsapp.phone;
+      const b = parsed.send_whatsapp.body;
+      if (typeof p === 'string' && typeof b === 'string' && /^\+?[0-9]{10,15}$/.test(p.replace(/^whatsapp:/i, '').replace(/\s/g, ''))) {
+        const phone = p.replace(/^whatsapp:/i, '').trim();
+        result.sendWhatsAppTo = { phone: phone.startsWith('+') ? phone : `+${phone}`, body: String(b).slice(0, 3500) };
+      }
+    }
+    if (typeof parsed.ask_for_number === 'string' && parsed.ask_for_number.trim()) {
+      result.askForNumber = parsed.ask_for_number.trim();
+    }
+    if (parsed.create_task && typeof parsed.create_task === 'object' && typeof parsed.create_task.title === 'string' && parsed.create_task.title.trim()) {
+      result.createTask = {
+        title: parsed.create_task.title.trim().slice(0, 500),
+        description: typeof parsed.create_task.description === 'string' ? parsed.create_task.description.trim().slice(0, 5000) : undefined,
+      };
+    }
+    if (parsed.update_task && typeof parsed.update_task === 'object' && typeof parsed.update_task.task_ref === 'string') {
+      result.updateTask = {
+        taskRef: parsed.update_task.task_ref.trim(),
+        status: typeof parsed.update_task.status === 'string' ? parsed.update_task.status : undefined,
+        feedback: typeof parsed.update_task.feedback === 'string' ? parsed.update_task.feedback.trim() : undefined,
+      };
+    }
+
+    return result;
   } catch (e) {
     console.error('generateAiReplyForInboundMessage:', e);
     return null;
+  }
+}
+
+/** Execute inbound AI actions: send WhatsApp, create task, update task. */
+export async function executeInboundAiActions(
+  companyId: string,
+  taskId: string,
+  adminId: string,
+  result: InboundAiActionResult
+): Promise<void> {
+  if (result.sendWhatsAppTo) {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const from = process.env.TWILIO_WHATSAPP_FROM;
+    if (accountSid && authToken && from) {
+      try {
+        const to = result.sendWhatsAppTo.phone.startsWith('+') ? `whatsapp:${result.sendWhatsAppTo.phone}` : `whatsapp:+${result.sendWhatsAppTo.phone}`;
+        const taskRef = taskId.slice(-6).toUpperCase();
+        const body = `[رد على المهمة #${taskRef}]\n${result.sendWhatsAppTo.body}`.slice(0, 4096);
+        await twilio(accountSid, authToken).messages.create({
+          from,
+          to,
+          body,
+        });
+        await prisma.coordinatorTask.update({
+          where: { id: taskId },
+          data: { awaitingFeedbackFrom: to },
+        });
+      } catch (e) {
+        console.error('executeInboundAiActions sendWhatsApp:', e);
+      }
+    }
+  }
+
+  if (result.createTask && result.createTask.title) {
+    await prisma.coordinatorTask.create({
+      data: {
+        title: result.createTask.title,
+        description: result.createTask.description ?? null,
+        status: CoordinatorTaskStatus.PENDING,
+        companyId,
+        createdById: adminId,
+        source: 'whatsapp',
+      },
+    });
+  }
+
+  if (result.updateTask && result.updateTask.taskRef) {
+    const tasks = await prisma.coordinatorTask.findMany({ where: { companyId }, select: { id: true } });
+    const match = tasks.find(
+      (t) => t.id === result.updateTask!.taskRef || t.id.endsWith(result.updateTask!.taskRef) || t.id.slice(-6).toUpperCase() === result.updateTask!.taskRef.toUpperCase()
+    );
+    if (match) {
+      const data: { status?: CoordinatorTaskStatus; completedAt?: Date; coordinatorFeedback?: string } = {};
+      if (result.updateTask.status && VALID_STATUSES.includes(result.updateTask.status as CoordinatorTaskStatus)) {
+        data.status = result.updateTask.status as CoordinatorTaskStatus;
+        if (data.status === CoordinatorTaskStatus.COMPLETED) data.completedAt = new Date();
+      }
+      if (result.updateTask.feedback) data.coordinatorFeedback = result.updateTask.feedback;
+      if (Object.keys(data).length > 0) {
+        await prisma.coordinatorTask.update({ where: { id: match.id }, data });
+      }
+    }
   }
 }

@@ -73,7 +73,12 @@ Twilio sends `application/x-www-form-urlencoded` with `From`, `To`, `Body`, etc.
   - Accepts Twilio’s form body and optional JSON (for other providers).  
   - Validates Twilio signature when `TWILIO_AUTH_TOKEN` is set.  
   - Creates one **CoordinatorTask** per message (title from first line of body, description includes sender and full text).
-  - **AI auto-reply:** When `OPENAI_API_KEY` is set, OpenAI generates the WhatsApp reply directly from company data (tasks, KPIs, reports) and the incoming message. No human needed—the sender gets an intelligent, contextual reply immediately.
+  - **AI auto-reply:** When `OPENAI_API_KEY` is set, the AI generates replies and can **execute actions** directly:
+    - Answer questions from company data (tasks, KPIs, reports)
+    - **Send WhatsApp** to a contact (e.g. "راسل أحمد" / "call Ahmed")—if the contact is in the contacts list
+    - **Ask for number** if the requested person is not in contacts: "رقم أحمد غير متوفر. يرجى إرسال رقمه للتواصل."
+    - Create or update tasks. Add contacts via `POST /api/coordinator/contacts` (name, phone).
+  - **Feedback from external contacts:** When the AI sends a WhatsApp to a contact (e.g. Ahmed) for a task, the task is marked as awaiting that contact's reply. When Ahmed replies, his message is stored as coordinator feedback on the task, and the AI forwards a summary to the original requester.
 
 - **Contact (display):** `GET /api/coordinator/whatsapp/contact`  
   - Returns the coordinator number (from `TWILIO_WHATSAPP_FROM`, stripped of `whatsapp:` for display and wa.me links).  

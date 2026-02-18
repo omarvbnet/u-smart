@@ -15,6 +15,7 @@ export type CompanyContext = {
       priority: string | null;
       hasFeedback: boolean;
       inboundReplyTo: string | null;
+      awaitingFeedbackFrom: string | null;
       createdAt: string;
     }>;
   };
@@ -48,6 +49,7 @@ export type CompanyContext = {
   };
   jobDuties: { total: number };
   socialAccounts: { total: number; platforms: string[] };
+  contacts: Array<{ name: string; phone: string }>;
 };
 
 /**
@@ -67,6 +69,7 @@ export async function buildCompanyContext(companyId: string): Promise<CompanyCon
     voiceLogsCount,
     jobDutyCount,
     socialAccounts,
+    contacts,
   ] = await Promise.all([
     prisma.coordinatorTask.findMany({
       where: { companyId },
@@ -80,6 +83,7 @@ export async function buildCompanyContext(companyId: string): Promise<CompanyCon
         priority: true,
         coordinatorFeedback: true,
         inboundReplyTo: true,
+        awaitingFeedbackFrom: true,
         createdAt: true,
       },
     }),
@@ -112,6 +116,10 @@ export async function buildCompanyContext(companyId: string): Promise<CompanyCon
     prisma.coordinatorSocialAccount.findMany({
       where: { companyId },
       select: { platform: true },
+    }),
+    prisma.coordinatorContact.findMany({
+      where: { companyId },
+      select: { name: true, phone: true },
     }),
   ]);
 
@@ -159,6 +167,7 @@ export async function buildCompanyContext(companyId: string): Promise<CompanyCon
         priority: t.priority,
         hasFeedback: !!(t.coordinatorFeedback && t.coordinatorFeedback.trim().length > 0),
         inboundReplyTo: t.inboundReplyTo,
+        awaitingFeedbackFrom: t.awaitingFeedbackFrom,
         createdAt: t.createdAt.toISOString(),
       })),
     },
@@ -195,6 +204,7 @@ export async function buildCompanyContext(companyId: string): Promise<CompanyCon
       total: socialAccounts.length,
       platforms: [...new Set(socialAccounts.map((s) => s.platform))],
     },
+    contacts: contacts.map((c) => ({ name: c.name, phone: c.phone })),
   };
 }
 
@@ -202,11 +212,18 @@ export async function buildCompanyContext(companyId: string): Promise<CompanyCon
 export function contextToPromptText(ctx: CompanyContext): string {
   const parts: string[] = [];
   parts.push(`Tasks: total ${ctx.tasks.total}. By status: ${JSON.stringify(ctx.tasks.byStatus)}. By source: ${JSON.stringify(ctx.tasks.bySource)}. By priority: ${JSON.stringify(ctx.tasks.byPriority)}.`);
-  parts.push(`Recent tasks (up to 20): ${ctx.tasks.recent.map((t) => `[${t.id.slice(-6)}] ${t.title} | ${t.status} | source:${t.source ?? 'manual'} | priority:${t.priority ?? 'normal'} | hasFeedback:${t.hasFeedback} | inboundReplyTo:${t.inboundReplyTo ? 'yes' : 'no'}`).join('; ')}`);
+  parts.push(`Recent tasks (up to 20): ${ctx.tasks.recent.map((t) => `[${t.id.slice(-6)}] ${t.title} | ${t.status} | source:${t.source ?? 'manual'} | inboundReplyTo:${t.inboundReplyTo || 'no'} | awaitingFeedbackFrom:${t.awaitingFeedbackFrom || 'no'}`).join('; ')}`);
   parts.push(`KPIs: total ${ctx.kpis.total}. By status: ${JSON.stringify(ctx.kpis.byStatus)}. List: ${ctx.kpis.list.map((k) => `${k.name}=${k.actualValue}/${k.targetValue} (${k.status})`).join('; ')}`);
   parts.push(`Reports (last 5): ${ctx.reports.map((r) => `${r.title} (${r.type})`).join('; ')}`);
   parts.push(`Recent audit: ${ctx.audit.map((a) => `${a.action} ${a.resource ?? ''} ${a.resourceId ?? ''}`).join('; ')}`);
   parts.push(`Voice: call records last 7 days: ${ctx.voice.callRecordsLast7Days}; voice logs total: ${ctx.voice.voiceLogsTotal}.`);
   parts.push(`Job duty templates: ${ctx.jobDuties.total}. Social accounts: ${ctx.socialAccounts.total} (${ctx.socialAccounts.platforms.join(', ') || 'none'}).`);
+  const contactList = ctx.contacts.map((c) => `${c.name}=${c.phone}`).join('; ') || 'none';
+  const inboundByTask = ctx.tasks.recent
+    .filter((t) => t.inboundReplyTo)
+    .map((t) => `#${t.id.slice(-6)}=${t.inboundReplyTo}`)
+    .join('; ');
+  const inboundLine = inboundByTask ? ` Inbound (task ref=number): ${inboundByTask}.` : '';
+  parts.push(`ALL WhatsApp numbers: ${contactList}.${inboundLine} Use these when asked to contact someone. Match by name (contacts) or by task ref (e.g. "راسل صاحب المهمة #ABC123" → use number for #ABC123).`);
   return parts.join('\n');
 }

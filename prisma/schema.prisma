@@ -626,6 +626,7 @@ model User {
     subscriptionPlan  CoordinatorSubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
     subscriptions     CoordinatorSubscription[]
     users             CoordinatorUser[]
+    contacts          CoordinatorContact[]
     tasks             CoordinatorTask[]
     kpis              CoordinatorKPI[]
     reports           CoordinatorReport[]
@@ -663,6 +664,21 @@ model User {
     @@map("coordinator_users")
   }
 
+  model CoordinatorContact {
+    id        String   @id @default(cuid())
+    name      String   // e.g. "أحمد" or "Ahmed" for lookup
+    phone     String   // E.164 e.g. +9647712345678
+    companyId String
+    company   CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    notes     String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([companyId])
+    @@index([companyId, name])
+    @@map("coordinator_contacts")
+  }
+
   model CoordinatorTask {
     id                   String               @id @default(cuid())
     title                String
@@ -679,6 +695,7 @@ model User {
     source               String?              // voice | email | whatsapp | manual
     coordinatorFeedback  String?              // coordinator's feedback after action (e.g. "Called Ahmed, he said...")
     inboundReplyTo       String?              // for inbound tasks: WhatsApp/email to send feedback to (e.g. whatsapp:+964...)
+    awaitingFeedbackFrom String?              // when we messaged a contact for this task: their whatsapp (e.g. whatsapp:+964...) so we link their reply
     aiProcessedAt        DateTime?            // when AI last processed this task (status + WhatsApp reply)
     priority             String?             @default("normal") // normal | high | urgent (for escalation)
     subTasks             CoordinatorSubtask[]

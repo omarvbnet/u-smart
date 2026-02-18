@@ -238,6 +238,26 @@ async function main() {
   })
   console.log('✅ Coordinator: admin@coordinator.usmart.com / Admin@Coordinator123 (company: usmart-demo)')
 
+  const existingAhmed = await prisma.coordinatorContact.findFirst({
+    where: { companyId: coordCompany.id, name: 'أحمد' },
+  })
+  if (existingAhmed) {
+    await prisma.coordinatorContact.update({
+      where: { id: existingAhmed.id },
+      data: { phone: '+9647700000001', notes: 'Demo contact for AI "call Ahmed" / "راسل أحمد"' },
+    })
+  } else {
+    await prisma.coordinatorContact.create({
+      data: {
+        name: 'أحمد',
+        phone: '+9647700000001',
+        notes: 'Demo contact for AI "call Ahmed" / "راسل أحمد"',
+        companyId: coordCompany.id,
+      },
+    })
+  }
+  console.log('✅ Demo contact: أحمد / +9647700000001 (add real contacts via /api/coordinator/contacts)')
+
   console.log('🎉 Seeding completed!')
 }
 
