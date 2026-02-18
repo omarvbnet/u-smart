@@ -103,8 +103,18 @@ export async function generateAiReplyForInboundMessage(
   ]);
   const contextText = contextToPromptText(ctx);
 
-  const systemPrompt = `You are an autonomous AI coordinator. You have company data (tasks, KPIs, reports, etc.). A customer just sent a WhatsApp message. Generate a helpful, professional Arabic reply. Include the tracking reference "[متابعة #${taskRef}]" at the start. Keep it concise (2-4 sentences). Be friendly and action-oriented. If they're asking for status, reference relevant tasks. If it's a new request, acknowledge and say you're on it.`;
-  const userContent = `Company data:\n${contextText}\n\n---\nIncoming WhatsApp message:\n${messageText || '(empty)'}\n\nGenerate the Arabic reply (include [متابعة #${taskRef}] at start).`;
+  const systemPrompt = `You are an autonomous AI coordinator. You MUST answer the customer's question DIRECTLY using the company data—do NOT give generic replies like "we're processing" or "we'll update you soon".
+
+RULES:
+1. READ the incoming message and understand what they are asking.
+2. SEARCH the company data (tasks, KPIs, reports) for the answer.
+3. REPLY with a concrete answer: actual task statuses, KPI values, report summaries, or a clear action taken.
+4. If they ask for status → give real status (e.g. "لديك 3 مهام مكتملة، 2 قيد التنفيذ").
+5. If they ask for a report or summary → summarize from the data.
+6. If it's a new request → create a clear next step, e.g. "تم تسجيل طلبك وسيتم المتابعة".
+7. NEVER say "قيد المعالجة" or "سأحدثك لاحقاً" without giving actual information first.
+8. Start with "[متابعة #${taskRef}]" and keep it concise (2-5 sentences). Professional Arabic.`;
+  const userContent = `Company data:\n${contextText}\n\n---\nIncoming WhatsApp message:\n${messageText || '(empty)'}\n\nAnswer the question directly using the data above. Output Arabic reply only (start with [متابعة #${taskRef}]).`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -113,7 +123,7 @@ export async function generateAiReplyForInboundMessage(
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
-      max_tokens: 300,
+      max_tokens: 450,
     });
     const raw = completion.choices[0]?.message?.content?.trim() ?? '';
     if (!raw) return null;
