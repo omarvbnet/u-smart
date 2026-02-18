@@ -33,7 +33,7 @@ This guide covers voice features for the Digital Coordinator: in-app assistant, 
 
 2. **Environment variables** (optional but recommended)
    - `TWILIO_AUTH_TOKEN` – From Twilio Console. Used to validate that requests really come from Twilio (recommended in production).
-   - `TWILIO_COORDINATOR_COMPANY_ID` – The coordinator company ID to attach incoming call records to. If not set, the first company in the database is used.
+   - `TWILIO_COORDINATOR_COMPANY_ID` – The **CoordinatorCompany** id (from `coordinator_companies`) to attach incoming call records to. Must not be a main app `Company` id. If not set, the first coordinator company is used.
 
 3. **Verification**
    - Call your Twilio number; you should hear the Arabic greeting and then the call end. A new row should appear under **المكالمات والصوت** → سجل المكالمات.

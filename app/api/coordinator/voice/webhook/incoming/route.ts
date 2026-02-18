@@ -35,6 +35,20 @@ export async function POST(req: NextRequest) {
       const first = await prisma.coordinatorCompany.findFirst({ select: { id: true } });
       resolvedCompanyId = first?.id ?? null;
     }
+    // Validate company exists (avoids FK violation; TWILIO_COORDINATOR_COMPANY_ID must be a CoordinatorCompany id)
+    if (resolvedCompanyId) {
+      const company = await prisma.coordinatorCompany.findUnique({
+        where: { id: resolvedCompanyId },
+        select: { id: true },
+      });
+      if (!company) {
+        console.error(
+          'Coordinator voice webhook: companyId not found in coordinator_companies. ' +
+            'TWILIO_COORDINATOR_COMPANY_ID must be a CoordinatorCompany id, not a main Company id.'
+        );
+        resolvedCompanyId = null;
+      }
+    }
     if (resolvedCompanyId) {
       const callRecord = await prisma.coordinatorVoiceCallRecord.create({
         data: {

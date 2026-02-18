@@ -15,7 +15,7 @@ Single reference for all environment variables used by the Digital Coordinator (
 | `TWILIO_ACCOUNT_SID` | Optional | Required for sending WhatsApp from coordinator (`POST /api/coordinator/whatsapp/send`). |
 | `TWILIO_AUTH_TOKEN` | Optional | Validate Twilio voice/WhatsApp webhooks; used to send WhatsApp. |
 | `TWILIO_WHATSAPP_FROM` | Optional | Coordinator’s WhatsApp number (e.g. `whatsapp:+14155238886`). Shown on Voice page; used for outbound messages. |
-| `TWILIO_COORDINATOR_COMPANY_ID` | Optional | Which company to attach incoming voice calls and WhatsApp tasks to; if unset, first company. |
+| `TWILIO_COORDINATOR_COMPANY_ID` | Optional | CoordinatorCompany id (from `coordinator_companies`) to attach incoming voice calls and WhatsApp tasks to; if unset, first coordinator company. Must **not** be a main app `Company` id. |
 | `COORDINATOR_INBOUND_SECRET` | Optional | Inbound email/WhatsApp webhooks: send as `X-Inbound-Secret` or `Authorization: Bearer <secret>`. If set, requests without it get 401. |
 
 **Quick setup (minimal):**
