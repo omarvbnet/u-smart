@@ -62,6 +62,7 @@ export async function PATCH(
       checklist?: Prisma.InputJsonValue;
       fileUrls?: string[];
       coordinatorFeedback?: string | null;
+      aiProcessedAt?: Date | null;
       priority?: string | null;
     } = {};
 
