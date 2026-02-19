@@ -1,8 +1,1 @@
-{
-  "crons": [
-    { "path": "/api/coordinator/cron/generate-tasks", "schedule": "0 9 * * *" },
-    { "path": "/api/coordinator/cron/monthly-report", "schedule": "0 9 1 * *" },
-    { "path": "/api/coordinator/cron/daily-performance", "schedule": "0 8 * * *" },
-    { "path": "/api/coordinator/cron/ai-agent", "schedule": "0 10 * * *" }
-  ]
-}
+{"crons":[]}
