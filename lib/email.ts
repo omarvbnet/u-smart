@@ -443,7 +443,7 @@ function getBaseUrl(): string {
   return raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
 }
 
-/** Professional email to user when company dashboard account is approved. Contains username, password, and change-password note. */
+/** Professional email to user when company dashboard account is approved. Contains username, password, congrats message, and change-password note. */
 export async function sendCompanyAccountApprovedEmail(
   to: string,
   params: { name: string; username: string; password: string }
@@ -460,52 +460,70 @@ export async function sendCompanyAccountApprovedEmail(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تم تفعيل حسابك - U-SMART</title>
+  <title>تهانينا! تم تفعيل حسابك - U-SMART</title>
 </head>
-<body style="margin:0; padding:0; background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%); min-height:100vh;">
+<body style="margin:0; padding:0; background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 40%, #0f172a 100%); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 40%, #0f172a 100%); min-height:100vh;">
     <tr>
-      <td align="center" style="padding: 48px 20px;">
-        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px; width:100%; background:#ffffff; border-radius:24px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.4);">
+      <td align="center" style="padding: 48px 24px;">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px; width:100%; background:#ffffff; border-radius:28px; overflow:hidden; box-shadow:0 32px 64px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);">
+          <!-- Header with logo & congrats -->
           <tr>
-            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px 40px 32px; text-align: center;">
-              <img src="${logoUrl}" alt="U-SMART" width="80" height="80" style="display:inline-block; margin-bottom:16px; border-radius:12px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-              <p style="display:none; margin:0 0 16px; color:#f59e0b; font-size:32px; font-weight:800; letter-spacing:2px;">U-SMART</p>
-              <h1 style="margin:0; color:#f59e0b; font-size:26px; font-weight:700;">Smart Solutions &amp; Innovation</h1>
-              <p style="margin:12px 0 0; color:rgba(255,255,255,0.9); font-size:15px;">تم الموافقة على طلبك — حساب لوحة التحكم جاهز</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 40px 40px 32px;">
-              <h2 style="margin:0 0 24px; color:#0f172a; font-size:22px; font-weight:600;">مرحباً ${safeName}،</h2>
-              <p style="margin:0 0 20px; color:#475569; font-size:16px; line-height:1.7;">تمت الموافقة على طلب إنشاء لوحة التحكم. يمكنك الآن تسجيل الدخول باستخدام البيانات التالية:</p>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc; border-radius:16px; border:2px solid #e2e8f0;">
-                <tr>
-                  <td style="padding: 24px 28px;">
-                    <p style="margin:0 0 8px; color:#64748b; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">اسم المستخدم</p>
-                    <p style="margin:0 0 20px; color:#0f172a; font-size:18px; font-weight:700; font-family:monospace;">${escapeHtml(username)}</p>
-                    <p style="margin:0 0 8px; color:#64748b; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">كلمة المرور</p>
-                    <p style="margin:0; color:#0f172a; font-size:18px; font-weight:700; font-family:monospace;">${escapeHtml(password)}</p>
-                  </td>
-                </tr>
+            <td style="background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); padding: 44px 40px 36px; text-align: center; position: relative;">
+              <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin-bottom: 20px;">
+                <tr><td style="width: 96px; height: 96px; background: #f59e0b; border-radius: 24px; text-align: center; vertical-align: middle; padding: 8px;"><img src="${logoUrl}" alt="U-SMART" width="80" height="80" style="border-radius: 20px;" /></td></tr>
               </table>
-              <div style="margin:24px 0; padding:20px 24px; background:#fef3c7; border-radius:12px; border-right:4px solid #f59e0b;">
-                <p style="margin:0 0 8px; color:#92400e; font-size:13px; font-weight:700;">⚠️ تنبيه مهم</p>
-                <p style="margin:0; color:#78350f; font-size:14px; line-height:1.6;">ننصحك بشدة بتغيير كلمة المرور فور أول تسجيل دخول من لوحة التحكم لضمان أمان حسابك.</p>
+              <h1 style="margin: 0; color: #f59e0b; font-size: 28px; font-weight: 800; letter-spacing: 1px;">U-SMART</h1>
+              <p style="margin: 6px 0 0; color: rgba(255,255,255,0.85); font-size: 15px;">Smart Solutions &amp; Innovation</p>
+              <div style="margin-top: 24px; padding: 16px 24px; background: rgba(34,197,94,0.2); border-radius: 16px; border: 1px solid rgba(34,197,94,0.4); display: inline-block;">
+                <p style="margin: 0; color: #4ade80; font-size: 18px; font-weight: 700;">🎉 تهانينا من فريق U-SMART!</p>
+                <p style="margin: 6px 0 0; color: rgba(255,255,255,0.95); font-size: 15px;">تمت الموافقة على طلبك — حساب لوحة التحكم جاهز الآن</p>
               </div>
-              <table role="presentation" cellspacing="0" cellpadding="0">
+            </td>
+          </tr>
+          <!-- Greeting & credentials -->
+          <tr>
+            <td style="padding: 40px 40px 36px;">
+              <h2 style="margin: 0 0 20px; color: #0f172a; font-size: 24px; font-weight: 700;">مرحباً ${safeName}،</h2>
+              <p style="margin: 0 0 28px; color: #475569; font-size: 17px; line-height: 1.75;">يسر فريق U-SMART أن يهنئك بموافقتنا على طلب إنشاء لوحة التحكم. يمكنك الآن تسجيل الدخول باستخدام البيانات التالية:</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 20px; border: 2px solid #e2e8f0; margin-bottom: 28px;">
                 <tr>
-                  <td style="background:#f59e0b; border-radius:12px;">
-                    <a href="${dashboardUrl}" target="_blank" rel="noopener" style="display:inline-block; padding:16px 32px; color:#ffffff; font-size:16px; font-weight:600; text-decoration:none;">تسجيل الدخول إلى لوحة التحكم</a>
+                  <td style="padding: 28px 32px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="padding-bottom: 20px;">
+                          <p style="margin: 0 0 6px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">اسم المستخدم</p>
+                          <p style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: 0.5px;">${escapeHtml(username)}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <p style="margin: 0 0 6px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">كلمة المرور</p>
+                          <p style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: 1px;">${escapeHtml(password)}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <div style="margin-bottom: 28px; padding: 22px 28px; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-radius: 16px; border-right: 5px solid #f59e0b;">
+                <p style="margin: 0 0 8px; color: #92400e; font-size: 14px; font-weight: 700;">⚠️ تنبيه أمني مهم</p>
+                <p style="margin: 0; color: #78350f; font-size: 15px; line-height: 1.65;">ننصحك بشدة بتغيير كلمة المرور فور أول تسجيل دخول من لوحة التحكم لضمان أمان حسابك وحماية بياناتك.</p>
+              </div>
+              <table role="presentation" cellspacing="0" cellpadding="0" align="center">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); border-radius: 14px; box-shadow: 0 4px 14px rgba(245,158,11,0.4);">
+                    <a href="${dashboardUrl}" target="_blank" rel="noopener" style="display: inline-block; padding: 18px 40px; color: #0f172a; font-size: 17px; font-weight: 700; text-decoration: none;">تسجيل الدخول إلى لوحة التحكم</a>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
+          <!-- Footer with team signature -->
           <tr>
-            <td style="background:#f8fafc; padding: 28px 40px; text-align:center; border-top:1px solid #e2e8f0;">
-              <p style="margin:0; color:#64748b; font-size:13px;">فريق U-SMART</p>
-              <p style="margin:8px 0 0; color:#94a3b8; font-size:12px;">© ${new Date().getFullYear()} U-SMART. All rights reserved.</p>
+            <td style="background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); padding: 32px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #475569; font-size: 15px; font-weight: 600;">بالتوفيق من فريق U-SMART 💙</p>
+              <p style="margin: 10px 0 0; color: #94a3b8; font-size: 13px;">© ${new Date().getFullYear()} U-SMART. All rights reserved.</p>
             </td>
           </tr>
         </table>
@@ -516,7 +534,7 @@ export async function sendCompanyAccountApprovedEmail(
 </html>
   `.trim();
 
-  const text = `مرحباً ${name || 'عميلنا'}،\n\nتمت الموافقة على طلب إنشاء لوحة التحكم.\n\nاسم المستخدم: ${username}\nكلمة المرور: ${password}\n\nتنبيه مهم: ننصحك بتغيير كلمة المرور فور أول تسجيل دخول.\n\nتسجيل الدخول: ${dashboardUrl}\n\nفريق U-SMART`;
+  const text = `تهانينا من فريق U-SMART!\n\nمرحباً ${name || 'عميلنا'}،\n\nيسر فريق U-SMART أن يهنئك بموافقتنا على طلب إنشاء لوحة التحكم. حسابك جاهز الآن.\n\nاسم المستخدم: ${username}\nكلمة المرور: ${password}\n\nتنبيه مهم: ننصحك بتغيير كلمة المرور فور أول تسجيل دخول.\n\nتسجيل الدخول: ${dashboardUrl}\n\nبالتوفيق من فريق U-SMART`;
   return sendEmail({
     to,
     subject: 'تم تفعيل حسابك — U-SMART لوحة التحكم',
