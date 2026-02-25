@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendTrainingRequestConfirmation } from '@/lib/email';
+import { sendTrainingRequestConfirmation, notifyTicketsTrainingRequest } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,6 +41,18 @@ export async function POST(req: NextRequest) {
       requesterEmail,
       serviceTitle,
       serviceSlug,
+      company,
+      message,
+      budget,
+    });
+
+    notifyTicketsTrainingRequest({
+      id: trainingRequest.id,
+      serviceSlug,
+      serviceTitle,
+      requesterName,
+      requesterEmail,
+      requesterPhone,
       company,
       message,
       budget,

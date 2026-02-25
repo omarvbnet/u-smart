@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { notifyTicketsProductRequest } from '@/lib/email';
 
 function slugify(text: string) {
   return text
@@ -73,6 +74,15 @@ export async function POST(req: NextRequest) {
         phone,
         message,
       },
+    });
+
+    notifyTicketsProductRequest({
+      productTitle: product.title,
+      productType: validType,
+      name,
+      email,
+      phone,
+      message,
     });
 
     return NextResponse.json({

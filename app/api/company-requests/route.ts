@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getVerifiedEmailFromCookie } from '@/lib/otp-auth';
+import { notifyTicketsCompanyRequest } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,6 +60,16 @@ export async function POST(req: NextRequest) {
         throw err;
       }
     }
+
+    notifyTicketsCompanyRequest({
+      id: request.id,
+      companyName,
+      pocName,
+      pocEmail: pocEmail || null,
+      pocPhone,
+      serviceSlug: finalServiceSlug,
+      certificateUrl: certificateUrl ?? undefined,
+    });
 
     return NextResponse.json({
       success: true,

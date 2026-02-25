@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { prisma as _prisma } from '@/lib/prisma';
 import { verifyRequesterToken, createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
-import { sendTicketNotificationEmail } from '@/lib/email';
+import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTicket } from '@/lib/email';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -198,6 +198,16 @@ export async function POST(req: NextRequest) {
         console.error('Create new-ticket notification:', e);
       }
 
+      notifyTicketsTicket({
+        id: ticket.id,
+        siteName,
+        siteCoordinator,
+        technique,
+        requesterName: name || null,
+        phone,
+        status: 'PENDING',
+      });
+
       return NextResponse.json({
         success: true,
         ticket: {
@@ -227,6 +237,16 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error('Create new-ticket notification:', e);
     }
+
+    notifyTicketsTicket({
+      id: ticket.id,
+      siteName,
+      siteCoordinator,
+      technique,
+      requesterName: ((requester as { name?: string | null })?.name ?? name) || null,
+      phone,
+      status: 'PENDING',
+    });
 
     const requesterEmail = (requester as { email?: string | null })?.email;
     if (requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {

@@ -364,6 +364,167 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
+/** Email address that receives all tickets/applications/requests notifications. */
+const TICKETS_EMAIL = (process.env.TICKETS_EMAIL || 'tickets@usmart-iot.com').trim();
+
+/** Send notification to tickets@usmart-iot.com (or TICKETS_EMAIL). Full HTML body. */
+export async function sendTicketsNotification(subject: string, htmlBody: string, textBody?: string): Promise<boolean> {
+  if (!TICKETS_EMAIL) return false;
+  return sendEmail({
+    to: TICKETS_EMAIL,
+    subject: `[U-SMART] ${subject}`,
+    html: htmlBody,
+    text: textBody ?? htmlToPlainText(htmlBody),
+  });
+}
+
+function row(label: string, value: unknown): string {
+  const v = value == null ? '—' : String(value);
+  return `<tr><td style="padding:6px 12px 6px 0; color:#64748b; font-size:13px; vertical-align:top; width:160px;">${escapeHtml(label)}</td><td style="padding:6px 0; color:#0f172a; font-size:14px;">${escapeHtml(v)}</td></tr>`;
+}
+
+/** Notify tickets@ of new job application (full info). */
+export async function notifyTicketsApplication(data: { id: string; name: string; email: string; phone: string; coverLetter: string | null; resumeUrl: string; careerTitle?: string }): Promise<void> {
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New job application</strong></p>
+    <table style="border-collapse:collapse;">${row('ID', data.id)}${row('Name', data.name)}${row('Email', data.email)}${row('Phone', data.phone)}${row('Career', data.careerTitle || '—')}${row('Resume', data.resumeUrl)}${data.coverLetter ? row('Cover letter', data.coverLetter) : ''}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New application: ${data.name}`, html).catch((e) => console.error('Tickets notification (application):', e));
+}
+
+/** Notify tickets@ of new company/dashboard request (full info). */
+export async function notifyTicketsCompanyRequest(data: { id: string; companyName: string; pocName: string; pocEmail?: string | null; pocPhone: string; serviceSlug: string; certificateUrl?: string | null }): Promise<void> {
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New company / dashboard request</strong></p>
+    <table style="border-collapse:collapse;">${row('Request ID', data.id)}${row('Company', data.companyName)}${row('POC name', data.pocName)}${row('POC email', data.pocEmail || '—')}${row('POC phone', data.pocPhone)}${row('Service', data.serviceSlug)}${data.certificateUrl ? row('Certificate', data.certificateUrl) : ''}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New company request: ${data.companyName}`, html).catch((e) => console.error('Tickets notification (company request):', e));
+}
+
+/** Notify tickets@ of new visitor request (full info). */
+export async function notifyTicketsVisitorRequest(data: { id: string; serviceSlug: string; name?: string | null; email?: string | null; phone: string; company?: string | null; province: string; technique: string; buildingType?: string | null }): Promise<void> {
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New visitor / service request</strong></p>
+    <table style="border-collapse:collapse;">${row('ID', data.id)}${row('Service', data.serviceSlug)}${row('Name', data.name || '—')}${row('Email', data.email || '—')}${row('Phone', data.phone)}${row('Company', data.company || '—')}${row('Province', data.province)}${row('Technique', data.technique)}${data.buildingType ? row('Building type', data.buildingType) : ''}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New visitor request: ${data.serviceSlug}`, html).catch((e) => console.error('Tickets notification (visitor request):', e));
+}
+
+/** Notify tickets@ of new ticket (dashboard/enterprise ticket). */
+export async function notifyTicketsTicket(data: { id: string; siteName?: string; siteCoordinator?: string; technique: string; requesterName?: string | null; phone: string; status?: string }): Promise<void> {
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New dashboard ticket</strong></p>
+    <table style="border-collapse:collapse;">${row('Ticket ID', data.id)}${row('Site name', data.siteName || '—')}${row('Site coordinator', data.siteCoordinator || '—')}${row('Technique', data.technique)}${row('Requester', data.requesterName || '—')}${row('Phone', data.phone)}${row('Status', data.status || 'PENDING')}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New ticket: ${data.siteName || data.id}`, html).catch((e) => console.error('Tickets notification (ticket):', e));
+}
+
+/** Notify tickets@ of new training request (full info). */
+export async function notifyTicketsTrainingRequest(data: { id: string; serviceSlug: string; serviceTitle: string; requesterName: string; requesterEmail: string; requesterPhone: string; company?: string | null; message?: string | null; budget?: string | null }): Promise<void> {
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New training request</strong></p>
+    <table style="border-collapse:collapse;">${row('ID', data.id)}${row('Service', data.serviceTitle)}${row('Slug', data.serviceSlug)}${row('Name', data.requesterName)}${row('Email', data.requesterEmail)}${row('Phone', data.requesterPhone)}${row('Company', data.company || '—')}${data.message ? row('Message', data.message) : ''}${data.budget ? row('Budget', data.budget) : ''}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New training request: ${data.serviceTitle}`, html).catch((e) => console.error('Tickets notification (training):', e));
+}
+
+/** Notify tickets@ of new product request (full info). */
+export async function notifyTicketsProductRequest(data: { productTitle: string; productType: string; name: string; email: string; phone: string; message?: string | null }): Promise<void> {
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New product / order request</strong></p>
+    <table style="border-collapse:collapse;">${row('Product', data.productTitle)}${row('Type', data.productType)}${row('Name', data.name)}${row('Email', data.email)}${row('Phone', data.phone)}${data.message ? row('Message', data.message) : ''}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New product request: ${data.productTitle}`, html).catch((e) => console.error('Tickets notification (product request):', e));
+}
+
+/** Build base URL for links and logo. */
+function getBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  return raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+}
+
+/** Professional email to user when company dashboard account is approved. Contains username, password, and change-password note. */
+export async function sendCompanyAccountApprovedEmail(
+  to: string,
+  params: { name: string; username: string; password: string }
+): Promise<boolean> {
+  const { name, username, password } = params;
+  const baseUrl = getBaseUrl();
+  const logoUrl = `${baseUrl}/icon.png`;
+  const dashboardUrl = `${baseUrl}/dashboard`;
+  const safeName = escapeHtml(name || 'عزيزنا العميل');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تم تفعيل حسابك - U-SMART</title>
+</head>
+<body style="margin:0; padding:0; background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%); min-height:100vh;">
+    <tr>
+      <td align="center" style="padding: 48px 20px;">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px; width:100%; background:#ffffff; border-radius:24px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.4);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px 40px 32px; text-align: center;">
+              <img src="${logoUrl}" alt="U-SMART" width="80" height="80" style="display:inline-block; margin-bottom:16px; border-radius:12px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+              <p style="display:none; margin:0 0 16px; color:#f59e0b; font-size:32px; font-weight:800; letter-spacing:2px;">U-SMART</p>
+              <h1 style="margin:0; color:#f59e0b; font-size:26px; font-weight:700;">Smart Solutions &amp; Innovation</h1>
+              <p style="margin:12px 0 0; color:rgba(255,255,255,0.9); font-size:15px;">تم الموافقة على طلبك — حساب لوحة التحكم جاهز</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 40px 32px;">
+              <h2 style="margin:0 0 24px; color:#0f172a; font-size:22px; font-weight:600;">مرحباً ${safeName}،</h2>
+              <p style="margin:0 0 20px; color:#475569; font-size:16px; line-height:1.7;">تمت الموافقة على طلب إنشاء لوحة التحكم. يمكنك الآن تسجيل الدخول باستخدام البيانات التالية:</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc; border-radius:16px; border:2px solid #e2e8f0;">
+                <tr>
+                  <td style="padding: 24px 28px;">
+                    <p style="margin:0 0 8px; color:#64748b; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">اسم المستخدم</p>
+                    <p style="margin:0 0 20px; color:#0f172a; font-size:18px; font-weight:700; font-family:monospace;">${escapeHtml(username)}</p>
+                    <p style="margin:0 0 8px; color:#64748b; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">كلمة المرور</p>
+                    <p style="margin:0; color:#0f172a; font-size:18px; font-weight:700; font-family:monospace;">${escapeHtml(password)}</p>
+                  </td>
+                </tr>
+              </table>
+              <div style="margin:24px 0; padding:20px 24px; background:#fef3c7; border-radius:12px; border-right:4px solid #f59e0b;">
+                <p style="margin:0 0 8px; color:#92400e; font-size:13px; font-weight:700;">⚠️ تنبيه مهم</p>
+                <p style="margin:0; color:#78350f; font-size:14px; line-height:1.6;">ننصحك بشدة بتغيير كلمة المرور فور أول تسجيل دخول من لوحة التحكم لضمان أمان حسابك.</p>
+              </div>
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="background:#f59e0b; border-radius:12px;">
+                    <a href="${dashboardUrl}" target="_blank" rel="noopener" style="display:inline-block; padding:16px 32px; color:#ffffff; font-size:16px; font-weight:600; text-decoration:none;">تسجيل الدخول إلى لوحة التحكم</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; padding: 28px 40px; text-align:center; border-top:1px solid #e2e8f0;">
+              <p style="margin:0; color:#64748b; font-size:13px;">فريق U-SMART</p>
+              <p style="margin:8px 0 0; color:#94a3b8; font-size:12px;">© ${new Date().getFullYear()} U-SMART. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  const text = `مرحباً ${name || 'عميلنا'}،\n\nتمت الموافقة على طلب إنشاء لوحة التحكم.\n\nاسم المستخدم: ${username}\nكلمة المرور: ${password}\n\nتنبيه مهم: ننصحك بتغيير كلمة المرور فور أول تسجيل دخول.\n\nتسجيل الدخول: ${dashboardUrl}\n\nفريق U-SMART`;
+  return sendEmail({
+    to,
+    subject: 'تم تفعيل حسابك — U-SMART لوحة التحكم',
+    html,
+    text,
+  });
+}
+
 type TrainingConfirmationParams = {
   requesterName: string;
   requesterEmail: string;

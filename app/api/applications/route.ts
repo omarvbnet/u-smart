@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { notifyTicketsApplication } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +26,16 @@ export async function POST(req: NextRequest) {
 
     const application = await prisma.application.create({
       data: { name, email, phone, coverLetter, resumeUrl, careerId },
+    });
+
+    notifyTicketsApplication({
+      id: application.id,
+      name,
+      email,
+      phone,
+      coverLetter,
+      resumeUrl,
+      careerTitle: career.title,
     });
 
     return NextResponse.json({ success: true, application });

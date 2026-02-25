@@ -3,6 +3,7 @@ import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { sendCompanyAccountApprovedEmail } from '@/lib/email';
 
 function generateUsername(): string {
   return `company_${crypto.randomBytes(4).toString('hex')}`;
@@ -95,6 +96,16 @@ export async function PATCH(
         where: { id },
         data: { status: 'APPROVED' },
       });
+
+      const userEmail = pocEmail && typeof pocEmail === 'string' ? pocEmail.trim() : null;
+      if (userEmail) {
+        sendCompanyAccountApprovedEmail(userEmail, {
+          name: companyRequest.pocName,
+          username,
+          password,
+        }).catch((e) => console.error('Company account approved email:', e));
+      }
+
       return NextResponse.json({
         success: true,
         status: 'APPROVED',

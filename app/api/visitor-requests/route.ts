@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { notifyTicketsVisitorRequest } from '@/lib/email';
 
 const BUILDING_TYPES = ['home', 'villa', 'hotel', 'complex', 'other'];
 const SMART_HOME_TECHNIQUES = ['knx', 'buspro', 'zigbee'];
@@ -105,6 +106,18 @@ export async function POST(req: NextRequest) {
         email: body.email?.trim() || null,
         serviceSlug,
       },
+    });
+
+    notifyTicketsVisitorRequest({
+      id: request.id,
+      serviceSlug,
+      name: body.name?.trim() || null,
+      email: body.email?.trim() || null,
+      phone,
+      company: body.company?.trim() || null,
+      province,
+      technique,
+      buildingType: isProgramming || isEnterpriseNetworking ? null : buildingType || null,
     });
 
     return NextResponse.json({ success: true, request });
