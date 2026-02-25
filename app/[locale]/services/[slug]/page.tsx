@@ -6,7 +6,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2 } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
-import ServicePdfExport from '@/components/ServicePdfExport';
+
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
@@ -212,13 +212,6 @@ export default function ServiceDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             {t('serviceDetail.backToServices')}
           </Link>
-          {service && (
-            <ServicePdfExport
-              serviceTitle={service.title}
-              serviceDescription={service.description}
-              slug={slug}
-            />
-          )}
         </div>
 
         {/* Service brief - description first */}
@@ -1381,21 +1374,21 @@ export default function ServiceDetailPage() {
             {showDashboardButtons && (
               <Link
                 href={dashboardHref}
-                className={`flex items-center gap-2 px-5 py-3 font-semibold rounded-full shadow-lg transition-all ${
+                className={`flex items-center gap-2 px-4 py-3 sm:px-5 text-sm sm:text-base font-semibold rounded-full shadow-lg transition-all min-h-[48px] ${
                   showQualityControlTechnologies
                     ? 'bg-white/10 hover:bg-white/20 border border-amber-500/40 text-amber-400 shadow-amber-500/20'
                     : 'bg-white/10 hover:bg-white/20 border border-cyan-500/40 text-cyan-400 shadow-cyan-500/20'
                 }`}
                 aria-label={t('ticketForm.dashboardButton')}
               >
-                <LayoutDashboard className="w-5 h-5" />
-                <span className="hidden sm:inline">{t('ticketForm.dashboardButton')}</span>
+                <LayoutDashboard className="w-5 h-5 shrink-0" />
+                <span>{t('ticketForm.dashboardButton')}</span>
               </Link>
             )}
             <button
               type="button"
               onClick={() => setRequestModalOpen(true)}
-              className={`flex items-center gap-2 px-5 py-3 font-semibold rounded-full shadow-lg transition-all ${
+              className={`flex items-center gap-2 px-4 py-3 sm:px-5 text-sm sm:text-base font-semibold rounded-full shadow-lg transition-all min-h-[48px] ${
                 showQualityControlTechnologies
                   ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/30 hover:shadow-amber-500/40'
                   : showEnterpriseNetworkingTechnologies
@@ -1406,8 +1399,8 @@ export default function ServiceDetailPage() {
               } text-white`}
               aria-label={showDashboardButtons ? t('companyRequest.createDashboard') : t('visitorRequestForm.title')}
             >
-              <Send className="w-5 h-5" />
-              <span className="hidden sm:inline">
+              <Send className="w-5 h-5 shrink-0" />
+              <span>
                 {showDashboardButtons ? t('companyRequest.createDashboard') : t('visitorRequestForm.submitButton')}
               </span>
             </button>
