@@ -312,7 +312,11 @@ export async function sendSubscriptionConfirmation(
   });
 }
 
-/** Send an HTML email. Returns true if sent, false if SMTP not configured or send failed. */
+/** Default retry config for email sends. */
+const EMAIL_RETRY_ATTEMPTS = 3;
+const EMAIL_RETRY_DELAY_MS = 2000;
+
+/** Send an HTML email. Returns true if sent, false if SMTP not configured or send failed after retries. */
 export async function sendEmail(options: {
   to: string;
   subject: string;
@@ -329,24 +333,32 @@ export async function sendEmail(options: {
   const from = options.from || process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@localhost';
   const text = options.text ?? htmlToPlainText(options.html);
 
-  try {
-    await transporter.sendMail({
-      from,
-      to: options.to,
-      subject: options.subject,
-      text,
-      html: options.html,
-      headers: {
-        'X-Mailer': 'U-SMART',
-        'Reply-To': from,
-        'Message-ID': `<${Date.now()}.${Math.random().toString(36).slice(2)}@${typeof process.env.SMTP_HOST === 'string' ? process.env.SMTP_HOST.replace(/^smtp\./, '') : 'usmart'}>`,
-      },
-    });
-    return true;
-  } catch (e) {
-    console.error('SMTP send error:', e);
-    return false;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= EMAIL_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await transporter.sendMail({
+        from,
+        to: options.to,
+        subject: options.subject,
+        text,
+        html: options.html,
+        headers: {
+          'X-Mailer': 'U-SMART',
+          'Reply-To': from,
+          'Message-ID': `<${Date.now()}.${Math.random().toString(36).slice(2)}@${typeof process.env.SMTP_HOST === 'string' ? process.env.SMTP_HOST.replace(/^smtp\./, '') : 'usmart'}>`,
+        },
+      });
+      return true;
+    } catch (e) {
+      lastError = e;
+      console.error(`SMTP send error (attempt ${attempt}/${EMAIL_RETRY_ATTEMPTS}):`, e);
+      if (attempt < EMAIL_RETRY_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, EMAIL_RETRY_DELAY_MS));
+      }
+    }
   }
+  console.error('SMTP send failed after all retries');
+  return false;
 }
 
 /** Strip HTML to a simple plain-text version (reduces spam score when sent as multipart). */
@@ -437,10 +449,17 @@ export async function notifyTicketsProductRequest(data: { productTitle: string; 
   sendTicketsNotification(`New product request: ${data.productTitle}`, html).catch((e) => console.error('Tickets notification (product request):', e));
 }
 
-/** Build base URL for links and logo. */
+/** Build base URL for links and logo. Prefer production domain for reliable image loading. */
 function getBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
   return raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+}
+
+/** Logo URL for emails. Use LOGO_URL env for explicit URL, otherwise baseUrl/icon.png. */
+function getLogoUrl(): string {
+  const explicit = (process.env.LOGO_URL || '').trim();
+  if (explicit && explicit.startsWith('http')) return explicit;
+  return `${getBaseUrl()}/icon.png`;
 }
 
 /** Professional email to user when company dashboard account is approved. Contains username, password, congrats message, and change-password note. */
@@ -450,7 +469,7 @@ export async function sendCompanyAccountApprovedEmail(
 ): Promise<boolean> {
   const { name, username, password } = params;
   const baseUrl = getBaseUrl();
-  const logoUrl = `${baseUrl}/icon.png`;
+  const logoUrl = getLogoUrl();
   const dashboardUrl = `${baseUrl}/dashboard`;
   const safeName = escapeHtml(name || 'عزيزنا العميل');
 
@@ -469,36 +488,38 @@ export async function sendCompanyAccountApprovedEmail(
         <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px; width:100%; background:#ffffff; border-radius:28px; overflow:hidden; box-shadow:0 32px 64px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);">
           <!-- Header with logo & congrats -->
           <tr>
-            <td style="background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); padding: 44px 40px 36px; text-align: center; position: relative;">
+            <td style="background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); padding: 44px 40px 36px; text-align: center;">
               <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin-bottom: 20px;">
-                <tr><td style="width: 96px; height: 96px; background: #f59e0b; border-radius: 24px; text-align: center; vertical-align: middle; padding: 8px;"><img src="${logoUrl}" alt="U-SMART" width="80" height="80" style="border-radius: 20px;" /></td></tr>
+                <tr><td style="width: 96px; height: 96px; background: #f59e0b; border-radius: 24px; text-align: center; vertical-align: middle; line-height: 96px;">
+                  <img src="${logoUrl}" alt="U-SMART" width="80" height="80" style="display:block; margin: 0 auto; border-radius: 20px; max-width: 80px; max-height: 80px;" />
+                </td></tr>
               </table>
-              <h1 style="margin: 0; color: #f59e0b; font-size: 28px; font-weight: 800; letter-spacing: 1px;">U-SMART</h1>
-              <p style="margin: 6px 0 0; color: rgba(255,255,255,0.85); font-size: 15px;">Smart Solutions &amp; Innovation</p>
-              <div style="margin-top: 24px; padding: 16px 24px; background: rgba(34,197,94,0.2); border-radius: 16px; border: 1px solid rgba(34,197,94,0.4); display: inline-block;">
-                <p style="margin: 0; color: #4ade80; font-size: 18px; font-weight: 700;">🎉 تهانينا من فريق U-SMART!</p>
-                <p style="margin: 6px 0 0; color: rgba(255,255,255,0.95); font-size: 15px;">تمت الموافقة على طلبك — حساب لوحة التحكم جاهز الآن</p>
+              <h1 style="margin: 0; color: #fbbf24; font-size: 28px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">U-SMART</h1>
+              <p style="margin: 6px 0 0; color: #e2e8f0; font-size: 15px;">Smart Solutions &amp; Innovation</p>
+              <div style="margin-top: 24px; padding: 16px 24px; background: rgba(34,197,94,0.25); border-radius: 16px; border: 1px solid #22c55e; display: inline-block;">
+                <p style="margin: 0; color: #ffffff; font-size: 18px; font-weight: 700;">🎉 تهانينا من فريق U-SMART!</p>
+                <p style="margin: 6px 0 0; color: #dcfce7; font-size: 15px;">تمت الموافقة على طلبك — حساب لوحة التحكم جاهز الآن</p>
               </div>
             </td>
           </tr>
           <!-- Greeting & credentials -->
           <tr>
-            <td style="padding: 40px 40px 36px;">
+            <td style="padding: 40px 40px 36px; background: #ffffff;">
               <h2 style="margin: 0 0 20px; color: #0f172a; font-size: 24px; font-weight: 700;">مرحباً ${safeName}،</h2>
-              <p style="margin: 0 0 28px; color: #475569; font-size: 17px; line-height: 1.75;">يسر فريق U-SMART أن يهنئك بموافقتنا على طلب إنشاء لوحة التحكم. يمكنك الآن تسجيل الدخول باستخدام البيانات التالية:</p>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 20px; border: 2px solid #e2e8f0; margin-bottom: 28px;">
+              <p style="margin: 0 0 28px; color: #334155; font-size: 17px; line-height: 1.75;">يسر فريق U-SMART أن يهنئك بموافقتنا على طلب إنشاء لوحة التحكم. يمكنك الآن تسجيل الدخول باستخدام البيانات التالية:</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #f1f5f9; border-radius: 20px; border: 2px solid #cbd5e1; margin-bottom: 28px;">
                 <tr>
                   <td style="padding: 28px 32px;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="padding-bottom: 20px;">
-                          <p style="margin: 0 0 6px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">اسم المستخدم</p>
+                          <p style="margin: 0 0 6px; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">اسم المستخدم</p>
                           <p style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: 0.5px;">${escapeHtml(username)}</p>
                         </td>
                       </tr>
                       <tr>
                         <td>
-                          <p style="margin: 0 0 6px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">كلمة المرور</p>
+                          <p style="margin: 0 0 6px; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">كلمة المرور</p>
                           <p style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: 1px;">${escapeHtml(password)}</p>
                         </td>
                       </tr>
@@ -506,14 +527,14 @@ export async function sendCompanyAccountApprovedEmail(
                   </td>
                 </tr>
               </table>
-              <div style="margin-bottom: 28px; padding: 22px 28px; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-radius: 16px; border-right: 5px solid #f59e0b;">
+              <div style="margin-bottom: 28px; padding: 22px 28px; background: #fef3c7; border-radius: 16px; border-right: 5px solid #d97706;">
                 <p style="margin: 0 0 8px; color: #92400e; font-size: 14px; font-weight: 700;">⚠️ تنبيه أمني مهم</p>
-                <p style="margin: 0; color: #78350f; font-size: 15px; line-height: 1.65;">ننصحك بشدة بتغيير كلمة المرور فور أول تسجيل دخول من لوحة التحكم لضمان أمان حسابك وحماية بياناتك.</p>
+                <p style="margin: 0; color: #451a03; font-size: 15px; line-height: 1.65;">ننصحك بشدة بتغيير كلمة المرور فور أول تسجيل دخول من لوحة التحكم لضمان أمان حسابك وحماية بياناتك.</p>
               </div>
               <table role="presentation" cellspacing="0" cellpadding="0" align="center">
                 <tr>
-                  <td style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); border-radius: 14px; box-shadow: 0 4px 14px rgba(245,158,11,0.4);">
-                    <a href="${dashboardUrl}" target="_blank" rel="noopener" style="display: inline-block; padding: 18px 40px; color: #0f172a; font-size: 17px; font-weight: 700; text-decoration: none;">تسجيل الدخول إلى لوحة التحكم</a>
+                  <td style="background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); border-radius: 14px; box-shadow: 0 4px 14px rgba(217,119,6,0.4);">
+                    <a href="${dashboardUrl}" target="_blank" rel="noopener" style="display: inline-block; padding: 18px 40px; color: #ffffff; font-size: 17px; font-weight: 700; text-decoration: none;">تسجيل الدخول إلى لوحة التحكم</a>
                   </td>
                 </tr>
               </table>
@@ -521,9 +542,9 @@ export async function sendCompanyAccountApprovedEmail(
           </tr>
           <!-- Footer with team signature -->
           <tr>
-            <td style="background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); padding: 32px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="margin: 0; color: #475569; font-size: 15px; font-weight: 600;">بالتوفيق من فريق U-SMART 💙</p>
-              <p style="margin: 10px 0 0; color: #94a3b8; font-size: 13px;">© ${new Date().getFullYear()} U-SMART. All rights reserved.</p>
+            <td style="background: #f1f5f9; padding: 32px 40px; text-align: center; border-top: 2px solid #e2e8f0;">
+              <p style="margin: 0; color: #334155; font-size: 15px; font-weight: 600;">بالتوفيق من فريق U-SMART 💙</p>
+              <p style="margin: 10px 0 0; color: #475569; font-size: 13px;">© ${new Date().getFullYear()} U-SMART. All rights reserved.</p>
             </td>
           </tr>
         </table>
