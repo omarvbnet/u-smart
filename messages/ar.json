@@ -317,12 +317,19 @@
       "companyNamePlaceholder": "اسم شركتك",
       "pocName": "اسم جهة الاتصال",
       "pocNamePlaceholder": "اسم نقطة الاتصال",
+      "pocEmail": "البريد الإلكتروني",
+      "pocEmailPlaceholder": "you@company.com",
       "pocPhone": "هاتف جهة الاتصال",
       "certificateOptional": "شهادة أو رخصة الشركة (اختياري)",
       "certificatePlaceholder": "رفع أو لصق الرابط",
       "submit": "إرسال الطلب",
       "submitSuccess": "تم إرسال الطلب. سنراجعه وننشئ لوحة التحكم.",
-      "requiredFields": "اسم الشركة واسم وجهة الاتصال وهاتفها مطلوبة."
+      "requiredFields": "اسم الشركة واسم جهة الاتصال والبريد الإلكتروني والهاتف مطلوبة.",
+      "emailVerifyTitle": "تحقق من بريدك الإلكتروني لمنع التسجيلات الوهمية. سنرسل لك رمزاً مكوناً من 6 أرقام.",
+      "sendCode": "إرسال الرمز",
+      "emailCodeSent": "تم إرسال رمز التحقق. تحقق من صندوق الوارد.",
+      "emailCodeTitle": "أدخل الرمز المكون من 6 أرقام المرسل إلى",
+      "verifyCode": "التحقق"
     },
     "ticketForm": {
       "title": "إضافة تذكرة",

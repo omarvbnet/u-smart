@@ -317,12 +317,19 @@
       "companyNamePlaceholder": "ناوی کۆمپانیاکەت",
       "pocName": "ناوی پەیوەندی",
       "pocNamePlaceholder": "ناوی جێبەجێکەر",
+      "pocEmail": "ئیمەیڵی پەیوەندی",
+      "pocEmailPlaceholder": "you@company.com",
       "pocPhone": "ژمارەی تەلەفۆنی پەیوەندی",
       "certificateOptional": "بڕوانامە یان مۆڵەتی کۆمپانیا (ئارەزوومەندانە)",
       "certificatePlaceholder": "بارکردن یان URL",
       "submit": "ناردنی داواکاری",
       "submitSuccess": "داواکاری نێردرا. پێداچوونەوە دەکەین و داشبۆرد دروست دەکەین.",
-      "requiredFields": "ناوی کۆمپانیا، ناوی پەیوەندی و تەلەفۆن پێویستن."
+      "requiredFields": "ناوی کۆمپانیا، ناوی پەیوەندی، ئیمەیڵ و تەلەفۆن پێویستن.",
+      "emailVerifyTitle": "ئیمەیڵەکەت دڵنیا بکەرەوە بۆ ڕێگرتن لە تۆمارکردنی هەڵە. کۆدی ٦ ژمارە دەنێرین.",
+      "sendCode": "ناردنی کۆد",
+      "emailCodeSent": "کۆدی پشتڕاستکردنەوە نێردرا. سندوقی وەرگرتنت بپشکنە.",
+      "emailCodeTitle": "کۆدی ٦ ژمارە بنووسە نێردراو بۆ",
+      "verifyCode": "دڵنیاکردنەوە"
     },
     "ticketForm": {
       "title": "زیادکردنی تیکێت",

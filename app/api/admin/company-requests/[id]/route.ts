@@ -68,11 +68,13 @@ export async function PATCH(
         ? 'quality-control-supervision'
         : 'enterprise-networking';
 
+      const pocEmail = (companyRequest as { pocEmail?: string | null }).pocEmail;
       const requester = await prisma.ticketRequester.create({
         data: {
           username,
           passwordHash,
           name: companyRequest.pocName,
+          email: pocEmail && typeof pocEmail === 'string' ? pocEmail.trim() : undefined,
           phone: companyRequest.pocPhone,
           company: companyRequest.companyName,
           companyCertificationUrl: companyRequest.certificateUrl ?? undefined,

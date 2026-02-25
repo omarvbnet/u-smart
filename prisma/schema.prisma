@@ -291,6 +291,7 @@ model User {
     id             String               @id @default(cuid())
     companyName    String
     pocName        String               // Point of Contact name
+    pocEmail       String?              // POC email (verified via 2FA before request)
     pocPhone       String
     certificateUrl String?              // optional company certificate/license
     serviceSlug    String               @default("enterprise-networking")  // which dashboard to create
@@ -299,6 +300,18 @@ model User {
     updatedAt      DateTime             @updatedAt
 
     @@map("company_requests")
+  }
+
+  // Email OTP for dashboard registration 2FA (verify real email)
+  model EmailOtp {
+    id        String   @id @default(cuid())
+    email     String
+    code      String
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    @@index([email, expiresAt])
+    @@map("email_otps")
   }
 
   enum CompanyRequestStatus {

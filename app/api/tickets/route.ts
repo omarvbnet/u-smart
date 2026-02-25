@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { prisma as _prisma } from '@/lib/prisma';
 import { verifyRequesterToken, createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
+import { sendTicketNotificationEmail } from '@/lib/email';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,26 +46,28 @@ export async function POST(req: NextRequest) {
 
     const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
     const payload = token ? verifyRequesterToken(token) : null;
+    let requester: { email?: string | null } | null = null;
 
     if (payload) {
-      const requester = await prisma.ticketRequester.findUnique({
+      const reqData = await prisma.ticketRequester.findUnique({
         where: { id: payload.requesterId },
-        select: { id: true, phone: true, name: true, company: true, serviceSlug: true, status: true },
+        select: { id: true, phone: true, name: true, company: true, serviceSlug: true, status: true, email: true },
       });
-      if (!requester) {
+      requester = reqData;
+      if (!reqData) {
         return NextResponse.json({ success: false, message: 'Requester not found' }, { status: 401 });
       }
-      const status = (requester as { status?: string }).status;
+      const status = (reqData as { status?: string }).status;
       if (status === 'BLOCKED' || status === 'SUSPENDED') {
         return NextResponse.json(
           { success: false, message: 'Your account is blocked or suspended. Please contact support.' },
           { status: 403 }
         );
       }
-      if (!phone) phone = requester.phone;
+      if (!phone) phone = reqData.phone;
       if (!province) province = 'N/A';
-      if (!name && requester.name) name = requester.name ?? '';
-      if (!company && requester.company) company = requester.company ?? '';
+      if (!name && reqData.name) name = reqData.name ?? '';
+      if (!company && reqData.company) company = reqData.company ?? '';
     } else {
       if (!phone || !province) {
         return NextResponse.json(
@@ -223,6 +226,16 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.error('Create new-ticket notification:', e);
+    }
+
+    const requesterEmail = (requester as { email?: string | null })?.email;
+    if (requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {
+      sendTicketNotificationEmail({
+        to: requesterEmail.trim(),
+        type: 'new_ticket',
+        ticketId: ticket.id,
+        summary: `${siteName} - ${siteCoordinator}`,
+      }).catch((e) => console.error('Ticket email notification:', e));
     }
 
     return NextResponse.json({

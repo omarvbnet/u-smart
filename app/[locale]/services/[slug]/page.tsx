@@ -105,6 +105,7 @@ export default function ServiceDetailPage() {
   const [createDashboardForm, setCreateDashboardForm] = useState({
     companyName: '',
     pocName: '',
+    pocEmail: '',
     pocPhone: '',
     certificateUrl: '',
   });
@@ -116,11 +117,14 @@ export default function ServiceDetailPage() {
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestMessage, setRequestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [requesterLoggedIn, setRequesterLoggedIn] = useState(false);
-  const [otpStep, setOtpStep] = useState<'request' | 'phone' | 'code' | 'form'>('request');
+  const [otpStep, setOtpStep] = useState<'request' | 'phone' | 'code' | 'form' | 'email'>('request');
   const [otpPhone, setOtpPhone] = useState('');
+  const [otpEmail, setOtpEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
+  const [emailOtpSending, setEmailOtpSending] = useState(false);
+  const [emailOtpVerifying, setEmailOtpVerifying] = useState(false);
   const requestModalOpenRef = useRef(false);
 
   useEffect(() => {
@@ -128,10 +132,11 @@ export default function ServiceDetailPage() {
     requestModalOpenRef.current = requestModalOpen;
     if (justOpened && showDashboardButtons && !requesterLoggedIn && !ticketCredentials) {
       setCreateDashboardSuccess(false);
-      setCreateDashboardForm({ companyName: '', pocName: '', pocPhone: '', certificateUrl: '' });
+      setCreateDashboardForm({ companyName: '', pocName: '', pocEmail: '', pocPhone: '', certificateUrl: '' });
       setRequestMessage(null);
-      setOtpStep('request');
+      setOtpStep('email');
       setOtpPhone('');
+      setOtpEmail('');
       setOtpCode('');
     }
   }, [requestModalOpen, showDashboardButtons, requesterLoggedIn, ticketCredentials]);
@@ -698,12 +703,109 @@ export default function ServiceDetailPage() {
                     {t('visitorRequestForm.close')}
                   </button>
                 </div>
-              ); if (otpStep !== 'phone' && otpStep !== 'code') return (
+              ); if (otpStep === 'email') return (
+                <div className="space-y-3">
+                  <p className="text-xs sm:text-sm text-gray-400">{t('companyRequest.emailVerifyTitle')}</p>
+                  {requestMessage && (
+                    <div className={`px-3 py-2 rounded-lg text-xs sm:text-sm ${requestMessage.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {requestMessage.text}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={otpEmail}
+                      onChange={(e) => setOtpEmail(e.target.value)}
+                      placeholder={t('companyRequest.pocEmailPlaceholder')}
+                      className="flex-1 min-w-0 px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={emailOtpSending || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otpEmail.trim())}
+                      onClick={async () => {
+                        setRequestMessage(null);
+                        setEmailOtpSending(true);
+                        try {
+                          const res = await fetch('/api/otp/email/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: otpEmail.trim().toLowerCase() }),
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setOtpStep('code');
+                            setRequestMessage({ type: 'success', text: t('companyRequest.emailCodeSent') });
+                          } else {
+                            setRequestMessage({ type: 'error', text: (data.message || t('visitorRequestForm.errorMessage')) as string });
+                          }
+                        } catch {
+                          setRequestMessage({ type: 'error', text: t('visitorRequestForm.errorMessage') });
+                        } finally {
+                          setEmailOtpSending(false);
+                        }
+                      }}
+                      className="px-4 py-2.5 sm:py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors shrink-0"
+                    >
+                      {emailOtpSending ? '...' : t('companyRequest.sendCode')}
+                    </button>
+                  </div>
+                </div>
+              ); if (otpStep === 'code' && otpEmail) return (
+                <div className="space-y-3">
+                  <p className="text-xs sm:text-sm text-gray-400">{t('companyRequest.emailCodeTitle')} — {otpEmail}</p>
+                  {requestMessage && (
+                    <div className={`px-3 py-2 rounded-lg text-xs sm:text-sm ${requestMessage.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {requestMessage.text}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      className="flex-1 min-w-0 px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-cyan-500 outline-none font-mono text-center"
+                    />
+                    <button
+                      type="button"
+                      disabled={emailOtpVerifying || otpCode.length < 4}
+                      onClick={async () => {
+                        setRequestMessage(null);
+                        setEmailOtpVerifying(true);
+                        try {
+                          const res = await fetch('/api/otp/email/verify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: otpEmail.trim().toLowerCase(), code: otpCode }),
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setCreateDashboardForm((f) => ({ ...f, pocEmail: otpEmail.trim().toLowerCase() }));
+                            setOtpStep('form');
+                            setRequestMessage(null);
+                          } else {
+                            setRequestMessage({ type: 'error', text: (data.message || t('visitorRequestForm.errorMessage')) as string });
+                          }
+                        } catch {
+                          setRequestMessage({ type: 'error', text: t('visitorRequestForm.errorMessage') });
+                        } finally {
+                          setEmailOtpVerifying(false);
+                        }
+                      }}
+                      className="px-4 py-2.5 sm:py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors shrink-0"
+                    >
+                      {emailOtpVerifying ? '...' : t('companyRequest.verifyCode')}
+                    </button>
+                  </div>
+                </div>
+              ); if (otpStep === 'form') return (
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
                     setRequestMessage(null);
-                    if (!createDashboardForm.companyName.trim() || !createDashboardForm.pocName.trim() || !createDashboardForm.pocPhone.trim()) {
+                    if (!createDashboardForm.companyName.trim() || !createDashboardForm.pocName.trim() || !createDashboardForm.pocPhone.trim() || !createDashboardForm.pocEmail.trim()) {
                       setRequestMessage({ type: 'error', text: t('companyRequest.requiredFields') });
                       return;
                     }
@@ -715,6 +817,7 @@ export default function ServiceDetailPage() {
                         body: JSON.stringify({
                           companyName: createDashboardForm.companyName.trim(),
                           pocName: createDashboardForm.pocName.trim(),
+                          pocEmail: createDashboardForm.pocEmail.trim().toLowerCase(),
                           pocPhone: createDashboardForm.pocPhone.trim(),
                           certificateUrl: createDashboardForm.certificateUrl.trim() || undefined,
                           serviceSlug: slug,
@@ -754,6 +857,15 @@ export default function ServiceDetailPage() {
                       placeholder={t('companyRequest.pocNamePlaceholder')}
                       className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm sm:text-base text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('companyRequest.pocEmail')}</label>
+                    <input
+                      type="email"
+                      value={createDashboardForm.pocEmail}
+                      readOnly
+                      className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm sm:text-base text-gray-400 cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -879,7 +991,7 @@ export default function ServiceDetailPage() {
                     {t('visitorRequestForm.close')}
                   </button>
                 </div>
-              ); if (otpStep === 'code') return (
+              ); if (otpStep === 'code' && otpPhone) return (
                 <div className="space-y-3">
                   <p className="text-xs sm:text-sm text-gray-400">{t('ticketForm.otpStepTitle')} — {otpPhone}</p>
                   {requestMessage && (
@@ -932,7 +1044,7 @@ export default function ServiceDetailPage() {
                     </button>
                   </div>
                 </div>
-              ); if (otpStep === 'form') return (
+              ); if (otpStep === 'request') return (
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();

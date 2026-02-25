@@ -317,12 +317,19 @@
       "companyNamePlaceholder": "Şirket adınız",
       "pocName": "İletişim kişisi adı",
       "pocNamePlaceholder": "İletişim kişisi",
+      "pocEmail": "İletişim e-postası",
+      "pocEmailPlaceholder": "you@company.com",
       "pocPhone": "İletişim telefonu",
       "certificateOptional": "Şirket sertifikası veya lisansı (isteğe bağlı)",
       "certificatePlaceholder": "Yükle veya URL yapıştır",
       "submit": "Talep gönder",
       "submitSuccess": "Talep gönderildi. İnceleyip panelinizi oluşturacağız.",
-      "requiredFields": "Şirket adı, iletişim adı ve telefonu zorunludur."
+      "requiredFields": "Şirket adı, iletişim adı, e-posta ve telefon zorunludur.",
+      "emailVerifyTitle": "Sahte kayıtları önlemek için e-postanızı doğrulayın. 6 haneli kod göndereceğiz.",
+      "sendCode": "Kod gönder",
+      "emailCodeSent": "Doğrulama kodu gönderildi. Gelen kutunuzu kontrol edin.",
+      "emailCodeTitle": "Şu adrese gönderilen 6 haneli kodu girin",
+      "verifyCode": "Doğrula"
     },
     "ticketForm": {
       "title": "Bilet ekle",

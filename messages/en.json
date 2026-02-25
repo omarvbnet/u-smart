@@ -397,12 +397,19 @@
       "companyNamePlaceholder": "Your company name",
       "pocName": "POC name",
       "pocNamePlaceholder": "Point of contact name",
+      "pocEmail": "POC email",
+      "pocEmailPlaceholder": "you@company.com",
       "pocPhone": "POC phone number",
       "certificateOptional": "Company certificate or license (optional)",
       "certificatePlaceholder": "Upload or paste URL",
       "submit": "Submit request",
       "submitSuccess": "Request submitted. We will review and create your dashboard.",
-      "requiredFields": "Company name, POC name, and POC phone are required."
+      "requiredFields": "Company name, POC name, POC email, and POC phone are required.",
+      "emailVerifyTitle": "Verify your email to prevent fake signups. We will send you a 6-digit code.",
+      "sendCode": "Send code",
+      "emailCodeSent": "Verification code sent. Check your inbox.",
+      "emailCodeTitle": "Enter the 6-digit code sent to",
+      "verifyCode": "Verify"
     },
     "ticketForm": {
       "title": "Add Ticket",

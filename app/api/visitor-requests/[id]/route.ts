@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendTicketNotificationEmail, sendTicketCompletedEmail } from '@/lib/email';
 
 const TICKET_STATUSES = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'] as const;
 
@@ -275,7 +276,7 @@ export async function PATCH(
       }
     }
 
-    // Notify requester when status changes
+    // Notify requester when status changes (in-app + email)
     try {
       if (updated.requesterId && updated.requester) {
         const statusLabels: Record<string, string> = {
@@ -294,6 +295,39 @@ export async function PATCH(
             forAdmin: false,
           },
         });
+        const requesterEmail = (updated.requester as { email?: string | null })?.email;
+        if (status && requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {
+          const emailAddr = requesterEmail.trim();
+          if (status === 'COMPLETED') {
+            let parsed: Record<string, unknown> = {};
+            try {
+              const raw = typeof updated.company === 'string' ? updated.company : '';
+              if (raw) parsed = JSON.parse(raw) as Record<string, unknown>;
+            } catch {
+              /* ignore */
+            }
+            const completedData = {
+              ticketId: id,
+              siteName: (parsed.siteName as string) ?? (updated as { siteName?: string }).siteName ?? null,
+              siteCoordinator: (parsed.siteCoordinator as string) ?? (updated as { siteCoordinator?: string }).siteCoordinator ?? null,
+              technique: (updated.technique as string) ?? (parsed.technique as string) ?? '—',
+              slaHours: (parsed.slaHours as number) ?? (updated as { slaHours?: number }).slaHours ?? null,
+              completedAt: (parsed.completedAt as string) ?? (updated.completedAt ? String(updated.completedAt) : null),
+              inspectionResult: (parsed.inspectionResult as string) ?? null,
+              inspectionComments: (parsed.inspectionComments as string) ?? null,
+              maintenanceDescription: (updated as { maintenanceDescription?: string }).maintenanceDescription ?? null,
+              designSpecifications: (parsed.designSpecifications as string) ?? null,
+            };
+            sendTicketCompletedEmail(emailAddr, completedData).catch((e) => console.error('Ticket completed email:', e));
+          } else {
+            sendTicketNotificationEmail({
+              to: emailAddr,
+              type: 'status_changed',
+              ticketId: id,
+              status: status as string,
+            }).catch((e) => console.error('Ticket status email:', e));
+          }
+        }
       }
     } catch (e) {
       console.error('Create status notification:', e);
