@@ -522,7 +522,10 @@ export default function ProfessionalHomePage() {
       });
       const data = await res.json();
       if (data.success) {
-        setSubscribeMessage({ type: "success", text: t("footer.subscribeSuccess") });
+        const text = data.emailSent === false
+          ? (t("footer.subscribeSuccessNoEmail") || "Subscribed. Confirmation email could not be sent — use Resend to try again.")
+          : t("footer.subscribeSuccess");
+        setSubscribeMessage({ type: "success", text });
       } else {
         setSubscribeMessage({ type: "error", text: data.message || t("footer.subscribeError") });
       }

@@ -45,17 +45,20 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.subscriber.findUnique({ where: { email } });
     if (existing) {
       if (existing.active) {
-        return NextResponse.json(
-          { success: true, message: 'Already subscribed', alreadySubscribed: true },
-          { status: 200 }
-        );
+        const emailSent = await sendSubscriptionConfirmation(email, name ?? existing.name);
+        return NextResponse.json({
+          success: true,
+          message: 'Already subscribed',
+          alreadySubscribed: true,
+          emailSent,
+        });
       }
       await prisma.subscriber.update({
         where: { email },
         data: { active: true, name: name ?? existing.name },
       });
-      await sendSubscriptionConfirmation(email, name ?? existing.name);
-      return NextResponse.json({ success: true, message: 'Subscription reactivated' });
+      const emailSent = await sendSubscriptionConfirmation(email, name ?? existing.name);
+      return NextResponse.json({ success: true, message: 'Subscription reactivated', emailSent });
     }
 
     await prisma.subscriber.create({
@@ -66,8 +69,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await sendSubscriptionConfirmation(email, name);
-    return NextResponse.json({ success: true, message: 'Subscribed successfully' });
+    const emailSent = await sendSubscriptionConfirmation(email, name);
+    return NextResponse.json({ success: true, message: 'Subscribed successfully', emailSent });
   } catch (error) {
     console.error('POST /api/subscribe:', error);
     if (isPrismaInitError(error)) {

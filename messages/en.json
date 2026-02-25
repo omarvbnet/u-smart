@@ -660,6 +660,7 @@
       "subscribe": "Subscribe",
       "subscribing": "Subscribing…",
       "subscribeSuccess": "Thank you! You're subscribed. We'll send you our latest updates.",
+      "subscribeSuccessNoEmail": "Subscribed! Confirmation email could not be sent — use Resend to try again.",
       "subscribeError": "Something went wrong. Please try again.",
       "subscribeErrorRequired": "Please enter your email.",
       "resendEmail": "Resend confirmation email",

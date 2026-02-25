@@ -601,6 +601,7 @@
       "subscribe": "Abone Ol",
       "subscribing": "Abone olunuyor…",
       "subscribeSuccess": "Teşekkürler! Abone oldunuz. En son güncellemeleri size göndereceğiz.",
+      "subscribeSuccessNoEmail": "Abone olundu. Onay e-postası gönderilemedi — Tekrar gönder'i kullanın.",
       "subscribeError": "Bir şeyler yanlış gitti. Lütfen tekrar deneyin.",
       "subscribeErrorRequired": "Lütfen e-posta adresinizi girin.",
       "resendEmail": "Onay e-postasını tekrar gönder",
