@@ -19,11 +19,31 @@ export async function GET(
     return NextResponse.json({ success: false, message: 'Ticket ID required' }, { status: 400 });
   }
 
+  // Determine requester role to decide access rules
+  let requesterRole = 'COMPANY';
   try {
+    const reqRow = await prisma.ticketRequester.findUnique({
+      where: { id: payload.requesterId },
+      select: { role: true },
+    });
+    requesterRole = reqRow?.role ?? 'COMPANY';
+  } catch { /* fallback to COMPANY */ }
+
+  try {
+    // For COMPANY users: must own the ticket.
+    // For ENGINEER users: ticket must be PENDING or assigned to them.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let whereClause: any;
+    if (requesterRole === 'ENGINEER') {
+      whereClause = { id };
+    } else {
+      whereClause = { id, requesterId: payload.requesterId };
+    }
+
     let row: any;
     try {
       row = await prisma.visitorRequest.findFirst({
-        where: { id, requesterId: payload.requesterId },
+        where: whereClause,
         select: {
           id: true,
           technique: true,
@@ -46,7 +66,7 @@ export async function GET(
       });
     } catch (schemaErr) {
       row = await prisma.visitorRequest.findFirst({
-        where: { id, requesterId: payload.requesterId },
+        where: whereClause,
         select: {
           id: true,
           technique: true,
