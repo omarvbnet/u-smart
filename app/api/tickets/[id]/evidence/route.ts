@@ -5,15 +5,17 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
+  const { id } = await params;
+
   try {
     const evidence = await prisma.ticketEvidence.findMany({
-      where: { visitorRequestId: params.id },
+      where: { visitorRequestId: id },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -33,11 +35,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
+
+  const { id } = await params;
 
   try {
     const body = await req.json();
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const evidence = await prisma.ticketEvidence.create({
       data: {
-        visitorRequestId: params.id,
+        visitorRequestId: id,
         uploadedById: auth.payload.requesterId,
         uploadedByName: requester?.name || requester?.username || 'Unknown',
         fileUrl,

@@ -5,15 +5,17 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
+  const { id } = await params;
+
   try {
     const ticket = await prisma.visitorRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, status: true, company: true },
     });
 
@@ -21,7 +23,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
     }
 
-    // Parse company JSON to check assignment
     let parsed: Record<string, unknown> = {};
     try {
       parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
@@ -39,7 +40,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const body = await req.json();
     const checklistResponse = body.checklistResponse ?? null;
 
-    // Update company JSON with completedAt
     parsed.status = 'COMPLETED';
     parsed.completedAt = new Date().toISOString();
     if (checklistResponse) {
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     await prisma.visitorRequest.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
@@ -56,10 +56,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       },
     });
 
-    // Create status log
     try {
       await prisma.ticketStatusLog.create({
-        data: { visitorRequestId: params.id, status: 'COMPLETED' },
+        data: { visitorRequestId: id, status: 'COMPLETED' },
       });
     } catch { /* ignore */ }
 
