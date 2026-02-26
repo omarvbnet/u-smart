@@ -5,6 +5,7 @@ class ApiConfig {
   static const String me = '/api/auth/requester-me';
   static const String updateProfile = '/api/auth/requester-update';
   static const String logout = '/api/auth/requester-logout';
+  static const String requesterRole = '/api/auth/requester-role';
 
   static const String tickets = '/api/tickets';
   static String ticketDetail(String id) => '/api/tickets/$id';

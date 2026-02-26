@@ -24,6 +24,16 @@ class AuthService {
     _api.setToken(null);
   }
 
+  Future<String> _fetchRole() async {
+    try {
+      final data = await _api.get(ApiConfig.requesterRole);
+      if (data['success'] == true && data['role'] != null) {
+        return data['role'] as String;
+      }
+    } catch (_) {}
+    return 'COMPANY';
+  }
+
   Future<({User user, String token})?> login(
       String username, String password) async {
     final data = await _api.post(ApiConfig.login, body: {
@@ -34,7 +44,14 @@ class AuthService {
     if (data['success'] == true && data['token'] != null) {
       final token = data['token'] as String;
       await _saveToken(token);
-      final user = User.fromJson(data['user'] as Map<String, dynamic>);
+
+      final userJson = data['user'] as Map<String, dynamic>;
+      // If login response doesn't include role, fetch it separately
+      if (userJson['role'] == null) {
+        userJson['role'] = await _fetchRole();
+      }
+
+      final user = User.fromJson(userJson);
       return (user: user, token: token);
     }
     return null;
@@ -43,7 +60,12 @@ class AuthService {
   Future<User?> fetchMe() async {
     final data = await _api.get(ApiConfig.me);
     if (data['success'] == true && data['user'] != null) {
-      return User.fromJson(data['user'] as Map<String, dynamic>);
+      final userJson = data['user'] as Map<String, dynamic>;
+      // If /me response doesn't include role, fetch it separately
+      if (userJson['role'] == null) {
+        userJson['role'] = await _fetchRole();
+      }
+      return User.fromJson(userJson);
     }
     return null;
   }
