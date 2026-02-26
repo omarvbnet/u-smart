@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { prisma } from '@/lib/prisma';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
 function getSiteDelegate() {
   return (prisma as any).site;
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-  if (!token) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-  const payload = verifyRequesterToken(token);
-  if (!payload) {
-    return NextResponse.json({ success: false, message: 'Invalid or expired session' }, { status: 401 });
-  }
+  const payload = auth.payload;
 
   const site = getSiteDelegate();
   const doExport = req.nextUrl.searchParams.get('export') === '1';
@@ -38,6 +35,8 @@ export async function GET(req: NextRequest) {
         siteId: true,
         location: true,
         province: true,
+        latitude: true,
+        longitude: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -92,14 +91,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-  if (!token) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-  const payload = verifyRequesterToken(token);
-  if (!payload) {
-    return NextResponse.json({ success: false, message: 'Invalid or expired session' }, { status: 401 });
-  }
+  const payload = auth.payload;
 
   try {
     const body = await req.json();
@@ -150,6 +146,8 @@ export async function POST(req: NextRequest) {
     const siteId = typeof body.siteId === 'string' ? body.siteId.trim() : '';
     const location = typeof body.location === 'string' ? body.location.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() : '';
+    const latitude = typeof body.latitude === 'number' ? body.latitude : null;
+    const longitude = typeof body.longitude === 'number' ? body.longitude : null;
 
     if (!siteId || !location || !province) {
       return NextResponse.json(
@@ -187,6 +185,8 @@ export async function POST(req: NextRequest) {
         siteId,
         location,
         province,
+        latitude,
+        longitude,
         requesterId: payload.requesterId,
       },
     });
@@ -198,6 +198,8 @@ export async function POST(req: NextRequest) {
         siteId: created.siteId,
         location: created.location,
         province: created.province,
+        latitude: created.latitude ?? null,
+        longitude: created.longitude ?? null,
         ticketCount: 0,
         qualityControlCount: 0,
         enterpriseCount: 0,

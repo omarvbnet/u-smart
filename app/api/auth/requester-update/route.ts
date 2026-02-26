@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
 export async function PATCH(req: NextRequest) {
   try {
-    const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-    if (!token) {
+    const auth = getRequesterFromRequest(req);
+    if (!auth) {
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
     }
-    const payload = verifyRequesterToken(token);
-    if (!payload) {
-      return NextResponse.json({ success: false, message: 'Invalid or expired session' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },

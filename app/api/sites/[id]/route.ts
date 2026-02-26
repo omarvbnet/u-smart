@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { prisma } from '@/lib/prisma';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
 function getSiteDelegate() {
   return (prisma as any).site;
@@ -10,14 +10,11 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-  if (!token) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-  const payload = verifyRequesterToken(token);
-  if (!payload) {
-    return NextResponse.json({ success: false, message: 'Invalid or expired session' }, { status: 401 });
-  }
+  const payload = auth.payload;
 
   const { id } = await params;
   if (!id) {
@@ -37,6 +34,8 @@ export async function PATCH(
     const siteId = typeof body.siteId === 'string' ? body.siteId.trim() : undefined;
     const location = typeof body.location === 'string' ? body.location.trim() : undefined;
     const province = typeof body.province === 'string' ? body.province.trim() : undefined;
+    const latitude = typeof body.latitude === 'number' ? body.latitude : undefined;
+    const longitude = typeof body.longitude === 'number' ? body.longitude : undefined;
 
     const site = await siteDelegate.findUnique({
       where: { id },
@@ -47,10 +46,12 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: 'Site not found' }, { status: 404 });
     }
 
-    const data: { siteId?: string; location?: string; province?: string } = {};
+    const data: { siteId?: string; location?: string; province?: string; latitude?: number | null; longitude?: number | null } = {};
     if (siteId !== undefined) data.siteId = siteId;
     if (location !== undefined) data.location = location;
     if (province !== undefined) data.province = province;
+    if (latitude !== undefined) data.latitude = latitude;
+    if (longitude !== undefined) data.longitude = longitude;
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(
@@ -109,14 +110,11 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-  if (!token) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-  const payload = verifyRequesterToken(token);
-  if (!payload) {
-    return NextResponse.json({ success: false, message: 'Invalid or expired session' }, { status: 401 });
-  }
+  const payload = auth.payload;
 
   const { id } = await params;
   if (!id) {

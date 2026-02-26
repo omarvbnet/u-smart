@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma as _prisma } from '@/lib/prisma';
-import { verifyRequesterToken, createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTicket } from '@/lib/email';
 
@@ -44,8 +45,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-    const payload = token ? verifyRequesterToken(token) : null;
+    const auth = getRequesterFromRequest(req);
+    const payload = auth?.payload ?? null;
     let requester: { email?: string | null } | null = null;
 
     if (payload) {
@@ -291,21 +292,14 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-    if (!token) {
+    const auth = getRequesterFromRequest(req);
+    if (!auth) {
       return NextResponse.json(
         { success: false, message: 'Not authenticated' },
         { status: 401 }
       );
     }
-
-    const payload = verifyRequesterToken(token);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid or expired session' },
-        { status: 401 }
-      );
-    }
+    const payload = auth.payload;
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
@@ -402,6 +396,9 @@ export async function GET(req: NextRequest) {
       let ncrReason: string | null = null;
       let ncrImageUrls: string[] = [];
       let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
+      let assignedEngineerId: string | null = null;
+      let assignedEngineerName: string | null = null;
+      let assignedAt: string | null = null;
       try {
         const parsed = typeof r.company === 'string' ? JSON.parse(r.company) : {} as Record<string, unknown>;
         if (parsed._ticket) {
@@ -418,6 +415,9 @@ export async function GET(req: NextRequest) {
           ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
             ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
             : [];
+          assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+          assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
+          assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
         }
       } catch {
         /* ignore */
@@ -443,6 +443,9 @@ export async function GET(req: NextRequest) {
         ncrReason: ncrReason || null,
         ncrImageUrls,
         ncrResubmissions,
+        assignedEngineerId,
+        assignedEngineerName,
+        assignedAt,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
       };
     });

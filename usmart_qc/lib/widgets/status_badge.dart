@@ -1,0 +1,113 @@
+import 'package:flutter/material.dart';
+
+class StatusBadge extends StatelessWidget {
+  final String status;
+  final double fontSize;
+
+  const StatusBadge({super.key, required this.status, this.fontSize = 11});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = _statusConfig(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [config.bg, config.bg.withAlpha(40)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: config.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: config.text.withAlpha(30),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: config.text,
+              boxShadow: [
+                BoxShadow(
+                  color: config.text.withAlpha(120),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            config.label,
+            style: TextStyle(
+              color: config.text,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static _StatusConfig _statusConfig(String status) {
+    switch (status.toUpperCase()) {
+      case 'PENDING':
+        return _StatusConfig(
+          label: 'Pending',
+          bg: const Color(0x40F59E0B),
+          border: const Color(0x60F59E0B),
+          text: const Color(0xFFFBBF24),
+        );
+      case 'ON_SITE':
+        return _StatusConfig(
+          label: 'On Site',
+          bg: const Color(0x406C63FF),
+          border: const Color(0x606C63FF),
+          text: const Color(0xFF8B83FF),
+        );
+      case 'IN_PROGRESS':
+        return _StatusConfig(
+          label: 'In Progress',
+          bg: const Color(0x4000D4AA),
+          border: const Color(0x6000D4AA),
+          text: const Color(0xFF00D4AA),
+        );
+      case 'COMPLETED':
+        return _StatusConfig(
+          label: 'Completed',
+          bg: const Color(0x4022C55E),
+          border: const Color(0x6022C55E),
+          text: const Color(0xFF4ADE80),
+        );
+      default:
+        return _StatusConfig(
+          label: status,
+          bg: const Color(0x406B7280),
+          border: const Color(0x606B7280),
+          text: const Color(0xFF9CA3AF),
+        );
+    }
+  }
+}
+
+class _StatusConfig {
+  final String label;
+  final Color bg;
+  final Color border;
+  final Color text;
+  _StatusConfig(
+      {required this.label,
+      required this.bg,
+      required this.border,
+      required this.text});
+}

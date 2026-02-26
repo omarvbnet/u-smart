@@ -349,6 +349,8 @@ model User {
     siteId            String            // user-defined site identifier
     location          String            // site location/address
     province          String            // province in Iraq
+    latitude          Float?
+    longitude         Float?
     requesterId       String
     requester         TicketRequester   @relation(fields: [requesterId], references: [id], onDelete: Cascade)
     createdAt         DateTime          @default(now())

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
-import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
 const prisma = _prisma as any;
 
@@ -8,14 +8,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-  if (!token) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-  const payload = verifyRequesterToken(token);
-  if (!payload) {
-    return NextResponse.json({ success: false, message: 'Invalid or expired session' }, { status: 401 });
-  }
+  const payload = auth.payload;
 
   const { id } = await params;
   if (!id) {
