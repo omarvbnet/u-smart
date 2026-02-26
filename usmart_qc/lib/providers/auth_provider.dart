@@ -16,6 +16,8 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggedIn => _user != null;
   bool get loading => _loading;
   String? get error => _error;
+  bool get isEngineer => _user?.isEngineer ?? false;
+  bool get isCompany => _user?.isCompany ?? true;
 
   Future<void> tryAutoLogin() async {
     _loading = true;

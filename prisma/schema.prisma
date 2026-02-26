@@ -243,9 +243,12 @@ model User {
     maintenanceDescription String?  // description of maintenance work done (when completed)
     beforeImageUrls Json?          // before images (when IN_PROGRESS+)
     finishingImageUrls     Json?   // after / finishing site photos
+    checklistResponse Json?           // { checklistId, checklistName, items: [{id, label, checked, note?}], completedAt }
     requesterId     String?
     requester       TicketRequester? @relation(fields: [requesterId], references: [id], onDelete: SetNull)
     statusLogs      TicketStatusLog[]
+    comments        TicketComment[]
+    evidence        TicketEvidence[]
     createdAt       DateTime       @default(now())
     updatedAt       DateTime       @updatedAt
 
@@ -264,6 +267,34 @@ model User {
     @@map("ticket_status_logs")
   }
 
+  model TicketComment {
+    id                String         @id @default(cuid())
+    visitorRequestId  String
+    visitorRequest    VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
+    authorId          String
+    authorName        String
+    body              String
+    createdAt         DateTime       @default(now())
+
+    @@index([visitorRequestId])
+    @@map("ticket_comments")
+  }
+
+  model TicketEvidence {
+    id                String         @id @default(cuid())
+    visitorRequestId  String
+    visitorRequest    VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
+    uploadedById      String
+    uploadedByName    String
+    fileUrl           String
+    fileType          String         // image | pdf
+    description       String?
+    createdAt         DateTime       @default(now())
+
+    @@index([visitorRequestId])
+    @@map("ticket_evidence")
+  }
+
   // Ticket requester accounts (each linked to one service: enterprise-networking OR quality-control-supervision)
   model TicketRequester {
     id                       String            @id @default(cuid())
@@ -275,6 +306,7 @@ model User {
     company                  String?
     companyCertificationUrl  String?           // uploaded file path/URL
     serviceSlug              String            @default("enterprise-networking")  // which dashboard: enterprise-networking | quality-control-supervision
+    role                     RequesterRole     @default(COMPANY)
     status                   RequesterStatus   @default(ACTIVE)
     hasUpdatedCredentials    Boolean           @default(false)
     createdAt                DateTime          @default(now())
@@ -365,6 +397,11 @@ model User {
     ACTIVE
     SUSPENDED
     BLOCKED
+  }
+
+  enum RequesterRole {
+    COMPANY
+    ENGINEER
   }
 
   enum TicketStatus {

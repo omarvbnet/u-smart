@@ -9,6 +9,7 @@ export type RequesterPayload = {
   requesterId: string;
   username: string;
   name: string | null;
+  role: string;
 };
 
 export function createRequesterToken(payload: RequesterPayload): string {
@@ -25,6 +26,7 @@ export function verifyRequesterToken(token: string): RequesterPayload | null {
       requesterId: decoded.requesterId,
       username: decoded.username,
       name: decoded.name ?? null,
+      role: decoded.role ?? 'COMPANY',
     };
   } catch {
     return null;

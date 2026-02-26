@@ -35,10 +35,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const role = (requester as { role?: string }).role ?? 'COMPANY';
     const token = createRequesterToken({
       requesterId: requester.id,
       username: requester.username,
       name: requester.name,
+      role,
     });
 
     const res = NextResponse.json({
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
         id: requester.id,
         username: requester.username,
         name: requester.name,
+        role,
       },
     });
 

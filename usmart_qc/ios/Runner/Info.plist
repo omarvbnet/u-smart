@@ -32,6 +32,10 @@
 	<string>U-Smart QC uses background location to detect site arrival and update ticket status.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>U-Smart QC needs your location to detect when you arrive at a site and automatically update ticket status.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Provisor needs camera access to capture evidence photos for inspection reports.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Provisor needs photo library access to upload evidence images for inspection reports.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -51,4 +51,19 @@ class ApiService {
         await http.delete(_uri(path), headers: _headers);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
+
+  Future<String?> uploadFile(String path, String filePath) async {
+    final request = http.MultipartRequest('POST', _uri(path));
+    if (_token != null) {
+      request.headers['Authorization'] = 'Bearer $_token';
+    }
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+    final data = jsonDecode(body) as Map<String, dynamic>;
+    if (data['success'] == true) {
+      return data['url'] as String?;
+    }
+    return null;
+  }
 }

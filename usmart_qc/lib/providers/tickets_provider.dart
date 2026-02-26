@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/ticket.dart';
 import '../models/stats.dart';
+import '../models/comment.dart';
+import '../models/evidence.dart';
+import '../models/inspection_checklist.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 
@@ -16,7 +19,11 @@ class TicketsProvider extends ChangeNotifier {
   Timer? _pollTimer;
   int _lastTicketCount = 0;
 
+  String? _currentUserId;
+
   TicketsProvider(this._api, this._notifications);
+
+  void setCurrentUserId(String? id) => _currentUserId = id;
 
   List<Ticket> get tickets => _tickets;
   List<Ticket> get pendingTickets =>
@@ -30,6 +37,36 @@ class TicketsProvider extends ChangeNotifier {
   List<Ticket> get ncrTickets => _tickets.where((t) => t.isNcr).toList();
   List<Ticket> get unassignedTickets =>
       _tickets.where((t) => t.canBeAssigned).toList();
+
+  // Engineer-specific: available tickets (PENDING + not assigned)
+  List<Ticket> get availableTickets =>
+      _tickets.where((t) => t.isPending && !t.isAssigned).toList();
+
+  // Engineer-specific: tickets assigned to me (any status)
+  List<Ticket> get myAssignedTickets => _currentUserId == null
+      ? []
+      : _tickets
+          .where((t) => t.assignedEngineerId == _currentUserId)
+          .toList();
+
+  // Engineer-specific: my completed tickets
+  List<Ticket> get myCompletedTickets => _currentUserId == null
+      ? []
+      : _tickets
+          .where((t) =>
+              t.isCompleted && t.assignedEngineerId == _currentUserId)
+          .toList();
+
+  // Engineer-specific: my active tickets (assigned to me, not completed)
+  List<Ticket> get myActiveTickets => _currentUserId == null
+      ? []
+      : _tickets
+          .where((t) =>
+              !t.isCompleted &&
+              !t.isPending &&
+              t.assignedEngineerId == _currentUserId)
+          .toList();
+
   TicketStats? get stats => _stats;
   bool get loading => _loading;
   String? get error => _error;
@@ -175,6 +212,109 @@ class TicketsProvider extends ChangeNotifier {
       return data['success'] == true;
     } catch (_) {}
     return false;
+  }
+
+  // ─── Comments ───
+  Future<List<TicketComment>> fetchComments(String ticketId) async {
+    try {
+      final data = await _api.get(ApiConfig.ticketComments(ticketId));
+      if (data['success'] == true && data['comments'] is List) {
+        return (data['comments'] as List)
+            .map((e) => TicketComment.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<TicketComment?> addComment(String ticketId, String body) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketComments(ticketId),
+        body: {'body': body},
+      );
+      if (data['success'] == true && data['comment'] != null) {
+        return TicketComment.fromJson(
+            data['comment'] as Map<String, dynamic>);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ─── Evidence ───
+  Future<List<TicketEvidence>> fetchEvidence(String ticketId) async {
+    try {
+      final data = await _api.get(ApiConfig.ticketEvidence(ticketId));
+      if (data['success'] == true && data['evidence'] is List) {
+        return (data['evidence'] as List)
+            .map((e) => TicketEvidence.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<TicketEvidence?> addEvidence(
+      String ticketId, String fileUrl, String fileType,
+      [String? description]) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketEvidence(ticketId),
+        body: {
+          'fileUrl': fileUrl,
+          'fileType': fileType,
+          if (description != null) 'description': description,
+        },
+      );
+      if (data['success'] == true && data['evidence'] != null) {
+        return TicketEvidence.fromJson(
+            data['evidence'] as Map<String, dynamic>);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ─── Checklists ───
+  Future<List<InspectionChecklist>> fetchChecklists() async {
+    try {
+      final data = await _api.get(ApiConfig.inspectionChecklists);
+      if (data['success'] == true && data['checklists'] is List) {
+        return (data['checklists'] as List)
+            .map((e) =>
+                InspectionChecklist.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // ─── Complete Ticket ───
+  Future<bool> completeTicket(
+      String ticketId, Map<String, dynamic>? checklistResponse) async {
+    try {
+      final data = await _api.patch(
+        ApiConfig.ticketComplete(ticketId),
+        body: {
+          if (checklistResponse != null)
+            'checklistResponse': checklistResponse,
+        },
+      );
+      if (data['success'] == true) {
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // ─── Upload file ───
+  Future<String?> uploadFile(String filePath) async {
+    try {
+      final url = await _api.uploadFile(
+          ApiConfig.uploadTicketAttachment, filePath);
+      return url;
+    } catch (_) {}
+    return null;
   }
 
   @override

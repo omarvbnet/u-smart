@@ -303,7 +303,7 @@ export async function GET(req: NextRequest) {
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { serviceSlug: true },
+      select: { serviceSlug: true, role: true, name: true },
     });
     if (!requester) {
       return NextResponse.json(
@@ -312,6 +312,7 @@ export async function GET(req: NextRequest) {
       );
     }
     const requesterServiceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
+    const requesterRole = (requester as { role?: string }).role ?? 'COMPANY';
 
     const { searchParams } = new URL(req.url);
     const doExport = searchParams.get('export') === '1';
@@ -325,23 +326,43 @@ export async function GET(req: NextRequest) {
       ? dashboardSlug
       : requesterServiceSlug;
 
-    const where: { requesterId: string; serviceSlug?: string; createdAt?: { gte?: Date; lte?: Date }; OR?: Array<{ siteName?: { contains: string; mode: 'insensitive' }; company?: { contains: string } }> } = {
-      requesterId: payload.requesterId,
-      serviceSlug: filterServiceSlug,
-    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let where: any;
+
+    if (requesterRole === 'ENGINEER') {
+      // Engineers see: all PENDING+unassigned tickets globally + all tickets assigned to them
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: [
+          { status: 'PENDING' },
+          { company: { contains: payload.requesterId } },
+        ],
+      };
+    } else {
+      where = {
+        requesterId: payload.requesterId,
+        serviceSlug: filterServiceSlug,
+      };
+    }
+
     if (!doExport) {
       if (from) {
         const d = new Date(from);
         d.setHours(0, 0, 0, 0);
-        where.createdAt = { ...(where.createdAt as object), gte: d };
+        where.createdAt = { ...(where.createdAt as object ?? {}), gte: d };
       }
       if (to) {
         const d = new Date(to);
         d.setHours(23, 59, 59, 999);
-        where.createdAt = { ...(where.createdAt as object), lte: d };
+        where.createdAt = { ...(where.createdAt as object ?? {}), lte: d };
       }
       if (siteNameParam) {
-        where.OR = [{ company: { contains: siteNameParam } }];
+        if (where.OR) {
+          where.AND = [{ OR: where.OR }, { OR: [{ company: { contains: siteNameParam } }] }];
+          delete where.OR;
+        } else {
+          where.OR = [{ company: { contains: siteNameParam } }];
+        }
       }
     }
 

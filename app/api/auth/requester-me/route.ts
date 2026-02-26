@@ -9,12 +9,12 @@ export async function GET(req: NextRequest) {
   }
   const payload = auth.payload;
 
-  type RequesterRow = { id: string; username: string; name: string | null; phone: string; company: string | null; serviceSlug: string };
+  type RequesterRow = { id: string; username: string; name: string | null; phone: string; company: string | null; serviceSlug: string; role?: string };
   let requester: RequesterRow | null = null;
   try {
     const row = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { id: true, username: true, name: true, phone: true, company: true, serviceSlug: true },
+      select: { id: true, username: true, name: true, phone: true, company: true, serviceSlug: true, role: true },
     });
     requester = row as RequesterRow | null;
   } catch {
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     /* use defaults */
   }
   const serviceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
+  const role = requester.role ?? 'COMPANY';
   return NextResponse.json({
     success: true,
     user: {
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest) {
       status,
       hasUpdatedCredentials,
       serviceSlug,
+      role,
     },
   });
 }

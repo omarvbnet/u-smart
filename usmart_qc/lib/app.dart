@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/company_dashboard_screen.dart';
+import 'screens/engineer_dashboard_screen.dart';
 
 class ProvisrApp extends StatelessWidget {
   const ProvisrApp({super.key});
@@ -36,7 +37,10 @@ class ProvisrApp extends StatelessWidget {
             return const _SplashScreen();
           }
           if (auth.isLoggedIn) {
-            return const DashboardScreen();
+            if (auth.isEngineer) {
+              return const EngineerDashboardScreen();
+            }
+            return const CompanyDashboardScreen();
           }
           return const LoginScreen();
         },

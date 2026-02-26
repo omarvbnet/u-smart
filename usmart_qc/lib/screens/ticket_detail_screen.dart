@@ -2,9 +2,17 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/ticket.dart';
+import '../models/comment.dart';
+import '../models/evidence.dart';
+import '../models/inspection_checklist.dart';
+import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/comments_widget.dart';
+import '../widgets/checklist_widget.dart';
+import '../widgets/evidence_upload_widget.dart';
 import 'ncr_resubmit_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
@@ -20,6 +28,20 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _loading = true;
   bool _assigning = false;
 
+  // Engineer-specific data
+  List<TicketComment> _comments = [];
+  List<TicketEvidence> _evidence = [];
+  List<InspectionChecklist> _checklists = [];
+  bool _loadingComments = false;
+  bool _loadingEvidence = false;
+  bool _loadingChecklists = false;
+  bool _uploading = false;
+
+  final _picker = ImagePicker();
+
+  bool get _isEngineer =>
+      context.read<AuthProvider>().isEngineer;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +56,33 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       setState(() {
         _ticket = t;
         _loading = false;
+      });
+      if (_isEngineer) {
+        _loadEngineerData();
+      }
+    }
+  }
+
+  Future<void> _loadEngineerData() async {
+    final provider = context.read<TicketsProvider>();
+    setState(() {
+      _loadingComments = true;
+      _loadingEvidence = true;
+      _loadingChecklists = true;
+    });
+    final results = await Future.wait([
+      provider.fetchComments(widget.ticketId),
+      provider.fetchEvidence(widget.ticketId),
+      provider.fetchChecklists(),
+    ]);
+    if (mounted) {
+      setState(() {
+        _comments = results[0] as List<TicketComment>;
+        _evidence = results[1] as List<TicketEvidence>;
+        _checklists = results[2] as List<InspectionChecklist>;
+        _loadingComments = false;
+        _loadingEvidence = false;
+        _loadingChecklists = false;
       });
     }
   }
@@ -55,6 +104,106 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       );
       if (ok) await _load();
       setState(() => _assigning = false);
+    }
+  }
+
+  Future<void> _addComment(String body) async {
+    final provider = context.read<TicketsProvider>();
+    final comment = await provider.addComment(widget.ticketId, body);
+    if (comment != null && mounted) {
+      setState(() => _comments = [..._comments, comment]);
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picked = await _picker.pickImage(
+        source: ImageSource.camera, imageQuality: 80);
+    if (picked == null) return;
+    await _uploadFile(picked.path, 'image');
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final picked = await _picker.pickImage(
+        source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    await _uploadFile(picked.path, 'image');
+  }
+
+  Future<void> _uploadFile(String filePath, String fileType) async {
+    setState(() => _uploading = true);
+    final provider = context.read<TicketsProvider>();
+    final url = await provider.uploadFile(filePath);
+    if (url != null) {
+      final evidence =
+          await provider.addEvidence(widget.ticketId, url, fileType);
+      if (evidence != null && mounted) {
+        setState(() => _evidence = [evidence, ..._evidence]);
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to upload file'),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
+
+  Future<void> _completeWithChecklist(
+      Map<String, dynamic> checklistResponse) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Complete Ticket',
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          'Mark this ticket as completed with the filled checklist?',
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00D4AA),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Complete',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final ok = await context
+          .read<TicketsProvider>()
+          .completeTicket(widget.ticketId, checklistResponse);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text(ok ? 'Ticket completed!' : 'Failed to complete'),
+            backgroundColor:
+                ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        if (ok) await _load();
+      }
     }
   }
 
@@ -195,10 +344,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   List<Widget> _buildContent() {
     final t = _ticket!;
     final fmt = DateFormat('MMM d, yyyy HH:mm');
+    final isEngineer = _isEngineer;
 
     return [
       // Assign button
-      if (t.canBeAssigned) ...[
+      if (t.canBeAssigned && isEngineer) ...[
         GestureDetector(
           onTap: _assigning ? null : _assignToMe,
           child: Container(
@@ -273,6 +423,38 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       const SizedBox(height: 16),
       _timelineSection(t),
 
+      // ─── Engineer sections ───
+      if (isEngineer && t.isAssigned) ...[
+        const SizedBox(height: 16),
+        _glassContainer(
+          CommentsWidget(
+            comments: _comments,
+            loading: _loadingComments,
+            onAdd: _addComment,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _glassContainer(
+          EvidenceUploadWidget(
+            evidence: _evidence,
+            loading: _loadingEvidence,
+            uploading: _uploading,
+            onPickImage: _pickAndUploadImage,
+            onPickFile: _pickAndUploadFile,
+          ),
+        ),
+        if (!t.isCompleted) ...[
+          const SizedBox(height: 16),
+          _glassContainer(
+            ChecklistWidget(
+              templates: _checklists,
+              loading: _loadingChecklists,
+              onComplete: _completeWithChecklist,
+            ),
+          ),
+        ],
+      ],
+
       if (t.designSpecifications != null &&
           t.designSpecifications!.isNotEmpty) ...[
         const SizedBox(height: 16),
@@ -289,6 +471,23 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       ],
       const SizedBox(height: 40),
     ];
+  }
+
+  Widget _glassContainer(Widget child) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF12122A),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withAlpha(10)),
+          ),
+          child: child,
+        ),
+      ),
+    );
   }
 
   Widget _glassSection(String title, List<Widget> children) {
@@ -428,7 +627,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         child: Text(
                           '${r.action} - ${r.comment ?? 'No comment'}',
                           style: TextStyle(
-                              color: Colors.white.withAlpha(120), fontSize: 12),
+                              color: Colors.white.withAlpha(120),
+                              fontSize: 12),
                         ),
                       ),
                     ],
@@ -491,7 +691,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       shape: BoxShape.circle,
                       color: color,
                       boxShadow: [
-                        BoxShadow(color: color.withAlpha(100), blurRadius: 6),
+                        BoxShadow(
+                            color: color.withAlpha(100), blurRadius: 6),
                       ],
                     ),
                   ),
@@ -514,7 +715,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       Text(
                         fmt.format(log.createdAt),
                         style: TextStyle(
-                            color: Colors.white.withAlpha(60), fontSize: 12),
+                            color: Colors.white.withAlpha(60),
+                            fontSize: 12),
                       ),
                     ],
                   ),

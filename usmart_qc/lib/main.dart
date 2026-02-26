@@ -35,6 +35,7 @@ void main() async {
 
   await authProvider.tryAutoLogin();
   if (authProvider.isLoggedIn) {
+    ticketsProvider.setCurrentUserId(authProvider.user?.id);
     await ticketsProvider.fetchTickets();
     await sitesProvider.fetchSites();
     geofenceService.updateData(sitesProvider.sites, ticketsProvider.tickets);
@@ -44,11 +45,13 @@ void main() async {
 
   authProvider.addListener(() {
     if (authProvider.isLoggedIn) {
+      ticketsProvider.setCurrentUserId(authProvider.user?.id);
       geofenceService.updateData(
           sitesProvider.sites, ticketsProvider.tickets);
       geofenceService.start();
       ticketsProvider.startPolling();
     } else {
+      ticketsProvider.setCurrentUserId(null);
       geofenceService.stop();
       ticketsProvider.stopPolling();
     }

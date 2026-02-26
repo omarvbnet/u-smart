@@ -8,6 +8,7 @@ class User {
   final String status;
   final bool hasUpdatedCredentials;
   final String serviceSlug;
+  final String role;
 
   User({
     required this.id,
@@ -19,7 +20,11 @@ class User {
     this.status = 'ACTIVE',
     this.hasUpdatedCredentials = false,
     this.serviceSlug = 'quality-control-supervision',
+    this.role = 'COMPANY',
   });
+
+  bool get isEngineer => role == 'ENGINEER';
+  bool get isCompany => role == 'COMPANY';
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -32,6 +37,7 @@ class User {
       status: json['status'] as String? ?? 'ACTIVE',
       hasUpdatedCredentials: json['hasUpdatedCredentials'] == true,
       serviceSlug: json['serviceSlug'] as String? ?? 'quality-control-supervision',
+      role: json['role'] as String? ?? 'COMPANY',
     );
   }
 }
