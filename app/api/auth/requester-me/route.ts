@@ -27,15 +27,19 @@ export async function GET(req: NextRequest) {
   let companyCertificationUrl: string | null = null;
   let status = 'ACTIVE';
   let hasUpdatedCredentials = false;
+  let province: string | null = null;
+  let provinceFilterActive = true;
   try {
     const extended = await (prisma.ticketRequester as any).findUnique({
       where: { id: payload.requesterId },
-      select: { companyCertificationUrl: true, status: true, hasUpdatedCredentials: true },
+      select: { companyCertificationUrl: true, status: true, hasUpdatedCredentials: true, province: true, provinceFilterActive: true },
     });
     if (extended) {
       companyCertificationUrl = extended.companyCertificationUrl ?? null;
       status = extended.status ?? 'ACTIVE';
       hasUpdatedCredentials = extended.hasUpdatedCredentials === true;
+      province = extended.province ?? null;
+      provinceFilterActive = extended.provinceFilterActive ?? true;
     }
   } catch {
     /* use defaults */
@@ -55,6 +59,8 @@ export async function GET(req: NextRequest) {
       hasUpdatedCredentials,
       serviceSlug,
       role,
+      province,
+      provinceFilterActive,
     },
   });
 }

@@ -303,7 +303,7 @@ export async function GET(req: NextRequest) {
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { serviceSlug: true, role: true, name: true },
+      select: { serviceSlug: true, role: true, name: true, province: true, provinceFilterActive: true },
     });
     if (!requester) {
       return NextResponse.json(
@@ -313,6 +313,8 @@ export async function GET(req: NextRequest) {
     }
     const requesterServiceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
     const requesterRole = (requester as { role?: string }).role ?? 'COMPANY';
+    const requesterProvince = (requester as { province?: string | null }).province ?? null;
+    const provinceFilterActive = (requester as { provinceFilterActive?: boolean }).provinceFilterActive ?? true;
 
     const { searchParams } = new URL(req.url);
     const doExport = searchParams.get('export') === '1';
@@ -330,11 +332,15 @@ export async function GET(req: NextRequest) {
     let where: any;
 
     if (requesterRole === 'ENGINEER') {
-      // Engineers see: all PENDING+unassigned tickets globally + all tickets assigned to them
+      // Engineers see: PENDING tickets (province-filtered if active) + tickets assigned to them
+      const pendingFilter: any = { status: 'PENDING' };
+      if (provinceFilterActive && requesterProvince) {
+        pendingFilter.province = requesterProvince;
+      }
       where = {
         serviceSlug: filterServiceSlug,
         OR: [
-          { status: 'PENDING' },
+          pendingFilter,
           { company: { contains: payload.requesterId } },
         ],
       };

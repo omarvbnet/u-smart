@@ -9,6 +9,8 @@ class User {
   final bool hasUpdatedCredentials;
   final String serviceSlug;
   final String role;
+  final String? province;
+  final bool provinceFilterActive;
 
   User({
     required this.id,
@@ -21,6 +23,8 @@ class User {
     this.hasUpdatedCredentials = false,
     this.serviceSlug = 'quality-control-supervision',
     this.role = 'COMPANY',
+    this.province,
+    this.provinceFilterActive = true,
   });
 
   bool get isEngineer => role == 'ENGINEER';
@@ -38,6 +42,8 @@ class User {
       hasUpdatedCredentials: json['hasUpdatedCredentials'] == true,
       serviceSlug: json['serviceSlug'] as String? ?? 'quality-control-supervision',
       role: json['role'] as String? ?? 'COMPANY',
+      province: json['province'] as String?,
+      provinceFilterActive: json['provinceFilterActive'] as bool? ?? true,
     );
   }
 }

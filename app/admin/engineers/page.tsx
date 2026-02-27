@@ -15,11 +15,19 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 
+const IRAQ_PROVINCES = [
+  'Baghdad', 'Basra', 'Nineveh', 'Erbil', 'Sulaymaniyah', 'Duhok',
+  'Kirkuk', 'Diyala', 'Anbar', 'Babylon', 'Karbala', 'Najaf',
+  'Wasit', 'Maysan', 'Dhi Qar', 'Muthanna', 'Qadisiyyah', 'Saladin',
+];
+
 type Engineer = {
   id: string;
   username: string;
   name: string | null;
   phone: string;
+  province: string | null;
+  provinceFilterActive: boolean;
   status: string;
   createdAt: string;
   activeTickets: number;
@@ -40,6 +48,7 @@ export default function AdminEngineersPage() {
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formPhone, setFormPhone] = useState('');
+  const [formProvince, setFormProvince] = useState('');
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -48,6 +57,7 @@ export default function AdminEngineersPage() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editProvince, setEditProvince] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Credentials modal
@@ -90,6 +100,7 @@ export default function AdminEngineersPage() {
           password: formPassword.trim(),
           name: formName.trim() || null,
           phone: formPhone.trim(),
+          province: formProvince || null,
         }),
       });
       const data = await res.json();
@@ -101,6 +112,7 @@ export default function AdminEngineersPage() {
         setFormUsername('');
         setFormPassword('');
         setFormPhone('');
+        setFormProvince('');
       } else {
         setFormError(data.message || 'Failed to create engineer');
       }
@@ -135,16 +147,18 @@ export default function AdminEngineersPage() {
     setEditName(e.name ?? '');
     setEditPhone(e.phone);
     setEditPassword('');
+    setEditProvince(e.province ?? '');
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
     setSaving(true);
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, unknown> = {};
       if (editName.trim()) body.name = editName.trim();
       if (editPhone.trim()) body.phone = editPhone.trim();
       if (editPassword.trim().length >= 6) body.password = editPassword.trim();
+      body.province = editProvince || null;
 
       const res = await fetch(`/api/admin/engineers/${editingId}`, {
         method: 'PATCH',
@@ -156,7 +170,7 @@ export default function AdminEngineersPage() {
         setEngineers((prev) =>
           prev.map((e) =>
             e.id === editingId
-              ? { ...e, name: data.engineer.name, phone: data.engineer.phone }
+              ? { ...e, name: data.engineer.name, phone: data.engineer.phone, province: data.engineer.province, provinceFilterActive: data.engineer.provinceFilterActive }
               : e
           )
         );
@@ -166,6 +180,27 @@ export default function AdminEngineersPage() {
       console.error(e);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleProvinceFilter = async (id: string, current: boolean) => {
+    setUpdatingId(id);
+    try {
+      const res = await fetch(`/api/admin/engineers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provinceFilterActive: !current }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEngineers((prev) =>
+          prev.map((e) => (e.id === id ? { ...e, provinceFilterActive: !current } : e))
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -292,6 +327,20 @@ export default function AdminEngineersPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Province</label>
+              <select
+                value={formProvince}
+                onChange={(e) => setFormProvince(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">All Provinces (no filter)</option>
+                {IRAQ_PROVINCES.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">If set, engineer only sees tickets from this province</p>
+            </div>
           </div>
           {formError && <p className="mt-3 text-sm text-red-600">{formError}</p>}
           <div className="mt-4 flex justify-end">
@@ -378,6 +427,7 @@ export default function AdminEngineersPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Engineer</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Province</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide">Active</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wide">Completed</th>
@@ -418,6 +468,40 @@ export default function AdminEngineersPage() {
                       />
                     ) : (
                       <span className="text-sm text-gray-600">{e.phone}</span>
+                    )}
+                  </td>
+                  {/* Province */}
+                  <td className="px-4 py-3">
+                    {editingId === e.id ? (
+                      <select
+                        value={editProvince}
+                        onChange={(ev) => setEditProvince(ev.target.value)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">All</option>
+                        {IRAQ_PROVINCES.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-gray-600">{e.province ?? 'All'}</span>
+                        {e.province && (
+                          <button
+                            type="button"
+                            onClick={() => toggleProvinceFilter(e.id, e.provinceFilterActive)}
+                            disabled={updatingId === e.id}
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                              e.provinceFilterActive
+                                ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                            title={e.provinceFilterActive ? 'Province filter ON — click to show all provinces' : 'Province filter OFF — click to restrict to province'}
+                          >
+                            {e.provinceFilterActive ? 'ON' : 'OFF'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                   {/* Status */}

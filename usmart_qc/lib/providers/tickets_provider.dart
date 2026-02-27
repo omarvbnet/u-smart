@@ -20,10 +20,43 @@ class TicketsProvider extends ChangeNotifier {
   int _lastTicketCount = 0;
 
   String? _currentUserId;
+  String? _province;
+  bool _provinceFilterActive = true;
 
   TicketsProvider(this._api, this._notifications);
 
   void setCurrentUserId(String? id) => _currentUserId = id;
+
+  String? get province => _province;
+  bool get provinceFilterActive => _provinceFilterActive;
+
+  Future<void> loadProvinceFilter() async {
+    try {
+      final data = await _api.get(ApiConfig.provinceFilter);
+      if (data['success'] == true) {
+        _province = data['province'] as String?;
+        _provinceFilterActive = data['provinceFilterActive'] as bool? ?? true;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> toggleProvinceFilter() async {
+    final newValue = !_provinceFilterActive;
+    try {
+      final data = await _api.patch(
+        ApiConfig.provinceFilter,
+        body: {'provinceFilterActive': newValue},
+      );
+      if (data['success'] == true) {
+        _provinceFilterActive = newValue;
+        notifyListeners();
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
 
   List<Ticket> get tickets => _tickets;
   List<Ticket> get pendingTickets =>

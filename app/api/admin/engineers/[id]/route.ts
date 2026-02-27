@@ -43,6 +43,14 @@ export async function PATCH(
       data.phone = body.phone.trim();
     }
 
+    if (typeof body.province === 'string') {
+      data.province = body.province.trim() || null;
+    }
+
+    if (typeof body.provinceFilterActive === 'boolean') {
+      data.provinceFilterActive = body.provinceFilterActive;
+    }
+
     if (typeof body.password === 'string' && body.password.trim().length >= 6) {
       data.passwordHash = await bcrypt.hash(body.password.trim(), 10);
     }
@@ -59,6 +67,8 @@ export async function PATCH(
         username: true,
         name: true,
         phone: true,
+        province: true,
+        provinceFilterActive: true,
         status: true,
       },
     });
@@ -67,6 +77,8 @@ export async function PATCH(
       success: true,
       engineer: {
         ...updated,
+        province: updated.province ?? null,
+        provinceFilterActive: updated.provinceFilterActive ?? true,
         status: updated.status ?? 'ACTIVE',
       },
     });

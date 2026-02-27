@@ -307,6 +307,8 @@ model User {
     companyCertificationUrl  String?           // uploaded file path/URL
     serviceSlug              String            @default("enterprise-networking")  // which dashboard: enterprise-networking | quality-control-supervision
     role                     RequesterRole     @default(COMPANY)
+    province                 String?
+    provinceFilterActive     Boolean           @default(true)
     status                   RequesterStatus   @default(ACTIVE)
     hasUpdatedCredentials    Boolean           @default(false)
     createdAt                DateTime          @default(now())

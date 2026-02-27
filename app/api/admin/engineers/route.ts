@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
         username: true,
         name: true,
         phone: true,
+        province: true,
+        provinceFilterActive: true,
         status: true,
         createdAt: true,
         _count: { select: { tickets: true } },
@@ -77,11 +79,13 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      engineers: engineers.map((e: { id: string; username: string; name: string | null; phone: string; status?: string; createdAt: Date; _count: { tickets: number } }) => ({
+      engineers: engineers.map((e: { id: string; username: string; name: string | null; phone: string; province?: string | null; provinceFilterActive?: boolean; status?: string; createdAt: Date; _count: { tickets: number } }) => ({
         id: e.id,
         username: e.username,
         name: e.name,
         phone: e.phone,
+        province: e.province ?? null,
+        provinceFilterActive: e.provinceFilterActive ?? true,
         status: e.status ?? 'ACTIVE',
         createdAt: e.createdAt,
         activeTickets: activeCountMap[e.id] ?? 0,
@@ -111,6 +115,7 @@ export async function POST(req: NextRequest) {
     const password = typeof body.password === 'string' ? body.password.trim() : '';
     const name = typeof body.name === 'string' ? body.name.trim() || null : null;
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const province = typeof body.province === 'string' ? body.province.trim() || null : null;
 
     if (!username || !password) {
       return NextResponse.json({ success: false, message: 'Username and password are required' }, { status: 400 });
@@ -132,6 +137,8 @@ export async function POST(req: NextRequest) {
         email: null,
         phone,
         company: null,
+        province,
+        provinceFilterActive: !!province,
         serviceSlug: 'quality-control-supervision',
         role: 'ENGINEER',
       },
@@ -140,6 +147,8 @@ export async function POST(req: NextRequest) {
         username: true,
         name: true,
         phone: true,
+        province: true,
+        provinceFilterActive: true,
         status: true,
         createdAt: true,
       },
@@ -149,6 +158,8 @@ export async function POST(req: NextRequest) {
       success: true,
       engineer: {
         ...engineer,
+        province: engineer.province ?? null,
+        provinceFilterActive: engineer.provinceFilterActive ?? true,
         status: engineer.status ?? 'ACTIVE',
         activeTickets: 0,
         completedTickets: 0,

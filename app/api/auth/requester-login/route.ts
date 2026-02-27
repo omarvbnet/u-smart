@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
     }
 
     const role = (requester as { role?: string }).role ?? 'COMPANY';
+    const province = (requester as { province?: string | null }).province ?? null;
+    const provinceFilterActive = (requester as { provinceFilterActive?: boolean }).provinceFilterActive ?? true;
     const token = createRequesterToken({
       requesterId: requester.id,
       username: requester.username,
@@ -51,6 +53,8 @@ export async function POST(req: NextRequest) {
         username: requester.username,
         name: requester.name,
         role,
+        province,
+        provinceFilterActive,
       },
     });
 

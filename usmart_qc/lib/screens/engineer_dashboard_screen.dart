@@ -26,7 +26,10 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
 
   Future<void> _loadData() async {
     final tickets = context.read<TicketsProvider>();
-    await tickets.fetchTickets();
+    await Future.wait([
+      tickets.fetchTickets(),
+      tickets.loadProvinceFilter(),
+    ]);
   }
 
   @override
@@ -130,6 +133,8 @@ class _AvailableTicketsTab extends StatelessWidget {
 
         final available = provider.availableTickets;
         final hasActive = provider.hasActiveTicket;
+        final engineerProvince = provider.province;
+        final filterActive = provider.provinceFilterActive;
 
         return Column(
           children: [
@@ -171,14 +176,78 @@ class _AvailableTicketsTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Unassigned tickets waiting for an engineer',
-                style: TextStyle(
-                    color: Colors.white.withAlpha(80), fontSize: 13),
+            if (engineerProvince != null && engineerProvince.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        filterActive
+                            ? 'Showing tickets in $engineerProvince'
+                            : 'Showing all Iraq provinces',
+                        style: TextStyle(
+                            color: Colors.white.withAlpha(80),
+                            fontSize: 13),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => provider.toggleProvinceFilter(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: filterActive
+                              ? const Color(0xFF6C63FF).withAlpha(25)
+                              : Colors.white.withAlpha(8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: filterActive
+                                ? const Color(0xFF6C63FF).withAlpha(60)
+                                : Colors.white.withAlpha(20),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              filterActive
+                                  ? Icons.location_on
+                                  : Icons.public,
+                              size: 14,
+                              color: filterActive
+                                  ? const Color(0xFF6C63FF)
+                                  : Colors.white.withAlpha(120),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              filterActive
+                                  ? 'My Province'
+                                  : 'All Iraq',
+                              style: TextStyle(
+                                color: filterActive
+                                    ? const Color(0xFF6C63FF)
+                                    : Colors.white.withAlpha(120),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Unassigned tickets waiting for an engineer',
+                  style: TextStyle(
+                      color: Colors.white.withAlpha(80), fontSize: 13),
+                ),
               ),
-            ),
             if (hasActive)
               Container(
                 margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
@@ -608,6 +677,8 @@ class _EngineerProfileTab extends StatelessWidget {
                 user.username, const Color(0xFF6C63FF)),
             _profileRow(Icons.phone_outlined, 'Phone',
                 user.phone ?? '-', const Color(0xFF00D4AA)),
+            _profileRow(Icons.location_on_outlined, 'Province',
+                user.province ?? 'All Provinces', const Color(0xFFFBBF24)),
             _profileRow(Icons.verified_outlined, 'Status', user.status,
                 const Color(0xFF4ADE80)),
             const SizedBox(height: 32),
