@@ -23,6 +23,10 @@ class ApiConfig {
   static const String sites = '/api/sites';
   static String siteDetail(String id) => '/api/sites/$id';
 
+  static const String notifications = '/api/notifications';
+  static const String notificationCount = '/api/notifications/count';
+  static String notificationMarkRead(String id) => '/api/notifications/$id';
+
   static const String serviceSlug = 'quality-control-supervision';
   static const double geofenceRadiusMeters = 200;
   static const int autoInProgressMinutes = 10;

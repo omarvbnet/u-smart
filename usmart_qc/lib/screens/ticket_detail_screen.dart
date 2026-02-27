@@ -269,8 +269,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Widget _dialogDropdown(TextEditingController ctrl) {
-    final options = ['pass', 'fail', 'ncr', 'conditional_pass'];
-    ctrl.text = 'pass';
+    final options = {
+      'accepted': 'Accepted',
+      'accepted_with_comments': 'Accepted with Comments',
+      'not_accepted': 'Not Accepted',
+      'ncr': 'NCR',
+    };
+    ctrl.text = 'accepted';
     return StatefulBuilder(
       builder: (ctx, setDropState) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -284,9 +289,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           dropdownColor: const Color(0xFF12122A),
           underline: const SizedBox.shrink(),
           style: const TextStyle(color: Colors.white, fontSize: 14),
-          items: options.map((o) {
+          items: options.entries.map((e) {
             return DropdownMenuItem(
-                value: o, child: Text(_statusLabel(o)));
+                value: e.key, child: Text(e.value));
           }).toList(),
           onChanged: (v) {
             if (v != null) {

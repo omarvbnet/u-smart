@@ -34,7 +34,7 @@ export async function PATCH(
 
     const row = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, status: true, company: true },
+      select: { id: true, status: true, company: true, requesterId: true },
     });
     if (!row) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
@@ -107,6 +107,22 @@ export async function PATCH(
         data: { visitorRequestId: id, status: newStatus },
       });
     } catch { /* ignore */ }
+
+    // Notify the company that an engineer has been assigned
+    if (row.requesterId && typeof prisma.notification?.create === 'function') {
+      try {
+        await prisma.notification.create({
+          data: {
+            type: 'status_changed',
+            title: 'Engineer assigned',
+            message: `Engineer ${requester.name || requester.username} has been assigned to your ticket`,
+            ticketId: id,
+            requesterId: row.requesterId,
+            forAdmin: false,
+          },
+        });
+      } catch { /* ignore */ }
+    }
 
     return NextResponse.json({
       success: true,

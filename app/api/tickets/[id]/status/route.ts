@@ -47,12 +47,12 @@ export async function PATCH(
     if (requesterRole === 'ENGINEER') {
       row = await prisma.visitorRequest.findUnique({
         where: { id },
-        select: { id: true, status: true, company: true },
+        select: { id: true, status: true, company: true, requesterId: true },
       });
     } else {
       row = await prisma.visitorRequest.findFirst({
         where: { id, requesterId: auth.payload.requesterId },
-        select: { id: true, status: true, company: true },
+        select: { id: true, status: true, company: true, requesterId: true },
       });
     }
 
@@ -110,6 +110,28 @@ export async function PATCH(
         data: { visitorRequestId: id, status: newStatus },
       });
     } catch { /* ignore */ }
+
+    const statusLabels: Record<string, string> = {
+      ON_SITE: 'On Site',
+      IN_PROGRESS: 'In Progress',
+      COMPLETED: 'Completed',
+    };
+
+    // Notify company about status change
+    if (row.requesterId && typeof prisma.notification?.create === 'function') {
+      try {
+        await prisma.notification.create({
+          data: {
+            type: 'status_changed',
+            title: 'Ticket status updated',
+            message: `Your ticket status is now: ${statusLabels[newStatus] || newStatus}`,
+            ticketId: id,
+            requesterId: row.requesterId,
+            forAdmin: false,
+          },
+        });
+      } catch { /* ignore */ }
+    }
 
     return NextResponse.json({
       success: true,

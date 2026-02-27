@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import '../providers/notifications_provider.dart';
 import '../models/ticket.dart';
 import '../widgets/ticket_card.dart';
 import '../widgets/stats_card.dart';
+import 'notifications_screen.dart';
 import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
 
@@ -201,6 +203,54 @@ class _TicketsTab extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
+                  Consumer<NotificationsProvider>(
+                    builder: (context, notifProvider, _) {
+                      final count = notifProvider.unreadCount;
+                      return GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen()),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Icon(
+                                Icons.notifications_outlined,
+                                color: Colors.white.withAlpha(150),
+                                size: 24,
+                              ),
+                              if (count > 0)
+                                Positioned(
+                                  top: -4,
+                                  right: -6,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFFF4757),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                        minWidth: 16, minHeight: 16),
+                                    child: Text(
+                                      count > 99 ? '99+' : '$count',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

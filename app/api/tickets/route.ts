@@ -15,6 +15,39 @@ const ENTERPRISE_TECHNIQUES = ['maintenance', 'fiber', 'cable_systemization', 'c
 const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'];
 const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES];
 
+async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
+  try {
+    if (typeof prisma.notification?.create !== 'function') return;
+    const engineers = await prisma.ticketRequester.findMany({
+      where: {
+        role: 'ENGINEER',
+        status: 'ACTIVE',
+        serviceSlug: 'quality-control-supervision',
+      },
+      select: { id: true, province: true, provinceFilterActive: true },
+    });
+    for (const eng of engineers) {
+      const filterActive = eng.provinceFilterActive ?? true;
+      const engProvince = eng.province ?? null;
+      if (filterActive && engProvince && engProvince !== province) continue;
+      try {
+        await prisma.notification.create({
+          data: {
+            type: 'new_ticket',
+            title: 'New ticket available',
+            message: `New QC ticket in ${province}: ${siteName}`,
+            ticketId,
+            requesterId: eng.id,
+            forAdmin: false,
+          },
+        });
+      } catch { /* skip */ }
+    }
+  } catch (e) {
+    console.error('notifyEngineersNewTicket:', e);
+  }
+}
+
 function generateUsername(): string {
   const prefix = 'req';
   const random = crypto.randomBytes(4).toString('hex');
@@ -209,6 +242,10 @@ export async function POST(req: NextRequest) {
         status: 'PENDING',
       });
 
+      if (serviceSlug === 'quality-control-supervision') {
+        notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+      }
+
       return NextResponse.json({
         success: true,
         ticket: {
@@ -248,6 +285,10 @@ export async function POST(req: NextRequest) {
       phone,
       status: 'PENDING',
     });
+
+    if (serviceSlug === 'quality-control-supervision') {
+      notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+    }
 
     const requesterEmail = (requester as { email?: string | null })?.email;
     if (requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {

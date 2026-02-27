@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const ticket = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, status: true, company: true },
+      select: { id: true, status: true, company: true, requesterId: true },
     });
 
     if (!ticket) {
@@ -57,14 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }));
     }
     if (inspectionResult) {
-      // Map engineer values to admin-expected values
-      const resultMap: Record<string, string> = {
-        'pass': 'accepted',
-        'fail': 'not_accepted',
-        'conditional_pass': 'accepted_with_comments',
-        'ncr': 'ncr',
-      };
-      parsed.inspectionResult = resultMap[inspectionResult.toLowerCase()] ?? inspectionResult;
+      parsed.inspectionResult = inspectionResult;
     }
     if (inspectionComments) {
       parsed.inspectionComments = inspectionComments;
@@ -85,6 +78,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         data: { visitorRequestId: id, status: 'COMPLETED' },
       });
     } catch { /* ignore */ }
+
+    // Notify company that ticket is completed
+    if (ticket.requesterId && typeof prisma.notification?.create === 'function') {
+      try {
+        const resultLabel: Record<string, string> = {
+          accepted: 'Accepted',
+          accepted_with_comments: 'Accepted with Comments',
+          not_accepted: 'Not Accepted',
+          ncr: 'NCR',
+        };
+        const resultText = inspectionResult ? (resultLabel[inspectionResult] ?? inspectionResult) : '';
+        await prisma.notification.create({
+          data: {
+            type: 'status_changed',
+            title: 'Ticket completed',
+            message: `Your ticket has been completed${resultText ? ` — Result: ${resultText}` : ''}`,
+            ticketId: id,
+            requesterId: ticket.requesterId,
+            forAdmin: false,
+          },
+        });
+      } catch { /* ignore */ }
+    }
 
     return NextResponse.json({ success: true, message: 'Ticket completed' });
   } catch (error) {

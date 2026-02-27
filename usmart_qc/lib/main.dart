@@ -9,6 +9,7 @@ import 'services/geofence_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/tickets_provider.dart';
 import 'providers/sites_provider.dart';
+import 'providers/notifications_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,7 @@ void main() async {
   final authProvider = AuthProvider(authService, apiService);
   final ticketsProvider = TicketsProvider(apiService, notifications);
   final sitesProvider = SitesProvider(apiService);
+  final notificationsProvider = NotificationsProvider(apiService, notifications);
 
   geofenceService.onTicketStatusChanged = () {
     ticketsProvider.fetchTickets();
@@ -41,6 +43,7 @@ void main() async {
     geofenceService.updateData(sitesProvider.sites, ticketsProvider.tickets);
     geofenceService.start();
     ticketsProvider.startPolling();
+    notificationsProvider.startPolling();
   }
 
   authProvider.addListener(() {
@@ -50,10 +53,12 @@ void main() async {
           sitesProvider.sites, ticketsProvider.tickets);
       geofenceService.start();
       ticketsProvider.startPolling();
+      notificationsProvider.startPolling();
     } else {
       ticketsProvider.setCurrentUserId(null);
       geofenceService.stop();
       ticketsProvider.stopPolling();
+      notificationsProvider.stopPolling();
     }
   });
 
@@ -70,6 +75,7 @@ void main() async {
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: ticketsProvider),
         ChangeNotifierProvider.value(value: sitesProvider),
+        ChangeNotifierProvider.value(value: notificationsProvider),
       ],
       child: const ProvisrApp(),
     ),

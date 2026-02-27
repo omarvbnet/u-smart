@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,13 +26,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, notifications: list, unreadCount });
     }
     if (forParam === 'requester') {
-      const token = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
-      if (!token) {
-        return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+      let payload: { requesterId: string } | null = null;
+      const cookieToken = req.cookies.get(REQUESTER_COOKIE_NAME)?.value;
+      if (cookieToken) {
+        payload = verifyRequesterToken(cookieToken);
       }
-      const payload = verifyRequesterToken(token);
       if (!payload) {
-        return NextResponse.json({ success: false, message: 'Invalid session' }, { status: 401 });
+        const headerAuth = getRequesterFromRequest(req);
+        if (headerAuth) payload = headerAuth.payload;
+      }
+      if (!payload) {
+        return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
       }
       const list = await notification.findMany({
         where: { requesterId: payload.requesterId, forAdmin: false },
