@@ -1059,12 +1059,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         return 'In Progress';
       case 'COMPLETED':
         return 'Completed';
+      case 'ACCEPTED':
+        return 'Accepted';
+      case 'ACCEPTED_WITH_COMMENTS':
+        return 'Accepted with Comments';
+      case 'NOT_ACCEPTED':
+        return 'Not Accepted';
+      case 'NCR':
+        return 'NCR';
       case 'PASS':
         return 'Pass';
       case 'FAIL':
         return 'Fail';
-      case 'NCR':
-        return 'NCR';
       case 'CONDITIONAL_PASS':
         return 'Conditional Pass';
       default:

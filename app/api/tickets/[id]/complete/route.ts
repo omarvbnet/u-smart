@@ -46,9 +46,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     parsed.completedAt = new Date().toISOString();
     if (checklistResponse) {
       parsed.checklistResponse = checklistResponse;
+      // Convert to inspectionChecklist format expected by admin panel
+      const items = Array.isArray(checklistResponse.items) ? checklistResponse.items : [];
+      parsed.inspectionChecklist = items.map((item: Record<string, unknown>) => ({
+        id: String(item.id ?? ''),
+        label: String(item.label ?? ''),
+        checked: !!item.checked,
+        comment: typeof item.comment === 'string' ? item.comment : (typeof item.note === 'string' ? item.note : undefined),
+        weight: typeof item.weight === 'string' ? item.weight : 'minor',
+      }));
     }
     if (inspectionResult) {
-      parsed.inspectionResult = inspectionResult;
+      // Map engineer values to admin-expected values
+      const resultMap: Record<string, string> = {
+        'pass': 'accepted',
+        'fail': 'not_accepted',
+        'conditional_pass': 'accepted_with_comments',
+        'ncr': 'ncr',
+      };
+      parsed.inspectionResult = resultMap[inspectionResult.toLowerCase()] ?? inspectionResult;
     }
     if (inspectionComments) {
       parsed.inspectionComments = inspectionComments;

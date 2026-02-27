@@ -13,6 +13,10 @@ function fromJson(raw: string | null): {
   siteCoordinator?: string;
   slaHours?: number;
   inspectionResult?: string;
+  inspectionComments?: string;
+  completedAt?: string;
+  assignedEngineerId?: string | null;
+  assignedEngineerName?: string | null;
   ncrReason?: string | null;
   ncrImageUrls?: string[];
   ncrResubmissions?: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }>;
@@ -23,6 +27,10 @@ function fromJson(raw: string | null): {
     siteCoordinator: undefined as string | undefined,
     slaHours: undefined as number | undefined,
     inspectionResult: undefined as string | undefined,
+    inspectionComments: undefined as string | undefined,
+    completedAt: undefined as string | undefined,
+    assignedEngineerId: undefined as string | null | undefined,
+    assignedEngineerName: undefined as string | null | undefined,
     ncrReason: undefined as string | null | undefined,
     ncrImageUrls: undefined as string[] | undefined,
     ncrResubmissions: undefined as Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> | undefined,
@@ -48,6 +56,10 @@ function fromJson(raw: string | null): {
       siteCoordinator: typeof p.siteCoordinator === 'string' ? p.siteCoordinator : undefined,
       slaHours: typeof p.slaHours === 'number' ? p.slaHours : undefined,
       inspectionResult: typeof p.inspectionResult === 'string' ? p.inspectionResult : undefined,
+      inspectionComments: typeof p.inspectionComments === 'string' ? p.inspectionComments : undefined,
+      completedAt: typeof p.completedAt === 'string' ? p.completedAt : undefined,
+      assignedEngineerId: typeof p.assignedEngineerId === 'string' ? p.assignedEngineerId : null,
+      assignedEngineerName: typeof p.assignedEngineerName === 'string' ? p.assignedEngineerName : null,
       ncrReason: typeof p.ncrReason === 'string' ? p.ncrReason : p.ncrReason === null ? null : undefined,
       ncrImageUrls: Array.isArray(p.ncrImageUrls) ? (p.ncrImageUrls as string[]).filter((u: unknown) => typeof u === 'string') : undefined,
       ncrResubmissions,
@@ -102,11 +114,15 @@ export async function GET(req: NextRequest) {
         name: r.name,
         email: r.email,
         createdAt: r.createdAt,
+        completedAt: j.completedAt ?? (r.completedAt ? r.completedAt.toISOString() : null),
         siteName: j.siteName ?? r.siteName ?? null,
         siteCoordinator: j.siteCoordinator ?? r.siteCoordinator ?? null,
         slaHours: j.slaHours ?? r.slaHours ?? null,
         displayCompany,
         inspectionResult: j.inspectionResult ?? null,
+        inspectionComments: j.inspectionComments ?? null,
+        assignedEngineerId: j.assignedEngineerId ?? null,
+        assignedEngineerName: j.assignedEngineerName ?? null,
         ncrReason: j.ncrReason ?? null,
         ncrImageUrls: j.ncrImageUrls ?? [],
         ncrResubmissions: j.ncrResubmissions ?? [],

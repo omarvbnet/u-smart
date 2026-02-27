@@ -4,21 +4,24 @@ import '../models/inspection_checklist.dart';
 class ChecklistResponseItem {
   final String id;
   final String label;
+  final String weight;
   bool checked;
-  String? note;
+  String? comment;
 
   ChecklistResponseItem({
     required this.id,
     required this.label,
+    this.weight = 'minor',
     this.checked = false,
-    this.note,
+    this.comment,
   });
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'label': label,
         'checked': checked,
-        if (note != null && note!.isNotEmpty) 'note': note,
+        'weight': weight,
+        if (comment != null && comment!.isNotEmpty) 'comment': comment,
       };
 }
 
@@ -46,7 +49,7 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
     setState(() {
       _selected = checklist;
       _items = checklist.items
-          .map((i) => ChecklistResponseItem(id: i.id, label: i.label))
+          .map((i) => ChecklistResponseItem(id: i.id, label: i.label, weight: i.weight))
           .toList();
     });
   }

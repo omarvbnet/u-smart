@@ -1,13 +1,15 @@
 class ChecklistItem {
   final String id;
   final String label;
+  final String weight;
 
-  ChecklistItem({required this.id, required this.label});
+  ChecklistItem({required this.id, required this.label, this.weight = 'minor'});
 
   factory ChecklistItem.fromJson(Map<String, dynamic> json) {
     return ChecklistItem(
       id: json['id'] as String,
       label: json['label'] as String,
+      weight: json['weight'] as String? ?? 'minor',
     );
   }
 }

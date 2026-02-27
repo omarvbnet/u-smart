@@ -14,11 +14,15 @@ type QualityRequest = {
   name: string | null;
   email: string | null;
   createdAt: string;
+  completedAt: string | null;
   siteName: string | null;
   siteCoordinator: string | null;
   slaHours: number | null;
   displayCompany: string | null;
   inspectionResult: string | null;
+  inspectionComments: string | null;
+  assignedEngineerId: string | null;
+  assignedEngineerName: string | null;
   ncrReason?: string | null;
   ncrImageUrls?: string[];
   ncrResubmissions?: NcrResubmission[];
@@ -283,6 +287,7 @@ export default function AdminQualityRequestsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Site</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Technique</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Engineer</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">NCR / Resubmissions</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -307,6 +312,13 @@ export default function AdminQualityRequestsPage() {
                   <td className="px-4 py-3 text-sm text-gray-900">{r.siteName ?? r.siteCoordinator ?? '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 font-medium">{String(r.displayCompany || '').trim() || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.technique}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    {r.assignedEngineerName ? (
+                      <span className="font-medium">{r.assignedEngineerName}</span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <span
                       className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
