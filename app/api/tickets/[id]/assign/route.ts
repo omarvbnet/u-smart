@@ -21,14 +21,19 @@ export async function PATCH(
   try {
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: auth.payload.requesterId },
-      select: { id: true, name: true, username: true },
+      select: { id: true, name: true, username: true, role: true },
     });
     if (!requester) {
       return NextResponse.json({ success: false, message: 'Requester not found' }, { status: 401 });
     }
 
-    const row = await prisma.visitorRequest.findFirst({
-      where: { id, requesterId: auth.payload.requesterId },
+    const role = requester.role ?? 'COMPANY';
+    if (role !== 'ENGINEER') {
+      return NextResponse.json({ success: false, message: 'Only engineers can assign tickets to themselves' }, { status: 403 });
+    }
+
+    const row = await prisma.visitorRequest.findUnique({
+      where: { id },
       select: { id: true, status: true, company: true },
     });
     if (!row) {
@@ -46,9 +51,9 @@ export async function PATCH(
       } catch { /* fallback */ }
     }
 
-    if (currentStatus === 'PENDING') {
+    if (currentStatus !== 'PENDING') {
       return NextResponse.json(
-        { success: false, message: 'Cannot assign a ticket that is still PENDING' },
+        { success: false, message: 'Only PENDING tickets can be assigned' },
         { status: 400 }
       );
     }
@@ -60,21 +65,39 @@ export async function PATCH(
       );
     }
 
+    const newStatus = 'ON_SITE';
+
     if (parsed._ticket) {
       parsed.assignedEngineerId = requester.id;
       parsed.assignedEngineerName = requester.name || requester.username;
       parsed.assignedAt = new Date().toISOString();
+      parsed.status = newStatus;
 
       await prisma.visitorRequest.update({
         where: { id },
-        data: { company: JSON.stringify(parsed) },
+        data: {
+          status: newStatus,
+          company: JSON.stringify(parsed),
+        },
+      });
+    } else {
+      await prisma.visitorRequest.update({
+        where: { id },
+        data: { status: newStatus },
       });
     }
+
+    try {
+      await prisma.ticketStatusLog.create({
+        data: { visitorRequestId: id, status: newStatus },
+      });
+    } catch { /* ignore */ }
 
     return NextResponse.json({
       success: true,
       ticket: {
         id,
+        status: newStatus,
         assignedEngineerId: requester.id,
         assignedEngineerName: requester.name || requester.username,
       },

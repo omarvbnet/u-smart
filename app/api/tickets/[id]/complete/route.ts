@@ -39,11 +39,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const body = await req.json();
     const checklistResponse = body.checklistResponse ?? null;
+    const inspectionResult = typeof body.inspectionResult === 'string' ? body.inspectionResult.trim() : null;
+    const inspectionComments = typeof body.inspectionComments === 'string' ? body.inspectionComments.trim() : null;
 
     parsed.status = 'COMPLETED';
     parsed.completedAt = new Date().toISOString();
     if (checklistResponse) {
       parsed.checklistResponse = checklistResponse;
+    }
+    if (inspectionResult) {
+      parsed.inspectionResult = inspectionResult;
+    }
+    if (inspectionComments) {
+      parsed.inspectionComments = inspectionComments;
     }
 
     await prisma.visitorRequest.update({

@@ -90,7 +90,7 @@ class Ticket {
   bool get isCompleted => status == 'COMPLETED';
   bool get isNcr => inspectionResult == 'ncr';
   bool get isAssigned => assignedEngineerId != null;
-  bool get canBeAssigned => !isPending && !isAssigned;
+  bool get canBeAssigned => isPending && !isAssigned;
 
   factory Ticket.fromJson(Map<String, dynamic> json) {
     return Ticket(

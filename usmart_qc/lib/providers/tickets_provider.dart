@@ -292,12 +292,22 @@ class TicketsProvider extends ChangeNotifier {
   Future<bool> completeTicket(
       String ticketId, Map<String, dynamic>? checklistResponse) async {
     try {
+      final body = <String, dynamic>{};
+      if (checklistResponse != null) {
+        final inspectionResult = checklistResponse.remove('inspectionResult');
+        final inspectionComments = checklistResponse.remove('inspectionComments');
+        body['checklistResponse'] = checklistResponse;
+        if (inspectionResult != null) {
+          body['inspectionResult'] = inspectionResult;
+        }
+        if (inspectionComments != null &&
+            (inspectionComments as String).isNotEmpty) {
+          body['inspectionComments'] = inspectionComments;
+        }
+      }
       final data = await _api.patch(
         ApiConfig.ticketComplete(ticketId),
-        body: {
-          if (checklistResponse != null)
-            'checklistResponse': checklistResponse,
-        },
+        body: body,
       );
       if (data['success'] == true) {
         await fetchTickets();

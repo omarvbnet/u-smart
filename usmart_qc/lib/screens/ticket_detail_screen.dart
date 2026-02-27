@@ -27,8 +27,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Ticket? _ticket;
   bool _loading = true;
   bool _assigning = false;
+  bool _updatingStatus = false;
 
-  // Engineer-specific data
   List<TicketComment> _comments = [];
   List<TicketEvidence> _evidence = [];
   List<InspectionChecklist> _checklists = [];
@@ -39,8 +39,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   final _picker = ImagePicker();
 
-  bool get _isEngineer =>
-      context.read<AuthProvider>().isEngineer;
+  bool get _isEngineer => context.read<AuthProvider>().isEngineer;
 
   @override
   void initState() {
@@ -94,16 +93,39 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(ok ? 'Ticket assigned to you' : 'Failed to assign'),
+          content: Text(ok ? 'Ticket assigned to you!' : 'Failed to assign'),
           backgroundColor:
               ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       if (ok) await _load();
       setState(() => _assigning = false);
+    }
+  }
+
+  Future<void> _updateStatus(String newStatus) async {
+    setState(() => _updatingStatus = true);
+    final ok = await context
+        .read<TicketsProvider>()
+        .updateTicketStatus(widget.ticketId, newStatus);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Status updated to ${_statusLabel(newStatus)}'
+              : 'Failed to update status'),
+          backgroundColor:
+              ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      if (ok) await _load();
+      setState(() => _updatingStatus = false);
     }
   }
 
@@ -116,8 +138,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    final picked = await _picker.pickImage(
-        source: ImageSource.camera, imageQuality: 80);
+    final picked =
+        await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
     if (picked == null) return;
     await _uploadFile(picked.path, 'image');
   }
@@ -145,7 +167,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           content: const Text('Failed to upload file'),
           backgroundColor: const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -154,7 +177,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _completeWithChecklist(
       Map<String, dynamic> checklistResponse) async {
-    final confirmed = await showDialog<bool>(
+    final resultCtrl = TextEditingController();
+    final commentsCtrl = TextEditingController();
+
+    final data = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF12122A),
@@ -162,49 +188,114 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         title: const Text('Complete Ticket',
             style:
                 TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        content: Text(
-          'Mark this ticket as completed with the filled checklist?',
-          style: TextStyle(color: Colors.white.withAlpha(180)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Add your inspection result before completing:',
+                style: TextStyle(color: Colors.white.withAlpha(180)),
+              ),
+              const SizedBox(height: 16),
+              _dialogDropdown(resultCtrl),
+              const SizedBox(height: 12),
+              TextField(
+                controller: commentsCtrl,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Inspection comments (optional)',
+                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                  filled: true,
+                  fillColor: const Color(0xFF0A0A1F),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel',
                 style: TextStyle(color: Colors.white.withAlpha(120))),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(ctx, {
+              'result': resultCtrl.text.isEmpty ? 'pass' : resultCtrl.text,
+              'comments': commentsCtrl.text,
+            }),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00D4AA),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Complete',
-                style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Complete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
 
-    if (confirmed == true && mounted) {
-      final ok = await context
-          .read<TicketsProvider>()
-          .completeTicket(widget.ticketId, checklistResponse);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text(ok ? 'Ticket completed!' : 'Failed to complete'),
-            backgroundColor:
-                ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
+    resultCtrl.dispose();
+    commentsCtrl.dispose();
+
+    if (data == null || !mounted) return;
+
+    final ok = await context.read<TicketsProvider>().completeTicket(
+          widget.ticketId,
+          {
+            ...checklistResponse,
+            'inspectionResult': data['result'],
+            'inspectionComments': data['comments'],
+          },
         );
-        if (ok) await _load();
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok ? 'Ticket completed!' : 'Failed to complete'),
+          backgroundColor:
+              ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      if (ok) await _load();
     }
+  }
+
+  Widget _dialogDropdown(TextEditingController ctrl) {
+    final options = ['pass', 'fail', 'ncr', 'conditional_pass'];
+    ctrl.text = 'pass';
+    return StatefulBuilder(
+      builder: (ctx, setDropState) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0A1F),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: DropdownButton<String>(
+          value: ctrl.text,
+          isExpanded: true,
+          dropdownColor: const Color(0xFF12122A),
+          underline: const SizedBox.shrink(),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          items: options.map((o) {
+            return DropdownMenuItem(
+                value: o, child: Text(_statusLabel(o)));
+          }).toList(),
+          onChanged: (v) {
+            if (v != null) {
+              setDropState(() => ctrl.text = v);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   Color get _accentColor {
@@ -229,7 +320,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       backgroundColor: const Color(0xFF05051A),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+              child:
+                  CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : _ticket == null
               ? const Center(
                   child: Text('Ticket not found',
@@ -243,8 +335,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       SliverPadding(
                         padding: const EdgeInsets.all(16),
                         sliver: SliverList(
-                          delegate: SliverChildListDelegate(
-                              _buildContent()),
+                          delegate:
+                              SliverChildListDelegate(_buildContent()),
                         ),
                       ),
                     ],
@@ -345,57 +437,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final t = _ticket!;
     final fmt = DateFormat('MMM d, yyyy HH:mm');
     final isEngineer = _isEngineer;
+    final isMyTicket = t.assignedEngineerId ==
+        context.read<AuthProvider>().user?.id;
 
     return [
-      // Assign button
-      if (t.canBeAssigned && isEngineer) ...[
-        GestureDetector(
-          onTap: _assigning ? null : _assignToMe,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6C63FF), Color(0xFF5A52E0)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6C63FF).withAlpha(60),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_assigning)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                else ...[
-                  const Icon(Icons.person_add_rounded,
-                      color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Assign to Me',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
+      // ─── Engineer action buttons ───
+      if (isEngineer) ..._buildEngineerActions(t, isMyTicket),
 
       // Details
       _glassSection('Details', [
@@ -408,7 +455,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
       if (t.inspectionResult != null) ...[
         const SizedBox(height: 16),
-        _glassSection('Inspection', [
+        _glassSection('Inspection Result', [
           _row('Result', _techniqueName(t.inspectionResult!)),
           if (t.inspectionComments != null)
             _row('Comments', t.inspectionComments!),
@@ -423,8 +470,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       const SizedBox(height: 16),
       _timelineSection(t),
 
-      // ─── Engineer sections ───
-      if (isEngineer && t.isAssigned) ...[
+      // ─── Engineer management sections ───
+      if (isEngineer && (t.isAssigned || t.isPending)) ...[
         const SizedBox(height: 16),
         _glassContainer(
           CommentsWidget(
@@ -443,7 +490,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             onPickFile: _pickAndUploadFile,
           ),
         ),
-        if (!t.isCompleted) ...[
+        if (isMyTicket && !t.isCompleted) ...[
           const SizedBox(height: 16),
           _glassContainer(
             ChecklistWidget(
@@ -471,6 +518,235 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       ],
       const SizedBox(height: 40),
     ];
+  }
+
+  List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket) {
+    final widgets = <Widget>[];
+
+    if (t.canBeAssigned) {
+      widgets.add(_actionButton(
+        icon: Icons.person_add_rounded,
+        label: 'Assign to Me',
+        gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+        loading: _assigning,
+        onTap: _assignToMe,
+      ));
+      widgets.add(const SizedBox(height: 12));
+    }
+
+    if (isMyTicket && !t.isCompleted) {
+      // Status flow: ON_SITE -> IN_PROGRESS
+      if (t.isOnSite) {
+        widgets.add(_actionButton(
+          icon: Icons.play_arrow_rounded,
+          label: 'Start Inspection',
+          gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
+          loading: _updatingStatus,
+          onTap: () => _updateStatus('IN_PROGRESS'),
+        ));
+        widgets.add(const SizedBox(height: 12));
+      }
+
+      // Status stepper
+      widgets.add(_buildStatusStepper(t));
+      widgets.add(const SizedBox(height: 16));
+    }
+
+    if (t.isCompleted && isMyTicket) {
+      widgets.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4ADE80).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF4ADE80).withAlpha(40)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                color: Color(0xFF4ADE80), size: 22),
+            const SizedBox(width: 10),
+            const Text(
+              'Ticket Completed',
+              style: TextStyle(
+                color: Color(0xFF4ADE80),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ));
+      widgets.add(const SizedBox(height: 16));
+    }
+
+    return widgets;
+  }
+
+  Widget _buildStatusStepper(Ticket t) {
+    final steps = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'];
+    final currentIdx =
+        steps.indexOf(t.status.toUpperCase()).clamp(0, steps.length - 1);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12122A),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withAlpha(10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TICKET PROGRESS',
+            style: TextStyle(
+              color: Colors.white.withAlpha(100),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: List.generate(steps.length * 2 - 1, (i) {
+              if (i.isOdd) {
+                final stepIdx = i ~/ 2;
+                final done = stepIdx < currentIdx;
+                return Expanded(
+                  child: Container(
+                    height: 3,
+                    color: done
+                        ? const Color(0xFF00D4AA)
+                        : Colors.white.withAlpha(15),
+                  ),
+                );
+              }
+              final stepIdx = i ~/ 2;
+              final done = stepIdx <= currentIdx;
+              final isCurrent = stepIdx == currentIdx;
+              final color = done
+                  ? _statusColorForStep(steps[stepIdx])
+                  : Colors.white.withAlpha(30);
+
+              return Container(
+                width: isCurrent ? 32 : 24,
+                height: isCurrent ? 32 : 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: done ? color : Colors.transparent,
+                  border: Border.all(
+                    color: color,
+                    width: isCurrent ? 3 : 2,
+                  ),
+                  boxShadow: isCurrent
+                      ? [
+                          BoxShadow(
+                              color: color.withAlpha(80), blurRadius: 12)
+                        ]
+                      : null,
+                ),
+                child: done
+                    ? Icon(
+                        stepIdx < currentIdx
+                            ? Icons.check
+                            : _stepIcon(steps[stepIdx]),
+                        color: Colors.white,
+                        size: isCurrent ? 16 : 12,
+                      )
+                    : null,
+              );
+            }),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: steps.map((s) {
+              final idx = steps.indexOf(s);
+              final isCurrent = idx == currentIdx;
+              return Text(
+                _statusLabel(s),
+                style: TextStyle(
+                  color: isCurrent
+                      ? Colors.white
+                      : Colors.white.withAlpha(60),
+                  fontSize: 9,
+                  fontWeight:
+                      isCurrent ? FontWeight.w700 : FontWeight.w500,
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _stepIcon(String status) {
+    switch (status.toUpperCase()) {
+      case 'PENDING':
+        return Icons.schedule;
+      case 'ON_SITE':
+        return Icons.location_on;
+      case 'IN_PROGRESS':
+        return Icons.construction;
+      case 'COMPLETED':
+        return Icons.check_circle;
+      default:
+        return Icons.circle;
+    }
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required List<Color> gradient,
+    required bool loading,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: gradient),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.first.withAlpha(60),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (loading)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            else ...[
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _glassContainer(Widget child) {
@@ -610,8 +886,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               ),
             ),
             ...t.ncrResubmissions.map((r) => Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 4),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -674,7 +950,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         final i = entry.key;
         final log = entry.value;
         final isLast = i == t.statusTimeline.length - 1;
-        final color = _statusColor(log.status);
+        final color = _statusColorForStep(log.status);
         final fmt = DateFormat('MMM d, HH:mm');
 
         return Padding(
@@ -729,7 +1005,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     ]);
   }
 
-  Color _statusColor(String status) {
+  Color _statusColorForStep(String status) {
     switch (status.toUpperCase()) {
       case 'PENDING':
         return const Color(0xFFFBBF24);
@@ -741,6 +1017,32 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         return const Color(0xFF4ADE80);
       default:
         return const Color(0xFF6B7280);
+    }
+  }
+
+  String _statusLabel(String s) {
+    switch (s.toUpperCase()) {
+      case 'PENDING':
+        return 'Pending';
+      case 'ON_SITE':
+        return 'On Site';
+      case 'IN_PROGRESS':
+        return 'In Progress';
+      case 'COMPLETED':
+        return 'Completed';
+      case 'PASS':
+        return 'Pass';
+      case 'FAIL':
+        return 'Fail';
+      case 'NCR':
+        return 'NCR';
+      case 'CONDITIONAL_PASS':
+        return 'Conditional Pass';
+      default:
+        return s.replaceAll('_', ' ').split(' ').map((w) {
+          if (w.isEmpty) return w;
+          return w[0].toUpperCase() + w.substring(1).toLowerCase();
+        }).join(' ');
     }
   }
 

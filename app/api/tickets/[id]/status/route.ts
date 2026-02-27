@@ -4,9 +4,9 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
 const prisma = _prisma as any;
 
-const ALLOWED_TRANSITIONS: Record<string, string> = {
-  PENDING: 'ON_SITE',
-  ON_SITE: 'IN_PROGRESS',
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  ON_SITE: ['IN_PROGRESS'],
+  IN_PROGRESS: ['COMPLETED'],
 };
 
 export async function PATCH(
@@ -29,15 +29,32 @@ export async function PATCH(
 
     if (!['ON_SITE', 'IN_PROGRESS'].includes(newStatus)) {
       return NextResponse.json(
-        { success: false, message: 'Requesters can only set status to ON_SITE or IN_PROGRESS' },
+        { success: false, message: 'Can only set status to ON_SITE or IN_PROGRESS' },
         { status: 400 }
       );
     }
 
-    const row = await prisma.visitorRequest.findFirst({
-      where: { id, requesterId: auth.payload.requesterId },
-      select: { id: true, status: true, company: true },
-    });
+    let requesterRole = 'COMPANY';
+    try {
+      const reqRow = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { role: true },
+      });
+      requesterRole = reqRow?.role ?? 'COMPANY';
+    } catch { /* fallback */ }
+
+    let row: any;
+    if (requesterRole === 'ENGINEER') {
+      row = await prisma.visitorRequest.findUnique({
+        where: { id },
+        select: { id: true, status: true, company: true },
+      });
+    } else {
+      row = await prisma.visitorRequest.findFirst({
+        where: { id, requesterId: auth.payload.requesterId },
+        select: { id: true, status: true, company: true },
+      });
+    }
 
     if (!row) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
@@ -51,12 +68,21 @@ export async function PATCH(
         if (parsed._ticket && typeof parsed.status === 'string') {
           currentStatus = parsed.status;
         }
-      } catch {
-        /* use column status */
+      } catch { /* fallback */ }
+    }
+
+    if (requesterRole === 'ENGINEER') {
+      const assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+      if (assignedEngineerId !== auth.payload.requesterId) {
+        return NextResponse.json(
+          { success: false, message: 'Only the assigned engineer can update this ticket' },
+          { status: 403 }
+        );
       }
     }
 
-    if (ALLOWED_TRANSITIONS[currentStatus] !== newStatus) {
+    const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
+    if (!allowed.includes(newStatus)) {
       return NextResponse.json(
         { success: false, message: `Cannot transition from ${currentStatus} to ${newStatus}` },
         { status: 400 }
@@ -83,9 +109,7 @@ export async function PATCH(
       await prisma.ticketStatusLog.create({
         data: { visitorRequestId: id, status: newStatus },
       });
-    } catch {
-      /* TicketStatusLog may not exist */
-    }
+    } catch { /* ignore */ }
 
     return NextResponse.json({
       success: true,

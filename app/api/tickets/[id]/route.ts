@@ -107,6 +107,9 @@ export async function GET(
     let ncrReason: string | null = null;
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
+    let assignedEngineerId: string | null = null;
+    let assignedEngineerName: string | null = null;
+    let assignedAt: string | null = null;
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -135,6 +138,9 @@ export async function GET(
               imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [],
             }))
           : [];
+        assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+        assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
+        assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
       }
     } catch {
       /* ignore */
@@ -183,6 +189,9 @@ export async function GET(
         ncrReason,
         ncrImageUrls,
         ncrResubmissions,
+        assignedEngineerId,
+        assignedEngineerName,
+        assignedAt,
       },
     });
   } catch (err) {
