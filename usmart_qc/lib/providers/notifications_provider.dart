@@ -68,8 +68,12 @@ class NotificationsProvider extends ChangeNotifier {
 
   Future<void> _fetchNotifications() async {
     try {
-      final data =
-          await _api.get('${ApiConfig.notifications}?for=requester');
+      Map<String, dynamic> data;
+      try {
+        data = await _api.get('${ApiConfig.notifications}?for=requester');
+      } catch (_) {
+        return;
+      }
       if (data['success'] == true) {
         final list = (data['notifications'] as List? ?? [])
             .map((e) =>
@@ -98,8 +102,8 @@ class NotificationsProvider extends ChangeNotifier {
         _notifications = list;
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('NotificationsProvider poll error: $e');
+    } catch (_) {
+      // Silently handle errors (e.g. backend not redeployed yet)
     }
   }
 
