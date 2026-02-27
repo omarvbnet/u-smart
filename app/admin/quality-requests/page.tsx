@@ -41,6 +41,7 @@ export default function AdminQualityRequestsPage() {
     id: '',
     siteId: '',
     company: '',
+    engineer: '',
   });
 
   const syncCompany = async () => {
@@ -67,6 +68,7 @@ export default function AdminQualityRequestsPage() {
       if (filters.id) params.set('id', filters.id);
       if (filters.siteId) params.set('siteId', filters.siteId);
       if (filters.company) params.set('company', filters.company);
+      if (filters.engineer) params.set('engineer', filters.engineer);
       const qs = params.toString();
       const res = await fetch(`/api/admin/quality-requests${qs ? `?${qs}` : ''}`);
       const data = await res.json();
@@ -85,7 +87,7 @@ export default function AdminQualityRequestsPage() {
 
   useEffect(() => {
     load();
-  }, [filters.result, filters.status, filters.id, filters.siteId, filters.company]);
+  }, [filters.result, filters.status, filters.id, filters.siteId, filters.company, filters.engineer]);
 
   const formatDate = (s: string) => {
     try {
@@ -201,7 +203,7 @@ export default function AdminQualityRequestsPage() {
           <FunnelIcon className="w-4 h-4" />
           Filters
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Inspection result</label>
             <select
@@ -261,10 +263,20 @@ export default function AdminQualityRequestsPage() {
               className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
             />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Assigned Engineer</label>
+            <input
+              type="text"
+              value={filters.engineer}
+              onChange={(e) => setFilters((f) => ({ ...f, engineer: e.target.value }))}
+              placeholder="Filter by engineer name"
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+            />
+          </div>
         </div>
         <button
           type="button"
-          onClick={() => setFilters({ result: '', status: '', id: '', siteId: '', company: '' })}
+          onClick={() => setFilters({ result: '', status: '', id: '', siteId: '', company: '', engineer: '' })}
           className="mt-3 text-sm text-gray-600 hover:text-gray-900"
         >
           Clear filters

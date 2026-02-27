@@ -7,6 +7,8 @@ class ChecklistResponseItem {
   final String weight;
   bool checked;
   String? comment;
+  /// 'accepted' | 'rejected' — each item must have a result
+  String? result;
 
   ChecklistResponseItem({
     required this.id,
@@ -14,6 +16,7 @@ class ChecklistResponseItem {
     this.weight = 'minor',
     this.checked = false,
     this.comment,
+    this.result,
   });
 
   Map<String, dynamic> toJson() => {
@@ -21,6 +24,7 @@ class ChecklistResponseItem {
         'label': label,
         'checked': checked,
         'weight': weight,
+        if (result != null && result!.isNotEmpty) 'result': result!,
         if (comment != null && comment!.isNotEmpty) 'comment': comment,
       };
 }
@@ -56,6 +60,22 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
 
   void _submit() {
     if (_selected == null) return;
+    final itemsWithResult = _items.where((i) => i.result == 'accepted' || i.result == 'rejected').length;
+    if (_items.isNotEmpty && itemsWithResult < _items.length) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please Accept or Reject all ${_items.length} items before completing',
+          ),
+          backgroundColor: const Color(0xFFFBBF24),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
     final response = {
       'checklistId': _selected!.id,
       'checklistName': _selected!.name,
@@ -65,7 +85,7 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
     widget.onComplete(response);
   }
 
-  int get _checkedCount => _items.where((i) => i.checked).length;
+  int get _checkedCount => _items.where((i) => i.result == 'accepted' || i.result == 'rejected').length;
 
   @override
   Widget build(BuildContext context) {
@@ -225,67 +245,129 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
             ),
           ),
           const SizedBox(height: 8),
-          // Items
+          // Items with Accept / Reject
           ..._items.asMap().entries.map((entry) {
-            final i = entry.key;
+            final idx = entry.key;
             final item = entry.value;
+            final isAccepted = item.result == 'accepted';
+            final isRejected = item.result == 'rejected';
             return Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-              child: GestureDetector(
-                onTap: () => setState(() => _items[i].checked = !item.checked),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: item.checked
-                        ? const Color(0xFF00D4AA).withAlpha(8)
-                        : Colors.white.withAlpha(3),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: item.checked
-                          ? const Color(0xFF00D4AA).withAlpha(30)
-                          : Colors.white.withAlpha(8),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isAccepted
+                      ? const Color(0xFF00D4AA).withAlpha(12)
+                      : isRejected
+                          ? const Color(0xFFFF4757).withAlpha(12)
+                          : Colors.white.withAlpha(3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isAccepted
+                        ? const Color(0xFF00D4AA).withAlpha(35)
+                        : isRejected
+                            ? const Color(0xFFFF4757).withAlpha(35)
+                            : Colors.white.withAlpha(8),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.label,
+                        style: TextStyle(
+                          color: isAccepted || isRejected
+                              ? Colors.white
+                              : Colors.white.withAlpha(180),
+                          fontSize: 14,
+                          decoration: isRejected
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 22,
-                        height: 22,
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _items[idx].result = 'accepted';
+                        _items[idx].checked = true;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: item.checked
+                          color: isAccepted
                               ? const Color(0xFF00D4AA)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: item.checked
-                                ? const Color(0xFF00D4AA)
-                                : const Color(0xFF4B5563),
-                            width: 2,
-                          ),
+                              : const Color(0xFF00D4AA).withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: item.checked
-                            ? const Icon(Icons.check,
-                                color: Colors.white, size: 14)
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          item.label,
-                          style: TextStyle(
-                            color: item.checked
-                                ? Colors.white
-                                : Colors.white.withAlpha(150),
-                            fontSize: 14,
-                            decoration: item.checked
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: isAccepted
+                                  ? Colors.white
+                                  : const Color(0xFF00D4AA),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Accept',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isAccepted
+                                    ? Colors.white
+                                    : const Color(0xFF00D4AA),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _items[idx].result = 'rejected';
+                        _items[idx].checked = false;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isRejected
+                              ? const Color(0xFFFF4757)
+                              : const Color(0xFFFF4757).withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.cancel,
+                              size: 16,
+                              color: isRejected
+                                  ? Colors.white
+                                  : const Color(0xFFFF6B81),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Reject',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isRejected
+                                    ? Colors.white
+                                    : const Color(0xFFFF6B81),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );

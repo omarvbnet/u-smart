@@ -61,6 +61,7 @@ class Ticket {
   final String? assignedEngineerId;
   final String? assignedEngineerName;
   final String? assignedAt;
+  final List<Map<String, dynamic>>? inspectionChecklist;
 
   Ticket({
     required this.id,
@@ -82,6 +83,7 @@ class Ticket {
     this.assignedEngineerId,
     this.assignedEngineerName,
     this.assignedAt,
+    this.inspectionChecklist,
   });
 
   bool get isPending => status == 'PENDING';
@@ -127,6 +129,11 @@ class Ticket {
       assignedEngineerId: json['assignedEngineerId'] as String?,
       assignedEngineerName: json['assignedEngineerName'] as String?,
       assignedAt: json['assignedAt'] as String?,
+      inspectionChecklist: json['inspectionChecklist'] is List
+          ? (json['inspectionChecklist'] as List)
+              .map((e) => e as Map<String, dynamic>)
+              .toList()
+          : null,
     );
   }
 }

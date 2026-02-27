@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
     const idFilter = searchParams.get('id')?.trim() || '';
     const siteIdFilter = searchParams.get('siteId')?.trim() || '';
     const companyFilter = searchParams.get('company')?.trim() || '';
+    const engineerFilter = searchParams.get('engineer')?.trim().toLowerCase() || '';
 
     const rows = await prisma.visitorRequest.findMany({
       where: { serviceSlug: 'quality-control-supervision' },
@@ -162,6 +163,11 @@ export async function GET(req: NextRequest) {
       const cf = companyFilter.toLowerCase();
       enriched = enriched.filter((r) =>
         (r.displayCompany || '').toLowerCase().includes(cf)
+      );
+    }
+    if (engineerFilter) {
+      enriched = enriched.filter((r) =>
+        (r.assignedEngineerName || '').toLowerCase().includes(engineerFilter)
       );
     }
 

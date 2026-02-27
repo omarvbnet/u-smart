@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/ticket.dart';
 import '../models/comment.dart';
 import '../models/evidence.dart';
@@ -145,10 +146,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _pickAndUploadFile() async {
-    final picked = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 80);
-    if (picked == null) return;
-    await _uploadFile(picked.path, 'image');
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif'],
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    if (file.path == null) return;
+    final ext = file.extension?.toLowerCase() ?? 'image';
+    final fileType = ext == 'pdf' ? 'file' : 'image';
+    await _uploadFile(file.path!, fileType);
   }
 
   Future<void> _uploadFile(String filePath, String fileType) async {
@@ -177,7 +185,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _completeWithChecklist(
       Map<String, dynamic> checklistResponse) async {
-    final resultCtrl = TextEditingController();
+    final items = (checklistResponse['items'] as List?) ?? [];
+    final allAccepted = items.every((i) =>
+        (i is Map && (i['result'] ?? i['checked']) == 'accepted') ||
+        (i is Map && i['checked'] == true && i['result'] != 'rejected'));
+    final defaultResult = allAccepted ? 'accepted' : 'not_accepted';
+
+    final resultCtrl = TextEditingController(text: defaultResult);
     final commentsCtrl = TextEditingController();
 
     final data = await showDialog<Map<String, dynamic>>(
@@ -193,7 +207,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Add your inspection result before completing:',
+                'Inspection result (auto-filled from checklist):',
                 style: TextStyle(color: Colors.white.withAlpha(180)),
               ),
               const SizedBox(height: 16),
@@ -275,7 +289,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       'not_accepted': 'Not Accepted',
       'ncr': 'NCR',
     };
-    ctrl.text = 'accepted';
+    if (ctrl.text.isEmpty) ctrl.text = 'accepted';
     return StatefulBuilder(
       builder: (ctx, setDropState) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 14),

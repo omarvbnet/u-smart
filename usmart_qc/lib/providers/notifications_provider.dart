@@ -68,40 +68,38 @@ class NotificationsProvider extends ChangeNotifier {
 
   Future<void> _fetchNotifications() async {
     try {
-      Map<String, dynamic> data;
-      try {
-        data = await _api.get('${ApiConfig.notifications}?for=requester');
-      } catch (_) {
-        return;
-      }
-      if (data['success'] == true) {
-        final list = (data['notifications'] as List? ?? [])
-            .map((e) =>
-                AppNotification.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _unreadCount = (data['unreadCount'] as int?) ?? 0;
+      final data = await _api.getSafe(
+        ApiConfig.notifications,
+        query: {'for': 'requester'},
+      );
+      if (data == null || data['success'] != true) return;
 
+      final list = (data['notifications'] as List? ?? [])
+          .map((e) =>
+              AppNotification.fromJson(e as Map<String, dynamic>))
+          .toList();
+      _unreadCount = (data['unreadCount'] as int?) ?? 0;
+
+      for (final n in list) {
+        if (!n.read && !_shownIds.contains(n.id) && _initialized) {
+          _shownIds.add(n.id);
+          _localNotifications.show(
+            id: n.id.hashCode,
+            title: n.title,
+            body: n.message,
+          );
+        }
+      }
+
+      if (!_initialized) {
         for (final n in list) {
-          if (!n.read && !_shownIds.contains(n.id) && _initialized) {
-            _shownIds.add(n.id);
-            _localNotifications.show(
-              id: n.id.hashCode,
-              title: n.title,
-              body: n.message,
-            );
-          }
+          _shownIds.add(n.id);
         }
-
-        if (!_initialized) {
-          for (final n in list) {
-            _shownIds.add(n.id);
-          }
-          _initialized = true;
-        }
-
-        _notifications = list;
-        notifyListeners();
+        _initialized = true;
       }
+
+      _notifications = list;
+      notifyListeners();
     } catch (_) {
       // Silently handle errors (e.g. backend not redeployed yet)
     }

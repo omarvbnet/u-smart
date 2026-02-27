@@ -82,25 +82,19 @@ export async function PATCH(
 
     const newStatus = 'ON_SITE';
 
-    if (parsed._ticket) {
-      parsed.assignedEngineerId = requester.id;
-      parsed.assignedEngineerName = requester.name || requester.username;
-      parsed.assignedAt = new Date().toISOString();
-      parsed.status = newStatus;
+    parsed.assignedEngineerId = requester.id;
+    parsed.assignedEngineerName = requester.name || requester.username;
+    parsed.assignedAt = new Date().toISOString();
+    parsed.status = newStatus;
+    if (!parsed._ticket) parsed._ticket = true;
 
-      await prisma.visitorRequest.update({
-        where: { id },
-        data: {
-          status: newStatus,
-          company: JSON.stringify(parsed),
-        },
-      });
-    } else {
-      await prisma.visitorRequest.update({
-        where: { id },
-        data: { status: newStatus },
-      });
-    }
+    await prisma.visitorRequest.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        company: JSON.stringify(parsed),
+      },
+    });
 
     try {
       await prisma.ticketStatusLog.create({

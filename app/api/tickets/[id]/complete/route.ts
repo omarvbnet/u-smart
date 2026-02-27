@@ -52,6 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         id: String(item.id ?? ''),
         label: String(item.label ?? ''),
         checked: !!item.checked,
+        result: typeof item.result === 'string' ? item.result : (item.checked ? 'accepted' : 'rejected'),
         comment: typeof item.comment === 'string' ? item.comment : (typeof item.note === 'string' ? item.note : undefined),
         weight: typeof item.weight === 'string' ? item.weight : 'minor',
       }));
