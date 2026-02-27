@@ -74,17 +74,34 @@ class ApiService {
   }
 
   Future<String?> uploadFile(String path, String filePath) async {
-    final request = http.MultipartRequest('POST', _uri(path));
-    if (_token != null) {
-      request.headers['Authorization'] = 'Bearer $_token';
+    try {
+      final request = http.MultipartRequest('POST', _uri(path));
+      if (_token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+      request.files.add(await http.MultipartFile.fromPath('file', filePath));
+      final streamed = await request.send();
+      final body = await streamed.stream.bytesToString();
+
+      if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+        try {
+          final err = jsonDecode(body) as Map<String, dynamic>;
+          final msg = err['message'] as String? ?? 'Upload failed (${streamed.statusCode})';
+          throw Exception(msg);
+        } catch (e) {
+          if (e is Exception) rethrow;
+          throw Exception('Upload failed (${streamed.statusCode})');
+        }
+      }
+
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      if (data['success'] == true) {
+        return data['url'] as String?;
+      }
+      final msg = data['message'] as String? ?? 'Upload failed';
+      throw Exception(msg);
+    } on FormatException {
+      throw Exception('Invalid server response');
     }
-    request.files.add(await http.MultipartFile.fromPath('file', filePath));
-    final streamed = await request.send();
-    final body = await streamed.stream.bytesToString();
-    final data = jsonDecode(body) as Map<String, dynamic>;
-    if (data['success'] == true) {
-      return data['url'] as String?;
-    }
-    return null;
   }
 }

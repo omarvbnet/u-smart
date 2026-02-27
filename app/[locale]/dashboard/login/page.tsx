@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
+import { X, Building2, UserCog, Upload, Loader2 } from 'lucide-react';
 
 export default function RequesterLoginPage() {
   const router = useRouter();
@@ -15,6 +16,15 @@ export default function RequesterLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [showRegistration, setShowRegistration] = useState(false);
+  const [regStep, setRegStep] = useState<'role' | 'form'>('role');
+  const [regRole, setRegRole] = useState<'COMPANY' | 'ENGINEER' | null>(null);
+  const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '' });
+  const [regEvidenceUrl, setRegEvidenceUrl] = useState('');
+  const [regEvidenceUploading, setRegEvidenceUploading] = useState(false);
+  const [regSubmitting, setRegSubmitting] = useState(false);
+  const [regSuccess, setRegSuccess] = useState(false);
+  const [regError, setRegError] = useState('');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
 
   useEffect(() => {
@@ -132,8 +142,198 @@ export default function RequesterLoginPage() {
               {t('ticketForm.backToHome')}
             </Link>
           </p>
+
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
+              className="w-full py-2.5 text-sm text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-xl border border-cyan-500/30 transition-colors"
+            >
+              {t('ticketForm.requestRegistration') || 'Request for registration'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {showRegistration && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => !regSubmitting && setShowRegistration(false)}>
+          <div className="bg-[#0f1419] border border-white/10 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <h2 className="text-lg font-semibold text-white">
+                {t('ticketForm.requestRegistration') || 'Request for registration'}
+              </h2>
+              <button type="button" onClick={() => !regSubmitting && setShowRegistration(false)} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/10">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {regSuccess ? (
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl text-emerald-400">✓</span>
+                </div>
+                <p className="text-emerald-400 font-medium mb-2">{t('ticketForm.regRequestSubmitted') || 'Request submitted'}</p>
+                <p className="text-sm text-gray-400 mb-4">{t('ticketForm.regRequestSubmittedHint') || 'You will be notified once approved.'}</p>
+                <button type="button" onClick={() => setShowRegistration(false)} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white text-sm font-medium">
+                  {t('visitorRequestForm.close') || 'Close'}
+                </button>
+              </div>
+            ) : regStep === 'role' ? (
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-400">{t('ticketForm.chooseRole') || 'Choose your role:'}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => { setRegRole('COMPANY'); setRegStep('form'); }}
+                    className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
+                  >
+                    <Building2 className="w-10 h-10 text-cyan-400" />
+                    <span className="font-medium text-white">{t('ticketForm.roleCompany') || 'Company'}</span>
+                    <span className="text-xs text-gray-400 text-center">{t('ticketForm.roleCompanyHint') || 'Submit & manage tickets'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRegRole('ENGINEER'); setRegStep('form'); }}
+                    className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
+                  >
+                    <UserCog className="w-10 h-10 text-cyan-400" />
+                    <span className="font-medium text-white">{t('ticketForm.roleEngineer') || 'Engineer'}</span>
+                    <span className="text-xs text-gray-400 text-center">{t('ticketForm.roleEngineerHint') || 'Inspect & complete tickets'}</span>
+                  </button>
+                </div>
+                <button type="button" onClick={() => setRegStep('role')} className="text-sm text-gray-500 hover:text-white">
+                  ← {t('ticketForm.back') || 'Back'}
+                </button>
+              </div>
+            ) : (
+              <form
+                className="p-6 space-y-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setRegError('');
+                  if (!regEvidenceUrl) {
+                    setRegError(t('ticketForm.evidenceRequired') || 'Identification evidence is required');
+                    return;
+                  }
+                  setRegSubmitting(true);
+                  try {
+                    const res = await fetch('/api/registration-requests', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        legalName: regForm.legalName.trim(),
+                        phone: regForm.phone.trim(),
+                        email: regForm.email.trim(),
+                        evidenceUrl: regEvidenceUrl,
+                        role: regRole,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setRegSuccess(true);
+                    } else {
+                      setRegError(data.message || 'Failed to submit');
+                    }
+                  } catch {
+                    setRegError(t('ticketForm.regRequestFailed') || 'Failed to submit request');
+                  } finally {
+                    setRegSubmitting(false);
+                  }
+                }}
+              >
+                <button type="button" onClick={() => setRegStep('role')} className="text-sm text-gray-500 hover:text-white mb-2">
+                  ← {t('ticketForm.back') || 'Back'} ({regRole === 'COMPANY' ? t('ticketForm.roleCompany') || 'Company' : t('ticketForm.roleEngineer') || 'Engineer'})
+                </button>
+
+                {regError && (
+                  <div className="px-4 py-3 rounded-lg bg-red-500/20 text-red-400 text-sm border border-red-500/30">
+                    {regError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.legalName') || 'Legal name'}</label>
+                  <input
+                    type="text"
+                    value={regForm.legalName}
+                    onChange={(e) => setRegForm((f) => ({ ...f, legalName: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
+                    placeholder={t('ticketForm.legalNamePlaceholder') || 'Full legal name'}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('visitorRequestForm.phoneLabel') || 'Phone'}</label>
+                  <input
+                    type="tel"
+                    value={regForm.phone}
+                    onChange={(e) => setRegForm((f) => ({ ...f, phone: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
+                    placeholder="+964..."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.email') || 'Email'}</label>
+                  <input
+                    type="email"
+                    value={regForm.email}
+                    onChange={(e) => setRegForm((f) => ({ ...f, email: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
+                    placeholder="email@example.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.evidenceForIdentification') || 'Evidence for identification'}</label>
+                  <p className="text-xs text-gray-500 mb-2">{t('ticketForm.evidenceHint') || 'ID card, passport, or company certificate (PDF, JPEG, PNG)'}</p>
+                  {regEvidenceUrl ? (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                      <span className="text-sm text-emerald-400">✓ {t('ticketForm.fileUploaded') || 'File uploaded'}</span>
+                      <a href={regEvidenceUrl.startsWith('http') ? regEvidenceUrl : regEvidenceUrl.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${regEvidenceUrl}` : regEvidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline">View</a>
+                      <button type="button" onClick={() => setRegEvidenceUrl('')} className="text-xs text-red-400 hover:underline ml-auto">{t('ticketForm.remove') || 'Remove'}</button>
+                    </div>
+                  ) : (
+                    <label className={`flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/20 hover:border-cyan-500/50 cursor-pointer transition-colors ${regEvidenceUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                      <input
+                        type="file"
+                        accept=".pdf,image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        disabled={regEvidenceUploading}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setRegEvidenceUploading(true);
+                          try {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            const res = await fetch('/api/upload/registration-evidence', { method: 'POST', body: fd });
+                            const data = await res.json();
+                            if (data.success && data.url) setRegEvidenceUrl(data.url);
+                          } finally {
+                            setRegEvidenceUploading(false);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      {regEvidenceUploading ? <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" /> : <Upload className="w-8 h-8 text-gray-400" />}
+                      <span className="text-sm text-gray-400">{regEvidenceUploading ? t('ticketForm.uploading') || 'Uploading...' : t('ticketForm.uploadEvidence') || 'Upload PDF or image'}</span>
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={regSubmitting}
+                  className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
+                >
+                  {regSubmitting ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {t('ticketForm.submitting') || 'Submitting...'}</span> : (t('ticketForm.submitRequest') || 'Submit request')}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

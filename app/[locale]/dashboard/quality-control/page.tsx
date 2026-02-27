@@ -46,7 +46,7 @@ export default function QualityControlDashboardPage() {
   const params = useParams();
   const t = useTranslations('Index');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
-  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; serviceSlug?: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; serviceSlug?: string; role?: string } | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticketFormOpen, setTicketFormOpen] = useState(false);
@@ -78,13 +78,20 @@ export default function QualityControlDashboardPage() {
   const [siteTicketsFilter, setSiteTicketsFilter] = useState({ status: '', from: '', to: '' });
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [ticketListFilter, setTicketListFilter] = useState({ result: '', siteName: '', ticketId: '' });
+  const [dashboardFilters, setDashboardFilters] = useState({ from: '', to: '', siteName: '', ticketId: '' });
+  const [appliedDashboardFilters, setAppliedDashboardFilters] = useState({ from: '', to: '', siteName: '', ticketId: '' });
   const [exportingSites, setExportingSites] = useState(false);
   const [importingSites, setImportingSites] = useState(false);
   const [exportingData, setExportingData] = useState(false);
   const siteFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
-    const qs = '?serviceSlug=quality-control-supervision';
+    const params = new URLSearchParams();
+    params.set('serviceSlug', 'quality-control-supervision');
+    if (appliedDashboardFilters.from) params.set('from', appliedDashboardFilters.from);
+    if (appliedDashboardFilters.to) params.set('to', appliedDashboardFilters.to);
+    if (appliedDashboardFilters.siteName) params.set('siteName', appliedDashboardFilters.siteName);
+    const qs = `?${params.toString()}`;
     const [meRes, ticketsRes, statsRes] = await Promise.all([
       fetch('/api/auth/requester-me', { credentials: 'include' }).then((r) => r.json()),
       fetch(`/api/tickets${qs}`, { credentials: 'include' }).then((r) => r.json()),
@@ -102,12 +109,14 @@ export default function QualityControlDashboardPage() {
   useEffect(() => {
     setLoading(true);
     loadData().then(() => setLoading(false)).catch(() => router.replace(`/${locale}/dashboard/login`));
-  }, [router, locale]);
+  }, [router, locale, appliedDashboardFilters.from, appliedDashboardFilters.to, appliedDashboardFilters.siteName]);
 
   useEffect(() => {
     const id = setInterval(loadData, 15000);
     return () => clearInterval(id);
-  }, []);
+  }, [appliedDashboardFilters.from, appliedDashboardFilters.to, appliedDashboardFilters.siteName]);
+
+  const isCompany = user?.role === 'COMPANY';
 
   const loadSites = async () => {
     setSitesLoading(true);
@@ -404,6 +413,10 @@ export default function QualityControlDashboardPage() {
       : tickets.filter((tk) => tk.status === 'COMPLETED');
 
   const filteredTickets = baseFilteredTickets.filter((tk) => {
+    if (appliedDashboardFilters.ticketId.trim()) {
+      const q = appliedDashboardFilters.ticketId.trim().toLowerCase();
+      if (!tk.id.toLowerCase().includes(q)) return false;
+    }
     if (ticketListFilter.result) {
       const r = (tk.inspectionResult ?? '').toLowerCase();
       if (r !== ticketListFilter.result.toLowerCase()) return false;
@@ -486,6 +499,72 @@ export default function QualityControlDashboardPage() {
             >
               <LogOut className="w-5 h-5" />
               {t('ticketForm.logout')}
+            </button>
+          </div>
+        </div>
+
+        {/* Global date range & filters - applies to tickets + stats for both company and engineer */}
+        <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
+            <Filter className="w-4 h-4" />
+            {t('ticketForm.filterByDate') || 'Filter by date'} / {t('ticketForm.filterBySite') || 'Filter by site'}
+          </h3>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterFrom') || 'From'}</label>
+              <input
+                type="date"
+                value={dashboardFilters.from}
+                onChange={(e) => setDashboardFilters((f) => ({ ...f, from: e.target.value }))}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterTo') || 'To'}</label>
+              <input
+                type="date"
+                value={dashboardFilters.to}
+                onChange={(e) => setDashboardFilters((f) => ({ ...f, to: e.target.value }))}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterBySite') || 'Site'}</label>
+              <input
+                type="text"
+                value={dashboardFilters.siteName}
+                onChange={(e) => setDashboardFilters((f) => ({ ...f, siteName: e.target.value }))}
+                placeholder={t('ticketForm.filterPlaceholder') || 'Site name'}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm min-w-[140px]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterByTicketId') || 'Ticket ID'}</label>
+              <input
+                type="text"
+                value={dashboardFilters.ticketId}
+                onChange={(e) => setDashboardFilters((f) => ({ ...f, ticketId: e.target.value }))}
+                placeholder="e.g. abc123"
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm min-w-[120px]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setAppliedDashboardFilters({ ...dashboardFilters })}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-sm font-medium"
+            >
+              {t('ticketForm.applyFilter') || 'Apply'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const cleared = { from: '', to: '', siteName: '', ticketId: '' };
+                setDashboardFilters(cleared);
+                setAppliedDashboardFilters(cleared);
+              }}
+              className="px-4 py-2 bg-white/10 hover:bg-white/15 text-gray-400 hover:text-white rounded-lg text-sm font-medium"
+            >
+              {t('ticketForm.clearFilter') || 'Clear'}
             </button>
           </div>
         </div>
@@ -633,48 +712,50 @@ export default function QualityControlDashboardPage() {
                 <Map className="w-5 h-5 text-amber-400" />
                 {t('ticketForm.navSites')}
               </h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportSites}
-                  disabled={exportingSites || sites.length === 0}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-medium disabled:opacity-50"
-                  title={t('ticketForm.exportSitesHint')}
-                >
-                  {exportingSites ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  {t('ticketForm.exportSites')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => siteFileInputRef.current?.click()}
-                  disabled={importingSites}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-medium disabled:opacity-50"
-                  title={t('ticketForm.importSitesHint')}
-                >
-                  {importingSites ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  {t('ticketForm.importSites')}
-                </button>
-                <input
-                  ref={siteFileInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  className="hidden"
-                  onChange={handleImportSitesChange}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSite(null);
-                    setSiteForm({ siteId: '', location: '', province: '' });
-                    setSiteFormOpen(true);
-                    setSiteMessage(null);
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-white text-sm font-medium"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  {t('ticketForm.addSite')}
-                </button>
-              </div>
+              {isCompany && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportSites}
+                    disabled={exportingSites || sites.length === 0}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-medium disabled:opacity-50"
+                    title={t('ticketForm.exportSitesHint')}
+                  >
+                    {exportingSites ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {t('ticketForm.exportSites')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => siteFileInputRef.current?.click()}
+                    disabled={importingSites}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-sm font-medium disabled:opacity-50"
+                    title={t('ticketForm.importSitesHint')}
+                  >
+                    {importingSites ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {t('ticketForm.importSites')}
+                  </button>
+                  <input
+                    ref={siteFileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={handleImportSitesChange}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSite(null);
+                      setSiteForm({ siteId: '', location: '', province: '' });
+                      setSiteFormOpen(true);
+                      setSiteMessage(null);
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-white text-sm font-medium"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    {t('ticketForm.addSite')}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center gap-3">
@@ -743,21 +824,25 @@ export default function QualityControlDashboardPage() {
                         <PlusCircle className="w-3.5 h-3.5" />
                         {t('ticketForm.openTicket')}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditSite(site)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-gray-300 text-xs font-medium transition-colors"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        {t('ticketForm.updateSite')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSite(site.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-xs font-medium transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {isCompany && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleEditSite(site)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-gray-300 text-xs font-medium transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            {t('ticketForm.updateSite')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSite(site.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-xs font-medium transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

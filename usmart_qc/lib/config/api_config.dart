@@ -20,6 +20,11 @@ class ApiConfig {
   static const String inspectionChecklists = '/api/inspection-checklists';
   static const String uploadTicketAttachment = '/api/upload/ticket-attachment';
 
+  // Conflicts (company/admin only)
+  static const String conflicts = '/api/conflicts';
+  static String conflictDetail(String id) => '/api/conflicts/$id';
+  static String ticketReportConflict(String id) => '/api/tickets/$id/report-conflict';
+
   static const String sites = '/api/sites';
   static String siteDetail(String id) => '/api/sites/$id';
 

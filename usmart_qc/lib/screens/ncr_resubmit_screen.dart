@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 
 class NcrResubmitScreen extends StatefulWidget {
@@ -17,9 +18,10 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
   Future<void> _submit() async {
     final comment = _commentCtrl.text.trim();
     if (comment.isEmpty) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please add a comment'),
+          content: Text(l10n.t('add_comment')),
           backgroundColor: const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -34,10 +36,11 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
         await provider.submitNcrResubmission(widget.ticketId, comment, []);
 
     if (mounted) {
+      final l10n = AppLocalizations.of(context);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('NCR resubmission sent'),
+            content: Text(l10n.t('ncr_sent')),
             backgroundColor: const Color(0xFF00D4AA),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -47,7 +50,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to submit'),
+            content: Text(l10n.t('submit_failed')),
             backgroundColor: const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -66,13 +69,14 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF05051A),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('NCR Resubmission',
+        title: Text(l10n.t('ncr_resubmission'),
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
       ),
       body: Padding(
@@ -94,7 +98,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Describe the corrective action taken to resolve the non-conformance.',
+                      l10n.t('ncr_resubmit_hint'),
                       style: TextStyle(
                           color: Colors.white.withAlpha(150), fontSize: 13),
                     ),
@@ -108,7 +112,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
               maxLines: 6,
               style: const TextStyle(color: Colors.white, fontSize: 15),
               decoration: InputDecoration(
-                hintText: 'Enter your response...',
+                hintText: l10n.t('ncr_enter_response'),
                 hintStyle: const TextStyle(color: Color(0xFF4B5563)),
                 filled: true,
                 fillColor: const Color(0xFF12122A),
@@ -161,7 +165,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2.5, color: Colors.white),
                         )
-                      : const Text('Submit Resubmission',
+                      : Text(l10n.t('submit_resubmission'),
                           style: TextStyle(
                               fontSize: 16, fontWeight: FontWeight.w700)),
                 ),

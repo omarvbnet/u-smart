@@ -15,6 +15,8 @@ import {
   Calendar,
   User,
   Building2,
+  Share2,
+  MessageSquare,
 } from 'lucide-react';
 
 type AssignedTeam = {
@@ -42,6 +44,9 @@ type TicketDetail = {
   inspectionResult?: string | null;
   inspectionComments?: string | null;
   inspectionChecklist?: Array<{ id: string; label: string; checked: boolean; comment?: string; weight?: string }>;
+  assignedEngineerId?: string | null;
+  assignedEngineerName?: string | null;
+  comments?: Array<{ id: string; authorName: string; body: string; createdAt: string; authorRole: 'engineer' | 'requester' }>;
 };
 
 export default function PublicTicketPage() {
@@ -52,6 +57,7 @@ export default function PublicTicketPage() {
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [shareFeedback, setShareFeedback] = useState<string>('');
 
   useEffect(() => {
     if (!id) {
@@ -167,12 +173,47 @@ export default function PublicTicketPage() {
     ? ticket.statusTimeline
     : [{ status: ticket.status, createdAt: ticket.createdAt }];
 
+  const handleShare = async () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const title = ticket?.siteName ? `Ticket: ${ticket.siteName}` : 'Ticket details';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title, url, text: title });
+        setShareFeedback('shared');
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareFeedback('copied');
+      }
+      setTimeout(() => setShareFeedback(''), 2000);
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        try {
+          await navigator.clipboard.writeText(url);
+          setShareFeedback('copied');
+        } catch {
+          setShareFeedback('error');
+        }
+        setTimeout(() => setShareFeedback(''), 2000);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
       <div className="max-w-3xl mx-auto p-4 sm:p-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm font-medium mb-6">
-          ← Back to home
-        </Link>
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <Link href="/" className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm font-medium">
+            ← Back to home
+          </Link>
+          <button
+            type="button"
+            onClick={handleShare}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-medium rounded-xl"
+          >
+            <Share2 className="w-4 h-4" />
+            {shareFeedback === 'shared' ? 'Shared!' : shareFeedback === 'copied' ? 'Copied!' : shareFeedback === 'error' ? 'Failed' : 'Share'}
+          </button>
+        </div>
 
         <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent overflow-hidden shadow-xl">
           <div className="p-5 sm:p-6 border-b border-white/10">
@@ -219,6 +260,17 @@ export default function PublicTicketPage() {
                     <dd className="text-white">
                       {ticket.assignedTeam.name}
                       {ticket.assignedTeam.leader && ` — Leader: ${ticket.assignedTeam.leader.fullName}`}
+                    </dd>
+                  </div>
+                )}
+                {(ticket.assignedEngineerName || ticket.assignedEngineerId) && (
+                  <div className="flex gap-3 py-2 border-b border-white/5 sm:col-span-2">
+                    <dt className="text-gray-500 shrink-0 flex items-center gap-1.5"><User className="w-4 h-4 text-cyan-400" /> Assigned engineer</dt>
+                    <dd className="text-white">
+                      <span className="font-medium">{ticket.assignedEngineerName ?? '—'}</span>
+                      {ticket.assignedEngineerId && (
+                        <span className="ml-1.5 text-gray-400 font-mono text-xs">(ID: {ticket.assignedEngineerId})</span>
+                      )}
                     </dd>
                   </div>
                 )}
@@ -369,6 +421,38 @@ export default function PublicTicketPage() {
                 )}
               </div>
             </section>
+
+            {ticket.comments && ticket.comments.length > 0 && (
+              <section>
+                <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Comments
+                </h2>
+                <div className="space-y-3">
+                  {ticket.comments.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`rounded-xl border p-3 text-sm ${
+                        c.authorRole === 'engineer'
+                          ? 'border-cyan-500/30 bg-cyan-500/10'
+                          : 'border-emerald-500/30 bg-emerald-500/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-white">{c.authorName}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          c.authorRole === 'engineer' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-emerald-500/30 text-emerald-300'
+                        }`}>
+                          {c.authorRole === 'engineer' ? 'Engineer' : 'Requester'}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatDate(c.createdAt)}</span>
+                      </div>
+                      <p className="text-gray-300 whitespace-pre-wrap">{c.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section>
               <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">

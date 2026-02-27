@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -44,9 +45,10 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final success = await auth.login(username, password);
     if (!success && mounted) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(auth.error ?? 'Login failed'),
+          content: Text(auth.error ?? l10n.t('login_failed')),
           backgroundColor: const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -67,6 +69,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       body: Stack(
@@ -156,8 +159,8 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Quality Control & Inspection',
+                        Text(
+                          l10n.t('app_subtitle'),
                           style: TextStyle(
                             color: Color(0xFF6B7280),
                             fontSize: 14,
@@ -184,13 +187,13 @@ class _LoginScreenState extends State<LoginScreen>
                                 children: [
                                   _buildField(
                                     controller: _usernameCtrl,
-                                    hint: 'Username',
+                                    hint: l10n.t('login_username'),
                                     icon: Icons.person_outline_rounded,
                                   ),
                                   const SizedBox(height: 16),
                                   _buildField(
                                     controller: _passwordCtrl,
-                                    hint: 'Password',
+                                    hint: l10n.t('login_password'),
                                     icon: Icons.lock_outline_rounded,
                                     obscure: _obscure,
                                     suffix: IconButton(
@@ -253,8 +256,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                   color: Colors.white,
                                                 ),
                                               )
-                                            : const Text(
-                                                'Sign In',
+                                            : Text(
+                                                l10n.t('login_sign_in'),
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight:

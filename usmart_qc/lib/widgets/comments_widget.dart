@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../models/comment.dart';
 
 class CommentsWidget extends StatefulWidget {
@@ -39,6 +40,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final fmt = DateFormat('MMM d, HH:mm');
 
     return Column(
@@ -49,7 +51,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
           child: Row(
             children: [
               Text(
-                'COMMENTS',
+                l10n.t('comments_header'),
                 style: TextStyle(
                   color: Colors.white.withAlpha(100),
                   fontSize: 11,
@@ -93,7 +95,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'No comments yet. Start the conversation.',
+              l10n.t('no_comments'),
               style:
                   TextStyle(color: Colors.white.withAlpha(60), fontSize: 13),
             ),
@@ -142,6 +144,26 @@ class _CommentsWidgetState extends State<CommentsWidget> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: c.authorRole == 'engineer'
+                                  ? const Color(0xFF0EA5E9).withAlpha(40)
+                                  : const Color(0xFF10B981).withAlpha(40),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              c.authorRole == 'engineer' ? l10n.t('engineer') : l10n.t('requester'),
+                              style: TextStyle(
+                                color: c.authorRole == 'engineer'
+                                    ? const Color(0xFF38BDF8)
+                                    : const Color(0xFF34D399),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                           const Spacer(),
                           Text(
                             fmt.format(c.createdAt),
@@ -172,7 +194,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
                   controller: _ctrl,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'Write a comment...',
+                    hintText: l10n.t('write_comment'),
                     hintStyle: const TextStyle(color: Color(0xFF4B5563)),
                     filled: true,
                     fillColor: const Color(0xFF0A0A1F),

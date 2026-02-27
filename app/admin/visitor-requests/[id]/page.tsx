@@ -117,7 +117,7 @@ export default function VisitorRequestDetailPage() {
   type NcrResubmission = { at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] };
   type ChecklistItem = { id: string; label: string; checked: boolean; comment?: string; weight?: 'minor' | 'major' };
   const parseTicketData = (r: VisitorRequest | null) => {
-    if (!r) return { siteName: null, siteCoordinator: null, slaHours: null, displayCompany: null, designSpecifications: null, attachmentUrls: [], inspectionResult: null, inspectionComments: null, inspectionChecklist: [] as ChecklistItem[], ncrReason: null, ncrImageUrls: [] as string[], ncrResubmissions: [] as NcrResubmission[] };
+    if (!r) return { siteName: null, siteCoordinator: null, slaHours: null, displayCompany: null, designSpecifications: null, attachmentUrls: [], inspectionResult: null, inspectionComments: null, inspectionChecklist: [] as ChecklistItem[], ncrReason: null, ncrImageUrls: [] as string[], ncrResubmissions: [] as NcrResubmission[], assignedEngineerId: null, assignedEngineerName: null };
     let siteName = r.siteName ?? null;
     let siteCoordinator = r.siteCoordinator ?? null;
     let slaHours = r.slaHours ?? null;
@@ -130,6 +130,8 @@ export default function VisitorRequestDetailPage() {
     let ncrReason: string | null = null;
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: NcrResubmission[] = [];
+    let assignedEngineerId: string | null = null;
+    let assignedEngineerName: string | null = null;
     if (typeof r.company === 'string') {
       try {
         const parsed = JSON.parse(r.company) as Record<string, unknown>;
@@ -150,12 +152,14 @@ export default function VisitorRequestDetailPage() {
           ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
             ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
             : [];
+          assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+          assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
         }
       } catch {
         /* not ticket JSON */
       }
     }
-    return { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist, ncrReason, ncrImageUrls, ncrResubmissions };
+    return { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist, ncrReason, ncrImageUrls, ncrResubmissions, assignedEngineerId, assignedEngineerName };
   };
 
   const parsed = parseTicketData(request);
@@ -324,7 +328,7 @@ export default function VisitorRequestDetailPage() {
     );
   }
 
-  const { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist } = parsed;
+  const { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist, assignedEngineerId, assignedEngineerName } = parsed;
   const effectiveStatus = (request.status ?? '').toString().toUpperCase();
   const isCompleted = effectiveStatus === 'COMPLETED';
 
@@ -485,6 +489,19 @@ export default function VisitorRequestDetailPage() {
                   </button>
                 </dd>
               </div>
+              {request.serviceSlug === 'quality-control-supervision' && (assignedEngineerId || assignedEngineerName) && (
+                <div className="flex justify-between py-3">
+                  <dt className="text-sm text-gray-500">Assigned engineer</dt>
+                  <dd className="text-sm text-gray-900">
+                    <span className="font-medium">{assignedEngineerName ?? '—'}</span>
+                    {assignedEngineerId && (
+                      <span className="ml-2 text-gray-500 font-mono text-xs" title="Engineer ID">
+                        (ID: {assignedEngineerId})
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               {statusError && (
                 <div className="py-2">
                   <p className="text-sm text-red-600">{statusError}</p>
@@ -597,8 +614,16 @@ export default function VisitorRequestDetailPage() {
       {request.serviceSlug === 'quality-control-supervision' && (
         <div className="mt-6 bg-amber-50/80 border border-amber-200 rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-amber-200 bg-amber-100/50">
-            <h2 className="text-lg font-semibold text-amber-900">Inspection results</h2>
+            <h2 className="text-lg font-semibold text-amber-900">Inspection results (Quality report)</h2>
             {isCompleted && <p className="text-sm text-amber-800 mt-1">(Read-only — completed)</p>}
+            {(assignedEngineerName || assignedEngineerId) && (
+              <p className="text-sm text-amber-800 mt-2">
+                <strong>Assigned engineer:</strong> {assignedEngineerName ?? '—'}
+                {assignedEngineerId && (
+                  <span className="ml-1.5 text-gray-600 font-mono text-xs">(ID: {assignedEngineerId})</span>
+                )}
+              </p>
+            )}
           </div>
           <div className="p-6 space-y-4">
             <div>

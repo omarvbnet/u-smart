@@ -17,7 +17,13 @@ export async function POST(req: NextRequest) {
     if (!file || typeof file === 'string') {
       return NextResponse.json({ success: false, message: 'No file provided' }, { status: 400 });
     }
-    const fileType = file.type || (file.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const rawType = file.type?.toLowerCase() || '';
+    const ext = (file.name?.split('.').pop() || '').toLowerCase();
+    const extToType: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf',
+    };
+    const fileType = rawType || extToType[ext] || 'image/jpeg';
     if (!ALLOWED_TYPES.includes(fileType)) {
       return NextResponse.json({ success: false, message: 'Allowed types: JPEG, PNG, WebP, GIF, PDF' }, { status: 400 });
     }
@@ -28,7 +34,8 @@ export async function POST(req: NextRequest) {
     const { url } = await uploadFile({ file, folder: 'ticket-attachments', prefix: 'attachment' });
     return NextResponse.json({ success: true, url });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Upload failed';
     console.error('POST /api/upload/ticket-attachment:', err);
-    return NextResponse.json({ success: false, message: 'Upload failed' }, { status: 500 });
+    return NextResponse.json({ success: false, message: msg }, { status: 500 });
   }
 }

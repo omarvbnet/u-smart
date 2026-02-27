@@ -125,7 +125,7 @@ export default function TicketDashboardPage() {
   const params = useParams();
   const t = useTranslations('Index');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
-  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; status?: string; hasUpdatedCredentials?: boolean; serviceSlug?: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; status?: string; hasUpdatedCredentials?: boolean; serviceSlug?: string; role?: string } | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; read: boolean; createdAt: string }[]>([]);
   const [slaStats, setSlaStats] = useState<SlaStats | null>(null);
@@ -556,6 +556,7 @@ export default function TicketDashboardPage() {
   }
 
   const isRestricted = user?.status === 'SUSPENDED' || user?.status === 'BLOCKED';
+  const isCompany = user?.role === 'COMPANY';
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white py-12 px-4">
@@ -709,6 +710,73 @@ export default function TicketDashboardPage() {
             </form>
           </div>
         ))}
+
+        {/* Global date range & filters - visible for all sections, applies to tickets + stats */}
+        <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="text-sm font-semibold text-cyan-400 mb-3 flex items-center gap-2">
+            <Filter className="w-4 h-4" />
+            {t('ticketForm.filterByDate')} / {t('ticketForm.filterBySite')}
+          </h3>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterFrom')}</label>
+              <input
+                type="date"
+                value={filters.from}
+                onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterTo')}</label>
+              <input
+                type="date"
+                value={filters.to}
+                onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterBySite')}</label>
+              <input
+                type="text"
+                value={filters.siteName}
+                onChange={(e) => setFilters((f) => ({ ...f, siteName: e.target.value }))}
+                placeholder={t('ticketForm.filterPlaceholder')}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm min-w-[140px]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterByTicketId') || 'Filter by ticket ID'}</label>
+              <input
+                type="text"
+                value={filters.ticketId}
+                onChange={(e) => setFilters((f) => ({ ...f, ticketId: e.target.value }))}
+                placeholder="e.g. abc123 or last 6 chars"
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm min-w-[120px]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => { setAppliedFilters({ ...filters }); loadData(); }}
+              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white text-sm font-medium"
+            >
+              {t('ticketForm.applyFilter') || 'Apply'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const cleared = { from: '', to: '', siteName: '', ticketId: '' };
+                setFilters(cleared);
+                setAppliedFilters(cleared);
+                loadData();
+              }}
+              className="px-4 py-2 bg-white/10 hover:bg-white/15 text-gray-400 hover:text-white rounded-lg text-sm font-medium"
+            >
+              {t('ticketForm.clearFilter') || 'Clear'}
+            </button>
+          </div>
+        </div>
 
         {/* Dashboard navigation */}
         <nav className="flex flex-wrap gap-2 mb-6 border-b border-white/10 pb-4">
@@ -1035,7 +1103,7 @@ export default function TicketDashboardPage() {
                 <Map className="w-5 h-5 text-cyan-400" />
                 {t('ticketForm.navSites')}
               </h3>
-              {!isRestricted && (
+              {isCompany && !isRestricted && (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -1134,41 +1202,43 @@ export default function TicketDashboardPage() {
                         </span>
                       </div>
                     </button>
-                    {!isRestricted && (
-                      <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSiteForTickets(site)}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-cyan-500/20 text-cyan-400 rounded-lg text-xs font-medium transition-colors"
-                        >
-                          <ClipboardList className="w-3.5 h-3.5" />
-                          View tickets
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenTicketFromSite(site)}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white text-xs font-medium transition-colors"
-                        >
-                          <PlusCircle className="w-3.5 h-3.5" />
-                          {t('ticketForm.openTicket')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEditSite(site)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-gray-300 text-xs font-medium transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                          {t('ticketForm.updateSite')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSite(site.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-xs font-medium transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSiteForTickets(site)}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-cyan-500/20 text-cyan-400 rounded-lg text-xs font-medium transition-colors"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        View tickets
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTicketFromSite(site)}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white text-xs font-medium transition-colors"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        {t('ticketForm.openTicket')}
+                      </button>
+                      {isCompany && !isRestricted && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleEditSite(site)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-gray-300 text-xs font-medium transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            {t('ticketForm.updateSite')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSite(site.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-xs font-medium transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1410,57 +1480,6 @@ export default function TicketDashboardPage() {
 
         {(dashboardSection === 'pending' || dashboardSection === 'completed') && (
           <>
-          <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4">
-            <h3 className="text-sm font-semibold text-gray-300 mb-3">{t('ticketForm.filterByDate')} / {t('ticketForm.filterBySite')}</h3>
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterFrom')}</label>
-                <input
-                  type="date"
-                  value={filters.from}
-                  onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
-                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterTo')}</label>
-                <input
-                  type="date"
-                  value={filters.to}
-                  onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
-                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">{t('ticketForm.filterBySite')}</label>
-                <input
-                  type="text"
-                  value={filters.siteName}
-                  onChange={(e) => setFilters((f) => ({ ...f, siteName: e.target.value }))}
-                  placeholder={t('ticketForm.filterPlaceholder')}
-                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm min-w-[140px]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Filter by ticket ID</label>
-                <input
-                  type="text"
-                  value={filters.ticketId}
-                  onChange={(e) => setFilters((f) => ({ ...f, ticketId: e.target.value }))}
-                  placeholder="e.g. abc123 or last 6 chars"
-                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm min-w-[120px]"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => { setAppliedFilters({ ...filters }); loadData(); }}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white text-sm font-medium"
-              >
-                Filter
-              </button>
-            </div>
-          </div>
-
           {slaStats != null && (slaStats.withinSla > 0 || slaStats.outOfSla > 0) && (
             <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 sm:p-6">
               <h3 className="text-lg font-semibold text-cyan-400 mb-4">{t('ticketForm.slaChart')}</h3>

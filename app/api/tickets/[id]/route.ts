@@ -103,7 +103,7 @@ export async function GET(
     let attachmentUrls: string[] = [];
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
-    let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; comment?: string }> = [];
+    let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; result?: string; comment?: string }> = [];
     let ncrReason: string | null = null;
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
@@ -125,7 +125,14 @@ export async function GET(
         inspectionChecklist = Array.isArray(parsed.inspectionChecklist)
           ? parsed.inspectionChecklist
             .filter((c: unknown) => c && typeof c === 'object' && 'id' in c && 'label' in c && 'checked' in c)
-            .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string }) => ({ id: c.id, label: c.label, checked: !!c.checked, comment: c.comment, weight: c.weight === 'major' ? 'major' : 'minor' }))
+            .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string; result?: string }) => ({
+              id: c.id,
+              label: c.label,
+              checked: !!c.checked,
+              result: typeof c.result === 'string' ? c.result : (c.checked ? 'accepted' : 'rejected'),
+              comment: c.comment,
+              weight: c.weight === 'major' ? 'major' : 'minor',
+            }))
           : [];
         ncrReason = (parsed.ncrReason as string) ?? null;
         ncrImageUrls = Array.isArray(parsed.ncrImageUrls) ? parsed.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];

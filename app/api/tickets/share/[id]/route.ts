@@ -75,10 +75,12 @@ export async function GET(
     let attachmentUrls: string[] = [];
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
-    let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; comment?: string }> = [];
+    let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; result?: string; comment?: string }> = [];
     let ncrReason: string | null = null;
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
+    let assignedEngineerId: string | null = null;
+    let assignedEngineerName: string | null = null;
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -94,7 +96,14 @@ export async function GET(
         inspectionChecklist = Array.isArray(parsed.inspectionChecklist)
           ? parsed.inspectionChecklist
             .filter((c: unknown) => c && typeof c === 'object' && 'id' in c && 'label' in c && 'checked' in c)
-            .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string }) => ({ id: c.id, label: c.label, checked: !!c.checked, comment: c.comment, weight: c.weight === 'major' ? 'major' : 'minor' }))
+            .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string; result?: string }) => ({
+              id: c.id,
+              label: c.label,
+              checked: !!c.checked,
+              result: typeof c.result === 'string' ? c.result : (c.checked ? 'accepted' : 'rejected'),
+              comment: c.comment,
+              weight: c.weight === 'major' ? 'major' : 'minor',
+            }))
           : [];
         ncrReason = (parsed.ncrReason as string) ?? null;
         ncrImageUrls = Array.isArray(parsed.ncrImageUrls) ? parsed.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
@@ -102,6 +111,8 @@ export async function GET(
           ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
           : [];
       }
+      assignedEngineerId = typeof (parsed as { assignedEngineerId?: string }).assignedEngineerId === 'string' ? (parsed as { assignedEngineerId: string }).assignedEngineerId : null;
+      assignedEngineerName = typeof (parsed as { assignedEngineerName?: string }).assignedEngineerName === 'string' ? (parsed as { assignedEngineerName: string }).assignedEngineerName : null;
     } catch {
       /* ignore */
     }
@@ -115,6 +126,30 @@ export async function GET(
     const maintenanceDescription = (row as any).maintenanceDescription ?? null;
     const beforeImageUrls = Array.isArray((row as any).beforeImageUrls) ? (row as any).beforeImageUrls : [];
     const finishingImageUrls = Array.isArray((row as any).finishingImageUrls) ? (row as any).finishingImageUrls : [];
+
+    const commentsRows = await prisma.ticketComment.findMany({
+      where: { visitorRequestId: id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, authorId: true, authorName: true, body: true, createdAt: true },
+    });
+    const authorIds = [...new Set(commentsRows.map((c: { authorId: string }) => c.authorId))];
+    const requesters = authorIds.length > 0
+      ? await prisma.ticketRequester.findMany({
+          where: { id: { in: authorIds } },
+          select: { id: true, role: true },
+        })
+      : [];
+    const roleByAuthor: Record<string, string> = {};
+    for (const r of requesters) {
+      roleByAuthor[r.id] = r.role === 'ENGINEER' ? 'engineer' : 'requester';
+    }
+    const comments = commentsRows.map((c: { id: string; authorId: string; authorName: string; body: string; createdAt: Date }) => ({
+      id: c.id,
+      authorName: c.authorName,
+      body: c.body,
+      createdAt: c.createdAt,
+      authorRole: roleByAuthor[c.authorId] ?? 'requester',
+    }));
     const assignedTeam = (row as any).assignedTeam
       ? {
           id: (row as any).assignedTeam.id,
@@ -149,6 +184,9 @@ export async function GET(
         ncrReason,
         ncrImageUrls,
         ncrResubmissions,
+        assignedEngineerId,
+        assignedEngineerName,
+        comments,
       },
     });
   } catch (err) {

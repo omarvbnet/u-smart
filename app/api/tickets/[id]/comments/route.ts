@@ -5,6 +5,17 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
+async function verifyTicketAccess(prismaClient: any, ticketId: string, requesterId: string): Promise<boolean> {
+  const reqRow = await prismaClient.ticketRequester.findUnique({
+    where: { id: requesterId },
+    select: { role: true },
+  });
+  const role = reqRow?.role ?? 'COMPANY';
+  const where = role === 'ENGINEER' ? { id: ticketId } : { id: ticketId, requesterId };
+  const ticket = await prismaClient.visitorRequest.findFirst({ where, select: { id: true } });
+  return !!ticket;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
@@ -14,6 +25,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
+    const hasAccess = await verifyTicketAccess(prisma, id, auth.payload.requesterId);
+    if (!hasAccess) {
+      return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+    }
+
     const comments = await prisma.ticketComment.findMany({
       where: { visitorRequestId: id },
       orderBy: { createdAt: 'asc' },
@@ -26,7 +42,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
 
-    return NextResponse.json({ success: true, comments });
+    const authorIds = [...new Set(comments.map((c: { authorId: string }) => c.authorId))];
+    const requesters = authorIds.length > 0
+      ? await prisma.ticketRequester.findMany({
+          where: { id: { in: authorIds } },
+          select: { id: true, role: true },
+        })
+      : [];
+    const roleByAuthor: Record<string, string> = {};
+    for (const r of requesters) {
+      roleByAuthor[r.id] = r.role === 'ENGINEER' ? 'engineer' : 'requester';
+    }
+
+    const commentsWithRole = comments.map((c: { id: string; authorId: string; authorName: string; body: string; createdAt: Date }) => ({
+      ...c,
+      authorRole: roleByAuthor[c.authorId] ?? 'requester',
+    }));
+
+    return NextResponse.json({ success: true, comments: commentsWithRole });
   } catch (error) {
     console.error('GET /api/tickets/[id]/comments:', error);
     return NextResponse.json({ success: false, message: 'Failed to fetch comments' }, { status: 500 });
@@ -42,6 +75,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   try {
+    const hasAccess = await verifyTicketAccess(prisma, id, auth.payload.requesterId);
+    if (!hasAccess) {
+      return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+    }
+
     const body = await req.json();
     const text = typeof body.body === 'string' ? body.body.trim() : '';
     if (!text) {
@@ -50,8 +88,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: auth.payload.requesterId },
-      select: { name: true, username: true },
+      select: { name: true, username: true, role: true },
     });
+
+    const authorRole = requester?.role === 'ENGINEER' ? 'engineer' : 'requester';
 
     const comment = await prisma.ticketComment.create({
       data: {
@@ -69,7 +109,49 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
-    return NextResponse.json({ success: true, comment });
+    const commentWithRole = { ...comment, authorRole };
+
+    // Notify the other party: engineer -> notify requester (company); requester -> notify engineer
+    if (typeof prisma.notification?.create === 'function') {
+      try {
+        const ticket = await prisma.visitorRequest.findUnique({
+          where: { id },
+          select: { requesterId: true, company: true },
+        });
+        if (ticket) {
+          const company = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
+          const assignedEngineerId = company?.assignedEngineerId;
+
+          if (authorRole === 'engineer' && ticket.requesterId) {
+            await prisma.notification.create({
+              data: {
+                type: 'comment_added',
+                title: 'New comment on your ticket',
+                message: `${requester?.name || requester?.username || 'Engineer'} replied on ticket`,
+                ticketId: id,
+                requesterId: ticket.requesterId,
+                forAdmin: false,
+              },
+            });
+          } else if (authorRole === 'requester' && assignedEngineerId) {
+            await prisma.notification.create({
+              data: {
+                type: 'comment_added',
+                title: 'Company replied on ticket',
+                message: `${requester?.name || requester?.username || 'Company'} replied on ticket`,
+                ticketId: id,
+                requesterId: assignedEngineerId,
+                forAdmin: false,
+              },
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Create comment notification:', e);
+      }
+    }
+
+    return NextResponse.json({ success: true, comment: commentWithRole });
   } catch (error) {
     console.error('POST /api/tickets/[id]/comments:', error);
     return NextResponse.json({ success: false, message: 'Failed to add comment' }, { status: 500 });

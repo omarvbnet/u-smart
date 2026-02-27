@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
 import 'status_badge.dart';
 
@@ -30,8 +31,19 @@ class TicketCard extends StatelessWidget {
     }
   }
 
+  String _techniqueKey(String t) {
+    final upper = t.toUpperCase().replaceAll(' ', '_');
+    if (upper.contains('INSPECTION')) return 'tech_inspection';
+    if (upper.contains('SUPERVISION')) return 'tech_supervision';
+    if (upper.contains('HSE')) return 'tech_hse';
+    if (upper.contains('INVESTIGATION')) return 'tech_investigation';
+    if (upper.contains('TRACKING')) return 'tech_tracking';
+    return 'tech_inspection';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -85,7 +97,7 @@ class TicketCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              ticket.siteName ?? 'Unknown Site',
+                              ticket.siteName ?? l10n.t('unknown_site'),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
@@ -105,7 +117,7 @@ class TicketCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      StatusBadge(status: ticket.status),
+                      StatusBadge(status: ticket.status, localizations: l10n),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -114,15 +126,24 @@ class TicketCard extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       _chip(Icons.build_outlined,
-                          _techniqueName(ticket.technique)),
+                          l10n.t(_techniqueKey(ticket.technique))),
                       _chip(
                           Icons.access_time_rounded,
                           DateFormat('MMM d, HH:mm')
                               .format(ticket.createdAt)),
                       if (ticket.slaHours != null)
-                        _chip(Icons.schedule, '${ticket.slaHours}h SLA'),
+                        _chip(Icons.schedule, '${ticket.slaHours}${l10n.t('h_sla')}'),
                       if (ticket.isAssigned)
-                        _chip(Icons.person, ticket.assignedEngineerName ?? 'Assigned'),
+                        _chip(
+                          Icons.person,
+                          ticket.assignedEngineerName != null
+                              ? (ticket.assignedEngineerId != null
+                                  ? '${ticket.assignedEngineerName} (ID: ${_shortId(ticket.assignedEngineerId!)})'
+                                  : ticket.assignedEngineerName!)
+                              : (ticket.assignedEngineerId != null
+                                  ? l10n.t('engineer_id', {'id': _shortId(ticket.assignedEngineerId!)})
+                                  : l10n.t('assigned')),
+                        ),
                     ],
                   ),
                   if (ticket.isNcr || ticket.canBeAssigned) ...[
@@ -144,14 +165,14 @@ class TicketCard extends StatelessWidget {
                               border: Border.all(
                                   color: const Color(0x60FF4757)),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.warning_rounded,
+                                const Icon(Icons.warning_rounded,
                                     color: Color(0xFFFF6B81), size: 12),
-                                SizedBox(width: 4),
+                                const SizedBox(width: 4),
                                 Text(
-                                  'NCR',
+                                  l10n.t('ncr'),
                                   style: TextStyle(
                                     color: Color(0xFFFF6B81),
                                     fontSize: 11,
@@ -185,14 +206,14 @@ class TicketCard extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.person_add_rounded,
+                                  const Icon(Icons.person_add_rounded,
                                       color: Colors.white, size: 14),
-                                  SizedBox(width: 4),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    'Assign to Me',
+                                    l10n.t('assign_to_me'),
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -239,10 +260,6 @@ class TicketCard extends StatelessWidget {
     );
   }
 
-  String _techniqueName(String t) {
-    return t.replaceAll('_', ' ').split(' ').map((w) {
-      if (w.isEmpty) return w;
-      return w[0].toUpperCase() + w.substring(1);
-    }).join(' ');
-  }
+  String _shortId(String id) =>
+      id.length > 8 ? id.substring(id.length - 8) : id;
 }

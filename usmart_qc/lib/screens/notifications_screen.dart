@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/notifications_provider.dart';
 import 'ticket_detail_screen.dart';
 
@@ -10,13 +11,14 @@ class NotificationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Notifications',
+        title: Text(
+          l10n.t('notifications'),
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w700,
@@ -41,7 +43,7 @@ class NotificationsScreen extends StatelessWidget {
                       size: 56, color: Colors.white.withAlpha(30)),
                   const SizedBox(height: 12),
                   Text(
-                    'No notifications yet',
+                    l10n.t('no_notifications'),
                     style: TextStyle(
                       color: Colors.white.withAlpha(80),
                       fontSize: 15,

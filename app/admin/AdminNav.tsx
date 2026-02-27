@@ -42,6 +42,7 @@ const links = [
   { href: '/admin/teams', label: 'Teams', icon: UsersRound },
   { href: '/admin/employees', label: 'Employees', icon: UserCog },
   { href: '/admin/company-requests', label: 'Company Req.', icon: Building2 },
+  { href: '/admin/registration-requests', label: 'Registration Req.', icon: UserCircle },
   { href: '/admin/companies', label: 'Companies', icon: Building },
   { href: '/admin/requesters', label: 'Requesters', icon: TicketCheck },
   { href: '/admin/users', label: 'Users', icon: UserCircle },

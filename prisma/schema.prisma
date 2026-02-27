@@ -354,6 +354,27 @@ model User {
     REJECTED
   }
 
+  // Registration request from login page (company or engineer role)
+  model RegistrationRequest {
+    id          String                    @id @default(cuid())
+    legalName   String
+    phone       String
+    email       String
+    evidenceUrl String                    // identification document (ID, passport, etc.)
+    role        RequesterRole             // COMPANY or ENGINEER
+    status      RegistrationRequestStatus @default(PENDING)
+    createdAt   DateTime                  @default(now())
+    updatedAt   DateTime                  @updatedAt
+
+    @@map("registration_requests")
+  }
+
+  enum RegistrationRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+  }
+
   // Approved company (linked to a dashboard account for one service type)
   model Company {
     id              String            @id @default(cuid())

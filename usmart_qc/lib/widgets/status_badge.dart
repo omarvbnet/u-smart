@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
   final double fontSize;
+  final AppLocalizations? localizations;
 
-  const StatusBadge({super.key, required this.status, this.fontSize = 11});
+  const StatusBadge({super.key, required this.status, this.fontSize = 11, this.localizations});
 
   @override
   Widget build(BuildContext context) {
-    final config = _statusConfig(status);
+    final l10n = localizations ?? AppLocalizations.of(context);
+    final config = _statusConfig(status, l10n);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
@@ -59,32 +62,32 @@ class StatusBadge extends StatelessWidget {
     );
   }
 
-  static _StatusConfig _statusConfig(String status) {
+  static _StatusConfig _statusConfig(String status, AppLocalizations l10n) {
     switch (status.toUpperCase()) {
       case 'PENDING':
         return _StatusConfig(
-          label: 'Pending',
+          label: l10n.t('section_pending'),
           bg: const Color(0x40F59E0B),
           border: const Color(0x60F59E0B),
           text: const Color(0xFFFBBF24),
         );
       case 'ON_SITE':
         return _StatusConfig(
-          label: 'On Site',
+          label: l10n.t('section_on_site'),
           bg: const Color(0x406C63FF),
           border: const Color(0x606C63FF),
           text: const Color(0xFF8B83FF),
         );
       case 'IN_PROGRESS':
         return _StatusConfig(
-          label: 'In Progress',
+          label: l10n.t('section_in_progress'),
           bg: const Color(0x4000D4AA),
           border: const Color(0x6000D4AA),
           text: const Color(0xFF00D4AA),
         );
       case 'COMPLETED':
         return _StatusConfig(
-          label: 'Completed',
+          label: l10n.t('section_completed'),
           bg: const Color(0x4022C55E),
           border: const Color(0x6022C55E),
           text: const Color(0xFF4ADE80),

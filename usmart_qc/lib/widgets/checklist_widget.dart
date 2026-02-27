@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/inspection_checklist.dart';
 
 class ChecklistResponseItem {
@@ -62,10 +63,11 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
     if (_selected == null) return;
     final itemsWithResult = _items.where((i) => i.result == 'accepted' || i.result == 'rejected').length;
     if (_items.isNotEmpty && itemsWithResult < _items.length) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please Accept or Reject all ${_items.length} items before completing',
+            l10n.t('accept_reject_all', {'count': '${_items.length}'}),
           ),
           backgroundColor: const Color(0xFFFBBF24),
           behavior: SnackBarBehavior.floating,
@@ -89,13 +91,14 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
           child: Text(
-            'INSPECTION CHECKLIST',
+            l10n.t('checklist_header'),
             style: TextStyle(
               color: Colors.white.withAlpha(100),
               fontSize: 11,
@@ -121,7 +124,7 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'No checklists available. Contact admin to create templates.',
+                l10n.t('no_checklists'),
                 style: TextStyle(
                     color: Colors.white.withAlpha(60), fontSize: 13),
               ),
@@ -172,7 +175,7 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                                                 fontWeight:
                                                     FontWeight.w600)),
                                         Text(
-                                            '${t.items.length} items',
+                                            '${t.items.length} ${l10n.t('items')}',
                                             style: TextStyle(
                                                 color: Colors.white
                                                     .withAlpha(60),
@@ -314,7 +317,7 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Accept',
+                              l10n.t('accept'),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -354,7 +357,7 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Reject',
+                              l10n.t('reject'),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -387,9 +390,9 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                   ),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Complete & Close Ticket',
+                    l10n.t('complete_close'),
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 15,

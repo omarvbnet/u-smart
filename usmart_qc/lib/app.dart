@@ -1,7 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'l10n/app_localizations.dart';
+import 'l10n/app_localizations_delegate.dart';
 import 'providers/auth_provider.dart';
+import 'providers/locale_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/company_dashboard_screen.dart';
 import 'screens/engineer_dashboard_screen.dart';
@@ -11,10 +15,24 @@ class ProvisrApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Provisor',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
+    return Consumer2<AuthProvider, LocaleProvider>(
+      builder: (context, auth, localeProv, _) {
+        final locale = localeProv.locale;
+        final isRtl = localeProv.isRtl;
+        return Directionality(
+          textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+          child: MaterialApp(
+            title: 'Provisor',
+            debugShowCheckedModeBanner: false,
+            locale: locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizationsDelegate(),
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF05051A),
         colorScheme: const ColorScheme.dark(
@@ -31,21 +49,17 @@ class ProvisrApp extends StatelessWidget {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           },
         ),
-      ),
-      home: Consumer<AuthProvider>(
-        builder: (context, auth, _) {
-          if (auth.loading) {
-            return const SplashScreen();
-          }
-          if (auth.isLoggedIn) {
-            if (auth.isEngineer) {
-              return const EngineerDashboardScreen();
-            }
-            return const CompanyDashboardScreen();
-          }
-          return const LoginScreen();
-        },
-      ),
+            ),
+            home: auth.loading
+          ? const SplashScreen()
+          : auth.isLoggedIn
+              ? auth.isEngineer
+                  ? const EngineerDashboardScreen()
+                  : const CompanyDashboardScreen()
+              : const LoginScreen(),
+          ),
+        );
+      },
     );
   }
 }
@@ -374,8 +388,8 @@ class _SplashScreenState extends State<SplashScreen>
                   animation: _contentController,
                   builder: (context, _) => Opacity(
                     opacity: _subtitleOpacity.value,
-                    child: const Text(
-                      'Quality Control & Inspection',
+                    child: Text(
+                      AppLocalizations.of(context).t('app_subtitle'),
                       style: TextStyle(
                         color: Color(0xFF6B7280),
                         fontSize: 14,

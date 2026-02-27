@@ -430,6 +430,9 @@
       "filterTo": "Bitiş",
       "filterBySite": "Site",
       "filterPlaceholder": "Tüm siteler",
+      "filterByTicketId": "Bilet ID",
+      "applyFilter": "Uygula",
+      "clearFilter": "Temizle",
       "exportSites": "Siteleri dışa aktar",
       "importSites": "Siteleri içe aktar",
       "exportDashboardData": "Tüm verileri dışa aktar",
@@ -457,7 +460,10 @@
       "hse": { "name": "İSG (İş Sağlığı ve Güvenliği)", "description": "İşçileri ve çevreyi korumak için Sağlık, Güvenlik ve Çevre yönetimi. Risk değerlendirmeleri, güvenlik denetimleri, çevresel uyum kontrolleri ve düzeltici eylem planlarıyla olay soruşturması.", "highlights": ["Risk değerlendirmeleri", "Güvenlik denetimleri", "Çevresel uyum", "Olay soruşturması"] },
       "investigation": { "name": "Soruşturma", "description": "Kusurlar, arızalar veya uyumsuzlukların kök neden analizi ve teknik soruşturması. Tekrarlamayı önlemek için net bulgular, öneriler ve düzeltici planlar sunuyoruz.", "highlights": ["Kök neden analizi", "Teknik bulgular", "Düzeltici planlar", "Tekrarlamayı önleme"] },
       "tracking": { "name": "İzleme", "description": "Kalite metrikleri, denetim durumu ve uyumluluğun gerçek zamanlı izlenmesi ve raporlanması. Panolar ve periyodik raporlar, proje kalite performansından her aşamada haberdar olmanızı sağlar.", "highlights": ["Gerçek zamanlı panolar", "Periyodik raporlar", "Uyumluluk durumu", "Kalite metrikleri"] },
-      "ctaDescription": "Kalite kontrol ve denetim hizmetleri talep edin. Yönetici sistemimiz üzerinden talepleri göndermek ve ilerlemeyi takip etmek için bir panel oluşturun."
+      "ctaDescription": "Kalite kontrol ve denetim hizmetleri talep edin. Yönetici sistemimiz üzerinden talepleri göndermek ve ilerlemeyi takip etmek için bir panel oluşturun.",
+      "appDownloadDescription": "Mühendisler: saha kalite denetimleri ve bilet yönetimi için Provisor mobil uygulamasını indirin.",
+      "downloadAndroid": "Android için İndir",
+      "downloadIOS": "iOS için İndir"
     },
     "hero": {
       "subtitle": "Yeni Nesil Dijital Çözümler",

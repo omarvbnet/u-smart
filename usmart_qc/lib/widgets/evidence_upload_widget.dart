@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../models/evidence.dart';
 
 class EvidenceUploadWidget extends StatelessWidget {
@@ -20,6 +21,7 @@ class EvidenceUploadWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final fmt = DateFormat('MMM d, HH:mm');
 
     return Column(
@@ -30,7 +32,7 @@ class EvidenceUploadWidget extends StatelessWidget {
           child: Row(
             children: [
               Text(
-                'EVIDENCE',
+                l10n.t('evidence'),
                 style: TextStyle(
                   color: Colors.white.withAlpha(100),
                   fontSize: 11,
@@ -147,7 +149,7 @@ class EvidenceUploadWidget extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'No evidence uploaded yet.',
+                l10n.t('no_evidence'),
                 style: TextStyle(
                     color: Colors.white.withAlpha(60), fontSize: 13),
               ),
@@ -184,7 +186,7 @@ class EvidenceUploadWidget extends StatelessWidget {
                             const Icon(Icons.camera_alt_rounded,
                                 color: Color(0xFF8B83FF), size: 18),
                             const SizedBox(width: 6),
-                            const Text('Photo',
+                            Text(l10n.t('photo'),
                                 style: TextStyle(
                                     color: Color(0xFF8B83FF),
                                     fontSize: 13,
@@ -213,7 +215,7 @@ class EvidenceUploadWidget extends StatelessWidget {
                           const Icon(Icons.attach_file_rounded,
                               color: Color(0xFF00D4AA), size: 18),
                           const SizedBox(width: 6),
-                          const Text('File',
+                          Text(l10n.t('file'),
                               style: TextStyle(
                                   color: Color(0xFF00D4AA),
                                   fontSize: 13,

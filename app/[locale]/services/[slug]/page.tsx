@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2 } from 'lucide-react';
+import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 
@@ -45,6 +45,67 @@ const QUALITY_CONTROL_ICONS: Record<string, typeof ClipboardCheck> = {
   investigation: FileSearch,
   tracking: Activity,
 };
+
+const ANDROID_APP_URL = process.env.NEXT_PUBLIC_QC_APP_ANDROID_URL || '/app/usmart_qc.apk';
+// iOS OTA install: itms-services link points to our manifest, which references the IPA. Override with NEXT_PUBLIC_QC_APP_IOS_URL for custom install link.
+function getIosInstallLink(): string {
+  const custom = process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
+  if (custom) return custom;
+  const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (base) {
+    const siteUrl = base.startsWith('http') ? base : `https://${base}`.replace(/\/$/, '');
+    return `itms-services://?action=download-manifest&url=${encodeURIComponent(`${siteUrl}/api/app/ios-manifest`)}`;
+  }
+  if (typeof window !== 'undefined') {
+    const siteUrl = window.location.origin;
+    return `itms-services://?action=download-manifest&url=${encodeURIComponent(`${siteUrl}/api/app/ios-manifest`)}`;
+  }
+  return '';
+}
+
+function QcAppDownloadSection({ t }: { t: (key: string) => string }) {
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [iosLink, setIosLink] = useState<string>(() => getIosInstallLink());
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) setPlatform('ios');
+    else if (/Android/.test(ua)) setPlatform('android');
+    else setPlatform('desktop');
+    setIosLink(getIosInstallLink());
+  }, []);
+  const showAndroid = platform === 'android' || platform === 'desktop';
+  const showIOS = platform === 'ios' || platform === 'desktop';
+  const hasAndroid = Boolean(ANDROID_APP_URL);
+  const hasIOS = true; // iOS OTA always available via manifest
+  if (!hasAndroid && !hasIOS) return null;
+  return (
+    <div className="mt-8 pt-8 border-t border-amber-500/20">
+      <p className="text-sm text-gray-400 mb-4">{t('qualityControlTechnologies.appDownloadDescription')}</p>
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        {showAndroid && hasAndroid && (
+          <a
+            href={ANDROID_APP_URL}
+            download
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600/80 hover:bg-emerald-500 text-white font-medium rounded-xl transition-colors"
+          >
+            <Smartphone className="w-5 h-5" />
+            {t('qualityControlTechnologies.downloadAndroid')}
+          </a>
+        )}
+        {showIOS && hasIOS && (
+          <a
+            href={iosLink || '#'}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-800/80 hover:bg-gray-700 text-white font-medium rounded-xl border border-white/20 transition-colors"
+          >
+            <Apple className="w-5 h-5" />
+            {t('qualityControlTechnologies.downloadIOS')}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
 
 type Service = {
   id: string;
@@ -373,6 +434,7 @@ export default function ServiceDetailPage() {
                   {t('ticketForm.dashboardButton')}
                 </Link>
               </div>
+              <QcAppDownloadSection t={t} />
             </div>
           </section>
         )}

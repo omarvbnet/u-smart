@@ -1,9 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/notifications_provider.dart';
+import '../widgets/language_selector.dart';
 import '../models/ticket.dart';
 import '../widgets/ticket_card.dart';
 import 'ticket_detail_screen.dart';
@@ -36,6 +39,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       body: Stack(
@@ -88,9 +92,9 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
               unselectedFontSize: 10,
               elevation: 0,
               items: [
-                _navItem(Icons.inbox_rounded, 'Available'),
-                _navItem(Icons.assignment_turned_in_rounded, 'My Tickets'),
-                _navItem(Icons.person_rounded, 'Profile'),
+                _navItem(Icons.inbox_rounded, l10n.t('nav_available')),
+                _navItem(Icons.assignment_turned_in_rounded, l10n.t('nav_my_tickets')),
+                _navItem(Icons.person_rounded, l10n.t('nav_profile')),
               ],
             ),
           ),
@@ -125,6 +129,7 @@ class _AvailableTicketsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Consumer<TicketsProvider>(
       builder: (context, provider, _) {
         if (provider.loading && provider.tickets.isEmpty) {
@@ -148,8 +153,8 @@ class _AvailableTicketsTab extends StatelessWidget {
                     shaderCallback: (bounds) => const LinearGradient(
                       colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
                     ).createShader(bounds),
-                    child: const Text(
-                      'Available',
+                    child: Text(
+                      l10n.t('nav_available'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -214,7 +219,7 @@ class _AvailableTicketsTab extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '${available.length} pending',
+                      l10n.t('pending_count', {'count': '${available.length}'}),
                       style: const TextStyle(
                         color: Color(0xFFFBBF24),
                         fontSize: 12,
@@ -234,8 +239,8 @@ class _AvailableTicketsTab extends StatelessWidget {
                     Expanded(
                       child: Text(
                         filterActive
-                            ? 'Showing tickets in $engineerProvince'
-                            : 'Showing all Iraq provinces',
+                            ? l10n.t('showing_province', {'province': engineerProvince})
+                            : l10n.t('showing_all'),
                         style: TextStyle(
                             color: Colors.white.withAlpha(80),
                             fontSize: 13),
@@ -272,8 +277,8 @@ class _AvailableTicketsTab extends StatelessWidget {
                             const SizedBox(width: 4),
                             Text(
                               filterActive
-                                  ? 'My Province'
-                                  : 'All Iraq',
+                                  ? l10n.t('filter_my_province')
+                                  : l10n.t('filter_all_iraq'),
                               style: TextStyle(
                                 color: filterActive
                                     ? const Color(0xFF6C63FF)
@@ -293,7 +298,7 @@ class _AvailableTicketsTab extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  'Unassigned tickets waiting for an engineer',
+                  l10n.t('available_empty'),
                   style: TextStyle(
                       color: Colors.white.withAlpha(80), fontSize: 13),
                 ),
@@ -316,7 +321,7 @@ class _AvailableTicketsTab extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Complete your current ticket before taking a new one',
+                        l10n.t('complete_current'),
                         style: TextStyle(
                           color: const Color(0xFFFBBF24).withAlpha(220),
                           fontSize: 12,
@@ -331,9 +336,10 @@ class _AvailableTicketsTab extends StatelessWidget {
             Expanded(
               child: available.isEmpty
                   ? _emptyState(
+                      context,
                       Icons.check_circle_outline_rounded,
-                      'No available tickets',
-                      'All tickets are assigned or completed',
+                      l10n.t('no_available'),
+                      l10n.t('all_assigned'),
                     )
                   : RefreshIndicator(
                       onRefresh: () => provider.fetchTickets(),
@@ -354,7 +360,7 @@ class _AvailableTicketsTab extends StatelessWidget {
                             onAssign: hasActive
                                 ? null
                                 : () => _assignTicket(
-                                    context, provider, ticket),
+                                    context, provider, ticket, l10n),
                           );
                         },
                       ),
@@ -367,23 +373,23 @@ class _AvailableTicketsTab extends StatelessWidget {
   }
 
   Future<void> _assignTicket(
-      BuildContext context, TicketsProvider provider, Ticket ticket) async {
+      BuildContext context, TicketsProvider provider, Ticket ticket,
+      AppLocalizations l10n) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF12122A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Assign to Me',
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        title: Text(l10n.t('assign_to_me'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         content: Text(
-          'Take responsibility for "${ticket.siteName}"?',
+          l10n.t('assign_take', {'site': ticket.siteName ?? l10n.t('unknown_site')}),
           style: TextStyle(color: Colors.white.withAlpha(180)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
+            child: Text(l10n.t('cancel'),
                 style: TextStyle(color: Colors.white.withAlpha(120))),
           ),
           ElevatedButton(
@@ -393,8 +399,8 @@ class _AvailableTicketsTab extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child:
-                const Text('Assign', style: TextStyle(color: Colors.white)),
+            child: Text(l10n.t('assign'),
+                style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -403,10 +409,10 @@ class _AvailableTicketsTab extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       final ok = await provider.assignTicketToMe(ticket.id);
       if (context.mounted) {
+        final msg = ok ? l10n.t('assign_success') : l10n.t('assign_failed');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text(ok ? 'Ticket assigned to you!' : 'Failed to assign'),
+            content: Text(msg),
             backgroundColor:
                 ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
@@ -418,7 +424,7 @@ class _AvailableTicketsTab extends StatelessWidget {
     }
   }
 
-  Widget _emptyState(IconData icon, String title, String subtitle) {
+  Widget _emptyState(BuildContext context, IconData icon, String title, String subtitle) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -453,6 +459,7 @@ class _MyTicketsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Consumer<TicketsProvider>(
       builder: (context, provider, _) {
         if (provider.loading && provider.tickets.isEmpty) {
@@ -466,9 +473,9 @@ class _MyTicketsTab extends StatelessWidget {
 
         final sections = <_Section>[
           if (active.isNotEmpty)
-            _Section('Active', active, const Color(0xFF00D4AA)),
+            _Section(l10n.t('section_active'), active, const Color(0xFF00D4AA)),
           if (completed.isNotEmpty)
-            _Section('Completed', completed, const Color(0xFF4ADE80)),
+            _Section(l10n.t('section_completed'), completed, const Color(0xFF4ADE80)),
         ];
 
         return Column(
@@ -481,8 +488,8 @@ class _MyTicketsTab extends StatelessWidget {
                     shaderCallback: (bounds) => const LinearGradient(
                       colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
                     ).createShader(bounds),
-                    child: const Text(
-                      'My Tickets',
+                    child: Text(
+                      l10n.t('nav_my_tickets'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -499,7 +506,7 @@ class _MyTicketsTab extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '${active.length} active',
+                      l10n.t('active_count', {'count': '${active.length}'}),
                       style: const TextStyle(
                         color: Color(0xFF00D4AA),
                         fontSize: 12,
@@ -527,13 +534,13 @@ class _MyTicketsTab extends StatelessWidget {
                                 size: 48, color: Color(0xFF6C63FF)),
                           ),
                           const SizedBox(height: 20),
-                          const Text('No tickets yet',
-                              style: TextStyle(
+                          Text(l10n.t('no_tickets'),
+                              style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          Text('Assign yourself a ticket to get started',
+                          Text(l10n.t('assign_first_ticket'),
                               style: TextStyle(
                                   color: Colors.white.withAlpha(100),
                                   fontSize: 14)),
@@ -638,8 +645,9 @@ class _EngineerProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<AuthProvider, TicketsProvider>(
-      builder: (context, auth, tickets, _) {
+    return Consumer3<AuthProvider, TicketsProvider, LocaleProvider>(
+      builder: (context, auth, tickets, localeProv, _) {
+        final l10n = AppLocalizations.of(context);
         final user = auth.user;
         if (user == null) return const SizedBox.shrink();
 
@@ -700,8 +708,8 @@ class _EngineerProfileTab extends StatelessWidget {
                   color: const Color(0xFF00D4AA).withAlpha(20),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'QC Engineer',
+                child: Text(
+                  l10n.t('role_engineer'),
                   style: TextStyle(
                     color: Color(0xFF00D4AA),
                     fontSize: 12,
@@ -714,24 +722,26 @@ class _EngineerProfileTab extends StatelessWidget {
             // Quick stats
             Row(
               children: [
-                _statChip('Active', '${tickets.myActiveTickets.length}',
+                _statChip(l10n.t('section_active'), '${tickets.myActiveTickets.length}',
                     const Color(0xFF00D4AA)),
                 const SizedBox(width: 12),
-                _statChip('Completed',
+                _statChip(l10n.t('section_completed'),
                     '${tickets.myCompletedTickets.length}',
                     const Color(0xFF4ADE80)),
               ],
             ),
             const SizedBox(height: 28),
-            _profileRow(Icons.person_outline_rounded, 'Username',
+            _profileRow(Icons.person_outline_rounded, l10n.t('profile_username'),
                 user.username, const Color(0xFF6C63FF)),
-            _profileRow(Icons.phone_outlined, 'Phone',
+            _profileRow(Icons.phone_outlined, l10n.t('profile_phone'),
                 user.phone ?? '-', const Color(0xFF00D4AA)),
-            _profileRow(Icons.location_on_outlined, 'Province',
-                user.province ?? 'All Provinces', const Color(0xFFFBBF24)),
-            _profileRow(Icons.verified_outlined, 'Status', user.status,
+            _profileRow(Icons.location_on_outlined, l10n.t('profile_province'),
+                user.province ?? l10n.t('all_provinces'), const Color(0xFFFBBF24)),
+            _profileRow(Icons.verified_outlined, l10n.t('profile_status'), user.status,
                 const Color(0xFF4ADE80)),
-            const SizedBox(height: 32),
+            const SizedBox(height: 12),
+            _languageRow(context, l10n, localeProv),
+            const SizedBox(height: 20),
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
@@ -753,7 +763,7 @@ class _EngineerProfileTab extends StatelessWidget {
                             color: Color(0xFFFF4757), size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          'Sign Out',
+                          l10n.t('sign_out'),
                           style: TextStyle(
                             color:
                                 const Color(0xFFFF4757).withAlpha(220),
@@ -770,7 +780,7 @@ class _EngineerProfileTab extends StatelessWidget {
             const SizedBox(height: 20),
             Center(
               child: Text(
-                'Provisor v1.0.0',
+                l10n.t('app_version'),
                 style: TextStyle(
                     color: Colors.white.withAlpha(40), fontSize: 12),
               ),
@@ -778,6 +788,70 @@ class _EngineerProfileTab extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  Widget _languageRow(BuildContext context, AppLocalizations l10n, LocaleProvider localeProv) {
+    final code = localeProv.locale.languageCode;
+    final langKey = 'lang_$code';
+    return Material(
+      color: const Color(0xFF12122A),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => showLanguageSelector(context),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+                color: const Color(0xFF6C63FF).withAlpha(15)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C63FF).withAlpha(20),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.language_rounded,
+                  color: Color(0xFF6C63FF),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.t('language'),
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(80), fontSize: 11),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.t(langKey),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: Colors.white.withAlpha(100),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

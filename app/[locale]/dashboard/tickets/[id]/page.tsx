@@ -17,6 +17,9 @@ import {
   User,
   Building2,
   FileDown,
+  Share2,
+  MessageSquare,
+  Send,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas-pro';
@@ -51,6 +54,17 @@ type TicketDetail = {
   ncrReason?: string | null;
   ncrImageUrls?: string[];
   ncrResubmissions?: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }>;
+  assignedEngineerId?: string | null;
+  assignedEngineerName?: string | null;
+};
+
+type Comment = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  authorRole: 'engineer' | 'requester';
 };
 
 export default function TicketDetailPage() {
@@ -61,6 +75,7 @@ export default function TicketDetailPage() {
   const fromQc = searchParams.get('from') === 'qc';
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareUrl, setShareUrl] = useState<string>('');
+  const [shareFeedback, setShareFeedback] = useState<string>('');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
   const id = typeof params?.id === 'string' ? params.id : '';
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
@@ -71,6 +86,9 @@ export default function TicketDetailPage() {
   const [ncrResubmitImageUrls, setNcrResubmitImageUrls] = useState<string[]>([]);
   const [ncrResubmitSubmitting, setNcrResubmitSubmitting] = useState(false);
   const [ncrResubmitUploading, setNcrResubmitUploading] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentBody, setCommentBody] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -114,6 +132,14 @@ export default function TicketDetailPage() {
 
         if (ticketData.success && ticketData.ticket) {
           setTicket(ticketData.ticket as TicketDetail);
+          const commentsRes = await fetch(`/api/tickets/${id}/comments`, { credentials: 'include' });
+          if (cancelled) return;
+          if (commentsRes.ok) {
+            const commentsData = await commentsRes.json();
+            if (commentsData.success && Array.isArray(commentsData.comments) && !cancelled) {
+              setComments(commentsData.comments.map((c: Comment) => ({ ...c, createdAt: String(c.createdAt) })));
+            }
+          }
         } else {
           setError(ticketData.message || 'Ticket not found');
           return;
@@ -312,6 +338,54 @@ export default function TicketDetailPage() {
     }
   };
 
+  const handleAddComment = async () => {
+    const text = commentBody.trim();
+    if (!text || !id) return;
+    setCommentSubmitting(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ body: text }),
+      });
+      const data = await res.json();
+      if (data.success && data.comment) {
+        setComments((prev) => [...prev, { ...data.comment, createdAt: String(data.comment.createdAt) }]);
+        setCommentBody('');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const url = shareUrl || (typeof window !== 'undefined' ? `${window.location.origin}/${locale}/ticket/${id}` : '');
+    const title = ticket?.siteName ? `Ticket: ${ticket.siteName}` : 'Ticket details';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title, url, text: title });
+        setShareFeedback('shared');
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareFeedback('copied');
+      }
+      setTimeout(() => setShareFeedback(''), 2000);
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        try {
+          await navigator.clipboard.writeText(url);
+          setShareFeedback('copied');
+        } catch {
+          setShareFeedback('error');
+        }
+        setTimeout(() => setShareFeedback(''), 2000);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
       <div className="max-w-3xl mx-auto p-4 sm:p-6">
@@ -323,15 +397,25 @@ export default function TicketDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to dashboard
           </Link>
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            disabled={exportingPdf}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl"
-          >
-            <FileDown className="w-4 h-4" />
-            {exportingPdf ? 'Exporting...' : 'Export as PDF'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-medium rounded-xl"
+            >
+              <Share2 className="w-4 h-4" />
+              {shareFeedback === 'shared' ? 'Shared!' : shareFeedback === 'copied' ? 'Copied!' : shareFeedback === 'error' ? 'Failed' : 'Share'}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl"
+            >
+              <FileDown className="w-4 h-4" />
+              {exportingPdf ? 'Exporting...' : 'Export as PDF'}
+            </button>
+          </div>
         </div>
 
         <div ref={ticketContentRef} className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent overflow-hidden shadow-xl">
@@ -396,6 +480,17 @@ export default function TicketDetailPage() {
                     <dd className="text-white">
                       {ticket.assignedTeam.name}
                       {ticket.assignedTeam.leader && ` — Leader: ${ticket.assignedTeam.leader.fullName}`}
+                    </dd>
+                  </div>
+                )}
+                {(ticket.assignedEngineerName || ticket.assignedEngineerId) && (
+                  <div className="flex gap-3 py-2 border-b border-white/5 sm:col-span-2">
+                    <dt className="text-gray-500 shrink-0 flex items-center gap-1.5"><User className="w-4 h-4 text-cyan-400" /> Assigned engineer</dt>
+                    <dd className="text-white">
+                      <span className="font-medium">{ticket.assignedEngineerName ?? '—'}</span>
+                      {ticket.assignedEngineerId && (
+                        <span className="ml-1.5 text-gray-400 font-mono text-xs">(ID: {ticket.assignedEngineerId})</span>
+                      )}
                     </dd>
                   </div>
                 )}
@@ -708,6 +803,59 @@ export default function TicketDetailPage() {
                   <p className="text-sm text-gray-500">No finishing images added yet.</p>
                 </div>
               )}
+            </section>
+
+            {/* Comments (Engineer & Requester) */}
+            <section>
+              <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Comments
+              </h2>
+              {comments.length > 0 ? (
+                <div className="space-y-3 mb-4">
+                  {comments.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`rounded-xl border p-3 text-sm ${
+                        c.authorRole === 'engineer'
+                          ? 'border-cyan-500/30 bg-cyan-500/10'
+                          : 'border-emerald-500/30 bg-emerald-500/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-white">{c.authorName}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          c.authorRole === 'engineer' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-emerald-500/30 text-emerald-300'
+                        }`}>
+                          {c.authorRole === 'engineer' ? 'Engineer' : 'Requester'}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatDate(c.createdAt)}</span>
+                      </div>
+                      <p className="text-gray-300 whitespace-pre-wrap">{c.body}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">No comments yet.</p>
+              )}
+              <div className="rounded-xl border border-white/20 bg-white/5 p-3 space-y-2">
+                <textarea
+                  value={commentBody}
+                  onChange={(e) => setCommentBody(e.target.value)}
+                  placeholder="Add a reply..."
+                  rows={2}
+                  className="w-full text-sm rounded-lg border border-white/20 bg-white/5 text-gray-200 placeholder-gray-500 px-3 py-2 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 resize-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddComment}
+                  disabled={commentSubmitting || !commentBody.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg"
+                >
+                  {commentSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Reply
+                </button>
+              </div>
             </section>
           </div>
         </div>

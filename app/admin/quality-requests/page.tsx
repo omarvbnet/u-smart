@@ -325,8 +325,15 @@ export default function AdminQualityRequestsPage() {
                   <td className="px-4 py-3 text-sm text-gray-900 font-medium">{String(r.displayCompany || '').trim() || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.technique}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">
-                    {r.assignedEngineerName ? (
-                      <span className="font-medium">{r.assignedEngineerName}</span>
+                    {r.assignedEngineerName || r.assignedEngineerId ? (
+                      <span>
+                        <span className="font-medium">{r.assignedEngineerName ?? '—'}</span>
+                        {r.assignedEngineerId && (
+                          <span className="ml-1.5 text-gray-500 font-mono text-xs" title="Engineer ID">
+                            (ID: {r.assignedEngineerId})
+                          </span>
+                        )}
+                      </span>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}

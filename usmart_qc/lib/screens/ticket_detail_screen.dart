@@ -1,20 +1,26 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import '../config/api_config.dart';
+import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
 import '../models/comment.dart';
 import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
 import '../providers/auth_provider.dart';
+import '../providers/conflicts_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/comments_widget.dart';
 import '../widgets/checklist_widget.dart';
 import '../widgets/evidence_upload_widget.dart';
 import 'ncr_resubmit_screen.dart';
+import 'conflict_detail_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final String ticketId;
@@ -92,9 +98,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final ok =
         await context.read<TicketsProvider>().assignTicketToMe(widget.ticketId);
     if (mounted) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? 'Ticket assigned to you!' : 'Failed to assign'),
+          content: Text(ok ? l10n.t('assign_success') : l10n.t('assign_failed')),
           backgroundColor:
               ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
@@ -113,11 +120,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         .read<TicketsProvider>()
         .updateTicketStatus(widget.ticketId, newStatus);
     if (mounted) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(ok
-              ? 'Status updated to ${_statusLabel(newStatus)}'
-              : 'Failed to update status'),
+              ? l10n.t('status_updated', {'status': _statusLabel(newStatus, l10n)})
+              : l10n.t('status_failed')),
           backgroundColor:
               ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
@@ -146,41 +154,52 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _pickAndUploadFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif'],
-      withData: false,
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
     );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.single;
-    if (file.path == null) return;
-    final ext = file.extension?.toLowerCase() ?? 'image';
-    final fileType = ext == 'pdf' ? 'file' : 'image';
-    await _uploadFile(file.path!, fileType);
+    if (picked == null) return;
+    await _uploadFile(picked.path, 'image');
   }
 
   Future<void> _uploadFile(String filePath, String fileType) async {
     setState(() => _uploading = true);
     final provider = context.read<TicketsProvider>();
-    final url = await provider.uploadFile(filePath);
-    if (url != null) {
-      final evidence =
-          await provider.addEvidence(widget.ticketId, url, fileType);
-      if (evidence != null && mounted) {
-        setState(() => _evidence = [evidence, ..._evidence]);
+    try {
+      final url = await provider.uploadFile(filePath);
+      if (url != null) {
+        final evidence =
+            await provider.addEvidence(widget.ticketId, url, fileType);
+        if (evidence != null && mounted) {
+          setState(() => _evidence = [evidence, ..._evidence]);
+        }
+      } else if (mounted) {
+        _showUploadError(AppLocalizations.of(context).t('upload_failed'));
       }
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to upload file'),
-          backgroundColor: const Color(0xFFFF4757),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+    } catch (e) {
+      if (mounted) {
+        final msg = e is Exception ? e.toString().replaceFirst('Exception: ', '') : AppLocalizations.of(context).t('upload_failed');
+        _showUploadError(msg);
+      }
     }
     if (mounted) setState(() => _uploading = false);
+  }
+
+  void _showUploadError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: AppLocalizations.of(context).t('ok'),
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   Future<void> _completeWithChecklist(
@@ -194,12 +213,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final resultCtrl = TextEditingController(text: defaultResult);
     final commentsCtrl = TextEditingController();
 
+    final l10n = AppLocalizations.of(context);
     final data = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF12122A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Complete Ticket',
+        title: Text(l10n.t('complete_ticket'),
             style:
                 TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         content: SingleChildScrollView(
@@ -207,18 +227,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Inspection result (auto-filled from checklist):',
+                l10n.t('inspection_result_label'),
                 style: TextStyle(color: Colors.white.withAlpha(180)),
               ),
               const SizedBox(height: 16),
-              _dialogDropdown(resultCtrl),
+              _dialogDropdown(resultCtrl, l10n),
               const SizedBox(height: 12),
               TextField(
                 controller: commentsCtrl,
                 maxLines: 3,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Inspection comments (optional)',
+                  hintText: l10n.t('inspection_comments_hint'),
                   hintStyle: const TextStyle(color: Color(0xFF4B5563)),
                   filled: true,
                   fillColor: const Color(0xFF0A0A1F),
@@ -234,7 +254,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
+            child: Text(l10n.t('cancel'),
                 style: TextStyle(color: Colors.white.withAlpha(120))),
           ),
           ElevatedButton(
@@ -248,7 +268,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   borderRadius: BorderRadius.circular(12)),
             ),
             child:
-                const Text('Complete', style: TextStyle(color: Colors.white)),
+                Text(l10n.t('complete'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -270,7 +290,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? 'Ticket completed!' : 'Failed to complete'),
+          content: Text(ok ? l10n.t('ticket_completed') : l10n.t('complete_failed')),
           backgroundColor:
               ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
@@ -282,12 +302,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  Widget _dialogDropdown(TextEditingController ctrl) {
+  Widget _dialogDropdown(TextEditingController ctrl, AppLocalizations l10n) {
     final options = {
-      'accepted': 'Accepted',
-      'accepted_with_comments': 'Accepted with Comments',
-      'not_accepted': 'Not Accepted',
-      'ncr': 'NCR',
+      'accepted': l10n.t('accepted'),
+      'accepted_with_comments': l10n.t('accepted_with_comments'),
+      'not_accepted': l10n.t('not_accepted'),
+      'ncr': l10n.t('ncr'),
     };
     if (ctrl.text.isEmpty) ctrl.text = 'accepted';
     return StatefulBuilder(
@@ -342,8 +362,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               child:
                   CircularProgressIndicator(color: Color(0xFF6C63FF)))
           : _ticket == null
-              ? const Center(
-                  child: Text('Ticket not found',
+              ? Center(
+                  child: Text(AppLocalizations.of(context).t('ticket_not_found'),
                       style: TextStyle(color: Color(0xFF6B7280))))
               : RefreshIndicator(
                   onRefresh: _load,
@@ -364,6 +384,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
+  Future<void> _shareTicket() async {
+    final t = _ticket!;
+    final url = '${ApiConfig.baseUrl}/en/ticket/${t.id}';
+    final text = 'Ticket: ${t.siteName ?? t.id}\n$url';
+    await Share.share(text, subject: 'Ticket ${t.siteName ?? t.id}');
+  }
+
   SliverAppBar _buildAppBar() {
     final t = _ticket!;
     return SliverAppBar(
@@ -371,6 +398,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       pinned: true,
       backgroundColor: const Color(0xFF05051A),
       foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.share_rounded),
+          onPressed: _shareTicket,
+          tooltip: AppLocalizations.of(context).t('share'),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -415,7 +449,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          t.siteName ?? 'Unknown Site',
+                          t.siteName ?? AppLocalizations.of(context).t('unknown_site'),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
@@ -423,7 +457,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                           ),
                         ),
                       ),
-                      StatusBadge(status: t.status, fontSize: 13),
+                      StatusBadge(status: t.status, fontSize: 13, localizations: AppLocalizations.of(context)),
                     ],
                   ),
                   if (t.isAssigned) ...[
@@ -433,7 +467,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         Icon(Icons.person, size: 14, color: _accentColor),
                         const SizedBox(width: 4),
                         Text(
-                          'Assigned to ${t.assignedEngineerName}',
+                          AppLocalizations.of(context).t('assigned_to', {'name': t.assignedEngineerName ?? ''}),
                           style: TextStyle(
                             color: _accentColor,
                             fontSize: 12,
@@ -454,6 +488,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _buildContent() {
     final t = _ticket!;
+    final l10n = AppLocalizations.of(context);
     final fmt = DateFormat('MMM d, yyyy HH:mm');
     final isEngineer = _isEngineer;
     final isMyTicket = t.assignedEngineerId ==
@@ -461,29 +496,119 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
     return [
       // ─── Engineer action buttons ───
-      if (isEngineer) ..._buildEngineerActions(t, isMyTicket),
+      if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
 
       // Details
-      _glassSection('Details', [
-        _row('Coordinator', t.siteCoordinator ?? '-'),
-        _row('Technique', _techniqueName(t.technique)),
-        _row('SLA', t.slaHours != null ? '${t.slaHours} hours' : '-'),
-        _row('Created', fmt.format(t.createdAt)),
+      _glassSection(l10n.t('details'), [
+        _row(l10n.t('coordinator'), t.siteCoordinator ?? '-'),
+        _row(l10n.t('technique_label'), _techniqueLabel(t.technique, l10n)),
+        _row(l10n.t('sla'), t.slaHours != null ? '${t.slaHours} ${l10n.t('hours')}' : '-'),
+        _row(l10n.t('created'), fmt.format(t.createdAt)),
         if (t.completedAt != null) _row('Completed', t.completedAt!),
       ]),
 
       if (t.inspectionResult != null) ...[
         const SizedBox(height: 16),
-        _glassSection('Inspection Result', [
-          _row('Result', _techniqueName(t.inspectionResult!)),
+        _glassSection(l10n.t('inspection_result'), [
+          _row(l10n.t('result'), _techniqueLabel(t.inspectionResult!, l10n)),
           if (t.inspectionComments != null)
-            _row('Comments', t.inspectionComments!),
+            _row(l10n.t('comments'), t.inspectionComments!),
+        ]),
+      ],
+
+      if (t.isCompleted &&
+          t.inspectionChecklist != null &&
+          t.inspectionChecklist!.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('inspection_checklist'), [
+          ...t.inspectionChecklist!.map((item) {
+            final label = item['label'] as String? ?? '';
+            final result = item['result'] as String? ?? (item['checked'] == true ? 'accepted' : 'rejected');
+            final isAccepted = result == 'accepted';
+            final comment = item['comment'] as String?;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isAccepted
+                            ? Icons.check_circle_rounded
+                            : Icons.cancel_rounded,
+                        size: 18,
+                        color: isAccepted
+                            ? const Color(0xFF00D4AA)
+                            : const Color(0xFFFF4757),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: isAccepted
+                                ? Colors.white
+                                : Colors.white.withAlpha(180),
+                            fontSize: 14,
+                            decoration: isAccepted
+                                ? null
+                                : TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isAccepted
+                              ? const Color(0xFF00D4AA).withAlpha(30)
+                              : const Color(0xFFFF4757).withAlpha(30),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isAccepted ? l10n.t('accept') : l10n.t('reject'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isAccepted
+                                ? const Color(0xFF00D4AA)
+                                : const Color(0xFFFF6B81),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (comment != null && comment.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 28),
+                      child: Text(
+                        comment,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(140),
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
         ]),
       ],
 
       if (t.isNcr) ...[
         const SizedBox(height: 16),
-        _ncrSection(t),
+        _ncrSection(t, l10n),
+      ],
+
+      // Conflict button (company only, when result is not_accepted/ncr/accepted_with_comments)
+      if (!isEngineer && t.isCompleted && t.isConflictResult) ...[
+        const SizedBox(height: 16),
+        _conflictButton(t, l10n),
       ],
 
       const SizedBox(height: 16),
@@ -524,7 +649,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if (t.designSpecifications != null &&
           t.designSpecifications!.isNotEmpty) ...[
         const SizedBox(height: 16),
-        _glassSection('Design Specifications', [
+        _glassSection(l10n.t('design_specifications'), [
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
@@ -535,11 +660,99 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ]),
       ],
+      if (t.attachmentUrls.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('requester_attachments'), [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: t.attachmentUrls.asMap().entries.map((e) {
+                final url = e.value;
+                final idx = e.key;
+                final isImage = url.toLowerCase().contains('image') ||
+                    RegExp(r'\.(jpe?g|png|gif|webp)$').hasMatch(url);
+                final displayUrl =
+                    url.startsWith('http') ? url : (url.startsWith('/') ? '${ApiConfig.baseUrl}$url' : '${ApiConfig.baseUrl}/$url');
+                return InkWell(
+                  key: ValueKey(idx),
+                  onTap: () async {
+                    final uri = Uri.tryParse(displayUrl);
+                    if (uri != null) {
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        await Clipboard.setData(ClipboardData(text: displayUrl));
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(AppLocalizations.of(context).t('url_copied'))),
+                          );
+                        }
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A2E),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: _accentColor.withAlpha(60)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(11)),
+                          child: isImage
+                              ? Image.network(displayUrl,
+                                  height: 64,
+                                  width: 80,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 64,
+                                    width: 80,
+                                    color: const Color(0xFF0A0A1F),
+                                    child: Icon(Icons.broken_image,
+                                        color: Colors.white.withAlpha(100)),
+                                  ))
+                              : Container(
+                                  height: 64,
+                                  width: 80,
+                                  color: const Color(0xFF0A0A1F),
+                                  child: Icon(Icons.picture_as_pdf,
+                                      color: _accentColor, size: 28),
+                                ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 4),
+                          child: Text(
+                            url.split('/').last,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Colors.white.withAlpha(180),
+                                fontSize: 10),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ]),
+      ],
       const SizedBox(height: 40),
     ];
   }
 
-  List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket) {
+  List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
     final hasActive = context.read<TicketsProvider>().hasActiveTicket;
 
@@ -560,7 +773,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Complete your current ticket before assigning a new one',
+                  l10n.t('complete_before_assign'),
                   style: TextStyle(
                     color: const Color(0xFFFBBF24).withAlpha(220),
                     fontSize: 13,
@@ -573,7 +786,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       } else {
         widgets.add(_actionButton(
           icon: Icons.person_add_rounded,
-          label: 'Assign to Me',
+          label: l10n.t('assign_to_me'),
           gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
           loading: _assigning,
           onTap: _assignToMe,
@@ -587,7 +800,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if (t.isOnSite) {
         widgets.add(_actionButton(
           icon: Icons.play_arrow_rounded,
-          label: 'Start Inspection',
+          label: l10n.t('start_inspection'),
           gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
           loading: _updatingStatus,
           onTap: () => _updateStatus('IN_PROGRESS'),
@@ -596,7 +809,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       }
 
       // Status stepper
-      widgets.add(_buildStatusStepper(t));
+      widgets.add(_buildStatusStepper(t, l10n));
       widgets.add(const SizedBox(height: 16));
     }
 
@@ -615,8 +828,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             const Icon(Icons.check_circle_rounded,
                 color: Color(0xFF4ADE80), size: 22),
             const SizedBox(width: 10),
-            const Text(
-              'Ticket Completed',
+            Text(
+              l10n.t('ticket_completed'),
               style: TextStyle(
                 color: Color(0xFF4ADE80),
                 fontSize: 16,
@@ -632,7 +845,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return widgets;
   }
 
-  Widget _buildStatusStepper(Ticket t) {
+  Widget _buildStatusStepper(Ticket t, AppLocalizations l10n) {
     final steps = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'];
     final currentIdx =
         steps.indexOf(t.status.toUpperCase()).clamp(0, steps.length - 1);
@@ -648,7 +861,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'TICKET PROGRESS',
+            l10n.t('ticket_progress'),
             style: TextStyle(
               color: Colors.white.withAlpha(100),
               fontSize: 11,
@@ -714,7 +927,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               final idx = steps.indexOf(s);
               final isCurrent = idx == currentIdx;
               return Text(
-                _statusLabel(s),
+                _statusLabel(s, l10n),
                 style: TextStyle(
                   color: isCurrent
                       ? Colors.white
@@ -877,7 +1090,100 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  Widget _ncrSection(Ticket t) {
+  Widget _conflictButton(Ticket t, AppLocalizations l10n) {
+    return GestureDetector(
+      onTap: () => _reportConflict(t, l10n),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBBF24).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFBBF24).withAlpha(50)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.report_problem_rounded,
+                color: Color(0xFFFBBF24), size: 22),
+            const SizedBox(width: 10),
+            Text(
+              l10n.t('report_conflict'),
+              style: const TextStyle(
+                color: Color(0xFFFBBF24),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportConflict(Ticket t, AppLocalizations l10n) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(l10n.t('report_conflict'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          l10n.t('report_conflict_confirm'),
+          style: TextStyle(color: Colors.white.withAlpha(200)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFBBF24),
+              foregroundColor: const Color(0xFF05051A),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(l10n.t('report_conflict')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final conflictProv = context.read<ConflictsProvider>();
+    final conflict = await conflictProv.reportConflict(t.id);
+    if (mounted) {
+      if (conflict != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('conflict_reported')),
+            backgroundColor: const Color(0xFF00D4AA),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ConflictDetailScreen(conflictId: conflict.id),
+        ));
+        await _load();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('conflict_report_failed')),
+            backgroundColor: const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _ncrSection(Ticket t, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF12122A),
@@ -901,8 +1207,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       color: Color(0xFFFF6B81), size: 16),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'NCR Report',
+                Text(
+                  l10n.t('ncr_report'),
                   style: TextStyle(
                     color: Color(0xFFFF6B81),
                     fontSize: 13,
@@ -926,7 +1232,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'Resubmissions (${t.ncrResubmissions.length})',
+                l10n.t('resubmissions', {'count': '${t.ncrResubmissions.length}'}),
                 style: TextStyle(
                     color: Colors.white.withAlpha(80),
                     fontSize: 12,
@@ -949,7 +1255,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '${r.action} - ${r.comment ?? 'No comment'}',
+                          '${r.action} - ${r.comment ?? l10n.t('no_comment')}',
                           style: TextStyle(
                               color: Colors.white.withAlpha(120),
                               fontSize: 12),
@@ -974,7 +1280,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   if (result == true) _load();
                 },
                 icon: const Icon(Icons.reply_rounded, size: 18),
-                label: const Text('Resubmit',
+                label: Text(l10n.t('resubmit'),
                     style: TextStyle(fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF4757),
@@ -993,7 +1299,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Widget _timelineSection(Ticket t) {
-    return _glassSection('Status Timeline', [
+    return _glassSection(AppLocalizations.of(context).t('status_timeline'), [
       ...t.statusTimeline.asMap().entries.map((entry) {
         final i = entry.key;
         final log = entry.value;
@@ -1068,30 +1374,30 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  String _statusLabel(String s) {
+  String _statusLabel(String s, AppLocalizations l10n) {
     switch (s.toUpperCase()) {
       case 'PENDING':
-        return 'Pending';
+        return l10n.t('section_pending');
       case 'ON_SITE':
-        return 'On Site';
+        return l10n.t('section_on_site');
       case 'IN_PROGRESS':
-        return 'In Progress';
+        return l10n.t('section_in_progress');
       case 'COMPLETED':
-        return 'Completed';
+        return l10n.t('section_completed');
       case 'ACCEPTED':
-        return 'Accepted';
+        return l10n.t('accepted');
       case 'ACCEPTED_WITH_COMMENTS':
-        return 'Accepted with Comments';
+        return l10n.t('accepted_with_comments');
       case 'NOT_ACCEPTED':
-        return 'Not Accepted';
+        return l10n.t('not_accepted');
       case 'NCR':
-        return 'NCR';
+        return l10n.t('ncr');
       case 'PASS':
-        return 'Pass';
+        return l10n.t('pass');
       case 'FAIL':
-        return 'Fail';
+        return l10n.t('fail');
       case 'CONDITIONAL_PASS':
-        return 'Conditional Pass';
+        return l10n.t('conditional_pass');
       default:
         return s.replaceAll('_', ' ').split(' ').map((w) {
           if (w.isEmpty) return w;
@@ -1100,10 +1406,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  String _techniqueName(String t) {
-    return t.replaceAll('_', ' ').split(' ').map((w) {
-      if (w.isEmpty) return w;
-      return w[0].toUpperCase() + w.substring(1);
-    }).join(' ');
+  String _techniqueKey(String t) {
+    final upper = t.toUpperCase().replaceAll(' ', '_');
+    if (upper.contains('INSPECTION')) return 'tech_inspection';
+    if (upper.contains('SUPERVISION')) return 'tech_supervision';
+    if (upper.contains('HSE')) return 'tech_hse';
+    if (upper.contains('INVESTIGATION')) return 'tech_investigation';
+    if (upper.contains('TRACKING')) return 'tech_tracking';
+    return 'tech_inspection';
   }
+
+  String _techniqueLabel(String t, AppLocalizations l10n) =>
+      l10n.t(_techniqueKey(t));
 }

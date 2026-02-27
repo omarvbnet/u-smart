@@ -91,6 +91,12 @@ class Ticket {
   bool get isInProgress => status == 'IN_PROGRESS';
   bool get isCompleted => status == 'COMPLETED';
   bool get isNcr => inspectionResult == 'ncr';
+
+  /// True when inspection result is not_accepted, ncr, or accepted_with_comments
+  bool get isConflictResult {
+    final r = (inspectionResult ?? '').toLowerCase();
+    return r == 'not_accepted' || r == 'ncr' || r == 'accepted_with_comments';
+  }
   bool get isAssigned => assignedEngineerId != null;
   bool get canBeAssigned => isPending && !isAssigned;
 

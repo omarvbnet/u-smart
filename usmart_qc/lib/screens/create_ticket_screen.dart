@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 
-const _qcTechniques = [
-  ('inspection', 'Inspection'),
-  ('supervision', 'Supervision'),
-  ('hse', 'HSE'),
-  ('investigation', 'Investigation'),
-  ('tracking', 'Tracking'),
-];
+const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_hse', 'tech_investigation', 'tech_tracking'];
+const _qcTechniqueIds = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'];
 
 class CreateTicketScreen extends StatefulWidget {
   const CreateTicketScreen({super.key});
@@ -31,9 +27,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     final sla = int.tryParse(_slaCtrl.text.trim()) ?? 24;
 
     if (siteName.isEmpty || coordinator.isEmpty) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Site name and coordinator are required'),
+          content: Text(l10n.t('site_required')),
           backgroundColor: const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -52,10 +49,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
 
     if (mounted) {
+      final l10n = AppLocalizations.of(context);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Ticket created successfully'),
+            content: Text(l10n.t('ticket_created')),
             backgroundColor: const Color(0xFF00D4AA),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -65,7 +63,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to create ticket'),
+            content: Text(l10n.t('ticket_failed')),
             backgroundColor: const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -86,6 +84,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final sites = context.watch<SitesProvider>().sites;
 
     return Scaffold(
@@ -94,7 +93,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         backgroundColor: const Color(0xFF05051A),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('New Ticket',
+        title: Text(l10n.t('new_ticket'),
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
       ),
       body: ListView(
@@ -102,7 +101,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         children: [
           if (sites.isNotEmpty) ...[
             Text(
-              'QUICK FILL',
+              l10n.t('quick_fill'),
               style: TextStyle(
                 color: Colors.white.withAlpha(80),
                 fontSize: 11,
@@ -156,21 +155,21 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
           _buildField(
             controller: _siteNameCtrl,
-            label: 'Site Name',
-            hint: 'Enter site name or ID',
+            label: l10n.t('site_name'),
+            hint: l10n.t('site_name_hint'),
             icon: Icons.location_on_outlined,
           ),
           const SizedBox(height: 16),
           _buildField(
             controller: _coordinatorCtrl,
-            label: 'Site Coordinator / Location',
-            hint: 'Enter coordinator name',
+            label: l10n.t('site_coordinator'),
+            hint: l10n.t('site_coordinator_hint'),
             icon: Icons.person_outline_rounded,
           ),
           const SizedBox(height: 16),
 
           Text(
-            'TECHNIQUE',
+            l10n.t('technique'),
             style: TextStyle(
               color: Colors.white.withAlpha(80),
               fontSize: 11,
@@ -194,10 +193,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 15),
                 icon: Icon(Icons.expand_more_rounded,
                     color: Colors.white.withAlpha(80)),
-                items: _qcTechniques
-                    .map((t) =>
-                        DropdownMenuItem(value: t.$1, child: Text(t.$2)))
-                    .toList(),
+                items: List.generate(5, (i) => DropdownMenuItem(
+                    value: _qcTechniqueIds[i],
+                    child: Text(l10n.t(_qcTechniqueKeys[i])))),
                 onChanged: (v) {
                   if (v != null) setState(() => _technique = v);
                 },
@@ -207,7 +205,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           const SizedBox(height: 16),
           _buildField(
             controller: _slaCtrl,
-            label: 'SLA Hours',
+            label: l10n.t('sla_hours'),
             hint: '24',
             icon: Icons.schedule_rounded,
             keyboardType: TextInputType.number,
@@ -247,7 +245,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2.5, color: Colors.white),
                       )
-                    : const Text('Create Ticket',
+                    : Text(l10n.t('create_ticket'),
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w700)),
               ),

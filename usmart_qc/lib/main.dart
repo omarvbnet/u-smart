@@ -10,6 +10,8 @@ import 'providers/auth_provider.dart';
 import 'providers/tickets_provider.dart';
 import 'providers/sites_provider.dart';
 import 'providers/notifications_provider.dart';
+import 'providers/locale_provider.dart';
+import 'providers/conflicts_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +71,9 @@ void main() async {
     geofenceService.updateData(sitesProvider.sites, ticketsProvider.tickets);
   });
 
+  final localeProvider = LocaleProvider();
+  final conflictsProvider = ConflictsProvider(apiService);
+
   runApp(
     MultiProvider(
       providers: [
@@ -76,6 +81,8 @@ void main() async {
         ChangeNotifierProvider.value(value: ticketsProvider),
         ChangeNotifierProvider.value(value: sitesProvider),
         ChangeNotifierProvider.value(value: notificationsProvider),
+        ChangeNotifierProvider.value(value: localeProvider),
+        ChangeNotifierProvider.value(value: conflictsProvider),
       ],
       child: const ProvisrApp(),
     ),
