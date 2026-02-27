@@ -522,15 +522,44 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket) {
     final widgets = <Widget>[];
+    final hasActive = context.read<TicketsProvider>().hasActiveTicket;
 
     if (t.canBeAssigned) {
-      widgets.add(_actionButton(
-        icon: Icons.person_add_rounded,
-        label: 'Assign to Me',
-        gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
-        loading: _assigning,
-        onTap: _assignToMe,
-      ));
+      if (hasActive) {
+        widgets.add(Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBBF24).withAlpha(15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFBBF24).withAlpha(40)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  color: Color(0xFFFBBF24), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Complete your current ticket before assigning a new one',
+                  style: TextStyle(
+                    color: const Color(0xFFFBBF24).withAlpha(220),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
+      } else {
+        widgets.add(_actionButton(
+          icon: Icons.person_add_rounded,
+          label: 'Assign to Me',
+          gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+          loading: _assigning,
+          onTap: _assignToMe,
+        ));
+      }
       widgets.add(const SizedBox(height: 12));
     }
 

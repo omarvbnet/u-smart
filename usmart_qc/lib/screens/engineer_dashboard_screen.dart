@@ -129,6 +129,7 @@ class _AvailableTicketsTab extends StatelessWidget {
         }
 
         final available = provider.availableTickets;
+        final hasActive = provider.hasActiveTicket;
 
         return Column(
           children: [
@@ -178,6 +179,35 @@ class _AvailableTicketsTab extends StatelessWidget {
                     color: Colors.white.withAlpha(80), fontSize: 13),
               ),
             ),
+            if (hasActive)
+              Container(
+                margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBBF24).withAlpha(15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: const Color(0xFFFBBF24).withAlpha(40)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: Color(0xFFFBBF24), size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Complete your current ticket before taking a new one',
+                        style: TextStyle(
+                          color: const Color(0xFFFBBF24).withAlpha(220),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             Expanded(
               child: available.isEmpty
@@ -202,8 +232,10 @@ class _AvailableTicketsTab extends StatelessWidget {
                                     ticketId: ticket.id),
                               ),
                             ),
-                            onAssign: () =>
-                                _assignTicket(context, provider, ticket),
+                            onAssign: hasActive
+                                ? null
+                                : () => _assignTicket(
+                                    context, provider, ticket),
                           );
                         },
                       ),

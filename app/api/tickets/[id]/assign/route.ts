@@ -65,6 +65,21 @@ export async function PATCH(
       );
     }
 
+    // Check if engineer already has an uncompleted ticket
+    const activeTickets = await prisma.visitorRequest.findMany({
+      where: {
+        status: { not: 'COMPLETED' },
+        company: { contains: requester.id },
+      },
+      select: { id: true },
+    });
+    if (activeTickets.length > 0) {
+      return NextResponse.json(
+        { success: false, message: 'You already have an active ticket. Complete it before taking a new one.' },
+        { status: 400 }
+      );
+    }
+
     const newStatus = 'ON_SITE';
 
     if (parsed._ticket) {

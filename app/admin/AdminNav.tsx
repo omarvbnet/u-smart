@@ -21,6 +21,7 @@ import {
   TicketCheck,
   UserCircle,
   Network,
+  HardHat,
 } from 'lucide-react';
 
 const links = [
@@ -37,6 +38,7 @@ const links = [
   { href: '/admin/training-requests', label: 'Training', icon: GraduationCap, badgeType: 'pending_training' as const },
   { href: '/admin/product-requests', label: 'Product Orders', icon: Package, badgeType: 'pending_product' as const },
   { href: '/admin/checklists', label: 'Checklists', icon: CheckSquare },
+  { href: '/admin/engineers', label: 'Provisor Engineers', icon: HardHat },
   { href: '/admin/teams', label: 'Teams', icon: UsersRound },
   { href: '/admin/employees', label: 'Employees', icon: UserCog },
   { href: '/admin/company-requests', label: 'Company Req.', icon: Building2 },

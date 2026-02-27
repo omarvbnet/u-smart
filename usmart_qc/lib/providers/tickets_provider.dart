@@ -67,6 +67,8 @@ class TicketsProvider extends ChangeNotifier {
               t.assignedEngineerId == _currentUserId)
           .toList();
 
+  bool get hasActiveTicket => myActiveTickets.isNotEmpty;
+
   TicketStats? get stats => _stats;
   bool get loading => _loading;
   String? get error => _error;
