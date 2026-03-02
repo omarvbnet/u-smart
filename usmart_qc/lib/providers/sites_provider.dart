@@ -55,15 +55,35 @@ class SitesProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateSite(String id,
-      {double? latitude, double? longitude}) async {
+  Future<bool> updateSite(String id, {
+    String? siteId,
+    String? location,
+    String? province,
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
       final body = <String, dynamic>{};
+      if (siteId != null) body['siteId'] = siteId;
+      if (location != null) body['location'] = location;
+      if (province != null) body['province'] = province;
       if (latitude != null) body['latitude'] = latitude;
       if (longitude != null) body['longitude'] = longitude;
 
-      final data =
-          await _api.patch(ApiConfig.siteDetail(id), body: body);
+      if (body.isEmpty) return false;
+
+      final data = await _api.patch(ApiConfig.siteDetail(id), body: body);
+      if (data['success'] == true) {
+        await fetchSites();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> deleteSite(String id) async {
+    try {
+      final data = await _api.delete(ApiConfig.siteDetail(id));
       if (data['success'] == true) {
         await fetchSites();
         return true;

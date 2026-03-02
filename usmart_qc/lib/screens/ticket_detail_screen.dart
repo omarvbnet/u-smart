@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
@@ -14,6 +15,7 @@ import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
 import '../providers/auth_provider.dart';
 import '../providers/conflicts_provider.dart';
+import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/comments_widget.dart';
@@ -63,31 +65,39 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ticket = t;
         _loading = false;
       });
-      if (_isEngineer) {
-        _loadEngineerData();
-      }
+      // Load comments & evidence for both company and engineer (both can view/reply/upload)
+      _loadCommentsAndEvidence();
+      if (_isEngineer) _loadChecklists();
     }
   }
 
-  Future<void> _loadEngineerData() async {
+  Future<void> _loadCommentsAndEvidence() async {
     final provider = context.read<TicketsProvider>();
     setState(() {
       _loadingComments = true;
       _loadingEvidence = true;
-      _loadingChecklists = true;
     });
     final results = await Future.wait([
       provider.fetchComments(widget.ticketId),
       provider.fetchEvidence(widget.ticketId),
-      provider.fetchChecklists(),
     ]);
     if (mounted) {
       setState(() {
         _comments = results[0] as List<TicketComment>;
         _evidence = results[1] as List<TicketEvidence>;
-        _checklists = results[2] as List<InspectionChecklist>;
         _loadingComments = false;
         _loadingEvidence = false;
+      });
+    }
+  }
+
+  Future<void> _loadChecklists() async {
+    final provider = context.read<TicketsProvider>();
+    setState(() => _loadingChecklists = true);
+    final checklists = await provider.fetchChecklists();
+    if (mounted) {
+      setState(() {
+        _checklists = checklists;
         _loadingChecklists = false;
       });
     }
@@ -146,30 +156,124 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  Future<void> _pickAndUploadImage() async {
-    final picked =
-        await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-    if (picked == null) return;
-    await _uploadFile(picked.path, 'image');
+  void _showImageSourceChoice() {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF6C63FF)),
+                title: Text(l10n.t('pick_from_gallery'), style: const TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndUploadFromGallery();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFF6C63FF)),
+                title: Text(l10n.t('take_photo'), style: const TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndUploadFromCamera();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  Future<void> _pickAndUploadFile() async {
+  Future<void> _pickAndUploadFromGallery() async {
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 80,
+      maxWidth: 1920,
+      maxHeight: 1920,
     );
-    if (picked == null) return;
-    await _uploadFile(picked.path, 'image');
+    if (picked != null) await _uploadImageFromXFile(picked);
   }
 
-  Future<void> _uploadFile(String filePath, String fileType) async {
+  Future<void> _pickAndUploadFromCamera() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
+    if (picked != null) await _uploadImageFromXFile(picked);
+  }
+
+  Future<void> _uploadImageFromXFile(XFile xFile) async {
+    if (!mounted) return;
+    final provider = context.read<TicketsProvider>();
+    final bytes = await xFile.readAsBytes();
+    if (bytes.isEmpty) return;
+    final path = xFile.path;
+    final ext = path.split('.').lastOrNull ?? 'jpg';
+    final filename = 'image_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    if (!mounted) return;
+    setState(() => _uploading = true);
+    try {
+      final url = await provider.uploadFileFromBytes(bytes, filename);
+      if (url != null) {
+        final evidence = await provider.addEvidence(widget.ticketId, url, 'image');
+        if (evidence != null && mounted) {
+          setState(() => _evidence = [evidence, ..._evidence]);
+        }
+      } else if (mounted) {
+        _showUploadError(AppLocalizations.of(context).t('upload_failed'));
+      }
+    } catch (e) {
+      if (mounted) {
+        final msg = e is Exception ? e.toString().replaceFirst('Exception: ', '') : AppLocalizations.of(context).t('upload_failed');
+        _showUploadError(msg);
+      }
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    _showImageSourceChoice();
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif'],
+      allowMultiple: false,
+      withData: true, // for web when path is null
+    );
+    if (!mounted) return;
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final path = file.path;
+    final bytes = file.bytes;
+    final filename = file.name;
+    final ext = (file.extension ?? filename.split('.').lastOrNull ?? '').toLowerCase();
+    final fileType = ext == 'pdf' ? 'file' : 'image';
+
     setState(() => _uploading = true);
     final provider = context.read<TicketsProvider>();
     try {
-      final url = await provider.uploadFile(filePath);
+      String? url;
+      // Prefer bytes over path - iOS paths can be inaccessible after picker dismisses
+      if (bytes != null && bytes.isNotEmpty && filename.isNotEmpty) {
+        url = await provider.uploadFileFromBytes(bytes, filename);
+      } else if (path != null && path.isNotEmpty) {
+        url = await provider.uploadFile(path);
+      }
       if (url != null) {
-        final evidence =
-            await provider.addEvidence(widget.ticketId, url, fileType);
+        final evidence = await provider.addEvidence(widget.ticketId, url, fileType);
         if (evidence != null && mounted) {
           setState(() => _evidence = [evidence, ..._evidence]);
         }
@@ -477,6 +581,32 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ],
                     ),
                   ],
+                  if (t.isCompleted && _effectiveInspectionResult(t) != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _resultColor(_effectiveInspectionResult(t)!).withAlpha(35),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _resultColor(_effectiveInspectionResult(t)!).withAlpha(80)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.assignment_turned_in_rounded, size: 16, color: _resultColor(_effectiveInspectionResult(t)!)),
+                          const SizedBox(width: 6),
+                          Text(
+                            _statusLabel(_effectiveInspectionResult(t)!, AppLocalizations.of(context)),
+                            style: TextStyle(
+                              color: _resultColor(_effectiveInspectionResult(t)!),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -486,6 +616,20 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
+  DateTime? get _siteLastUpdated {
+    final t = _ticket;
+    if (t?.siteName == null) return null;
+    try {
+      for (final s in context.read<SitesProvider>().sites) {
+        if (s.siteId == t!.siteName) return s.updatedAt;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String _formatDateShort(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   List<Widget> _buildContent() {
     final t = _ticket!;
     final l10n = AppLocalizations.of(context);
@@ -493,6 +637,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final isEngineer = _isEngineer;
     final isMyTicket = t.assignedEngineerId ==
         context.read<AuthProvider>().user?.id;
+    final siteUpdated = _siteLastUpdated;
 
     return [
       // ─── Engineer action buttons ───
@@ -504,14 +649,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _row(l10n.t('technique_label'), _techniqueLabel(t.technique, l10n)),
         _row(l10n.t('sla'), t.slaHours != null ? '${t.slaHours} ${l10n.t('hours')}' : '-'),
         _row(l10n.t('created'), fmt.format(t.createdAt)),
-        if (t.completedAt != null) _row('Completed', t.completedAt!),
+        if (t.completedAt != null) _row(l10n.t('section_completed'), t.completedAt!),
+        if (siteUpdated != null)
+          _row(l10n.t('site_last_updated'), _formatDateShort(siteUpdated)),
       ]),
 
-      if (t.inspectionResult != null) ...[
+      if (_effectiveInspectionResult(t) != null) ...[
         const SizedBox(height: 16),
         _glassSection(l10n.t('inspection_result'), [
-          _row(l10n.t('result'), _techniqueLabel(t.inspectionResult!, l10n)),
-          if (t.inspectionComments != null)
+          _row(l10n.t('result'), _statusLabel(_effectiveInspectionResult(t)!, l10n)),
+          if (t.inspectionComments != null && t.inspectionComments!.isNotEmpty)
             _row(l10n.t('comments'), t.inspectionComments!),
         ]),
       ],
@@ -614,36 +761,34 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       const SizedBox(height: 16),
       _timelineSection(t),
 
-      // ─── Engineer management sections ───
-      if (isEngineer && (t.isAssigned || t.isPending)) ...[
+      // ─── Comments & evidence (both company and engineer can view, reply, upload) ───
+      const SizedBox(height: 16),
+      _glassContainer(
+        CommentsWidget(
+          comments: _comments,
+          loading: _loadingComments,
+          onAdd: _addComment,
+        ),
+      ),
+      const SizedBox(height: 16),
+      _glassContainer(
+        EvidenceUploadWidget(
+          evidence: _evidence,
+          loading: _loadingEvidence,
+          uploading: _uploading,
+          onPickImage: _pickAndUploadImage,
+          onPickFile: _pickAndUploadFile,
+        ),
+      ),
+      if (isEngineer && isMyTicket && !t.isCompleted) ...[
         const SizedBox(height: 16),
         _glassContainer(
-          CommentsWidget(
-            comments: _comments,
-            loading: _loadingComments,
-            onAdd: _addComment,
+          ChecklistWidget(
+            templates: _checklists,
+            loading: _loadingChecklists,
+            onComplete: _completeWithChecklist,
           ),
         ),
-        const SizedBox(height: 16),
-        _glassContainer(
-          EvidenceUploadWidget(
-            evidence: _evidence,
-            loading: _loadingEvidence,
-            uploading: _uploading,
-            onPickImage: _pickAndUploadImage,
-            onPickFile: _pickAndUploadFile,
-          ),
-        ),
-        if (isMyTicket && !t.isCompleted) ...[
-          const SizedBox(height: 16),
-          _glassContainer(
-            ChecklistWidget(
-              templates: _checklists,
-              loading: _loadingChecklists,
-              onComplete: _completeWithChecklist,
-            ),
-          ),
-        ],
       ],
 
       if (t.designSpecifications != null &&
@@ -1369,6 +1514,44 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         return const Color(0xFF00D4AA);
       case 'COMPLETED':
         return const Color(0xFF4ADE80);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  /// Returns inspection result, or derives from checklist when null.
+  String? _effectiveInspectionResult(Ticket t) {
+    if (t.inspectionResult != null && t.inspectionResult!.isNotEmpty) {
+      return t.inspectionResult;
+    }
+    if (t.isCompleted &&
+        t.inspectionChecklist != null &&
+        t.inspectionChecklist!.isNotEmpty) {
+      final items = t.inspectionChecklist!;
+      final hasReject = items.any((i) =>
+          (i['result'] as String? ?? '').toLowerCase() == 'rejected' ||
+          (i['checked'] == false && i['result'] == null));
+      final hasMajor = items.any((i) =>
+          (i['weight'] as String? ?? '').toLowerCase() == 'major');
+      if (hasReject && hasMajor) return 'ncr';
+      if (hasReject) return 'not_accepted';
+      final hasComments = items.any((i) =>
+          (i['comment'] as String? ?? '').trim().isNotEmpty);
+      return hasComments ? 'accepted_with_comments' : 'accepted';
+    }
+    return null;
+  }
+
+  Color _resultColor(String result) {
+    switch ((result).toLowerCase()) {
+      case 'accepted':
+        return const Color(0xFF00D4AA);
+      case 'accepted_with_comments':
+        return const Color(0xFFFBBF24);
+      case 'not_accepted':
+        return const Color(0xFFFF6B81);
+      case 'ncr':
+        return const Color(0xFFFF4757);
       default:
         return const Color(0xFF6B7280);
     }

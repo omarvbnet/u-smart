@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import 'registration_request_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -265,6 +266,21 @@ class _LoginScreenState extends State<LoginScreen>
                                                   letterSpacing: 0.5,
                                                 ),
                                               ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  TextButton(
+                                    onPressed: () =>
+                                        showRegistrationRequestModal(context),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFF6C63FF),
+                                    ),
+                                    child: Text(
+                                      l10n.t('reg_request_title'),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ),

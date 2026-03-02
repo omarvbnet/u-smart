@@ -353,9 +353,18 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   // ─── Upload file ───
-  /// Returns URL on success, or throws [Exception] with message on failure.
+  /// Returns URL on success, or null on failure.
   Future<String?> uploadFile(String filePath) async {
     return _api.uploadFile(ApiConfig.uploadTicketAttachment, filePath);
+  }
+
+  /// Upload from bytes (e.g. when file_picker returns null path on web).
+  Future<String?> uploadFileFromBytes(List<int> bytes, String filename) async {
+    return _api.uploadFileFromBytes(
+      ApiConfig.uploadTicketAttachment,
+      bytes,
+      filename,
+    );
   }
 
   @override

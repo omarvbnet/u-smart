@@ -12,6 +12,7 @@ import 'providers/sites_provider.dart';
 import 'providers/notifications_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/conflicts_provider.dart';
+import 'providers/registration_request_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +74,7 @@ void main() async {
 
   final localeProvider = LocaleProvider();
   final conflictsProvider = ConflictsProvider(apiService);
+  final registrationRequestProvider = RegistrationRequestProvider(apiService);
 
   runApp(
     MultiProvider(
@@ -83,6 +85,7 @@ void main() async {
         ChangeNotifierProvider.value(value: notificationsProvider),
         ChangeNotifierProvider.value(value: localeProvider),
         ChangeNotifierProvider.value(value: conflictsProvider),
+        ChangeNotifierProvider.value(value: registrationRequestProvider),
       ],
       child: const ProvisrApp(),
     ),

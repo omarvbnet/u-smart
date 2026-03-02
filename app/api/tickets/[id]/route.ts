@@ -149,6 +149,11 @@ export async function GET(
         assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
         assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
       }
+      // Fallback: extract inspection result when COMPLETED (handles alternate company JSON structure)
+      if (status === 'COMPLETED' && !inspectionResult && typeof parsed.inspectionResult === 'string') {
+        inspectionResult = parsed.inspectionResult;
+        if (!inspectionComments && typeof parsed.inspectionComments === 'string') inspectionComments = parsed.inspectionComments;
+      }
     } catch {
       /* ignore */
     }

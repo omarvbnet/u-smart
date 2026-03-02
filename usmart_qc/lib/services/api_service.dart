@@ -80,28 +80,46 @@ class ApiService {
         request.headers['Authorization'] = 'Bearer $_token';
       }
       request.files.add(await http.MultipartFile.fromPath('file', filePath));
-      final streamed = await request.send();
-      final body = await streamed.stream.bytesToString();
-
-      if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-        try {
-          final err = jsonDecode(body) as Map<String, dynamic>;
-          final msg = err['message'] as String? ?? 'Upload failed (${streamed.statusCode})';
-          throw Exception(msg);
-        } catch (e) {
-          if (e is Exception) rethrow;
-          throw Exception('Upload failed (${streamed.statusCode})');
-        }
-      }
-
-      final data = jsonDecode(body) as Map<String, dynamic>;
-      if (data['success'] == true) {
-        return data['url'] as String?;
-      }
-      final msg = data['message'] as String? ?? 'Upload failed';
-      throw Exception(msg);
+      return _handleUploadResponse(request);
     } on FormatException {
       throw Exception('Invalid server response');
     }
+  }
+
+  /// Upload from bytes (e.g. when file_picker returns null path on web).
+  Future<String?> uploadFileFromBytes(String path, List<int> bytes, String filename) async {
+    try {
+      final request = http.MultipartRequest('POST', _uri(path));
+      if (_token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      return _handleUploadResponse(request);
+    } on FormatException {
+      throw Exception('Invalid server response');
+    }
+  }
+
+  Future<String?> _handleUploadResponse(http.MultipartRequest request) async {
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      try {
+        final err = jsonDecode(body) as Map<String, dynamic>;
+        final msg = err['message'] as String? ?? 'Upload failed (${streamed.statusCode})';
+        throw Exception(msg);
+      } catch (e) {
+        if (e is Exception) rethrow;
+        throw Exception('Upload failed (${streamed.statusCode})');
+      }
+    }
+
+    final data = jsonDecode(body) as Map<String, dynamic>;
+    if (data['success'] == true) {
+      return data['url'] as String?;
+    }
+    final msg = data['message'] as String? ?? 'Upload failed';
+    throw Exception(msg);
   }
 }

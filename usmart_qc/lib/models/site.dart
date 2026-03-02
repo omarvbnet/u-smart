@@ -8,6 +8,7 @@ class Site {
   final int ticketCount;
   final int qualityControlCount;
   final int enterpriseCount;
+  final DateTime? updatedAt;
 
   Site({
     required this.id,
@@ -19,6 +20,7 @@ class Site {
     this.ticketCount = 0,
     this.qualityControlCount = 0,
     this.enterpriseCount = 0,
+    this.updatedAt,
   });
 
   bool get hasCoordinates => latitude != null && longitude != null;
@@ -34,6 +36,9 @@ class Site {
       ticketCount: json['ticketCount'] as int? ?? 0,
       qualityControlCount: json['qualityControlCount'] as int? ?? 0,
       enterpriseCount: json['enterpriseCount'] as int? ?? 0,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'] as String)
+          : null,
     );
   }
 }

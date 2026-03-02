@@ -32,6 +32,11 @@ class ApiConfig {
   static const String notificationCount = '/api/notifications/count';
   static String notificationMarkRead(String id) => '/api/notifications/$id';
 
+  // Registration requests (public, no auth)
+  static const String registrationRequests = '/api/registration-requests';
+  static const String uploadRegistrationEvidence =
+      '/api/upload/registration-evidence';
+
   static const String serviceSlug = 'quality-control-supervision';
   static const double geofenceRadiusMeters = 200;
   static const int autoInProgressMinutes = 10;

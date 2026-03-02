@@ -16,6 +16,7 @@ import 'notifications_screen.dart';
 import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
 import 'conflicts_screen.dart';
+import 'site_form_screen.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
   const CompanyDashboardScreen({super.key});
@@ -469,6 +470,48 @@ class _TicketSection {
 class _SitesTab extends StatelessWidget {
   const _SitesTab();
 
+  Future<void> _confirmDelete(
+      BuildContext context, SitesProvider provider, site, AppLocalizations l10n) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(l10n.t('site_delete_confirm_title'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          l10n.t('site_delete_confirm', {'name': site.siteId}),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4757)),
+            child: Text(l10n.t('site_delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final success = await provider.deleteSite(site.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? l10n.t('site_deleted') : l10n.t('site_delete_failed')),
+            backgroundColor: success ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -480,180 +523,253 @@ class _SitesTab extends StatelessWidget {
           );
         }
 
-        return Column(
+        return Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: Row(
-                children: [
-                  ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
-                    ).createShader(bounds),
-                    child: Text(
-                      l10n.t('nav_sites'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00D4AA).withAlpha(20),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.gps_fixed,
-                            color: Color(0xFF00D4AA), size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          l10n.t('gps_count', {'count': '${provider.sitesWithCoordinates.length}'}),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  child: Row(
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                        ).createShader(bounds),
+                        child: Text(
+                          l10n.t('nav_sites'),
                           style: const TextStyle(
-                            color: Color(0xFF00D4AA),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: provider.sites.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6C63FF).withAlpha(15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.explore_off_rounded,
-                                size: 48, color: Color(0xFF6C63FF)),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(l10n.t('no_sites'),
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 18,
-                                  fontWeight: FontWeight.w600)),
-                        ],
                       ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: provider.fetchSites,
-                      color: const Color(0xFF6C63FF),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        itemCount: provider.sites.length,
-                        itemBuilder: (context, index) {
-                          final site = provider.sites[index];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF12122A),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: Colors.white.withAlpha(10)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00D4AA).withAlpha(20),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.gps_fixed,
+                                color: Color(0xFF00D4AA), size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.t('gps_count', {'count': '${provider.sitesWithCoordinates.length}'}),
+                              style: const TextStyle(
+                                color: Color(0xFF00D4AA),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        const Color(0xFF6C63FF)
-                                            .withAlpha(30),
-                                        const Color(0xFF00D4AA)
-                                            .withAlpha(15),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: provider.sites.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6C63FF).withAlpha(15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.explore_off_rounded,
+                                    size: 48, color: Color(0xFF6C63FF)),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(l10n.t('no_sites'),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 18,
+                                      fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 24),
+                              ElevatedButton.icon(
+                                onPressed: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const SiteFormScreen(),
+                                  ),
+                                ).then((_) => provider.fetchSites()),
+                                icon: const Icon(Icons.add_rounded, size: 20),
+                                label: Text(l10n.t('site_add')),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6C63FF),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: provider.fetchSites,
+                          color: const Color(0xFF6C63FF),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                            itemCount: provider.sites.length,
+                            itemBuilder: (context, index) {
+                              final site = provider.sites[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF12122A),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: Colors.white.withAlpha(10)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            const Color(0xFF6C63FF)
+                                                .withAlpha(30),
+                                            const Color(0xFF00D4AA)
+                                                .withAlpha(15),
+                                          ],
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(14),
+                                      ),
+                                      child: const Icon(
+                                          Icons.location_on_rounded,
+                                          color: Color(0xFF8B83FF),
+                                          size: 22),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            site.siteId,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${site.location} - ${site.province}',
+                                            style: TextStyle(
+                                              color:
+                                                  Colors.white.withAlpha(100),
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            '${site.qualityControlCount} ${l10n.t('qc_tickets')}',
+                                            style: TextStyle(
+                                              color:
+                                                  Colors.white.withAlpha(60),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          if (site.updatedAt != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '${l10n.t('site_updated_on')} ${_formatDate(site.updatedAt!)}',
+                                              style: TextStyle(
+                                                color: Colors.white.withAlpha(50),
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          onPressed: () => Navigator.of(context)
+                                              .push(MaterialPageRoute(
+                                                builder: (_) =>
+                                                    SiteFormScreen(site: site),
+                                              ))
+                                              .then((_) => provider.fetchSites()),
+                                          icon: const Icon(Icons.edit_rounded,
+                                              color: Color(0xFF6C63FF), size: 20),
+                                          tooltip: l10n.t('site_edit'),
+                                        ),
+                                        IconButton(
+                                          onPressed: () =>
+                                              _confirmDelete(context, provider, site, l10n),
+                                          icon: const Icon(Icons.delete_outline_rounded,
+                                              color: Color(0xFFFF4757), size: 20),
+                                          tooltip: l10n.t('site_delete'),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: site.hasCoordinates
+                                                ? const Color(0xFF00D4AA)
+                                                    .withAlpha(20)
+                                                : Colors.white.withAlpha(8),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          child: Icon(
+                                            site.hasCoordinates
+                                                ? Icons.gps_fixed
+                                                : Icons.gps_off,
+                                            color: site.hasCoordinates
+                                                ? const Color(0xFF00D4AA)
+                                                : const Color(0xFF4B5563),
+                                            size: 18,
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                    borderRadius:
-                                        BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(
-                                      Icons.location_on_rounded,
-                                      color: Color(0xFF8B83FF),
-                                      size: 22),
+                                  ],
                                 ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        site.siteId,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${site.location} - ${site.province}',
-                                        style: TextStyle(
-                                          color:
-                                              Colors.white.withAlpha(100),
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        '${site.qualityControlCount} ${l10n.t('qc_tickets')}',
-                                        style: TextStyle(
-                                          color:
-                                              Colors.white.withAlpha(60),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: site.hasCoordinates
-                                        ? const Color(0xFF00D4AA)
-                                            .withAlpha(20)
-                                        : Colors.white.withAlpha(8),
-                                    borderRadius:
-                                        BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(
-                                    site.hasCoordinates
-                                        ? Icons.gps_fixed
-                                        : Icons.gps_off,
-                                    color: site.hasCoordinates
-                                        ? const Color(0xFF00D4AA)
-                                        : const Color(0xFF4B5563),
-                                    size: 18,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                              );
+                            },
+                          ),
+                        ),
+                ),
+              ],
+            ),
+            Positioned(
+              right: 20,
+              bottom: 24,
+              child: FloatingActionButton(
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(
+                      builder: (_) => const SiteFormScreen(),
+                    ))
+                    .then((_) => provider.fetchSites()),
+                backgroundColor: const Color(0xFF6C63FF),
+                child: const Icon(Icons.add_rounded, color: Colors.white),
+              ),
             ),
           ],
         );
       },
     );
+  }
+
+  String _formatDate(DateTime d) {
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 }
 
