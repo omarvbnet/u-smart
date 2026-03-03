@@ -1,3 +1,26 @@
+class ChecklistHistoryEntry {
+  final String at;
+  final List<Map<String, dynamic>> inspectionChecklist;
+  final String? inspectionResult;
+
+  ChecklistHistoryEntry({
+    required this.at,
+    this.inspectionChecklist = const [],
+    this.inspectionResult,
+  });
+
+  factory ChecklistHistoryEntry.fromJson(Map<String, dynamic> json) {
+    final list = json['inspectionChecklist'];
+    return ChecklistHistoryEntry(
+      at: json['at'] as String? ?? '',
+      inspectionChecklist: list is List
+          ? list.map((e) => e as Map<String, dynamic>).toList()
+          : [],
+      inspectionResult: json['inspectionResult'] as String?,
+    );
+  }
+}
+
 class StatusLogEntry {
   final String status;
   final DateTime createdAt;
@@ -62,6 +85,12 @@ class Ticket {
   final String? assignedEngineerName;
   final String? assignedAt;
   final List<Map<String, dynamic>>? inspectionChecklist;
+  /// Previous inspection records (e.g. before NCR-approved re-inspection)
+  final List<ChecklistHistoryEntry> checklistHistory;
+  /// Requester (POC) who submitted the ticket
+  final String? requesterName;
+  final String? requesterRole;
+  final String? requesterPhone;
 
   Ticket({
     required this.id,
@@ -84,6 +113,10 @@ class Ticket {
     this.assignedEngineerName,
     this.assignedAt,
     this.inspectionChecklist,
+    this.checklistHistory = const [],
+    this.requesterName,
+    this.requesterRole,
+    this.requesterPhone,
   });
 
   bool get isPending => status == 'PENDING';
@@ -147,6 +180,13 @@ class Ticket {
               .map((e) => e as Map<String, dynamic>)
               .toList()
           : null,
+      checklistHistory: (json['checklistHistory'] as List<dynamic>?)
+              ?.map((e) => ChecklistHistoryEntry.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      requesterName: json['requesterName'] as String?,
+      requesterRole: json['requesterRole'] as String?,
+      requesterPhone: json['requesterPhone'] as String?,
     );
   }
 }

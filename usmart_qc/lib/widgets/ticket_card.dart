@@ -8,12 +8,15 @@ class TicketCard extends StatelessWidget {
   final Ticket ticket;
   final VoidCallback? onTap;
   final VoidCallback? onAssign;
+  /// Requester must not see Assign to Me; pass false for company dashboard.
+  final bool showAssignToMe;
 
   const TicketCard({
     super.key,
     required this.ticket,
     this.onTap,
     this.onAssign,
+    this.showAssignToMe = true,
   });
 
   Color get _accentColor {
@@ -183,7 +186,7 @@ class TicketCard extends StatelessWidget {
                             ),
                           ),
                         const Spacer(),
-                        if (ticket.canBeAssigned && onAssign != null)
+                        if (showAssignToMe && ticket.canBeAssigned && onAssign != null)
                           GestureDetector(
                             onTap: onAssign,
                             child: Container(

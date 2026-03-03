@@ -51,6 +51,10 @@ export async function GET(
           status: true,
           createdAt: true,
           completedAt: true,
+          requesterId: true,
+          requester: {
+            select: { name: true, phone: true, role: true, username: true },
+          },
           maintenanceDescription: true,
           beforeImageUrls: true,
           finishingImageUrls: true,
@@ -107,6 +111,7 @@ export async function GET(
     let ncrReason: string | null = null;
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
+    let checklistHistory: Array<{ at: string; inspectionChecklist?: unknown[]; inspectionResult?: string }> = [];
     let assignedEngineerId: string | null = null;
     let assignedEngineerName: string | null = null;
     let assignedAt: string | null = null;
@@ -148,6 +153,13 @@ export async function GET(
         assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
         assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
         assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
+        checklistHistory = Array.isArray(parsed.checklistHistory)
+          ? (parsed.checklistHistory as Array<{ at?: string; inspectionChecklist?: unknown[]; inspectionResult?: string }>).map((e) => ({
+              at: e.at || '',
+              inspectionChecklist: Array.isArray(e.inspectionChecklist) ? e.inspectionChecklist : [],
+              inspectionResult: typeof e.inspectionResult === 'string' ? e.inspectionResult : undefined,
+            }))
+          : [];
       }
       // Fallback: extract inspection result when COMPLETED (handles alternate company JSON structure)
       if (status === 'COMPLETED' && !inspectionResult && typeof parsed.inspectionResult === 'string') {
@@ -175,6 +187,11 @@ export async function GET(
             : null,
         }
       : null;
+
+    const req = (row as any).requester;
+    const requesterName = req ? (req.name || req.username || null) : null;
+    const requesterRole = req?.role ?? null;
+    const requesterPhone = req?.phone ?? null;
 
     return NextResponse.json({
       success: true,
@@ -204,6 +221,10 @@ export async function GET(
         assignedEngineerId,
         assignedEngineerName,
         assignedAt,
+        checklistHistory,
+        requesterName,
+        requesterRole,
+        requesterPhone,
       },
     });
   } catch (err) {

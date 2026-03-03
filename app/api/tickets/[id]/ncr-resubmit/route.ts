@@ -29,6 +29,13 @@ export async function POST(
     const comment = typeof body.comment === 'string' ? body.comment.trim() : '';
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls.filter((u: unknown) => typeof u === 'string') : [];
 
+    if (!comment || comment.length === 0) {
+      return NextResponse.json({ success: false, message: 'Resolving comments are required' }, { status: 400 });
+    }
+    if (!imageUrls.length) {
+      return NextResponse.json({ success: false, message: 'At least one evidence image is required' }, { status: 400 });
+    }
+
     let parsed: Record<string, unknown> = {};
     if (typeof row.company === 'string') {
       try {

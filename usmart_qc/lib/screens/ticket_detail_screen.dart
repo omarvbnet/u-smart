@@ -654,6 +654,77 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           _row(l10n.t('site_last_updated'), _formatDateShort(siteUpdated)),
       ]),
 
+      // Requester / POC
+      if (t.requesterName != null || t.requesterPhone != null) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('requester_poc'), [
+          if (t.requesterName != null)
+            _row(l10n.t('requester'), t.requesterName!),
+          if (t.requesterRole != null)
+            _row(l10n.t('profile_role'), _roleLabel(t.requesterRole!, l10n)),
+          if (t.requesterPhone != null && t.requesterPhone!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      l10n.t('profile_phone'),
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(80), fontSize: 13),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text(
+                          t.requesterPhone!,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 12),
+                        InkWell(
+                          onTap: () => _callPhone(t.requesterPhone!),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00D4AA).withAlpha(30),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: const Color(0xFF00D4AA).withAlpha(60)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.phone_rounded,
+                                    color: Color(0xFF00D4AA), size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  l10n.t('call'),
+                                  style: const TextStyle(
+                                    color: Color(0xFF00D4AA),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ]),
+      ],
+
       if (_effectiveInspectionResult(t) != null) ...[
         const SizedBox(height: 16),
         _glassSection(l10n.t('inspection_result'), [
@@ -663,6 +734,114 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ]),
       ],
 
+      if (t.checklistHistory.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('previous_inspections'), [
+          ...t.checklistHistory.asMap().entries.map((entry) {
+            final i = entry.key + 1;
+            final h = entry.value;
+            final items = h.inspectionChecklist;
+            final result = h.inspectionResult ?? 'ncr';
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        l10n.t('inspection_record', {'n': '$i'}),
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(100),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        h.at.isNotEmpty ? _formatDateShort(DateTime.tryParse(h.at) ?? DateTime.now()) : '',
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(80),
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (result.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _resultColor(result).withAlpha(30),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _statusLabel(result, l10n),
+                            style: TextStyle(
+                              color: _resultColor(result),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (items.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    ...items.map((item) {
+                      final label = item['label'] as String? ?? '';
+                      final res = item['result'] as String? ?? (item['checked'] == true ? 'accepted' : 'rejected');
+                      final isAccepted = res == 'accepted';
+                      final comment = item['comment'] as String?;
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 12, top: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              isAccepted ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                              size: 14,
+                              color: isAccepted ? const Color(0xFF00D4AA) : const Color(0xFFFF6B81),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: Colors.white.withAlpha(180),
+                                      fontSize: 12,
+                                      decoration: isAccepted ? null : TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                                  if (comment != null && comment.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        comment,
+                                        style: TextStyle(
+                                          color: Colors.white.withAlpha(100),
+                                          fontSize: 11,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  const Divider(color: Color(0x10FFFFFF), height: 16),
+                ],
+              ),
+            );
+          }),
+        ]),
+      ],
       if (t.isCompleted &&
           t.inspectionChecklist != null &&
           t.inspectionChecklist!.isNotEmpty) ...[
@@ -1239,6 +1418,36 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _roleLabel(String role, AppLocalizations l10n) {
+    switch (role.toUpperCase()) {
+      case 'ENGINEER':
+        return l10n.t('role_engineer');
+      case 'COMPANY':
+        return l10n.t('role_company');
+      default:
+        return role;
+    }
+  }
+
+  Future<void> _callPhone(String phone) async {
+    final cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    final uri = Uri.parse('tel:$cleaned');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      await Clipboard.setData(ClipboardData(text: phone));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).t('phone_copied')),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
   }
 
   Widget _conflictButton(Ticket t, AppLocalizations l10n) {

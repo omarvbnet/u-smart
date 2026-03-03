@@ -311,7 +311,8 @@ class _TicketsTab extends StatelessWidget {
                                         ticketId: ticket.id),
                                   ),
                                 ),
-                                onAssign: null, // Requester cannot assign; only engineers
+                                onAssign: null,
+                                showAssignToMe: false, // Requester cannot assign
                               );
                             }
                             i += 1 + section.tickets.length;

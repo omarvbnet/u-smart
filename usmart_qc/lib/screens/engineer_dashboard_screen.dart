@@ -11,7 +11,6 @@ import '../models/ticket.dart';
 import '../widgets/ticket_card.dart';
 import 'ticket_detail_screen.dart';
 import 'notifications_screen.dart';
-import 'create_ticket_screen.dart';
 import 'site_form_screen.dart';
 import '../providers/sites_provider.dart';
 
@@ -107,33 +106,6 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
           ),
         ),
       ),
-      floatingActionButton: _currentTab == 0
-          ? Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF6C63FF), Color(0xFF5A52E0)],
-                ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6C63FF).withAlpha(80),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: FloatingActionButton(
-                onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const CreateTicketScreen()));
-                },
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                child: const Icon(Icons.add_rounded,
-                    color: Colors.white, size: 28),
-              ),
-            )
-          : null,
     );
   }
 
@@ -761,24 +733,6 @@ class _EngineerSitesTab extends StatelessWidget {
                                   style: const TextStyle(
                                       color: Colors.white, fontSize: 18,
                                       fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () => Navigator.of(context)
-                                    .push(MaterialPageRoute(
-                                      builder: (_) => const SiteFormScreen(),
-                                    ))
-                                    .then((_) => provider.fetchSites()),
-                                icon: const Icon(Icons.add_rounded, size: 20),
-                                label: Text(l10n.t('site_add')),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6C63FF),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14)),
-                                ),
-                              ),
                             ],
                           ),
                         )
@@ -878,19 +832,6 @@ class _EngineerSitesTab extends StatelessWidget {
                         ),
                 ),
               ],
-            ),
-            Positioned(
-              right: 20,
-              bottom: 24,
-              child: FloatingActionButton(
-                onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute(
-                      builder: (_) => const SiteFormScreen(),
-                    ))
-                    .then((_) => provider.fetchSites()),
-                backgroundColor: const Color(0xFF6C63FF),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              ),
             ),
           ],
         );
