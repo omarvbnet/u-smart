@@ -727,6 +727,11 @@ class _StatsTab extends StatelessWidget {
   static String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  static String _formatTotalInspectionHours(double h) {
+    if (h < 1) return '${(h * 60).round()} min';
+    return '${h.toStringAsFixed(1)} h';
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -1068,6 +1073,52 @@ class _StatsTab extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C63FF).withAlpha(20),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF6C63FF).withAlpha(40)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C63FF).withAlpha(30),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.timer_rounded,
+                          color: Color(0xFF8B83FF), size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.t('total_inspection_time'),
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(180),
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatTotalInspectionHours(provider.totalInspectionHours),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               if (inspection != null) ...[
                 const SizedBox(height: 28),

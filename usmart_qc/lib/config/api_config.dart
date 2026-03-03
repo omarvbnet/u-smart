@@ -39,7 +39,7 @@ class ApiConfig {
       '/api/upload/registration-evidence';
 
   static const String serviceSlug = 'quality-control-supervision';
-  static const double geofenceRadiusMeters = 200;
+  static const double geofenceRadiusMeters = 500;
   static const int autoInProgressMinutes = 10;
   static const int pollIntervalSeconds = 30;
 }

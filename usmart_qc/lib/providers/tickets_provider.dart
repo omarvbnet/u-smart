@@ -138,6 +138,16 @@ class TicketsProvider extends ChangeNotifier {
   List<Ticket> get activeTickets =>
       _tickets.where((t) => t.isOnSite || t.isInProgress).toList();
 
+  /// Total inspection time in hours across all completed tickets (respects date filter from fetch).
+  double get totalInspectionHours {
+    double sum = 0;
+    for (final t in completedTickets) {
+      final h = t.inspectionHours;
+      if (h != null && h > 0) sum += h;
+    }
+    return sum;
+  }
+
   // Engineer-specific: available tickets (PENDING + not assigned)
   List<Ticket> get availableTickets =>
       _tickets.where((t) => t.isPending && !t.isAssigned).toList();
@@ -168,6 +178,16 @@ class TicketsProvider extends ChangeNotifier {
           .toList();
 
   bool get hasActiveTicket => myActiveTickets.isNotEmpty;
+
+  /// Engineer inbox: tickets where requester resubmitted NCR, pending engineer response
+  List<Ticket> get ticketsPendingNcrResponse => _currentUserId == null
+      ? []
+      : _tickets
+          .where((t) =>
+              t.assignedEngineerId == _currentUserId &&
+              t.isNcr &&
+              t.hasPendingEngineerNcrResponse)
+          .toList();
 
   TicketStats? get stats => _stats;
   bool get loading => _loading;

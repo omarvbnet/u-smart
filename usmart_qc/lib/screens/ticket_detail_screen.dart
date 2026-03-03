@@ -23,6 +23,7 @@ import '../widgets/checklist_widget.dart';
 import '../widgets/evidence_upload_widget.dart';
 import 'ncr_resubmit_screen.dart';
 import 'conflict_detail_screen.dart';
+import 'attachment_viewer_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final String ticketId;
@@ -630,6 +631,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   String _formatDateShort(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  String _formatInspectionHoursDisplay(double h, AppLocalizations l10n) {
+    if (h < 1) {
+      final mins = (h * 60).round();
+      return l10n.t('inspection_minutes', {'m': '$mins'});
+    }
+    return l10n.t('inspection_hours', {'h': h.toStringAsFixed(1)});
+  }
+
   List<Widget> _buildContent() {
     final t = _ticket!;
     final l10n = AppLocalizations.of(context);
@@ -650,6 +659,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _row(l10n.t('sla'), t.slaHours != null ? '${t.slaHours} ${l10n.t('hours')}' : '-'),
         _row(l10n.t('created'), fmt.format(t.createdAt)),
         if (t.completedAt != null) _row(l10n.t('section_completed'), t.completedAt!),
+        if (t.inspectionHours != null)
+          _row(l10n.t('inspection_time'), _formatInspectionHoursDisplay(t.inspectionHours!, l10n)),
         if (siteUpdated != null)
           _row(l10n.t('site_last_updated'), _formatDateShort(siteUpdated)),
       ]),
@@ -998,82 +1009,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: t.attachmentUrls.asMap().entries.map((e) {
-                final url = e.value;
-                final idx = e.key;
-                final isImage = url.toLowerCase().contains('image') ||
-                    RegExp(r'\.(jpe?g|png|gif|webp)$').hasMatch(url);
-                final displayUrl =
-                    url.startsWith('http') ? url : (url.startsWith('/') ? '${ApiConfig.baseUrl}$url' : '${ApiConfig.baseUrl}/$url');
-                return InkWell(
-                  key: ValueKey(idx),
-                  onTap: () async {
-                    final uri = Uri.tryParse(displayUrl);
-                    if (uri != null) {
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      } else {
-                        await Clipboard.setData(ClipboardData(text: displayUrl));
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(AppLocalizations.of(context).t('url_copied'))),
-                          );
-                        }
-                      }
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A2E),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: _accentColor.withAlpha(60)),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(11)),
-                          child: isImage
-                              ? Image.network(displayUrl,
-                                  height: 64,
-                                  width: 80,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    height: 64,
-                                    width: 80,
-                                    color: const Color(0xFF0A0A1F),
-                                    child: Icon(Icons.broken_image,
-                                        color: Colors.white.withAlpha(100)),
-                                  ))
-                              : Container(
-                                  height: 64,
-                                  width: 80,
-                                  color: const Color(0xFF0A0A1F),
-                                  child: Icon(Icons.picture_as_pdf,
-                                      color: _accentColor, size: 28),
-                                ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 4),
-                          child: Text(
-                            url.split('/').last,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: Colors.white.withAlpha(180),
-                                fontSize: 10),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+              children: t.attachmentUrls
+                  .map((url) => _buildAttachmentThumbnail(url, l10n))
+                  .toList(),
             ),
           ),
         ]),
@@ -1705,6 +1643,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   ),
                 ),
               ),
+              if (t.hasPendingEngineerNcrResponse &&
+                  t.ncrResubmissions.isNotEmpty) ...[
+                _resubmittedAttachmentsSection(t.ncrResubmissions.last, l10n),
+                const SizedBox(height: 12),
+              ],
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
@@ -1784,6 +1727,102 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _resubmittedAttachmentsSection(NcrResubmission r, AppLocalizations l10n) {
+    if (r.imageUrls.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.t('resubmitted_evidence'),
+            style: TextStyle(
+              color: Colors.white.withAlpha(140),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: r.imageUrls.asMap().entries.map((e) {
+              final url = e.value;
+              return _buildAttachmentThumbnail(url, l10n);
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentThumbnail(String url, AppLocalizations l10n) {
+    final displayUrl = url.startsWith('http')
+        ? url
+        : (url.startsWith('/') ? '${ApiConfig.baseUrl}$url' : '${ApiConfig.baseUrl}/$url');
+    final isImage = url.toLowerCase().contains('image') ||
+        RegExp(r'\.(jpe?g|png|gif|webp)$').hasMatch(url);
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AttachmentViewerScreen(
+            url: url,
+            label: url.split('/').last,
+          ),
+        ),
+      ),
+      child: Container(
+        width: 80,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF00D4AA).withAlpha(60)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+              child: SizedBox(
+                width: 80,
+                height: 64,
+                child: isImage
+                    ? Image.network(
+                        displayUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFF0A0A1F),
+                          child: Icon(Icons.broken_image,
+                              color: Colors.white.withAlpha(100)),
+                        ),
+                      )
+                    : Container(
+                        color: const Color(0xFF0A0A1F),
+                        child: Icon(Icons.insert_photo,
+                            color: _accentColor, size: 28),
+                      ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Text(
+                url.split('/').last,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withAlpha(180),
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

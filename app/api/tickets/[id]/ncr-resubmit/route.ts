@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+
+const prisma = _prisma as any;
 
 export async function POST(
   req: NextRequest,
@@ -62,6 +64,24 @@ export async function POST(
       where: { id },
       data: { company: JSON.stringify(parsed) },
     });
+
+    // Notify assigned engineer of NCR resubmission
+    const assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+    const siteName = typeof parsed.siteName === 'string' ? parsed.siteName : 'Ticket';
+    if (assignedEngineerId && typeof prisma.notification?.create === 'function') {
+      try {
+        await prisma.notification.create({
+          data: {
+            type: 'status_changed',
+            title: 'NCR resubmitted',
+            message: `Requester resubmitted NCR for ${siteName}. Review and respond.`,
+            ticketId: id,
+            requesterId: assignedEngineerId,
+            forAdmin: false,
+          },
+        });
+      } catch { /* ignore */ }
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

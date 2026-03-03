@@ -8,11 +8,14 @@ import '../providers/tickets_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../widgets/language_selector.dart';
 import '../models/ticket.dart';
+import '../models/conflict.dart';
 import '../widgets/ticket_card.dart';
 import 'ticket_detail_screen.dart';
 import 'notifications_screen.dart';
 import 'site_form_screen.dart';
+import 'conflict_detail_screen.dart';
 import '../providers/sites_provider.dart';
+import '../providers/conflicts_provider.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -34,10 +37,12 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
   Future<void> _loadData() async {
     final tickets = context.read<TicketsProvider>();
     final sites = context.read<SitesProvider>();
+    final conflicts = context.read<ConflictsProvider>();
     await Future.wait([
       tickets.fetchTickets(),
       tickets.loadProvinceFilter(),
       sites.fetchSites(),
+      conflicts.fetchConflicts(),
     ]);
   }
 
@@ -67,6 +72,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
             child: IndexedStack(
               index: _currentTab,
               children: const [
+                _EngineerInboxTab(),
                 _AvailableTicketsTab(),
                 _MyTicketsTab(),
                 _EngineerSitesTab(),
@@ -97,6 +103,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
               unselectedFontSize: 10,
               elevation: 0,
               items: [
+                _navItem(Icons.mail_rounded, l10n.t('nav_inbox')),
                 _navItem(Icons.inbox_rounded, l10n.t('nav_available')),
                 _navItem(Icons.assignment_turned_in_rounded, l10n.t('nav_my_tickets')),
                 _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
@@ -125,6 +132,304 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
         ),
       ),
       label: label,
+    );
+  }
+}
+
+// ─── Engineer Inbox Tab (NCR resubmits + conflicts) ───
+class _EngineerInboxTab extends StatelessWidget {
+  const _EngineerInboxTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Consumer3<TicketsProvider, ConflictsProvider, AuthProvider>(
+      builder: (context, tickets, conflicts, auth, _) {
+        final ncrTickets = tickets.ticketsPendingNcrResponse;
+        final currentUserId = auth.user?.id;
+        final myConflicts = currentUserId == null
+            ? <ConflictCase>[]
+            : conflicts.pendingConflicts
+                .where((c) => c.assignedEngineerId == currentUserId)
+                .toList();
+        final hasNcr = ncrTickets.isNotEmpty;
+        final hasConflicts = myConflicts.isNotEmpty;
+        final isLoading = tickets.loading && tickets.tickets.isEmpty;
+
+        if (isLoading) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            await Future.wait([
+              tickets.fetchTickets(),
+              conflicts.fetchConflicts(),
+            ]);
+          },
+          color: const Color(0xFF6C63FF),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  children: [
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                      ).createShader(bounds),
+                      child: Text(
+                        l10n.t('nav_inbox'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Consumer<NotificationsProvider>(
+                      builder: (context, notifProvider, _) {
+                        final count = notifProvider.unreadCount;
+                        return GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const NotificationsScreen()),
+                          ),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Icon(
+                                Icons.notifications_outlined,
+                                color: Colors.white.withAlpha(150),
+                                size: 26,
+                              ),
+                              if (count > 0)
+                                Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFFF4757),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                        minWidth: 18, minHeight: 18),
+                                    child: Text(
+                                      count > 99 ? '99+' : '$count',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              if (!hasNcr && !hasConflicts)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(48),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inbox_outlined,
+                            size: 64, color: Colors.white.withAlpha(60)),
+                        const SizedBox(height: 20),
+                        Text(
+                          l10n.t('inbox_empty'),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(150),
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else ...[
+                if (hasNcr) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      l10n.t('inbox_ncr_resubmits'),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(140),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  ...ncrTickets.map((t) => _InboxNcrCard(ticket: t)),
+                  const SizedBox(height: 20),
+                ],
+                if (hasConflicts) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      l10n.t('inbox_conflicts'),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(140),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  ...myConflicts.map((c) => _InboxConflictCard(conflict: c)),
+                ],
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InboxNcrCard extends StatelessWidget {
+  final Ticket ticket;
+  const _InboxNcrCard({required this.ticket});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TicketDetailScreen(ticketId: ticket.id),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF4757).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x40FF4757)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF4757).withAlpha(25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.reply_all_rounded,
+                  color: Color(0xFFFF6B81), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ticket.siteName ?? l10n.t('unknown_site'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.t('ncr_resubmitted_from_requester'),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(140),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFFFF6B81), size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InboxConflictCard extends StatelessWidget {
+  final ConflictCase conflict;
+  const _InboxConflictCard({required this.conflict});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConflictDetailScreen(conflictId: conflict.id),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBBF24).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x40FBBF24)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBBF24).withAlpha(25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.gavel_rounded,
+                  color: Color(0xFFFBBF24), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    conflict.siteName ?? conflict.ticketId,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.t('conflict'),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(140),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFFFBBF24), size: 24),
+          ],
+        ),
+      ),
     );
   }
 }

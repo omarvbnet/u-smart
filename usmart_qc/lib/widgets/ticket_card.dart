@@ -136,6 +136,9 @@ class TicketCard extends StatelessWidget {
                               .format(ticket.createdAt)),
                       if (ticket.slaHours != null)
                         _chip(Icons.schedule, '${ticket.slaHours}${l10n.t('h_sla')}'),
+                      if (ticket.isCompleted && ticket.inspectionHours != null)
+                        _chip(Icons.timer_rounded,
+                            _formatInspectionHours(ticket.inspectionHours!)),
                       if (ticket.isAssigned)
                         _chip(
                           Icons.person,
@@ -265,4 +268,9 @@ class TicketCard extends StatelessWidget {
 
   String _shortId(String id) =>
       id.length > 8 ? id.substring(id.length - 8) : id;
+
+  static String _formatInspectionHours(double h) {
+    if (h < 1) return '${(h * 60).round()}m';
+    return '${h.toStringAsFixed(1)}h';
+  }
 }

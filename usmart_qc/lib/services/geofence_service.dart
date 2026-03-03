@@ -10,7 +10,6 @@ class GeofenceService {
   final ApiService _api;
   final NotificationService _notifications;
   StreamSubscription<Position>? _positionSub;
-  final Map<String, Timer> _inProgressTimers = {};
   List<Site> _sites = [];
   List<Ticket> _tickets = [];
   bool _running = false;
@@ -58,10 +57,6 @@ class GeofenceService {
     _running = false;
     _positionSub?.cancel();
     _positionSub = null;
-    for (final timer in _inProgressTimers.values) {
-      timer.cancel();
-    }
-    _inProgressTimers.clear();
   }
 
   void _onPosition(Position pos) {
@@ -82,6 +77,7 @@ class GeofenceService {
   }
 
   Future<void> _onEnteredSite(Site site) async {
+    // Tickets that are pending and belong to this site
     final pendingTickets = _tickets
         .where((t) =>
             t.isPending &&
@@ -90,7 +86,7 @@ class GeofenceService {
         .toList();
 
     for (final ticket in pendingTickets) {
-      await _updateStatus(ticket.id, 'ON_SITE', site.siteId);
+      await _updateStatus(ticket.id, 'IN_PROGRESS', site.siteId);
     }
   }
 
@@ -103,18 +99,11 @@ class GeofenceService {
       );
 
       if (data['success'] == true) {
-        if (newStatus == 'ON_SITE') {
+        if (newStatus == 'IN_PROGRESS') {
           _notifications.show(
             id: ticketId.hashCode,
-            title: 'Arrived at $siteName',
-            body: 'Status changed to On Site',
-          );
-          _startInProgressTimer(ticketId, siteName);
-        } else if (newStatus == 'IN_PROGRESS') {
-          _notifications.show(
-            id: ticketId.hashCode + 1,
-            title: siteName,
-            body: 'Ticket now In Progress',
+            title: 'Near $siteName',
+            body: 'Ticket set to In Progress (within 500m)',
           );
         }
         onTicketStatusChanged?.call();
@@ -124,11 +113,4 @@ class GeofenceService {
     }
   }
 
-  void _startInProgressTimer(String ticketId, String siteName) {
-    _inProgressTimers[ticketId]?.cancel();
-    _inProgressTimers[ticketId] = Timer(
-      Duration(minutes: ApiConfig.autoInProgressMinutes),
-      () => _updateStatus(ticketId, 'IN_PROGRESS', siteName),
-    );
-  }
 }

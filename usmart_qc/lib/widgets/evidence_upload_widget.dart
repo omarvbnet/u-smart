@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/evidence.dart';
+import '../screens/attachment_viewer_screen.dart';
 
 class EvidenceUploadWidget extends StatelessWidget {
   final List<TicketEvidence> evidence;
@@ -82,16 +83,26 @@ class EvidenceUploadWidget extends StatelessWidget {
                 itemCount: evidence.length,
                 itemBuilder: (context, index) {
                   final e = evidence[index];
-                  return Container(
-                    width: 120,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(5),
-                      borderRadius: BorderRadius.circular(14),
-                      border:
-                          Border.all(color: Colors.white.withAlpha(10)),
+                  return GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AttachmentViewerScreen(
+                          url: e.fileUrl,
+                          label: e.description ?? e.fileUrl.split('/').last,
+                        ),
+                      ),
                     ),
-                    child: Column(
+                    child: Container(
+                      width: 120,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(5),
+                        borderRadius: BorderRadius.circular(14),
+                        border:
+                            Border.all(color: Colors.white.withAlpha(10)),
+                      ),
+                      child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (e.isImage)
@@ -140,6 +151,7 @@ class EvidenceUploadWidget extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
                     ),
                   );
                 },

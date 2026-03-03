@@ -140,6 +140,24 @@ class Ticket {
   bool get isAssigned => assignedEngineerId != null;
   bool get canBeAssigned => isPending && !isAssigned;
 
+  /// Inspection duration in hours (from first ON_SITE/IN_PROGRESS to completedAt). Null if not completed.
+  double? get inspectionHours {
+    if (completedAt == null || completedAt!.isEmpty) return null;
+    final completed = DateTime.tryParse(completedAt!);
+    if (completed == null) return null;
+    DateTime? start;
+    for (final log in statusTimeline) {
+      final s = log.status.toUpperCase();
+      if (s == 'ON_SITE' || s == 'IN_PROGRESS') {
+        if (start == null || log.createdAt.isBefore(start)) {
+          start = log.createdAt;
+        }
+      }
+    }
+    start ??= createdAt;
+    return completed.difference(start).inMilliseconds / (1000 * 60 * 60);
+  }
+
   factory Ticket.fromJson(Map<String, dynamic> json) {
     return Ticket(
       id: json['id'] as String,

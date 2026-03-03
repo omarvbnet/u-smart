@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/sites_provider.dart';
+import 'site_map_picker_screen.dart';
 
 /// Screen for adding a new site or editing an existing one.
 class SiteFormScreen extends StatefulWidget {
@@ -20,6 +22,9 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   final _siteIdCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
+  final _coordinatesCtrl = TextEditingController();
+  double? _latitude;
+  double? _longitude;
   bool _submitting = false;
 
   @override
@@ -29,6 +34,12 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
       _siteIdCtrl.text = widget.site!.siteId;
       _locationCtrl.text = widget.site!.location;
       _provinceCtrl.text = widget.site!.province;
+      if (widget.site!.latitude != null && widget.site!.longitude != null) {
+        _latitude = widget.site!.latitude;
+        _longitude = widget.site!.longitude;
+        _coordinatesCtrl.text =
+            '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}';
+      }
     }
   }
 
@@ -37,7 +48,31 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
     _siteIdCtrl.dispose();
     _locationCtrl.dispose();
     _provinceCtrl.dispose();
+    _coordinatesCtrl.dispose();
     super.dispose();
+  }
+
+  void _applyCoordinates(double lat, double lng) {
+    setState(() {
+      _latitude = lat;
+      _longitude = lng;
+      _coordinatesCtrl.text =
+          '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+    });
+  }
+
+  Future<void> _openMapPicker() async {
+    final result = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (context) => SiteMapPickerScreen(
+          initialLat: _latitude,
+          initialLng: _longitude,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      _applyCoordinates(result.latitude, result.longitude);
+    }
   }
 
   Future<void> _submit() async {
@@ -64,13 +99,21 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
 
     bool success;
     if (widget.isEditing) {
-      success = await provider.updateSite(widget.site!.id,
-          siteId: siteId, location: location, province: province);
+      success = await provider.updateSite(
+        widget.site!.id,
+        siteId: siteId,
+        location: location,
+        province: province,
+        latitude: _latitude,
+        longitude: _longitude,
+      );
     } else {
       success = await provider.createSite(
         siteId: siteId,
         location: location,
         province: province,
+        latitude: _latitude,
+        longitude: _longitude,
       );
     }
 
@@ -140,6 +183,60 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
             hint: l10n.t('site_province_hint'),
             icon: Icons.map_outlined,
           ),
+          const SizedBox(height: 16),
+          _CoordinateSearchField(
+            controller: _coordinatesCtrl,
+            label: l10n.t('site_search_by_coords'),
+            hint: l10n.t('site_coordinates_hint'),
+            onApply: (lat, lng) {
+              _applyCoordinates(lat, lng);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${l10n.t('site_coordinates')}: ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'),
+                    backgroundColor: const Color(0xFF00D4AA),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            onParseError: () {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.t('site_coords_invalid')),
+                    backgroundColor: const Color(0xFFFF4757),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openMapPicker,
+              icon: const Icon(Icons.map, size: 20),
+              label: Text(l10n.t('site_select_on_map')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: Colors.white.withAlpha(100)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          if (_latitude != null && _longitude != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '${l10n.t('site_coordinates')}: ${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
+                style: const TextStyle(
+                  color: Color(0xFF6C63FF),
+                  fontSize: 13,
+                ),
+              ),
+            ),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -164,6 +261,95 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CoordinateSearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final void Function(double lat, double lng) onApply;
+  final VoidCallback onParseError;
+
+  const _CoordinateSearchField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.onApply,
+    required this.onParseError,
+  });
+
+  bool _tryParse(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    final parts = trimmed.split(RegExp(r'[,\s]+'));
+    if (parts.length < 2) return false;
+    final lat = double.tryParse(parts[0].trim());
+    final lng = double.tryParse(parts[1].trim());
+    if (lat == null ||
+        lng == null ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180) {
+      return false;
+    }
+    onApply(lat, lng);
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          onSubmitted: (v) {
+            if (!_tryParse(v)) onParseError();
+          },
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+            prefixIcon: const Icon(
+              Icons.gps_fixed,
+              color: Color(0xFF6C63FF),
+              size: 20,
+            ),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.check_circle_outline, color: Color(0xFF6C63FF)),
+              onPressed: () {
+                if (!_tryParse(controller.text)) onParseError();
+              },
+            ),
+            filled: true,
+            fillColor: const Color(0xFF12122A),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.white.withAlpha(15)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
