@@ -628,6 +628,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return null;
   }
 
+  /// NCR is resolved when engineer has approved the last resubmission (checklist reopened for re-inspection)
+  bool _isNcrResolved(Ticket t) {
+    if (!t.isNcr || t.ncrResubmissions.isEmpty) return false;
+    return t.ncrResubmissions.last.action == 'approved';
+  }
+
+  /// Site coordinates for ticket's site (from SitesProvider lookup)
+  ({double lat, double lng})? get _siteCoordinates {
+    final t = _ticket;
+    if (t?.siteName == null) return null;
+    try {
+      for (final s in context.read<SitesProvider>().sites) {
+        if (s.siteId == t!.siteName && s.hasCoordinates) {
+          return (lat: s.latitude!, lng: s.longitude!);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   String _formatDateShort(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -663,6 +683,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           _row(l10n.t('inspection_time'), _formatInspectionHoursDisplay(t.inspectionHours!, l10n)),
         if (siteUpdated != null)
           _row(l10n.t('site_last_updated'), _formatDateShort(siteUpdated)),
+        if (_siteCoordinates != null)
+          _row(l10n.t('site_coordinates'),
+              '${_siteCoordinates!.lat.toStringAsFixed(6)}, ${_siteCoordinates!.lng.toStringAsFixed(6)}'),
       ]),
 
       // Requester / POC
@@ -948,6 +971,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ncrEngineerResponseSection(t, l10n),
       ],
 
+      // NCR resubmission records (each resubmit action as a record)
+      if (t.ncrResubmissions.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _ncrResubmitRecordsSection(t, l10n),
+      ],
+
       // Conflict button (company only, when result is not_accepted/ncr/accepted_with_comments)
       if (!isEngineer && t.isCompleted && t.isConflictResult) ...[
         const SizedBox(height: 16),
@@ -974,9 +1003,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           uploading: _uploading,
           onPickImage: _pickAndUploadImage,
           onPickFile: _pickAndUploadFile,
+          showUploadButtons: !t.isCompleted,
         ),
       ),
-      if (isEngineer && isMyTicket && !t.isCompleted) ...[
+      if (isEngineer &&
+          isMyTicket &&
+          !t.isCompleted &&
+          (!t.isNcr || _isNcrResolved(t))) ...[
         const SizedBox(height: 16),
         _glassContainer(
           ChecklistWidget(
@@ -1479,6 +1512,122 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         );
       }
     }
+  }
+
+  Widget _ncrResubmitRecordsSection(Ticket t, AppLocalizations l10n) {
+    return _glassSection(l10n.t('ncr_resubmit_records'), [
+      ...t.ncrResubmissions.asMap().entries.map((entry) {
+        final i = entry.key + 1;
+        final r = entry.value;
+        final roleLabel = r.by == 'requester'
+            ? l10n.t('requester')
+            : (r.by == 'engineer' ? l10n.t('engineer') : r.by);
+        final actionLabel = r.action == 'resubmit'
+            ? l10n.t('resubmit')
+            : (r.action == 'approved'
+                ? l10n.t('ncr_approved')
+                : (r.action == 'rework' ? l10n.t('ncr_rework') : r.action));
+        final dateStr = r.at.isNotEmpty
+            ? _formatDateShort(DateTime.tryParse(r.at) ?? DateTime.now())
+            : '';
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(5),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withAlpha(10)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C63FF).withAlpha(25),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '#$i',
+                        style: const TextStyle(
+                          color: Color(0xFF8B83FF),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      dateStr,
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(120),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (r.action == 'approved'
+                                ? const Color(0xFF00D4AA)
+                                : r.action == 'rework'
+                                    ? const Color(0xFFFBBF24)
+                                    : const Color(0xFF6C63FF))
+                            .withAlpha(30),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        actionLabel,
+                        style: TextStyle(
+                          color: r.action == 'approved'
+                              ? const Color(0xFF00D4AA)
+                              : r.action == 'rework'
+                                  ? const Color(0xFFFBBF24)
+                                  : const Color(0xFF8B83FF),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.t('ncr_record_by', {'role': roleLabel}),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 12,
+                  ),
+                ),
+                if (r.comment != null && r.comment!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    r.comment!,
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(180),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                if (r.imageUrls.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: r.imageUrls
+                        .map((url) => _buildAttachmentThumbnail(url, l10n))
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }),
+    ]);
   }
 
   Widget _ncrSection(Ticket t, AppLocalizations l10n) {

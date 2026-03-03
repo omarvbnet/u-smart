@@ -154,9 +154,24 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
           }
           if (c == null) {
             return Center(
-              child: Text(
-                l10n.t('ticket_not_found'),
-                style: TextStyle(color: Colors.white.withAlpha(120)),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline_rounded,
+                        size: 48, color: Colors.white.withAlpha(120)),
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.t('conflict_load_failed'),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(180),
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             );
           }

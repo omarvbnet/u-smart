@@ -123,7 +123,7 @@ class Ticket {
   bool get isOnSite => status == 'ON_SITE';
   bool get isInProgress => status == 'IN_PROGRESS';
   bool get isCompleted => status == 'COMPLETED';
-  bool get isNcr => inspectionResult == 'ncr';
+  bool get isNcr => (inspectionResult ?? '').toLowerCase() == 'ncr';
 
   /// True when requester has resubmitted and engineer has not yet responded
   bool get hasPendingEngineerNcrResponse {

@@ -1,0 +1,195 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma as _prisma } from '@/lib/prisma';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
+
+const prisma = _prisma as any;
+
+const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
+const VALID_RESOLUTIONS = ['accepted', 'not_accepted', 'ncr', 'accepted_with_comments', 're_inspection', 'keep_same'];
+
+function rowToConflict(row: any): any {
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+  } catch {
+    return null;
+  }
+  return {
+    id: row.id,
+    ticketId: row.id,
+    siteName: parsed.siteName ?? null,
+    siteCoordinator: parsed.siteCoordinator ?? null,
+    assignedEngineerId: parsed.assignedEngineerId ?? null,
+    assignedEngineerName: parsed.assignedEngineerName ?? null,
+    inspectionResult: (parsed.inspectionResult as string) ?? 'not_accepted',
+    inspectionComments: parsed.inspectionComments ?? null,
+    ncrReason: parsed.ncrReason ?? null,
+    inspectionChecklist: Array.isArray(parsed.inspectionChecklist)
+      ? parsed.inspectionChecklist
+      : null,
+    status: (parsed.conflictStatus as string) ?? 'pending',
+    resolvedBy: parsed.conflictResolvedBy ?? null,
+    resolvedAt: parsed.conflictResolvedAt ?? null,
+    resolution: parsed.conflictResolution ?? null,
+    reportedBy: parsed.conflictReportedBy ?? null,
+    reportedAt: parsed.conflictReportedAt ?? null,
+  };
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
+    return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+  }
+
+  let requesterRole = 'COMPANY';
+  try {
+    const reqRow = await prisma.ticketRequester.findUnique({
+      where: { id: auth.payload.requesterId },
+      select: { role: true },
+    });
+    requesterRole = reqRow?.role ?? 'COMPANY';
+  } catch {
+    /* ignore */
+  }
+
+  const { id } = await params;
+  if (!id) {
+    return NextResponse.json({ success: false, message: 'Conflict ID required' }, { status: 400 });
+  }
+
+  try {
+    const row = await prisma.visitorRequest.findUnique({
+      where: { id },
+      select: { id: true, company: true, status: true, requesterId: true },
+    });
+
+    if (!row) {
+      return NextResponse.json({ success: false, message: 'Conflict not found' }, { status: 404 });
+    }
+
+    let parsedCheck: Record<string, unknown> = {};
+    try {
+      parsedCheck = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+    } catch {
+      return NextResponse.json({ success: false, message: 'Invalid ticket data' }, { status: 500 });
+    }
+    const assignedEngineerId = parsedCheck.assignedEngineerId as string | undefined;
+    const isOwner = row.requesterId === auth.payload.requesterId;
+    const isAssigned = assignedEngineerId === auth.payload.requesterId;
+    if (!isOwner && !isAssigned) {
+      return NextResponse.json({ success: false, message: 'Conflict not found' }, { status: 404 });
+    }
+
+    if (parsedCheck.conflictReported !== true && row.status === 'COMPLETED') {
+      const ir = ((parsedCheck.inspectionResult as string) ?? '').toLowerCase();
+      if (CONFLICT_RESULTS.includes(ir)) {
+        parsedCheck.conflictReported = true;
+        parsedCheck.conflictStatus = 'pending';
+      }
+    }
+
+    const conflict = rowToConflict({ ...row, company: JSON.stringify(parsedCheck) });
+    return NextResponse.json({ success: true, conflict });
+  } catch (err) {
+    console.error('GET /api/conflicts/[id]:', err);
+    return NextResponse.json(
+      { success: false, message: 'Failed to fetch conflict' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
+    return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+  }
+
+  let requesterRole = 'COMPANY';
+  try {
+    const reqRow = await prisma.ticketRequester.findUnique({
+      where: { id: auth.payload.requesterId },
+      select: { role: true },
+    });
+    requesterRole = reqRow?.role ?? 'COMPANY';
+  } catch {
+    /* ignore */
+  }
+
+  if (requesterRole !== 'ENGINEER') {
+    return NextResponse.json({ success: false, message: 'Only engineers can resolve conflicts' }, { status: 403 });
+  }
+
+  const { id } = await params;
+  if (!id) {
+    return NextResponse.json({ success: false, message: 'Conflict ID required' }, { status: 400 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const resolution = typeof body.resolution === 'string' ? body.resolution.trim() : null;
+  const comment = typeof body.comment === 'string' ? body.comment.trim() : null;
+
+  if (!resolution || !VALID_RESOLUTIONS.includes(resolution)) {
+    return NextResponse.json(
+      { success: false, message: `Invalid resolution. Must be one of: ${VALID_RESOLUTIONS.join(', ')}` },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const ticket = await prisma.visitorRequest.findFirst({
+      where: {
+        id,
+        company: { contains: auth.payload.requesterId },
+      },
+      select: { id: true, company: true, requesterId: true },
+    });
+
+    if (!ticket) {
+      return NextResponse.json({ success: false, message: 'Conflict not found or not assigned to you' }, { status: 404 });
+    }
+
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
+    } catch {
+      return NextResponse.json({ success: false, message: 'Invalid ticket data' }, { status: 500 });
+    }
+
+    parsed.conflictStatus = resolution === 're_inspection' || resolution === 'keep_same' ? 're_inspection' : 'resolved';
+    parsed.conflictResolvedBy = auth.payload.requesterId;
+    parsed.conflictResolvedAt = new Date().toISOString();
+    parsed.conflictResolution = resolution;
+    if (comment) parsed.conflictResolutionComment = comment;
+
+    if (resolution === 're_inspection') {
+      parsed.inspectionResult = null;
+      parsed.inspectionComments = null;
+      parsed.inspectionChecklist = null;
+      parsed.checklistResponse = null;
+    } else if (resolution !== 'keep_same') {
+      parsed.inspectionResult = resolution;
+    }
+
+    await prisma.visitorRequest.update({
+      where: { id },
+      data: { company: JSON.stringify(parsed) },
+    });
+
+    const conflict = rowToConflict({ ...ticket, company: JSON.stringify(parsed) });
+    return NextResponse.json({ success: true, conflict });
+  } catch (err) {
+    console.error('PATCH /api/conflicts/[id]:', err);
+    return NextResponse.json(
+      { success: false, message: 'Failed to resolve conflict' },
+      { status: 500 }
+    );
+  }
+}

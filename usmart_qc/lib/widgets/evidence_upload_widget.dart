@@ -10,6 +10,8 @@ class EvidenceUploadWidget extends StatelessWidget {
   final bool uploading;
   final VoidCallback onPickImage;
   final VoidCallback onPickFile;
+  /// When false, upload buttons (photo/file) are hidden (e.g. ticket completed)
+  final bool showUploadButtons;
 
   const EvidenceUploadWidget({
     super.key,
@@ -18,6 +20,7 @@ class EvidenceUploadWidget extends StatelessWidget {
     required this.uploading,
     required this.onPickImage,
     required this.onPickFile,
+    this.showUploadButtons = true,
   });
 
   @override
@@ -166,11 +169,12 @@ class EvidenceUploadWidget extends StatelessWidget {
                     color: Colors.white.withAlpha(60), fontSize: 13),
               ),
             ),
-          const SizedBox(height: 12),
-          // Upload buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
+          if (showUploadButtons) ...[
+            const SizedBox(height: 12),
+            // Upload buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
               children: [
                 Expanded(
                   child: GestureDetector(
@@ -240,8 +244,9 @@ class EvidenceUploadWidget extends StatelessWidget {
               ],
             ),
           ),
+          ],
+          const SizedBox(height: 8),
         ],
-        const SizedBox(height: 8),
       ],
     );
   }

@@ -6,6 +6,29 @@ import '../models/site.dart';
 import '../providers/sites_provider.dart';
 import 'site_map_picker_screen.dart';
 
+/// Iraq provinces (19 governorates)
+const List<String> _iraqProvinces = [
+  'Al-Anbar',
+  'Babil',
+  'Baghdad',
+  'Basra',
+  'Dhi Qar',
+  'Al-Qadisiyyah',
+  'Diyala',
+  'Duhok',
+  'Erbil',
+  'Halabja',
+  'Karbala',
+  'Kirkuk',
+  'Maysan',
+  'Muthanna',
+  'Najaf',
+  'Ninawa',
+  'Salah Al-Din',
+  'Sulaymaniyah',
+  'Wasit',
+];
+
 /// Screen for adding a new site or editing an existing one.
 class SiteFormScreen extends StatefulWidget {
   final Site? site;
@@ -21,8 +44,8 @@ class SiteFormScreen extends StatefulWidget {
 class _SiteFormScreenState extends State<SiteFormScreen> {
   final _siteIdCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
-  final _provinceCtrl = TextEditingController();
   final _coordinatesCtrl = TextEditingController();
+  String? _selectedProvince;
   double? _latitude;
   double? _longitude;
   bool _submitting = false;
@@ -33,7 +56,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
     if (widget.site != null) {
       _siteIdCtrl.text = widget.site!.siteId;
       _locationCtrl.text = widget.site!.location;
-      _provinceCtrl.text = widget.site!.province;
+      _selectedProvince = widget.site!.province;
       if (widget.site!.latitude != null && widget.site!.longitude != null) {
         _latitude = widget.site!.latitude;
         _longitude = widget.site!.longitude;
@@ -47,7 +70,6 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   void dispose() {
     _siteIdCtrl.dispose();
     _locationCtrl.dispose();
-    _provinceCtrl.dispose();
     _coordinatesCtrl.dispose();
     super.dispose();
   }
@@ -78,7 +100,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   Future<void> _submit() async {
     final siteId = _siteIdCtrl.text.trim();
     final location = _locationCtrl.text.trim();
-    final province = _provinceCtrl.text.trim();
+    final province = _selectedProvince ?? '';
 
     if (siteId.isEmpty || location.isEmpty || province.isEmpty) {
       final l10n = AppLocalizations.of(context);
@@ -177,11 +199,18 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
             icon: Icons.location_on_outlined,
           ),
           const SizedBox(height: 16),
-          _TextField(
-            controller: _provinceCtrl,
+          _ProvinceDropdown(
             label: l10n.t('site_province'),
             hint: l10n.t('site_province_hint'),
-            icon: Icons.map_outlined,
+            value: _selectedProvince,
+            items: [
+              ..._iraqProvinces,
+              if (widget.isEditing &&
+                  widget.site!.province.isNotEmpty &&
+                  !_iraqProvinces.contains(widget.site!.province))
+                widget.site!.province,
+            ],
+            onChanged: (v) => setState(() => _selectedProvince = v),
           ),
           const SizedBox(height: 16),
           _CoordinateSearchField(
@@ -261,6 +290,72 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProvinceDropdown extends StatelessWidget {
+  final String label;
+  final String hint;
+  final String? value;
+  final List<String> items;
+  final void Function(String?) onChanged;
+
+  const _ProvinceDropdown({
+    required this.label,
+    required this.hint,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value != null && items.contains(value) ? value : null,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+            prefixIcon: const Icon(
+              Icons.map_outlined,
+              color: Color(0xFF6C63FF),
+              size: 20,
+            ),
+            filled: true,
+            fillColor: const Color(0xFF12122A),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.white.withAlpha(15)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+            ),
+          ),
+          dropdownColor: const Color(0xFF12122A),
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF6C63FF)),
+          items: items.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
