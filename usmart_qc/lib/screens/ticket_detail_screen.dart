@@ -876,8 +876,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           }),
         ]),
       ],
-      if (t.isCompleted &&
-          t.inspectionChecklist != null &&
+      if (t.inspectionChecklist != null &&
           t.inspectionChecklist!.isNotEmpty) ...[
         const SizedBox(height: 16),
         _glassSection(l10n.t('inspection_checklist'), [
@@ -977,7 +976,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ncrResubmitRecordsSection(t, l10n),
       ],
 
-      // Conflict button (company only, when result is not_accepted/ncr/accepted_with_comments)
+      // Conflict button (company only, when result is ncr, not_accepted, or accepted_with_comments)
       if (!isEngineer && t.isCompleted && t.isConflictResult) ...[
         const SizedBox(height: 16),
         _conflictButton(t, l10n),
@@ -1714,31 +1713,62 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ],
           Padding(
             padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  final result = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          NcrResubmitScreen(ticketId: t.id),
+            child: t.hasPendingEngineerNcrResponse
+                ? Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6C63FF).withAlpha(20),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFF6C63FF).withAlpha(50),
+                      ),
                     ),
-                  );
-                  if (result == true) _load();
-                },
-                icon: const Icon(Icons.reply_rounded, size: 18),
-                label: Text(l10n.t('resubmit'),
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF4757),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 20,
+                          color: Colors.white.withAlpha(200),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          l10n.t('ncr_waiting_engineer'),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(200),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final result = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                NcrResubmitScreen(ticketId: t.id),
+                          ),
+                        );
+                        if (result == true) _load();
+                      },
+                      icon: const Icon(Icons.reply_rounded, size: 18),
+                      label: Text(l10n.t('resubmit'),
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF4757),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
           ),
         ],
       ),
