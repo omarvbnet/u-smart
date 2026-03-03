@@ -17,14 +17,17 @@ export async function POST(req: NextRequest) {
     if (!file || typeof file === 'string') {
       return NextResponse.json({ success: false, message: 'No file provided' }, { status: 400 });
     }
-    const rawType = file.type?.toLowerCase() || '';
+    const rawType = (file.type?.toLowerCase() || '').trim();
     const ext = (file.name?.split('.').pop() || '').toLowerCase();
     const extToType: Record<string, string> = {
       jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
       webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf',
       heic: 'image/heic', heif: 'image/heif',
     };
-    const fileType = rawType || extToType[ext] || 'image/jpeg';
+    // Mobile clients often send application/octet-stream; rely on extension in that case
+    const fileType = (rawType && rawType !== 'application/octet-stream')
+      ? rawType
+      : (extToType[ext] || 'image/jpeg');
     if (!ALLOWED_TYPES.includes(fileType)) {
       return NextResponse.json({ success: false, message: 'Allowed types: JPEG, PNG, WebP, GIF, HEIC, PDF' }, { status: 400 });
     }
