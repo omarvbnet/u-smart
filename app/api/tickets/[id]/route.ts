@@ -190,7 +190,7 @@ export async function GET(
 
     const req = (row as any).requester;
     const requesterName = req ? (req.name || req.username || null) : null;
-    const requesterRole = req?.role ?? null;
+    const ticketRequesterRole = req?.role ?? null;
     const requesterPhone = req?.phone ?? null;
 
     return NextResponse.json({
@@ -223,7 +223,7 @@ export async function GET(
         assignedAt,
         checklistHistory,
         requesterName,
-        requesterRole,
+        requesterRole: ticketRequesterRole,
         requesterPhone,
       },
     });
