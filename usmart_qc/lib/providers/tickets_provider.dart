@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../models/ticket.dart';
 import '../models/stats.dart';
@@ -23,7 +26,30 @@ class TicketsProvider extends ChangeNotifier {
   String? _province;
   bool _provinceFilterActive = true;
 
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+  bool _exporting = false;
+
   TicketsProvider(this._api, this._notifications);
+
+  DateTime? get dateFrom => _dateFrom;
+  DateTime? get dateTo => _dateTo;
+  bool get exporting => _exporting;
+
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  void setDateRange(DateTime? from, DateTime? to) {
+    _dateFrom = from;
+    _dateTo = to;
+    notifyListeners();
+  }
+
+  void clearDateRange() {
+    _dateFrom = null;
+    _dateTo = null;
+    notifyListeners();
+  }
 
   void setCurrentUserId(String? id) => _currentUserId = id;
 
@@ -70,6 +96,47 @@ class TicketsProvider extends ChangeNotifier {
   List<Ticket> get ncrTickets => _tickets.where((t) => t.isNcr).toList();
   List<Ticket> get unassignedTickets =>
       _tickets.where((t) => t.canBeAssigned).toList();
+
+  // Stats-card filtered lists (for tap-to-view related tickets)
+  List<Ticket> get ticketsWithinSla {
+    return _tickets.where((t) {
+      final sla = t.slaHours ?? 24;
+      if (t.isCompleted && t.completedAt != null) {
+        final completed = DateTime.tryParse(t.completedAt!);
+        if (completed == null) return false;
+        final hours = completed.difference(t.createdAt).inMilliseconds / (1000 * 60 * 60);
+        return hours <= sla;
+      }
+      return false;
+    }).toList();
+  }
+
+  List<Ticket> get ticketsOutOfSla {
+    final now = DateTime.now();
+    return _tickets.where((t) {
+      final sla = t.slaHours ?? 24;
+      if (t.isCompleted && t.completedAt != null) {
+        final completed = DateTime.tryParse(t.completedAt!);
+        if (completed == null) return false;
+        final hours = completed.difference(t.createdAt).inMilliseconds / (1000 * 60 * 60);
+        return hours > sla;
+      }
+      final hoursSince = now.difference(t.createdAt).inMilliseconds / (1000 * 60 * 60);
+      return hoursSince > sla;
+    }).toList();
+  }
+
+  List<Ticket> get ticketsAccepted =>
+      _tickets.where((t) => (t.inspectionResult ?? '').toLowerCase() == 'accepted').toList();
+
+  List<Ticket> get ticketsAcceptedWithComments =>
+      _tickets.where((t) => (t.inspectionResult ?? '').toLowerCase() == 'accepted_with_comments').toList();
+
+  List<Ticket> get ticketsNotAccepted =>
+      _tickets.where((t) => (t.inspectionResult ?? '').toLowerCase() == 'not_accepted').toList();
+
+  List<Ticket> get activeTickets =>
+      _tickets.where((t) => t.isOnSite || t.isInProgress).toList();
 
   // Engineer-specific: available tickets (PENDING + not assigned)
   List<Ticket> get availableTickets =>
@@ -150,9 +217,10 @@ class TicketsProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final data = await _api.get(ApiConfig.tickets, query: {
-        'serviceSlug': ApiConfig.serviceSlug,
-      });
+      final query = <String, String>{'serviceSlug': ApiConfig.serviceSlug};
+      if (_dateFrom != null) query['from'] = _formatDate(_dateFrom!);
+      if (_dateTo != null) query['to'] = _formatDate(_dateTo!);
+      final data = await _api.get(ApiConfig.tickets, query: query);
       if (data['success'] == true && data['tickets'] is List) {
         _tickets = (data['tickets'] as List)
             .map((e) => Ticket.fromJson(e as Map<String, dynamic>))
@@ -168,9 +236,10 @@ class TicketsProvider extends ChangeNotifier {
 
   Future<void> fetchStats() async {
     try {
-      final data = await _api.get(ApiConfig.ticketStats, query: {
-        'serviceSlug': ApiConfig.serviceSlug,
-      });
+      final query = <String, String>{'serviceSlug': ApiConfig.serviceSlug};
+      if (_dateFrom != null) query['from'] = _formatDate(_dateFrom!);
+      if (_dateTo != null) query['to'] = _formatDate(_dateTo!);
+      final data = await _api.get(ApiConfig.ticketStats, query: query);
       if (data['success'] == true && data['stats'] != null) {
         _stats =
             TicketStats.fromJson(data['stats'] as Map<String, dynamic>);
@@ -247,6 +316,50 @@ class TicketsProvider extends ChangeNotifier {
       return data['success'] == true;
     } catch (_) {}
     return false;
+  }
+
+  /// Engineer responds to requester NCR resubmission: 'approved' or 'rework'
+  Future<bool> submitNcrEngineerResponse(
+      String id, String action, {String? comment}) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ncrEngineerResponse(id),
+        body: {'action': action, if (comment != null && comment.isNotEmpty) 'comment': comment},
+      );
+      return data['success'] == true;
+    } catch (_) {}
+    return false;
+  }
+
+  /// Export tickets as Excel (CSV) for the current date range.
+  /// Shares file via system share sheet.
+  Future<String?> exportTicketsExcel() async {
+    _exporting = true;
+    notifyListeners();
+    try {
+      final query = <String, String>{
+        'serviceSlug': ApiConfig.serviceSlug,
+        'export': '1',
+        'format': 'csv',
+      };
+      if (_dateFrom != null) query['from'] = _formatDate(_dateFrom!);
+      if (_dateTo != null) query['to'] = _formatDate(_dateTo!);
+      final bytes = await _api.getBytes(ApiConfig.tickets, query: query);
+      if (bytes == null || bytes.isEmpty) return null;
+      final dir = await getTemporaryDirectory();
+      final dateStr = _dateFrom != null && _dateTo != null
+          ? '${_formatDate(_dateFrom!)}_to_${_formatDate(_dateTo!)}'
+          : DateTime.now().toIso8601String().split('T')[0];
+      final file = File('${dir.path}/dashboard-export-$dateStr.csv');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles([XFile(file.path)], text: 'Dashboard export');
+      return file.path;
+    } catch (_) {
+      return null;
+    } finally {
+      _exporting = false;
+      notifyListeners();
+    }
   }
 
   // ─── Comments ───

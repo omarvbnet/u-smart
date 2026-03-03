@@ -14,6 +14,7 @@ class ApiConfig {
   static String ticketAssign(String id) => '/api/tickets/$id/assign';
   static String ticketComplete(String id) => '/api/tickets/$id/complete';
   static String ncrResubmit(String id) => '/api/tickets/$id/ncr-resubmit';
+  static String ncrEngineerResponse(String id) => '/api/tickets/$id/ncr-engineer-response';
   static String ticketComments(String id) => '/api/tickets/$id/comments';
   static String ticketEvidence(String id) => '/api/tickets/$id/evidence';
   static const String ticketStats = '/api/tickets/stats';

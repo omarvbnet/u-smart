@@ -73,6 +73,15 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Download raw bytes (e.g. for CSV/Excel export).
+  Future<List<int>?> getBytes(String path, {Map<String, String>? query}) async {
+    try {
+      final response = await http.get(_uri(path, query), headers: _headers);
+      if (response.statusCode == 200) return response.bodyBytes;
+    } catch (_) {}
+    return null;
+  }
+
   Future<String?> uploadFile(String path, String filePath) async {
     try {
       final request = http.MultipartRequest('POST', _uri(path));

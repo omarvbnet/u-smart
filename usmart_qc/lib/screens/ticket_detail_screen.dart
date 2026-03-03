@@ -747,9 +747,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ]),
       ],
 
-      if (t.isNcr) ...[
+      // NCR Resubmit: requester only
+      if (t.isNcr && !isEngineer) ...[
         const SizedBox(height: 16),
         _ncrSection(t, l10n),
+      ],
+      // Engineer NCR response: when requester has resubmitted, show Approved/Rework
+      if (isEngineer && isMyTicket && t.isNcr && t.hasPendingEngineerNcrResponse) ...[
+        const SizedBox(height: 16),
+        _ncrEngineerResponseSection(t, l10n),
       ],
 
       // Conflict button (company only, when result is not_accepted/ncr/accepted_with_comments)
@@ -1441,6 +1447,181 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _ncrEngineerResponseSection(Ticket t, AppLocalizations l10n) {
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF12122A),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0x3000D4AA)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D4AA).withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.reply_all_rounded,
+                          color: Color(0xFF00D4AA), size: 16),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.t('ncr_resubmitted_from_requester'),
+                      style: const TextStyle(
+                        color: Color(0xFF00D4AA),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  l10n.t('ncr_engineer_response_hint'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final comment = await _showNcrReworkDialog(l10n);
+                          if (comment == null || !mounted) return;
+                          final ok = await context
+                              .read<TicketsProvider>()
+                              .submitNcrEngineerResponse(t.id, 'rework',
+                                  comment: comment);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok
+                                    ? l10n.t('ncr_rework_sent')
+                                    : l10n.t('submit_failed')),
+                                backgroundColor: ok
+                                    ? const Color(0xFF00D4AA)
+                                    : const Color(0xFFFF4757),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                            if (ok) _load();
+                          }
+                        },
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: Text(l10n.t('ncr_rework')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFBBF24),
+                          side: const BorderSide(color: Color(0xFFFBBF24)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final ok = await context
+                              .read<TicketsProvider>()
+                              .submitNcrEngineerResponse(t.id, 'approved');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok
+                                    ? l10n.t('ncr_approved_reinspect')
+                                    : l10n.t('submit_failed')),
+                                backgroundColor: ok
+                                    ? const Color(0xFF00D4AA)
+                                    : const Color(0xFFFF4757),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                            if (ok) _load();
+                          }
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 16),
+                        label: Text(l10n.t('ncr_approved')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _showNcrReworkDialog(AppLocalizations l10n) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(l10n.t('ncr_rework'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 4,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: l10n.t('ncr_rework_comment_hint'),
+            hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+            filled: true,
+            fillColor: const Color(0xFF0A0A1F),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFBBF24),
+              foregroundColor: Colors.black87,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(l10n.t('submit')),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return result;
   }
 
   Widget _timelineSection(Ticket t) {

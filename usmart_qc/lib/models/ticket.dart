@@ -92,6 +92,13 @@ class Ticket {
   bool get isCompleted => status == 'COMPLETED';
   bool get isNcr => inspectionResult == 'ncr';
 
+  /// True when requester has resubmitted and engineer has not yet responded
+  bool get hasPendingEngineerNcrResponse {
+    if (ncrResubmissions.isEmpty) return false;
+    final last = ncrResubmissions.last;
+    return last.by == 'requester' && last.action == 'resubmit';
+  }
+
   /// True when inspection result is not_accepted, ncr, or accepted_with_comments
   bool get isConflictResult {
     final r = (inspectionResult ?? '').toLowerCase();

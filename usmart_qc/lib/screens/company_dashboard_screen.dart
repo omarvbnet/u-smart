@@ -17,6 +17,7 @@ import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
 import 'conflicts_screen.dart';
 import 'site_form_screen.dart';
+import 'filtered_tickets_screen.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
   const CompanyDashboardScreen({super.key});
@@ -310,10 +311,7 @@ class _TicketsTab extends StatelessWidget {
                                         ticketId: ticket.id),
                                   ),
                                 ),
-                                onAssign: ticket.canBeAssigned
-                                    ? () => _assignTicket(
-                                        context, provider, ticket, l10n)
-                                    : null,
+                                onAssign: null, // Requester cannot assign; only engineers
                               );
                             }
                             i += 1 + section.tickets.length;
@@ -327,58 +325,6 @@ class _TicketsTab extends StatelessWidget {
         );
       },
     );
-  }
-
-  Future<void> _assignTicket(
-      BuildContext context, TicketsProvider provider, Ticket ticket,
-      AppLocalizations l10n) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF12122A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(l10n.t('assign_to_me'),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        content: Text(
-          l10n.t('assign_confirm', {'site': ticket.siteName ?? l10n.t('unknown_site')}),
-          style: TextStyle(color: Colors.white.withAlpha(180)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.t('cancel'),
-                style: TextStyle(color: Colors.white.withAlpha(120))),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(l10n.t('assign'),
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      final ok = await provider.assignTicketToMe(ticket.id);
-      if (context.mounted) {
-        final msg = ok ? l10n.t('assign_success') : l10n.t('assign_failed');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            backgroundColor:
-                ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
-    }
   }
 
   Widget _sectionHeader(_TicketSection section) {
@@ -777,6 +723,9 @@ class _SitesTab extends StatelessWidget {
 class _StatsTab extends StatelessWidget {
   const _StatsTab();
 
+  static String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -784,9 +733,13 @@ class _StatsTab extends StatelessWidget {
       builder: (context, provider, _) {
         final stats = provider.stats;
         final inspection = stats?.inspectionStats;
+        final hasFilter = provider.dateFrom != null || provider.dateTo != null;
 
         return RefreshIndicator(
-          onRefresh: () => provider.fetchStats(),
+          onRefresh: () async {
+            await provider.fetchStats();
+            await provider.fetchTickets();
+          },
           color: const Color(0xFF6C63FF),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -805,6 +758,193 @@ class _StatsTab extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Date range filter
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF12122A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withAlpha(10)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.date_range_rounded,
+                            size: 18, color: Colors.white.withAlpha(160)),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.t('filter_date_range'),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(200),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: provider.dateFrom ??
+                                    DateTime.now().subtract(const Duration(days: 30)),
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null && context.mounted) {
+                                provider.setDateRange(
+                                  picked,
+                                  provider.dateTo ?? picked,
+                                );
+                                await provider.fetchStats();
+                                await provider.fetchTickets();
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(8),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.calendar_today_rounded,
+                                      size: 16, color: Colors.white.withAlpha(140)),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    provider.dateFrom != null
+                                        ? _formatDate(provider.dateFrom!)
+                                        : l10n.t('filter_date_from'),
+                                    style: TextStyle(
+                                      color: provider.dateFrom != null
+                                          ? Colors.white
+                                          : Colors.white.withAlpha(100),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: provider.dateTo ?? DateTime.now(),
+                                firstDate: provider.dateFrom ?? DateTime(2020),
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null && context.mounted) {
+                                provider.setDateRange(
+                                  provider.dateFrom ?? picked,
+                                  picked,
+                                );
+                                await provider.fetchStats();
+                                await provider.fetchTickets();
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(8),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.calendar_today_rounded,
+                                      size: 16, color: Colors.white.withAlpha(140)),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    provider.dateTo != null
+                                        ? _formatDate(provider.dateTo!)
+                                        : l10n.t('filter_date_to'),
+                                    style: TextStyle(
+                                      color: provider.dateTo != null
+                                          ? Colors.white
+                                          : Colors.white.withAlpha(100),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (hasFilter) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () async {
+                              provider.clearDateRange();
+                              await provider.fetchStats();
+                              await provider.fetchTickets();
+                            },
+                            icon: const Icon(Icons.clear_rounded,
+                                color: Color(0xFFFF4757), size: 22),
+                            tooltip: l10n.t('filter_clear'),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: provider.exporting
+                            ? null
+                            : () async {
+                                final path = await provider.exportTicketsExcel();
+                                if (context.mounted && path != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(l10n.t('export_success')),
+                                      backgroundColor: const Color(0xFF00D4AA),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: provider.exporting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.download_rounded, size: 20),
+                        label: Text(
+                          provider.exporting
+                              ? l10n.t('exporting')
+                              : l10n.t('export_excel'),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 20),
@@ -874,18 +1014,42 @@ class _StatsTab extends StatelessWidget {
                     value: '${stats?.withinSla ?? 0}',
                     icon: Icons.check_circle_outline_rounded,
                     color: const Color(0xFF4ADE80),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('within_sla'),
+                          tickets: provider.ticketsWithinSla,
+                        ),
+                      ),
+                    ),
                   ),
                   StatsCard(
                     label: l10n.t('out_of_sla'),
                     value: '${stats?.outOfSla ?? 0}',
                     icon: Icons.warning_amber_rounded,
                     color: const Color(0xFFFF4757),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('out_of_sla'),
+                          tickets: provider.ticketsOutOfSla,
+                        ),
+                      ),
+                    ),
                   ),
                   StatsCard(
                     label: l10n.t('total_tickets'),
                     value: '${stats?.total ?? 0}',
                     icon: Icons.assignment_rounded,
                     color: const Color(0xFF6C63FF),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('total_tickets'),
+                          tickets: provider.tickets,
+                        ),
+                      ),
+                    ),
                   ),
                   StatsCard(
                     label: l10n.t('section_active'),
@@ -893,6 +1057,14 @@ class _StatsTab extends StatelessWidget {
                         '${(provider.onSiteTickets.length + provider.inProgressTickets.length)}',
                     icon: Icons.play_circle_outline_rounded,
                     color: const Color(0xFF00D4AA),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('section_active'),
+                          tickets: provider.activeTickets,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -923,24 +1095,56 @@ class _StatsTab extends StatelessWidget {
                       value: '${inspection.accepted}',
                       icon: Icons.thumb_up_rounded,
                       color: const Color(0xFF4ADE80),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FilteredTicketsScreen(
+                            title: l10n.t('accepted'),
+                            tickets: provider.ticketsAccepted,
+                          ),
+                        ),
+                      ),
                     ),
                     StatsCard(
                       label: l10n.t('ncr'),
                       value: '${inspection.ncr}',
                       icon: Icons.report_problem_rounded,
                       color: const Color(0xFFFF4757),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FilteredTicketsScreen(
+                            title: l10n.t('ncr'),
+                            tickets: provider.ncrTickets,
+                          ),
+                        ),
+                      ),
                     ),
                     StatsCard(
                       label: l10n.t('with_comments'),
                       value: '${inspection.acceptedWithComments}',
                       icon: Icons.chat_bubble_rounded,
                       color: const Color(0xFF00D4AA),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FilteredTicketsScreen(
+                            title: l10n.t('with_comments'),
+                            tickets: provider.ticketsAcceptedWithComments,
+                          ),
+                        ),
+                      ),
                     ),
                     StatsCard(
                       label: l10n.t('not_accepted'),
                       value: '${inspection.notAccepted}',
                       icon: Icons.cancel_rounded,
                       color: const Color(0xFFFBBF24),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FilteredTicketsScreen(
+                            title: l10n.t('not_accepted'),
+                            tickets: provider.ticketsNotAccepted,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

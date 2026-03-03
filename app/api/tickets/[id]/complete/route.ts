@@ -39,11 +39,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const body = await req.json();
     const checklistResponse = body.checklistResponse ?? null;
-    const inspectionResult = typeof body.inspectionResult === 'string' ? body.inspectionResult.trim() : null;
+    const inspectionResult = typeof body.inspectionResult === 'string' ? body.inspectionResult.trim().toLowerCase() : null;
     const inspectionComments = typeof body.inspectionComments === 'string' ? body.inspectionComments.trim() : null;
+    const ncrReason = typeof body.ncrReason === 'string' ? body.ncrReason.trim() : (inspectionResult === 'ncr' ? inspectionComments : null);
+    const ncrImageUrls = Array.isArray(body.ncrImageUrls) ? body.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
 
-    parsed.status = 'COMPLETED';
-    parsed.completedAt = new Date().toISOString();
+    // NCR: keep status IN_PROGRESS until NCR is resolved (requester resubmits → engineer approves or reworks)
+    const isNcr = inspectionResult === 'ncr';
+    if (!isNcr) {
+      parsed.status = 'COMPLETED';
+      parsed.completedAt = new Date().toISOString();
+    } else {
+      parsed.inspectionResult = 'ncr';
+      parsed.ncrReason = ncrReason || inspectionComments || null;
+      parsed.ncrImageUrls = ncrImageUrls.length > 0 ? ncrImageUrls : [];
+      parsed.ncrResubmissions = Array.isArray(parsed.ncrResubmissions) ? parsed.ncrResubmissions : [];
+    }
     if (checklistResponse) {
       parsed.checklistResponse = checklistResponse;
       // Convert to inspectionChecklist format expected by admin panel
@@ -67,20 +78,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await prisma.visitorRequest.update({
       where: { id },
       data: {
-        status: 'COMPLETED',
-        completedAt: new Date(),
+        status: isNcr ? 'IN_PROGRESS' : 'COMPLETED',
+        completedAt: isNcr ? null : new Date(),
         company: JSON.stringify(parsed),
         checklistResponse: checklistResponse ? JSON.stringify(checklistResponse) : undefined,
       },
     });
 
-    try {
-      await prisma.ticketStatusLog.create({
-        data: { visitorRequestId: id, status: 'COMPLETED' },
-      });
-    } catch { /* ignore */ }
+    if (!isNcr) {
+      try {
+        await prisma.ticketStatusLog.create({
+          data: { visitorRequestId: id, status: 'COMPLETED' },
+        });
+      } catch { /* ignore */ }
+    }
 
-    // Notify company that ticket is completed
+    // Notify company: completed (non-NCR) or NCR raised
     if (ticket.requesterId && typeof prisma.notification?.create === 'function') {
       try {
         const resultLabel: Record<string, string> = {
@@ -93,8 +106,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await prisma.notification.create({
           data: {
             type: 'status_changed',
-            title: 'Ticket completed',
-            message: `Your ticket has been completed${resultText ? ` — Result: ${resultText}` : ''}`,
+            title: isNcr ? 'NCR raised' : 'Ticket completed',
+            message: isNcr
+              ? 'An NCR has been raised on your ticket. Please resubmit with corrective action.'
+              : `Your ticket has been completed${resultText ? ` — Result: ${resultText}` : ''}`,
             ticketId: id,
             requesterId: ticket.requesterId,
             forAdmin: false,
