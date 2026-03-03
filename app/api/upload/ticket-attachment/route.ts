@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { uploadFile } from '@/lib/upload';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'application/pdf'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: NextRequest) {
@@ -22,10 +22,11 @@ export async function POST(req: NextRequest) {
     const extToType: Record<string, string> = {
       jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
       webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf',
+      heic: 'image/heic', heif: 'image/heif',
     };
     const fileType = rawType || extToType[ext] || 'image/jpeg';
     if (!ALLOWED_TYPES.includes(fileType)) {
-      return NextResponse.json({ success: false, message: 'Allowed types: JPEG, PNG, WebP, GIF, PDF' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Allowed types: JPEG, PNG, WebP, GIF, HEIC, PDF' }, { status: 400 });
     }
     if (file.size > MAX_SIZE) {
       return NextResponse.json({ success: false, message: 'File too large (max 10MB)' }, { status: 400 });

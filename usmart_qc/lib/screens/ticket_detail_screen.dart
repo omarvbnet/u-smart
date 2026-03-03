@@ -219,7 +219,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final bytes = await xFile.readAsBytes();
     if (bytes.isEmpty) return;
     final path = xFile.path;
-    final ext = path.split('.').lastOrNull ?? 'jpg';
+    final ext = (path.split('.').lastOrNull ?? 'jpg').toLowerCase();
     final filename = 'image_${DateTime.now().millisecondsSinceEpoch}.$ext';
     if (!mounted) return;
     setState(() => _uploading = true);
