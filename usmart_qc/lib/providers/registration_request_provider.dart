@@ -63,6 +63,7 @@ class RegistrationRequestProvider extends ChangeNotifier {
     required String legalName,
     required String phone,
     required String email,
+    required String province,
     required String evidenceUrl,
     required String role,
   }) async {
@@ -74,6 +75,7 @@ class RegistrationRequestProvider extends ChangeNotifier {
         'legalName': legalName.trim(),
         'phone': phone.trim(),
         'email': email.trim(),
+        'province': province.trim(),
         'evidenceUrl': evidenceUrl,
         'role': role,
       });

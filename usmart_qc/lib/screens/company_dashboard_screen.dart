@@ -15,6 +15,7 @@ import '../widgets/stats_card.dart';
 import 'notifications_screen.dart';
 import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
+import 'ticket_type_picker_screen.dart';
 import 'conflicts_screen.dart';
 import 'site_form_screen.dart';
 import 'filtered_tickets_screen.dart';
@@ -132,8 +133,13 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               ),
               child: FloatingActionButton(
                 onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const CreateTicketScreen()));
+                  final user = context.read<AuthProvider>().user;
+                  if (user?.isTechnician == true) {
+                    showNewTicketTypePicker(context);
+                  } else {
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const CreateTicketScreen()));
+                  }
                 },
                 backgroundColor: Colors.transparent,
                 elevation: 0,

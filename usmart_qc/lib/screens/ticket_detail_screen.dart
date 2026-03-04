@@ -822,6 +822,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ],
                     ],
                   ),
+                  if (h.inspectionComments != null &&
+                      h.inspectionComments!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Text(
+                        h.inspectionComments!,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(160),
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
                   if (items.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     ...items.map((item) {
@@ -1474,6 +1489,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         return l10n.t('role_engineer');
       case 'COMPANY':
         return l10n.t('role_company');
+      case 'TECHNICIAN':
+        return l10n.t('role_technician');
       default:
         return role;
     }
@@ -2407,7 +2424,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   String _techniqueKey(String t) {
+    final lower = t.toLowerCase();
     final upper = t.toUpperCase().replaceAll(' ', '_');
+    if (lower == 'fiber_route') return 'maint_fiber_route';
+    if (lower == 'fiber_site') return 'maint_fiber_site';
+    if (lower == 'electrical') return 'maint_electrical';
+    if (lower == 'telecom') return 'maint_telecom';
+    if (lower == 'ftth') return 'maint_ftth';
     if (upper.contains('INSPECTION')) return 'tech_inspection';
     if (upper.contains('SUPERVISION')) return 'tech_supervision';
     if (upper.contains('HSE')) return 'tech_hse';

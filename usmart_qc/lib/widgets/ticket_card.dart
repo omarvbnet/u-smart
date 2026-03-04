@@ -35,7 +35,13 @@ class TicketCard extends StatelessWidget {
   }
 
   String _techniqueKey(String t) {
+    final lower = t.toLowerCase();
     final upper = t.toUpperCase().replaceAll(' ', '_');
+    if (lower == 'fiber_route') return 'maint_fiber_route';
+    if (lower == 'fiber_site') return 'maint_fiber_site';
+    if (lower == 'electrical') return 'maint_electrical';
+    if (lower == 'telecom') return 'maint_telecom';
+    if (lower == 'ftth') return 'maint_ftth';
     if (upper.contains('INSPECTION')) return 'tech_inspection';
     if (upper.contains('SUPERVISION')) return 'tech_supervision';
     if (upper.contains('HSE')) return 'tech_hse';

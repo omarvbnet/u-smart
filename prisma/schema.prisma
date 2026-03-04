@@ -360,6 +360,7 @@ model User {
     legalName   String
     phone       String
     email       String
+    province    String                    // Iraq province
     evidenceUrl String                    // identification document (ID, passport, etc.)
     role        RequesterRole             // COMPANY or ENGINEER
     status      RegistrationRequestStatus @default(PENDING)
@@ -425,6 +426,7 @@ model User {
   enum RequesterRole {
     COMPANY
     ENGINEER
+    TECHNICIAN
   }
 
   enum TicketStatus {

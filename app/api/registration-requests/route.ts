@@ -7,12 +7,13 @@ export async function POST(req: NextRequest) {
     const legalName = typeof body.legalName === 'string' ? body.legalName.trim() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const province = typeof body.province === 'string' ? body.province.trim() : '';
     const evidenceUrl = typeof body.evidenceUrl === 'string' ? body.evidenceUrl.trim() : '';
     const role = body.role === 'ENGINEER' ? 'ENGINEER' : 'COMPANY';
 
-    if (!legalName || !phone || !email || !evidenceUrl) {
+    if (!legalName || !phone || !email || !province || !evidenceUrl) {
       return NextResponse.json(
-        { success: false, message: 'Legal name, phone, email, and identification evidence are required' },
+        { success: false, message: 'Legal name, phone, email, province, and identification evidence are required' },
         { status: 400 }
       );
     }
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
         legalName,
         phone,
         email,
+        province,
         evidenceUrl,
         role,
       },

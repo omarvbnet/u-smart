@@ -19,7 +19,7 @@ export default function RequesterLoginPage() {
   const [showRegistration, setShowRegistration] = useState(false);
   const [regStep, setRegStep] = useState<'role' | 'form'>('role');
   const [regRole, setRegRole] = useState<'COMPANY' | 'ENGINEER' | null>(null);
-  const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '' });
+  const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '', province: '' });
   const [regEvidenceUrl, setRegEvidenceUrl] = useState('');
   const [regEvidenceUploading, setRegEvidenceUploading] = useState(false);
   const [regSubmitting, setRegSubmitting] = useState(false);
@@ -146,7 +146,7 @@ export default function RequesterLoginPage() {
           <div className="mt-6 pt-6 border-t border-white/10">
             <button
               type="button"
-              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
+              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '', province: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
               className="w-full py-2.5 text-sm text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-xl border border-cyan-500/30 transition-colors"
             >
               {t('ticketForm.requestRegistration') || 'Request for registration'}
@@ -211,6 +211,10 @@ export default function RequesterLoginPage() {
                 onSubmit={async (e) => {
                   e.preventDefault();
                   setRegError('');
+                  if (!regForm.province?.trim()) {
+                    setRegError(t('ticketForm.selectProvince') || 'Please select a province');
+                    return;
+                  }
                   if (!regEvidenceUrl) {
                     setRegError(t('ticketForm.evidenceRequired') || 'Identification evidence is required');
                     return;
@@ -224,6 +228,7 @@ export default function RequesterLoginPage() {
                         legalName: regForm.legalName.trim(),
                         phone: regForm.phone.trim(),
                         email: regForm.email.trim(),
+                        province: regForm.province.trim(),
                         evidenceUrl: regEvidenceUrl,
                         role: regRole,
                       }),
@@ -283,6 +288,20 @@ export default function RequesterLoginPage() {
                     placeholder="email@example.com"
                     required
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.province') || 'Province'}</label>
+                  <select
+                    value={regForm.province}
+                    onChange={(e) => setRegForm((f) => ({ ...f, province: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-cyan-500 outline-none"
+                    required
+                  >
+                    <option value="">{t('ticketForm.selectProvince')}</option>
+                    {['Al-Anbar', 'Babil', 'Baghdad', 'Basra', 'Dhi Qar', 'Al-Qadisiyyah', 'Diyala', 'Duhok', 'Erbil', 'Halabja', 'Karbala', 'Kirkuk', 'Maysan', 'Muthanna', 'Najaf', 'Ninawa', 'Salah Al-Din', 'Sulaymaniyah', 'Wasit'].map((p) => (
+                      <option key={p} value={p} className="bg-[#0f1419] text-white">{t(`ticketForm.provinces.${p}` as never) || p}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.evidenceForIdentification') || 'Evidence for identification'}</label>

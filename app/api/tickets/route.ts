@@ -13,7 +13,9 @@ const prisma = _prisma as any;
 
 const ENTERPRISE_TECHNIQUES = ['maintenance', 'fiber', 'cable_systemization', 'closures', 'splice', 'qgis', 'asbuilt_design'];
 const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'];
-const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES];
+// Maintenance ticket types (technician only): stored as technique
+const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES, ...MAINTENANCE_TECHNIQUES];
 
 async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
   try {
@@ -125,6 +127,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
+    if (isMaintenanceTicket && payload) {
+      const requesterRole = (await prisma.ticketRequester.findUnique({
+        where: { id: payload.requesterId },
+        select: { role: true },
+      })) as { role?: string } | null;
+      if (requesterRole?.role !== 'TECHNICIAN') {
+        return NextResponse.json(
+          { success: false, message: 'Only technician role can create maintenance tickets' },
+          { status: 403 }
+        );
+      }
+    }
+
     if (slaHours < 0 || slaHours > 8760) {
       return NextResponse.json(
         { success: false, message: 'SLA hours must be between 0 and 8760' },
@@ -147,7 +163,9 @@ export async function POST(req: NextRequest) {
 
     const serviceSlug = QUALITY_CONTROL_TECHNIQUES.includes(technique)
       ? 'quality-control-supervision'
-      : 'enterprise-networking';
+      : MAINTENANCE_TECHNIQUES.includes(technique)
+        ? 'quality-control-supervision'
+        : 'enterprise-networking';
 
     const ticketData: {
       buildingType: string;
@@ -286,7 +304,7 @@ export async function POST(req: NextRequest) {
       status: 'PENDING',
     });
 
-    if (serviceSlug === 'quality-control-supervision') {
+    if (serviceSlug === 'quality-control-supervision' && !MAINTENANCE_TECHNIQUES.includes(technique)) {
       notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
     }
 
@@ -373,8 +391,8 @@ export async function GET(req: NextRequest) {
     let where: any;
 
     if (requesterRole === 'ENGINEER') {
-      // Engineers see: PENDING tickets (province-filtered if active) + tickets assigned to them
-      const pendingFilter: any = { status: 'PENDING' };
+      // Engineers see: PENDING tickets (province-filtered if active) + tickets assigned to them (exclude maintenance)
+      const pendingFilter: any = { status: 'PENDING', technique: { notIn: MAINTENANCE_TECHNIQUES } };
       if (provinceFilterActive && requesterProvince) {
         pendingFilter.province = requesterProvince;
       }
@@ -385,10 +403,22 @@ export async function GET(req: NextRequest) {
           { company: { contains: payload.requesterId } },
         ],
       };
+    } else if (requesterRole === 'TECHNICIAN') {
+      // Technicians see: their own tickets + maintenance tickets (PENDING or assigned)
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: [
+          { requesterId: payload.requesterId },
+          { technique: { in: MAINTENANCE_TECHNIQUES } },
+          { company: { contains: payload.requesterId } },
+        ],
+      };
     } else {
+      // COMPANY: only their tickets, exclude maintenance (maintenance is technician-only)
       where = {
         requesterId: payload.requesterId,
         serviceSlug: filterServiceSlug,
+        technique: { notIn: MAINTENANCE_TECHNIQUES },
       };
     }
 

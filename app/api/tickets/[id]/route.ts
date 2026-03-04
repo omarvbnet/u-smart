@@ -160,10 +160,11 @@ export async function GET(
         assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
         assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
         checklistHistory = Array.isArray(parsed.checklistHistory)
-          ? (parsed.checklistHistory as Array<{ at?: string; inspectionChecklist?: unknown[]; inspectionResult?: string }>).map((e) => ({
+          ? (parsed.checklistHistory as Array<{ at?: string; inspectionChecklist?: unknown[]; inspectionResult?: string; inspectionComments?: string }>).map((e) => ({
               at: e.at || '',
               inspectionChecklist: Array.isArray(e.inspectionChecklist) ? e.inspectionChecklist : [],
               inspectionResult: typeof e.inspectionResult === 'string' ? e.inspectionResult : undefined,
+              inspectionComments: typeof e.inspectionComments === 'string' ? e.inspectionComments : undefined,
             }))
           : [];
         conflictReported = parsed.conflictReported === true;

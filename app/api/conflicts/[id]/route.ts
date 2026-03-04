@@ -174,6 +174,17 @@ export async function PATCH(
 
     let newTicketStatus: string | null = null;
     if (resolution === 're_inspection') {
+      // Preserve previous inspection (checklist, comments, result) in history before clearing
+      const checklistHistory = Array.isArray(parsed.checklistHistory) ? parsed.checklistHistory : [];
+      if (parsed.inspectionChecklist || parsed.inspectionResult || parsed.inspectionComments) {
+        checklistHistory.push({
+          at: new Date().toISOString(),
+          inspectionChecklist: parsed.inspectionChecklist ?? [],
+          inspectionResult: parsed.inspectionResult ?? null,
+          inspectionComments: parsed.inspectionComments ?? null,
+        });
+      }
+      parsed.checklistHistory = checklistHistory;
       parsed.inspectionResult = null;
       parsed.inspectionComments = null;
       parsed.inspectionChecklist = null;

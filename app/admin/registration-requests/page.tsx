@@ -8,6 +8,7 @@ type RegistrationRequest = {
   legalName: string;
   phone: string;
   email: string;
+  province?: string;
   evidenceUrl: string;
   role: string;
   status: string;
@@ -122,6 +123,7 @@ export default function AdminRegistrationRequestsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Legal name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Province</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Evidence</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -135,6 +137,7 @@ export default function AdminRegistrationRequestsPage() {
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.legalName}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.phone}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.email}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.province ?? '—'}</td>
                   <td className="px-4 py-3 text-sm">
                     <span
                       className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${

@@ -28,12 +28,21 @@ class _RegistrationRequestContent extends StatefulWidget {
       _RegistrationRequestContentState();
 }
 
+/// Iraq provinces (19 governorates)
+const List<String> _iraqProvinces = [
+  'Al-Anbar', 'Babil', 'Baghdad', 'Basra', 'Dhi Qar',
+  'Al-Qadisiyyah', 'Diyala', 'Duhok', 'Erbil', 'Halabja',
+  'Karbala', 'Kirkuk', 'Maysan', 'Muthanna', 'Najaf',
+  'Ninawa', 'Salah Al-Din', 'Sulaymaniyah', 'Wasit',
+];
+
 class _RegistrationRequestContentState extends State<_RegistrationRequestContent> {
   int _step = 0; // 0=role, 1=form
   String? _role; // COMPANY | ENGINEER
   final _legalName = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
+  String? _selectedProvince;
   String? _evidenceUrl;
   bool _success = false;
 
@@ -83,6 +92,18 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
+    final province = _selectedProvince?.trim() ?? '';
+    if (province.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('reg_province_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
     if (_evidenceUrl == null || _evidenceUrl!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -100,6 +121,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
       legalName: _legalName.text.trim(),
       phone: _phone.text.trim(),
       email: _email.text.trim(),
+      province: province,
       evidenceUrl: _evidenceUrl!,
       role: _role!,
     );
@@ -305,6 +327,14 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           icon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
         ),
+        const SizedBox(height: 12),
+        _ProvinceDropdown(
+          label: l10n.t('reg_province'),
+          hint: l10n.t('reg_province_hint'),
+          value: _selectedProvince,
+          items: _iraqProvinces,
+          onChanged: (v) => setState(() => _selectedProvince = v),
+        ),
         const SizedBox(height: 16),
         Text(
           l10n.t('reg_evidence_label'),
@@ -445,6 +475,60 @@ class _RoleCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ProvinceDropdown extends StatelessWidget {
+  final String label;
+  final String hint;
+  final String? value;
+  final List<String> items;
+  final void Function(String?) onChanged;
+
+  const _ProvinceDropdown({
+    required this.label,
+    required this.hint,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value != null && items.contains(value) ? value : null,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+            prefixIcon: const Icon(Icons.map_outlined, color: Color(0xFF6C63FF), size: 20),
+            filled: true,
+            fillColor: const Color(0xFF12122A),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.white.withAlpha(15)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+            ),
+          ),
+          dropdownColor: const Color(0xFF12122A),
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6C63FF)),
+          items: items.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

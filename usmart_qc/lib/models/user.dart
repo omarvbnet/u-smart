@@ -30,6 +30,7 @@ class User {
   bool get isEngineer => role == 'ENGINEER';
   bool get isCompany => role == 'COMPANY';
   bool get isAdmin => role == 'ADMIN';
+  bool get isTechnician => role == 'TECHNICIAN';
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(

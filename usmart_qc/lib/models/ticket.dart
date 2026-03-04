@@ -2,11 +2,13 @@ class ChecklistHistoryEntry {
   final String at;
   final List<Map<String, dynamic>> inspectionChecklist;
   final String? inspectionResult;
+  final String? inspectionComments;
 
   ChecklistHistoryEntry({
     required this.at,
     this.inspectionChecklist = const [],
     this.inspectionResult,
+    this.inspectionComments,
   });
 
   factory ChecklistHistoryEntry.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,7 @@ class ChecklistHistoryEntry {
           ? list.map((e) => e as Map<String, dynamic>).toList()
           : [],
       inspectionResult: json['inspectionResult'] as String?,
+      inspectionComments: json['inspectionComments'] as String?,
     );
   }
 }
