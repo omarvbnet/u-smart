@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'File too large (max 5MB)' }, { status: 400 });
     }
 
-    const ext = path.extname(file.name) || (file.type === 'application/pdf' ? '.pdf' : '.jpg');
-    const safeName = `reg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
+    const extForName = ext ? `.${ext}` : (file.type === 'application/pdf' ? '.pdf' : '.jpg');
+    const safeName = `reg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}${extForName}`;
     const { url } = await uploadFile({ file, folder: 'registration-evidence', prefix: 'reg', safeName });
     return NextResponse.json({ success: true, url });
   } catch (err) {
