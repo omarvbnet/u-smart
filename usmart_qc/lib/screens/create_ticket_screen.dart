@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import 'attachment_viewer_screen.dart';
 
 const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_hse', 'tech_investigation', 'tech_tracking'];
 const _qcTechniqueIds = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'];
@@ -18,8 +22,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _siteNameCtrl = TextEditingController();
   final _coordinatorCtrl = TextEditingController();
   final _slaCtrl = TextEditingController(text: '24');
+  final _designSpecsCtrl = TextEditingController();
+  final _picker = ImagePicker();
   String _technique = 'inspection';
   bool _submitting = false;
+  bool _uploading = false;
+  final List<String> _attachmentUrls = [];
 
   Future<void> _submit() async {
     final siteName = _siteNameCtrl.text.trim();
@@ -41,11 +49,14 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
+    final designSpecs = _designSpecsCtrl.text.trim();
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
       technique: _technique,
       slaHours: sla,
+      designSpecifications: designSpecs.isEmpty ? null : designSpecs,
+      attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
     );
 
     if (mounted) {
@@ -74,11 +85,89 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     }
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final xFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2048,
+      imageQuality: 85,
+    );
+    if (!mounted || xFile == null) return;
+    final provider = context.read<TicketsProvider>();
+    setState(() => _uploading = true);
+    try {
+      final bytes = await xFile.readAsBytes();
+      if (bytes.isEmpty) return;
+      final ext = xFile.path.split('.').lastOrNull ?? 'jpg';
+      final url = await provider.uploadFileFromBytes(
+        bytes,
+        'spec_${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      if (url != null && mounted) {
+        final u = url;
+        setState(() => _attachmentUrls.add(u));
+      } else if (mounted) {
+        _showError(AppLocalizations.of(context).t('upload_failed'));
+      }
+    } catch (e) {
+      if (mounted) _showError(AppLocalizations.of(context).t('upload_failed'));
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif'],
+      allowMultiple: false,
+      withData: true,
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final provider = context.read<TicketsProvider>();
+    final file = result.files.single;
+    final bytes = file.bytes;
+    final path = file.path;
+    final filename = file.name;
+    setState(() => _uploading = true);
+    try {
+      String? url;
+      if (bytes != null && bytes.isNotEmpty && filename.isNotEmpty) {
+        url = await provider.uploadFileFromBytes(bytes, filename);
+      } else if (path != null && path.isNotEmpty) {
+        url = await provider.uploadFile(path);
+      }
+      if (url != null && mounted) {
+        final u = url;
+        setState(() => _attachmentUrls.add(u));
+      } else if (mounted) {
+        _showError(AppLocalizations.of(context).t('upload_failed'));
+      }
+    } catch (_) {
+      if (mounted) _showError(AppLocalizations.of(context).t('upload_failed'));
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _attachmentUrls.removeAt(index));
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _siteNameCtrl.dispose();
     _coordinatorCtrl.dispose();
     _slaCtrl.dispose();
+    _designSpecsCtrl.dispose();
     super.dispose();
   }
 
@@ -210,6 +299,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             icon: Icons.schedule_rounded,
             keyboardType: TextInputType.number,
           ),
+          const SizedBox(height: 16),
+          _buildDesignSpecsField(l10n),
+          const SizedBox(height: 16),
+          _buildAttachmentsSection(l10n),
           const SizedBox(height: 36),
           SizedBox(
             width: double.infinity,
@@ -229,7 +322,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 ],
               ),
               child: ElevatedButton(
-                onPressed: _submitting ? null : _submit,
+                onPressed: (_submitting || _uploading) ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
@@ -238,7 +331,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: _submitting
+                child: (_submitting || _uploading)
                     ? const SizedBox(
                         width: 22,
                         height: 22,
@@ -252,6 +345,226 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDesignSpecsField(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('design_specifications').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _designSpecsCtrl,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          decoration: InputDecoration(
+            hintText: l10n.t('design_specs_hint'),
+            hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+            prefixIcon: const Icon(Icons.description_outlined,
+                color: Color(0xFF6C63FF), size: 20),
+            filled: true,
+            fillColor: const Color(0xFF12122A),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttachmentsSection(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('add_attachments').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          l10n.t('add_attachments_hint'),
+          style: TextStyle(
+            color: Colors.white.withAlpha(120),
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _attachmentButton(
+              icon: Icons.photo_library_outlined,
+              label: l10n.t('add_image'),
+              onTap: _uploading ? null : _pickAndUploadImage,
+            ),
+            const SizedBox(width: 12),
+            _attachmentButton(
+              icon: Icons.attach_file_rounded,
+              label: l10n.t('add_file'),
+              onTap: _uploading ? null : _pickAndUploadFile,
+            ),
+          ],
+        ),
+        if (_attachmentUrls.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _attachmentUrls.asMap().entries.map((e) {
+              final url = e.value;
+              final idx = e.key;
+              final isImage = url.toLowerCase().contains('image') ||
+                  RegExp(r'\.(jpe?g|png|gif|webp)$').hasMatch(url);
+              final displayUrl = url.startsWith('http')
+                  ? url
+                  : (url.startsWith('/')
+                      ? '${ApiConfig.baseUrl}$url'
+                      : '${ApiConfig.baseUrl}/$url');
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AttachmentViewerScreen(
+                          url: url,
+                          label: url.split('/').last,
+                        ),
+                      ),
+                    ),
+                    child: Container(
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A2E),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: const Color(0xFF6C63FF).withAlpha(60)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(11)),
+                            child: SizedBox(
+                              width: 80,
+                              height: 64,
+                              child: isImage
+                                  ? Image.network(
+                                      displayUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          _placeholderIcon(),
+                                    )
+                                  : _placeholderIcon(),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 4),
+                            child: Text(
+                              url.split('/').last,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withAlpha(180),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: GestureDetector(
+                      onTap: () => _removeAttachment(idx),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF4757),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close,
+                            size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _placeholderIcon() => Container(
+        color: const Color(0xFF0A0A1F),
+        child: Icon(Icons.insert_drive_file_rounded,
+            color: Colors.white.withAlpha(120), size: 28),
+      );
+
+  Widget _attachmentButton({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+  }) {
+    return Expanded(
+      child: Material(
+        color: const Color(0xFF6C63FF).withAlpha(25),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: const Color(0xFF6C63FF), size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF8B83FF),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

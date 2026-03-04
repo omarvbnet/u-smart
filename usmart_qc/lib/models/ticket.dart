@@ -91,6 +91,13 @@ class Ticket {
   final String? requesterName;
   final String? requesterRole;
   final String? requesterPhone;
+  /// Conflict record: reported, status, resolution, etc.
+  final bool conflictReported;
+  final String? conflictStatus;
+  final String? conflictResolution;
+  final String? conflictReportComment;
+  final String? conflictReportedAt;
+  final String? conflictResolvedAt;
 
   Ticket({
     required this.id,
@@ -117,6 +124,12 @@ class Ticket {
     this.requesterName,
     this.requesterRole,
     this.requesterPhone,
+    this.conflictReported = false,
+    this.conflictStatus,
+    this.conflictResolution,
+    this.conflictReportComment,
+    this.conflictReportedAt,
+    this.conflictResolvedAt,
   });
 
   bool get isPending => status == 'PENDING';
@@ -205,6 +218,12 @@ class Ticket {
       requesterName: json['requesterName'] as String?,
       requesterRole: json['requesterRole'] as String?,
       requesterPhone: json['requesterPhone'] as String?,
+      conflictReported: json['conflictReported'] == true,
+      conflictStatus: json['conflictStatus'] as String?,
+      conflictResolution: json['conflictResolution'] as String?,
+      conflictReportComment: json['conflictReportComment'] as String?,
+      conflictReportedAt: json['conflictReportedAt'] as String?,
+      conflictResolvedAt: json['conflictResolvedAt'] as String?,
     );
   }
 }

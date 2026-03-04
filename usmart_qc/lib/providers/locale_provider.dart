@@ -4,10 +4,19 @@ import '../l10n/app_localizations.dart';
 
 const String _localeKey = 'provisor_locale';
 
+/// User's chosen language code. Used by AppLocalizationsDelegate when
+/// Flutter's Material uses a fallback locale (e.g. 'ar' for 'ku').
+String? appLanguageCodeOverride;
+
 class LocaleProvider extends ChangeNotifier {
   Locale _locale = const Locale('en');
 
   Locale get locale => _locale;
+
+  /// Locale to pass to MaterialApp. Uses 'ar' for 'ku' since Flutter's
+  /// MaterialLocalizations doesn't support Kurdish.
+  Locale get effectiveLocale =>
+      _locale.languageCode == 'ku' ? const Locale('ar') : _locale;
 
   bool get isRtl => AppLocalizations.isRtl(_locale.languageCode);
 
@@ -21,6 +30,7 @@ class LocaleProvider extends ChangeNotifier {
       final code = prefs.getString(_localeKey);
       if (code != null && AppLocalizations.supportedLocales.any((l) => l.languageCode == code)) {
         _locale = Locale(code);
+        appLanguageCodeOverride = code;
         notifyListeners();
       }
     } catch (_) {}
@@ -29,6 +39,7 @@ class LocaleProvider extends ChangeNotifier {
   Future<void> setLocale(Locale locale) async {
     if (_locale == locale) return;
     _locale = locale;
+    appLanguageCodeOverride = locale.languageCode;
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();

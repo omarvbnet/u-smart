@@ -674,6 +674,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
       // Details
       _glassSection(l10n.t('details'), [
+        _rowWithCopy(l10n.t('ticket_id'), t.id, l10n),
+        if (t.assignedEngineerId != null)
+          _rowWithCopy(l10n.t('assigned_engineer_id'), t.assignedEngineerId!, l10n),
         _row(l10n.t('coordinator'), t.siteCoordinator ?? '-'),
         _row(l10n.t('technique_label'), _techniqueLabel(t.technique, l10n)),
         _row(l10n.t('sla'), t.slaHours != null ? '${t.slaHours} ${l10n.t('hours')}' : '-'),
@@ -976,10 +979,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ncrResubmitRecordsSection(t, l10n),
       ],
 
-      // Conflict button (company only, when result is ncr, not_accepted, or accepted_with_comments)
-      if (!isEngineer && t.isCompleted && t.isConflictResult) ...[
+      // Conflict button (company only, when result is ncr, not_accepted, or accepted_with_comments, and not yet reported)
+      if (!isEngineer && t.isCompleted && t.isConflictResult && !t.conflictReported) ...[
         const SizedBox(height: 16),
         _conflictButton(t, l10n),
+      ],
+
+      // Conflict record: show when conflict was reported (engineers & company see result only)
+      if (t.conflictReported) ...[
+        const SizedBox(height: 16),
+        _conflictRecordSection(t, l10n),
       ],
 
       const SizedBox(height: 16),
@@ -1390,6 +1399,75 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
+  Widget _rowWithCopy(String label, String value, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: TextStyle(
+                  color: Colors.white.withAlpha(80), fontSize: 13),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500),
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(l10n.t('id_copied')),
+                  backgroundColor: const Color(0xFF00D4AA),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 1),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6C63FF).withAlpha(30),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: const Color(0xFF6C63FF).withAlpha(60)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.copy_rounded,
+                      size: 16, color: Colors.white.withAlpha(200)),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.t('copy'),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(200),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _roleLabel(String role, AppLocalizations l10n) {
     switch (role.toUpperCase()) {
       case 'ENGINEER':
@@ -1418,6 +1496,103 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         );
       }
     }
+  }
+
+  Widget _conflictRecordSection(Ticket t, AppLocalizations l10n) {
+    final isPending = (t.conflictStatus ?? '').toLowerCase() == 'pending';
+    final sectionTitle = isPending
+        ? l10n.t('conflict_cases')
+        : l10n.t('previous_conflict');
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConflictDetailScreen(conflictId: t.id),
+        ),
+      ),
+      child: _glassSection(sectionTitle, [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isPending ? Icons.schedule_rounded : Icons.check_circle_rounded,
+                    size: 20,
+                    color: isPending
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFF00D4AA),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    isPending
+                        ? l10n.t('ncr_waiting_manager')
+                        : l10n.t('resolved'),
+                    style: TextStyle(
+                      color: isPending
+                          ? const Color(0xFFFBBF24)
+                          : const Color(0xFF00D4AA),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 12,
+                    color: Colors.white.withAlpha(100),
+                  ),
+                ],
+              ),
+              if (t.conflictReportComment != null &&
+                  t.conflictReportComment!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  t.conflictReportComment!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(180),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+              if (!isPending && t.conflictResolution != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _conflictResolutionLabel(t.conflictResolution!, l10n),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                l10n.t('tap_to_view_details'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(100),
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+
+  String _conflictResolutionLabel(String r, AppLocalizations l10n) {
+    final lower = r.toLowerCase();
+    if (lower == 're_inspection') return l10n.t('resolution_re_inspection');
+    if (lower == 'keep_same') return l10n.t('resolution_keep_same');
+    if (lower == 'accepted') return '${l10n.t('resolution_changed_to')} ${l10n.t('accepted')}';
+    if (lower == 'not_accepted') return '${l10n.t('resolution_changed_to')} ${l10n.t('not_accepted')}';
+    if (lower == 'ncr') return '${l10n.t('resolution_changed_to')} ${l10n.t('ncr')}';
+    if (lower == 'accepted_with_comments') return '${l10n.t('resolution_changed_to')} ${l10n.t('accepted_with_comments')}';
+    return r;
   }
 
   Widget _conflictButton(Ticket t, AppLocalizations l10n) {
@@ -1452,25 +1627,58 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _reportConflict(Ticket t, AppLocalizations l10n) async {
-    final ok = await showDialog<bool>(
+    final commentController = TextEditingController();
+    final result = await showDialog<String?>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF12122A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(l10n.t('report_conflict'),
             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        content: Text(
-          l10n.t('report_conflict_confirm'),
-          style: TextStyle(color: Colors.white.withAlpha(200)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.t('report_conflict_confirm'),
+                style: TextStyle(color: Colors.white.withAlpha(200)),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.t('conflict_description_hint'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(150),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: commentController,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: l10n.t('conflict_description'),
+                  hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+                  filled: true,
+                  fillColor: Colors.white.withAlpha(8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withAlpha(30)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: Text(l10n.t('cancel'),
                 style: TextStyle(color: Colors.white.withAlpha(120))),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(ctx, commentController.text.trim()),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFBBF24),
               foregroundColor: const Color(0xFF05051A),
@@ -1482,10 +1690,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (result == null || !mounted) return;
 
     final conflictProv = context.read<ConflictsProvider>();
-    final conflict = await conflictProv.reportConflict(t.id);
+    final conflict = await conflictProv.reportConflict(t.id,
+        comment: result.isEmpty ? null : result);
     if (mounted) {
       if (conflict != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1734,7 +1943,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          l10n.t('ncr_waiting_engineer'),
+                          l10n.t('ncr_waiting_manager'),
                           style: TextStyle(
                             color: Colors.white.withAlpha(200),
                             fontSize: 15,

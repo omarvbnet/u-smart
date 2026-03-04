@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
+import '../models/conflict.dart';
+import '../models/evidence.dart';
+import '../providers/auth_provider.dart';
 import '../providers/conflicts_provider.dart';
 import '../providers/tickets_provider.dart';
+import 'attachment_viewer_screen.dart';
 import 'ticket_detail_screen.dart';
 
 class ConflictDetailScreen extends StatefulWidget {
@@ -16,6 +20,8 @@ class ConflictDetailScreen extends StatefulWidget {
 
 class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
   bool _resolving = false;
+  List<TicketEvidence>? _evidence;
+  bool _evidenceLoading = false;
 
   @override
   void initState() {
@@ -23,6 +29,18 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ConflictsProvider>().fetchConflictDetail(widget.conflictId);
     });
+  }
+
+  Future<void> _loadEvidence(String ticketId) async {
+    if (_evidence != null || _evidenceLoading) return;
+    setState(() => _evidenceLoading = true);
+    final list = await context.read<TicketsProvider>().fetchEvidence(ticketId);
+    if (mounted) {
+      setState(() {
+        _evidence = list;
+        _evidenceLoading = false;
+      });
+    }
   }
 
   Future<void> _showChangeResultSheet(AppLocalizations l10n) async {
@@ -74,6 +92,56 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
     if (lower == 'accepted_with_comments') return l10n.t('accepted_with_comments');
     if (lower == 'accepted') return l10n.t('accepted');
     return r;
+  }
+
+  String _resolutionOutcomeText(ConflictCase c, AppLocalizations l10n) {
+    final r = (c.resolution ?? '').toLowerCase();
+    if (r == 're_inspection') return l10n.t('resolution_re_inspection');
+    if (r == 'keep_same') return l10n.t('resolution_keep_same');
+    if (r == 'accepted' || r == 'not_accepted' || r == 'ncr' || r == 'accepted_with_comments') {
+      return '${l10n.t('resolution_changed_to')} ${_resultLabel(r, l10n)}';
+    }
+    return l10n.t('resolved');
+  }
+
+  Widget _resolutionOutcomeSection(ConflictCase c, AppLocalizations l10n) {
+    final text = _resolutionOutcomeText(c, l10n);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00D4AA).withAlpha(15),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF00D4AA).withAlpha(40)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: Color(0xFF00D4AA), size: 24),
+              const SizedBox(width: 12),
+              Text(
+                l10n.t('resolved'),
+                style: const TextStyle(
+                  color: Color(0xFF00D4AA),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: TextStyle(
+              color: Colors.white.withAlpha(200),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _resolve(String resolution) async {
@@ -176,12 +244,34 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
             );
           }
 
+          if (_evidence == null && !_evidenceLoading) {
+            _loadEvidence(c.ticketId);
+          }
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (c.conflictReportComment != null &&
+                    c.conflictReportComment!.isNotEmpty) ...[
+                  _glassSection(l10n.t('conflict_description'), [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        c.conflictReportComment!,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(220),
+                          fontSize: 15,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
                 _glassSection(l10n.t('details'), [
+                  _row(l10n.t('ticket_id'), c.ticketId),
                   _row(l10n.t('site_name'), c.siteName ?? '-'),
                   _row(l10n.t('coordinator'), c.siteCoordinator ?? '-'),
                   _row(l10n.t('result'), _resultLabel(c.inspectionResult, l10n)),
@@ -193,6 +283,109 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                     _row(l10n.t('engineer'), c.assignedEngineerName!),
                 ]),
 
+                if (!context.read<AuthProvider>().isAdmin &&
+                    c.isPending) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6C63FF).withAlpha(20),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFF6C63FF).withAlpha(50),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 20,
+                          color: Colors.white.withAlpha(200),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          l10n.t('ncr_waiting_manager'),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(200),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                if (_evidence != null && _evidence!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _glassSection(l10n.t('conflict_evidence'), [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: _evidence!.map((e) {
+                          return GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AttachmentViewerScreen(
+                                  url: e.fileUrl,
+                                  label: e.description ?? e.fileUrl.split('/').last,
+                                ),
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: e.isImage
+                                  ? Image.network(
+                                      e.fileUrl,
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        width: 100,
+                                        height: 100,
+                                        color: const Color(0xFF12122A),
+                                        child: Icon(
+                                          Icons.broken_image_rounded,
+                                          color: Colors.white.withAlpha(100),
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 100,
+                                      height: 100,
+                                      color: const Color(0xFF12122A),
+                                      child: const Icon(
+                                        Icons.picture_as_pdf_rounded,
+                                        color: Color(0xFF6C63FF),
+                                        size: 40,
+                                      ),
+                                    ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
+                if (_evidenceLoading) ...[
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF6C63FF),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 if (c.inspectionChecklist != null &&
                     c.inspectionChecklist!.isNotEmpty) ...[
                   const SizedBox(height: 16),
@@ -264,7 +457,7 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                   ]),
                 ],
 
-                if (c.isPending) ...[
+                if (c.isPending && context.read<AuthProvider>().isAdmin) ...[
                   const SizedBox(height: 24),
                   Text(
                     l10n.t('resolve_conflict'),
@@ -310,32 +503,10 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                         ),
                       ),
                     ),
-                ] else ...[
+                ],
+                if (!c.isPending) ...[
                   const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00D4AA).withAlpha(15),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: const Color(0xFF00D4AA).withAlpha(40)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle_rounded,
-                            color: Color(0xFF00D4AA), size: 24),
-                        const SizedBox(width: 12),
-                        Text(
-                          l10n.t('resolved'),
-                          style: const TextStyle(
-                            color: Color(0xFF00D4AA),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _resolutionOutcomeSection(c, l10n),
                 ],
                 const SizedBox(height: 40),
               ],

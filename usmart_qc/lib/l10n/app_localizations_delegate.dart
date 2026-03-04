@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../providers/locale_provider.dart';
 import 'app_localizations.dart';
 
 class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
@@ -12,7 +13,10 @@ class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
 
   @override
   Future<AppLocalizations> load(Locale locale) async {
-    return AppLocalizations(locale);
+    // When user chose Kurdish (ku), MaterialApp uses 'ar' for system widgets.
+    // Use override so our app strings come from Kurdish.
+    final code = appLanguageCodeOverride ?? locale.languageCode;
+    return AppLocalizations(Locale(code));
   }
 
   @override

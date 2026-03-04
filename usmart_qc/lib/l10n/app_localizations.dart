@@ -5,7 +5,12 @@ class AppLocalizations {
   final Locale locale;
   final Map<String, String> _strings;
 
-  AppLocalizations(this.locale) : _strings = allTranslations[locale.languageCode] ?? allTranslations['en']!;
+  AppLocalizations(this.locale) : _strings = _resolveStrings(locale.languageCode);
+
+  static Map<String, String> _resolveStrings(String code) {
+    final resolved = code == 'ckb' ? 'ku' : code;
+    return allTranslations[resolved] ?? allTranslations['en']!;
+  }
 
   static AppLocalizations of(BuildContext context) {
     return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
@@ -28,5 +33,5 @@ class AppLocalizations {
     Locale('tr'),
   ];
 
-  static bool isRtl(String code) => code == 'ar' || code == 'ku';
+  static bool isRtl(String code) => code == 'ar' || code == 'ku' || code == 'ckb';
 }

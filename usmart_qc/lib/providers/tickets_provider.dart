@@ -284,15 +284,24 @@ class TicketsProvider extends ChangeNotifier {
     required String technique,
     int slaHours = 24,
     String? province,
+    String? designSpecifications,
+    List<String>? attachmentUrls,
   }) async {
     try {
-      final data = await _api.post(ApiConfig.tickets, body: {
+      final body = <String, dynamic>{
         'siteName': siteName,
         'siteCoordinator': siteCoordinator,
         'technique': technique,
         'slaHours': slaHours,
         'province': province ?? 'N/A',
-      });
+      };
+      if (designSpecifications != null && designSpecifications.trim().isNotEmpty) {
+        body['designSpecifications'] = designSpecifications.trim();
+      }
+      if (attachmentUrls != null && attachmentUrls.isNotEmpty) {
+        body['attachmentUrls'] = attachmentUrls;
+      }
+      final data = await _api.post(ApiConfig.tickets, body: body);
       if (data['success'] == true) {
         await fetchTickets();
         return true;

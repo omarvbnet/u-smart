@@ -25,6 +25,7 @@ function toConflictPayload(row: any, parsed: Record<string, unknown>) {
     resolvedBy: parsed.conflictResolvedBy ?? null,
     resolvedAt: parsed.conflictResolvedAt ?? null,
     resolution: parsed.conflictResolution ?? null,
+    conflictReportComment: (parsed.conflictReportComment as string) ?? null,
     reportedBy: parsed.conflictReportedBy ?? null,
     reportedAt: parsed.conflictReportedAt ?? null,
   };

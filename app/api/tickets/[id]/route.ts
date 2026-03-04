@@ -112,6 +112,12 @@ export async function GET(
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
     let checklistHistory: Array<{ at: string; inspectionChecklist?: unknown[]; inspectionResult?: string }> = [];
+    let conflictReported = false;
+    let conflictStatus: string | null = null;
+    let conflictResolution: string | null = null;
+    let conflictReportComment: string | null = null;
+    let conflictReportedAt: string | null = null;
+    let conflictResolvedAt: string | null = null;
     let assignedEngineerId: string | null = null;
     let assignedEngineerName: string | null = null;
     let assignedAt: string | null = null;
@@ -160,6 +166,12 @@ export async function GET(
               inspectionResult: typeof e.inspectionResult === 'string' ? e.inspectionResult : undefined,
             }))
           : [];
+        conflictReported = parsed.conflictReported === true;
+        conflictStatus = typeof parsed.conflictStatus === 'string' ? parsed.conflictStatus : null;
+        conflictResolution = typeof parsed.conflictResolution === 'string' ? parsed.conflictResolution : null;
+        conflictReportComment = typeof parsed.conflictReportComment === 'string' ? parsed.conflictReportComment : null;
+        conflictReportedAt = typeof parsed.conflictReportedAt === 'string' ? parsed.conflictReportedAt : null;
+        conflictResolvedAt = typeof parsed.conflictResolvedAt === 'string' ? parsed.conflictResolvedAt : null;
       }
       // Fallback: extract inspection result when COMPLETED (handles alternate company JSON structure)
       if (status === 'COMPLETED' && !inspectionResult && typeof parsed.inspectionResult === 'string') {
@@ -225,6 +237,12 @@ export async function GET(
         requesterName,
         requesterRole: ticketRequesterRole,
         requesterPhone,
+        conflictReported,
+        conflictStatus,
+        conflictResolution,
+        conflictReportComment,
+        conflictReportedAt,
+        conflictResolvedAt,
       },
     });
   } catch (err) {

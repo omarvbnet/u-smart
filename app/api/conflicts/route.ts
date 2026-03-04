@@ -32,6 +32,7 @@ function rowToConflict(row: any): any {
     resolvedBy: parsed.conflictResolvedBy ?? null,
     resolvedAt: parsed.conflictResolvedAt ?? null,
     resolution: parsed.conflictResolution ?? null,
+    conflictReportComment: parsed.conflictReportComment ?? null,
     reportedBy: parsed.conflictReportedBy ?? null,
     reportedAt: parsed.conflictReportedAt ?? null,
   };

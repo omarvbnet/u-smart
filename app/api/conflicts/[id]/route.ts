@@ -31,8 +31,10 @@ function rowToConflict(row: any): any {
     resolvedBy: parsed.conflictResolvedBy ?? null,
     resolvedAt: parsed.conflictResolvedAt ?? null,
     resolution: parsed.conflictResolution ?? null,
+    resolutionComment: parsed.conflictResolutionComment ?? null,
     reportedBy: parsed.conflictReportedBy ?? null,
     reportedAt: parsed.conflictReportedAt ?? null,
+    conflictReportComment: parsed.conflictReportComment ?? null,
   };
 }
 
@@ -123,8 +125,8 @@ export async function PATCH(
     /* ignore */
   }
 
-  if (requesterRole !== 'ENGINEER') {
-    return NextResponse.json({ success: false, message: 'Only engineers can resolve conflicts' }, { status: 403 });
+  if (requesterRole !== 'ENGINEER' && requesterRole !== 'ADMIN') {
+    return NextResponse.json({ success: false, message: 'Only engineers or managers can resolve conflicts' }, { status: 403 });
   }
 
   const { id } = await params;
@@ -144,11 +146,12 @@ export async function PATCH(
   }
 
   try {
+    const whereClause: any = { id };
+    if (requesterRole !== 'ADMIN') {
+      whereClause.company = { contains: auth.payload.requesterId };
+    }
     const ticket = await prisma.visitorRequest.findFirst({
-      where: {
-        id,
-        company: { contains: auth.payload.requesterId },
-      },
+      where: whereClause,
       select: { id: true, company: true, requesterId: true },
     });
 
@@ -169,19 +172,41 @@ export async function PATCH(
     parsed.conflictResolution = resolution;
     if (comment) parsed.conflictResolutionComment = comment;
 
+    let newTicketStatus: string | null = null;
     if (resolution === 're_inspection') {
       parsed.inspectionResult = null;
       parsed.inspectionComments = null;
       parsed.inspectionChecklist = null;
       parsed.checklistResponse = null;
+      parsed.status = 'IN_PROGRESS';
+      newTicketStatus = 'IN_PROGRESS';
     } else if (resolution !== 'keep_same') {
       parsed.inspectionResult = resolution;
     }
 
+    const updateData: { company: string; status?: string; completedAt?: null } = { company: JSON.stringify(parsed) };
+    if (newTicketStatus) {
+      updateData.status = newTicketStatus;
+      updateData.completedAt = null;
+    }
+
     await prisma.visitorRequest.update({
       where: { id },
-      data: { company: JSON.stringify(parsed) },
+      data: updateData,
     });
+
+    if (newTicketStatus === 'IN_PROGRESS') {
+      try {
+        await prisma.ticketStatusLog.create({
+          data: {
+            visitorRequestId: id,
+            status: newTicketStatus,
+          },
+        });
+      } catch (logErr) {
+        /* ticketStatusLog may not exist */
+      }
+    }
 
     const conflict = rowToConflict({ ...ticket, company: JSON.stringify(parsed) });
     return NextResponse.json({ success: true, conflict });

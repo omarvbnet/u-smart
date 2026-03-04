@@ -17,7 +17,7 @@ class ProvisrApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<AuthProvider, LocaleProvider>(
       builder: (context, auth, localeProv, _) {
-        final locale = localeProv.locale;
+        final locale = localeProv.effectiveLocale;
         final isRtl = localeProv.isRtl;
         return Directionality(
           textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
@@ -42,7 +42,7 @@ class ProvisrApp extends StatelessWidget {
           error: Color(0xFFFF4757),
         ),
         useMaterial3: true,
-        fontFamily: 'Inter',
+        fontFamily: isRtl ? null : 'Inter',
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: CupertinoPageTransitionsBuilder(),

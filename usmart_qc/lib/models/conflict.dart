@@ -15,6 +15,8 @@ class ConflictCase {
   final String? resolvedBy;
   final String? resolvedAt;
   final String? resolution; // accepted, not_accepted, ncr, accepted_with_comments, re_inspection, keep_same
+  final String? resolutionComment;
+  final String? conflictReportComment;
   final String? reportedBy;
   final String? reportedAt;
 
@@ -33,6 +35,8 @@ class ConflictCase {
     this.resolvedBy,
     this.resolvedAt,
     this.resolution,
+    this.resolutionComment,
+    this.conflictReportComment,
     this.reportedBy,
     this.reportedAt,
   });
@@ -61,6 +65,8 @@ class ConflictCase {
       resolvedBy: json['resolvedBy'] as String?,
       resolvedAt: json['resolvedAt'] as String?,
       resolution: json['resolution'] as String?,
+      resolutionComment: json['resolutionComment'] as String?,
+      conflictReportComment: json['conflictReportComment'] as String?,
       reportedBy: json['reportedBy'] as String?,
       reportedAt: json['reportedAt'] as String?,
     );
