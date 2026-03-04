@@ -133,9 +133,10 @@ export async function POST(req: NextRequest) {
         where: { id: payload.requesterId },
         select: { role: true },
       })) as { role?: string } | null;
-      if (requesterRole?.role !== 'TECHNICIAN') {
+      const allowedRoles = ['TECHNICIAN', 'COMPANY', 'ENGINEER'];
+      if (!requesterRole?.role || !allowedRoles.includes(requesterRole.role)) {
         return NextResponse.json(
-          { success: false, message: 'Only technician role can create maintenance tickets' },
+          { success: false, message: 'Only company, engineer, or technician can create maintenance tickets' },
           { status: 403 }
         );
       }
@@ -391,8 +392,8 @@ export async function GET(req: NextRequest) {
     let where: any;
 
     if (requesterRole === 'ENGINEER') {
-      // Engineers see: PENDING tickets (province-filtered if active) + tickets assigned to them (exclude maintenance)
-      const pendingFilter: any = { status: 'PENDING', technique: { notIn: MAINTENANCE_TECHNIQUES } };
+      // Engineers see: PENDING tickets (province-filtered if active) + tickets assigned to them (including maintenance)
+      const pendingFilter: any = { status: 'PENDING' };
       if (provinceFilterActive && requesterProvince) {
         pendingFilter.province = requesterProvince;
       }
@@ -414,11 +415,10 @@ export async function GET(req: NextRequest) {
         ],
       };
     } else {
-      // COMPANY: only their tickets, exclude maintenance (maintenance is technician-only)
+      // COMPANY: only their tickets (including maintenance they created)
       where = {
         requesterId: payload.requesterId,
         serviceSlug: filterServiceSlug,
-        technique: { notIn: MAINTENANCE_TECHNIQUES },
       };
     }
 

@@ -8,7 +8,7 @@ import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import 'attachment_viewer_screen.dart';
 
-/// Maintenance types (technician only). Values must match backend MAINTENANCE_TECHNIQUES.
+/// Maintenance types. Values must match backend MAINTENANCE_TECHNIQUES.
 const _maintenanceTypeIds = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 const _maintenanceTypeKeys = [
   'maint_fiber_route',

@@ -23,6 +23,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> tryAutoLogin() async {
     _loading = true;
     notifyListeners();
+    final minSplashFuture = Future.delayed(const Duration(milliseconds: 2200));
     try {
       final token = await _authService.getSavedToken();
       if (token != null) {
@@ -32,6 +33,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       _user = null;
     }
+    await minSplashFuture;
     _loading = false;
     notifyListeners();
   }

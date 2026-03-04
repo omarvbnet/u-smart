@@ -14,6 +14,7 @@ import 'ticket_detail_screen.dart';
 import 'notifications_screen.dart';
 import 'site_form_screen.dart';
 import 'conflict_detail_screen.dart';
+import 'ticket_type_picker_screen.dart';
 import '../providers/sites_provider.dart';
 import '../providers/conflicts_provider.dart';
 
@@ -113,6 +114,33 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
           ),
         ),
       ),
+      floatingActionButton: _currentTab == 0
+          ? Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6C63FF).withAlpha(80),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                onPressed: () => showNewTicketTypePicker(context),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+            )
+          : null,
     );
   }
 

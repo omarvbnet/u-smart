@@ -14,7 +14,6 @@ import '../widgets/ticket_card.dart';
 import '../widgets/stats_card.dart';
 import 'notifications_screen.dart';
 import 'ticket_detail_screen.dart';
-import 'create_ticket_screen.dart';
 import 'ticket_type_picker_screen.dart';
 import 'conflicts_screen.dart';
 import 'site_form_screen.dart';
@@ -64,10 +63,12 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  const Color(0xFF6C63FF).withAlpha(25),
-                  Colors.transparent,
-                ]),
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF6C63FF).withAlpha(25),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
           ),
@@ -133,18 +134,15 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               ),
               child: FloatingActionButton(
                 onPressed: () {
-                  final user = context.read<AuthProvider>().user;
-                  if (user?.isTechnician == true) {
-                    showNewTicketTypePicker(context);
-                  } else {
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const CreateTicketScreen()));
-                  }
+                  showNewTicketTypePicker(context);
                 },
                 backgroundColor: Colors.transparent,
                 elevation: 0,
-                child: const Icon(Icons.add_rounded,
-                    color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
             )
           : null,
@@ -188,17 +186,29 @@ class _TicketsTab extends StatelessWidget {
 
         final sections = <_TicketSection>[
           if (provider.pendingTickets.isNotEmpty)
-            _TicketSection(l10n.t('section_pending'), provider.pendingTickets,
-                const Color(0xFFFBBF24)),
+            _TicketSection(
+              l10n.t('section_pending'),
+              provider.pendingTickets,
+              const Color(0xFFFBBF24),
+            ),
           if (provider.onSiteTickets.isNotEmpty)
-            _TicketSection(l10n.t('section_on_site'), provider.onSiteTickets,
-                const Color(0xFF6C63FF)),
+            _TicketSection(
+              l10n.t('section_on_site'),
+              provider.onSiteTickets,
+              const Color(0xFF6C63FF),
+            ),
           if (provider.inProgressTickets.isNotEmpty)
-            _TicketSection(l10n.t('section_in_progress'), provider.inProgressTickets,
-                const Color(0xFF00D4AA)),
+            _TicketSection(
+              l10n.t('section_in_progress'),
+              provider.inProgressTickets,
+              const Color(0xFF00D4AA),
+            ),
           if (provider.completedTickets.isNotEmpty)
-            _TicketSection(l10n.t('section_completed'), provider.completedTickets,
-                const Color(0xFF4ADE80)),
+            _TicketSection(
+              l10n.t('section_completed'),
+              provider.completedTickets,
+              const Color(0xFF4ADE80),
+            ),
         ];
 
         return Column(
@@ -229,7 +239,8 @@ class _TicketsTab extends StatelessWidget {
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => const NotificationsScreen()),
+                            builder: (_) => const NotificationsScreen(),
+                          ),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.only(right: 10),
@@ -252,7 +263,9 @@ class _TicketsTab extends StatelessWidget {
                                       shape: BoxShape.circle,
                                     ),
                                     constraints: const BoxConstraints(
-                                        minWidth: 16, minHeight: 16),
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
                                     child: Text(
                                       count > 99 ? '99+' : '$count',
                                       style: const TextStyle(
@@ -271,14 +284,18 @@ class _TicketsTab extends StatelessWidget {
                     },
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF6C63FF).withAlpha(20),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      l10n.t('total_count', {'count': '${provider.tickets.length}'}),
+                      l10n.t('total_count', {
+                        'count': '${provider.tickets.length}',
+                      }),
                       style: const TextStyle(
                         color: Color(0xFF8B83FF),
                         fontSize: 12,
@@ -299,7 +316,9 @@ class _TicketsTab extends StatelessWidget {
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                         itemCount: sections.fold<int>(
-                            0, (sum, s) => sum + 1 + s.tickets.length),
+                          0,
+                          (sum, s) => sum + 1 + s.tickets.length,
+                        ),
                         itemBuilder: (context, index) {
                           int i = 0;
                           for (final section in sections) {
@@ -307,18 +326,18 @@ class _TicketsTab extends StatelessWidget {
                               return _sectionHeader(section);
                             }
                             if (index <= i + section.tickets.length) {
-                              final ticket =
-                                  section.tickets[index - i - 1];
+                              final ticket = section.tickets[index - i - 1];
                               return TicketCard(
                                 ticket: ticket,
                                 onTap: () => Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => TicketDetailScreen(
-                                        ticketId: ticket.id),
+                                    builder: (_) =>
+                                        TicketDetailScreen(ticketId: ticket.id),
                                   ),
                                 ),
                                 onAssign: null,
-                                showAssignToMe: false, // Requester cannot assign
+                                showAssignToMe:
+                                    false, // Requester cannot assign
                               );
                             }
                             i += 1 + section.tickets.length;
@@ -389,8 +408,11 @@ class _TicketsTab extends StatelessWidget {
               color: const Color(0xFF6C63FF).withAlpha(15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.assignment_outlined,
-                size: 48, color: Color(0xFF6C63FF)),
+            child: const Icon(
+              Icons.assignment_outlined,
+              size: 48,
+              color: Color(0xFF6C63FF),
+            ),
           ),
           const SizedBox(height: 20),
           Text(
@@ -424,14 +446,23 @@ class _SitesTab extends StatelessWidget {
   const _SitesTab();
 
   Future<void> _confirmDelete(
-      BuildContext context, SitesProvider provider, site, AppLocalizations l10n) async {
+    BuildContext context,
+    SitesProvider provider,
+    site,
+    AppLocalizations l10n,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF12122A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(l10n.t('site_delete_confirm_title'),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        title: Text(
+          l10n.t('site_delete_confirm_title'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Text(
           l10n.t('site_delete_confirm', {'name': site.siteId}),
           style: TextStyle(color: Colors.white.withAlpha(180)),
@@ -439,12 +470,16 @@ class _SitesTab extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.t('cancel'),
-                style: TextStyle(color: Colors.white.withAlpha(120))),
+            child: Text(
+              l10n.t('cancel'),
+              style: TextStyle(color: Colors.white.withAlpha(120)),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4757)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4757),
+            ),
             child: Text(l10n.t('site_delete')),
           ),
         ],
@@ -455,10 +490,16 @@ class _SitesTab extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? l10n.t('site_deleted') : l10n.t('site_delete_failed')),
-            backgroundColor: success ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+            content: Text(
+              success ? l10n.t('site_deleted') : l10n.t('site_delete_failed'),
+            ),
+            backgroundColor: success
+                ? const Color(0xFF00D4AA)
+                : const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -500,7 +541,9 @@ class _SitesTab extends StatelessWidget {
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF00D4AA).withAlpha(20),
                           borderRadius: BorderRadius.circular(20),
@@ -508,11 +551,17 @@ class _SitesTab extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.gps_fixed,
-                                color: Color(0xFF00D4AA), size: 14),
+                            const Icon(
+                              Icons.gps_fixed,
+                              color: Color(0xFF00D4AA),
+                              size: 14,
+                            ),
                             const SizedBox(width: 4),
                             Text(
-                              l10n.t('gps_count', {'count': '${provider.sitesWithCoordinates.length}'}),
+                              l10n.t('gps_count', {
+                                'count':
+                                    '${provider.sitesWithCoordinates.length}',
+                              }),
                               style: const TextStyle(
                                 color: Color(0xFF00D4AA),
                                 fontSize: 12,
@@ -537,30 +586,42 @@ class _SitesTab extends StatelessWidget {
                                   color: const Color(0xFF6C63FF).withAlpha(15),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.explore_off_rounded,
-                                    size: 48, color: Color(0xFF6C63FF)),
+                                child: const Icon(
+                                  Icons.explore_off_rounded,
+                                  size: 48,
+                                  color: Color(0xFF6C63FF),
+                                ),
                               ),
                               const SizedBox(height: 20),
-                              Text(l10n.t('no_sites'),
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 18,
-                                      fontWeight: FontWeight.w600)),
+                              Text(
+                                l10n.t('no_sites'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               const SizedBox(height: 24),
                               ElevatedButton.icon(
-                                onPressed: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const SiteFormScreen(),
-                                  ),
-                                ).then((_) => provider.fetchSites()),
+                                onPressed: () => Navigator.of(context)
+                                    .push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const SiteFormScreen(),
+                                      ),
+                                    )
+                                    .then((_) => provider.fetchSites()),
                                 icon: const Icon(Icons.add_rounded, size: 20),
                                 label: Text(l10n.t('site_add')),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF6C63FF),
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 12),
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14)),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
                               ),
                             ],
@@ -581,7 +642,8 @@ class _SitesTab extends StatelessWidget {
                                   color: const Color(0xFF12122A),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                      color: Colors.white.withAlpha(10)),
+                                    color: Colors.white.withAlpha(10),
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
@@ -590,19 +652,21 @@ class _SitesTab extends StatelessWidget {
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: [
-                                            const Color(0xFF6C63FF)
-                                                .withAlpha(30),
-                                            const Color(0xFF00D4AA)
-                                                .withAlpha(15),
+                                            const Color(
+                                              0xFF6C63FF,
+                                            ).withAlpha(30),
+                                            const Color(
+                                              0xFF00D4AA,
+                                            ).withAlpha(15),
                                           ],
                                         ),
-                                        borderRadius:
-                                            BorderRadius.circular(14),
+                                        borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: const Icon(
-                                          Icons.location_on_rounded,
-                                          color: Color(0xFF8B83FF),
-                                          size: 22),
+                                        Icons.location_on_rounded,
+                                        color: Color(0xFF8B83FF),
+                                        size: 22,
+                                      ),
                                     ),
                                     const SizedBox(width: 14),
                                     Expanded(
@@ -622,8 +686,9 @@ class _SitesTab extends StatelessWidget {
                                           Text(
                                             '${site.location} - ${site.province}',
                                             style: TextStyle(
-                                              color:
-                                                  Colors.white.withAlpha(100),
+                                              color: Colors.white.withAlpha(
+                                                100,
+                                              ),
                                               fontSize: 13,
                                             ),
                                           ),
@@ -631,8 +696,7 @@ class _SitesTab extends StatelessWidget {
                                           Text(
                                             '${site.qualityControlCount} ${l10n.t('qc_tickets')}',
                                             style: TextStyle(
-                                              color:
-                                                  Colors.white.withAlpha(60),
+                                              color: Colors.white.withAlpha(60),
                                               fontSize: 11,
                                             ),
                                           ),
@@ -641,7 +705,9 @@ class _SitesTab extends StatelessWidget {
                                             Text(
                                               '${l10n.t('site_updated_on')} ${_formatDate(site.updatedAt!)}',
                                               style: TextStyle(
-                                                color: Colors.white.withAlpha(50),
+                                                color: Colors.white.withAlpha(
+                                                  50,
+                                                ),
                                                 fontSize: 10,
                                               ),
                                             ),
@@ -654,20 +720,36 @@ class _SitesTab extends StatelessWidget {
                                       children: [
                                         IconButton(
                                           onPressed: () => Navigator.of(context)
-                                              .push(MaterialPageRoute(
-                                                builder: (_) =>
-                                                    SiteFormScreen(site: site),
-                                              ))
-                                              .then((_) => provider.fetchSites()),
-                                          icon: const Icon(Icons.edit_rounded,
-                                              color: Color(0xFF6C63FF), size: 20),
+                                              .push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      SiteFormScreen(
+                                                        site: site,
+                                                      ),
+                                                ),
+                                              )
+                                              .then(
+                                                (_) => provider.fetchSites(),
+                                              ),
+                                          icon: const Icon(
+                                            Icons.edit_rounded,
+                                            color: Color(0xFF6C63FF),
+                                            size: 20,
+                                          ),
                                           tooltip: l10n.t('site_edit'),
                                         ),
                                         IconButton(
-                                          onPressed: () =>
-                                              _confirmDelete(context, provider, site, l10n),
-                                          icon: const Icon(Icons.delete_outline_rounded,
-                                              color: Color(0xFFFF4757), size: 20),
+                                          onPressed: () => _confirmDelete(
+                                            context,
+                                            provider,
+                                            site,
+                                            l10n,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: Color(0xFFFF4757),
+                                            size: 20,
+                                          ),
                                           tooltip: l10n.t('site_delete'),
                                         ),
                                         const SizedBox(width: 4),
@@ -675,11 +757,13 @@ class _SitesTab extends StatelessWidget {
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
                                             color: site.hasCoordinates
-                                                ? const Color(0xFF00D4AA)
-                                                    .withAlpha(20)
+                                                ? const Color(
+                                                    0xFF00D4AA,
+                                                  ).withAlpha(20)
                                                 : Colors.white.withAlpha(8),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
                                           ),
                                           child: Icon(
                                             site.hasCoordinates
@@ -707,9 +791,9 @@ class _SitesTab extends StatelessWidget {
               bottom: 24,
               child: FloatingActionButton(
                 onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute(
-                      builder: (_) => const SiteFormScreen(),
-                    ))
+                    .push(
+                      MaterialPageRoute(builder: (_) => const SiteFormScreen()),
+                    )
                     .then((_) => provider.fetchSites()),
                 backgroundColor: const Color(0xFF6C63FF),
                 child: const Icon(Icons.add_rounded, color: Colors.white),
@@ -786,8 +870,11 @@ class _StatsTab extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.date_range_rounded,
-                            size: 18, color: Colors.white.withAlpha(160)),
+                        Icon(
+                          Icons.date_range_rounded,
+                          size: 18,
+                          color: Colors.white.withAlpha(160),
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           l10n.t('filter_date_range'),
@@ -807,8 +894,11 @@ class _StatsTab extends StatelessWidget {
                             onTap: () async {
                               final picked = await showDatePicker(
                                 context: context,
-                                initialDate: provider.dateFrom ??
-                                    DateTime.now().subtract(const Duration(days: 30)),
+                                initialDate:
+                                    provider.dateFrom ??
+                                    DateTime.now().subtract(
+                                      const Duration(days: 30),
+                                    ),
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime.now(),
                               );
@@ -824,15 +914,20 @@ class _StatsTab extends StatelessWidget {
                             borderRadius: BorderRadius.circular(10),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withAlpha(8),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.calendar_today_rounded,
-                                      size: 16, color: Colors.white.withAlpha(140)),
+                                  Icon(
+                                    Icons.calendar_today_rounded,
+                                    size: 16,
+                                    color: Colors.white.withAlpha(140),
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     provider.dateFrom != null
@@ -872,15 +967,20 @@ class _StatsTab extends StatelessWidget {
                             borderRadius: BorderRadius.circular(10),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withAlpha(8),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.calendar_today_rounded,
-                                      size: 16, color: Colors.white.withAlpha(140)),
+                                  Icon(
+                                    Icons.calendar_today_rounded,
+                                    size: 16,
+                                    color: Colors.white.withAlpha(140),
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     provider.dateTo != null
@@ -906,8 +1006,11 @@ class _StatsTab extends StatelessWidget {
                               await provider.fetchStats();
                               await provider.fetchTickets();
                             },
-                            icon: const Icon(Icons.clear_rounded,
-                                color: Color(0xFFFF4757), size: 22),
+                            icon: const Icon(
+                              Icons.clear_rounded,
+                              color: Color(0xFFFF4757),
+                              size: 22,
+                            ),
                             tooltip: l10n.t('filter_clear'),
                           ),
                         ],
@@ -920,7 +1023,8 @@ class _StatsTab extends StatelessWidget {
                         onPressed: provider.exporting
                             ? null
                             : () async {
-                                final path = await provider.exportTicketsExcel();
+                                final path = await provider
+                                    .exportTicketsExcel();
                                 if (context.mounted && path != null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
@@ -1007,7 +1111,8 @@ class _StatsTab extends StatelessWidget {
                           minHeight: 8,
                           backgroundColor: Colors.white.withAlpha(15),
                           valueColor: const AlwaysStoppedAnimation(
-                              Color(0xFF00D4AA)),
+                            Color(0xFF00D4AA),
+                          ),
                         ),
                       ),
                     ],
@@ -1086,7 +1191,9 @@ class _StatsTab extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF6C63FF).withAlpha(20),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF6C63FF).withAlpha(40)),
+                  border: Border.all(
+                    color: const Color(0xFF6C63FF).withAlpha(40),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -1096,8 +1203,11 @@ class _StatsTab extends StatelessWidget {
                         color: const Color(0xFF6C63FF).withAlpha(30),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.timer_rounded,
-                          color: Color(0xFF8B83FF), size: 24),
+                      child: const Icon(
+                        Icons.timer_rounded,
+                        color: Color(0xFF8B83FF),
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -1113,7 +1223,9 @@ class _StatsTab extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _formatTotalInspectionHours(provider.totalInspectionHours),
+                            _formatTotalInspectionHours(
+                              provider.totalInspectionHours,
+                            ),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -1262,9 +1374,7 @@ class _ProfileTab extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    (user.name ?? user.username)
-                        .substring(0, 1)
-                        .toUpperCase(),
+                    (user.name ?? user.username).substring(0, 1).toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -1291,19 +1401,37 @@ class _ProfileTab extends StatelessWidget {
                 child: Text(
                   user.company!,
                   style: TextStyle(
-                      color: Colors.white.withAlpha(100), fontSize: 14),
+                    color: Colors.white.withAlpha(100),
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],
             const SizedBox(height: 32),
-            _profileRow(Icons.person_outline_rounded, l10n.t('profile_username'),
-                user.username, const Color(0xFF6C63FF)),
-            _profileRow(Icons.phone_outlined, l10n.t('profile_phone'),
-                user.phone ?? '-', const Color(0xFF00D4AA)),
-            _profileRow(Icons.verified_outlined, l10n.t('profile_status'),
-                user.status, const Color(0xFF4ADE80)),
-            _profileRow(Icons.business_rounded, l10n.t('profile_role'),
-                l10n.t('role_company'), const Color(0xFFFBBF24)),
+            _profileRow(
+              Icons.person_outline_rounded,
+              l10n.t('profile_username'),
+              user.username,
+              const Color(0xFF6C63FF),
+            ),
+            _profileRow(
+              Icons.phone_outlined,
+              l10n.t('profile_phone'),
+              user.phone ?? '-',
+              const Color(0xFF00D4AA),
+            ),
+            _profileRow(
+              Icons.verified_outlined,
+              l10n.t('profile_status'),
+              user.status,
+              const Color(0xFF4ADE80),
+            ),
+            _profileRow(
+              Icons.business_rounded,
+              l10n.t('profile_role'),
+              l10n.t('role_company'),
+              const Color(0xFFFBBF24),
+            ),
             const SizedBox(height: 12),
             _languageRow(context, l10n, localeProv),
             const SizedBox(height: 20),
@@ -1311,7 +1439,8 @@ class _ProfileTab extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: const Color(0xFFFF4757).withAlpha(60)),
+                  color: const Color(0xFFFF4757).withAlpha(60),
+                ),
               ),
               child: Material(
                 color: Colors.transparent,
@@ -1324,8 +1453,11 @@ class _ProfileTab extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.logout_rounded,
-                            color: Color(0xFFFF4757), size: 18),
+                        const Icon(
+                          Icons.logout_rounded,
+                          color: Color(0xFFFF4757),
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           l10n.t('sign_out'),
@@ -1346,7 +1478,9 @@ class _ProfileTab extends StatelessWidget {
               child: Text(
                 l10n.t('app_version'),
                 style: TextStyle(
-                    color: Colors.white.withAlpha(40), fontSize: 12),
+                  color: Colors.white.withAlpha(40),
+                  fontSize: 12,
+                ),
               ),
             ),
           ],
@@ -1355,7 +1489,11 @@ class _ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _languageRow(BuildContext context, AppLocalizations l10n, LocaleProvider localeProv) {
+  Widget _languageRow(
+    BuildContext context,
+    AppLocalizations l10n,
+    LocaleProvider localeProv,
+  ) {
     final code = localeProv.locale.languageCode;
     final langKey = 'lang_$code';
     return Material(
@@ -1368,8 +1506,7 @@ class _ProfileTab extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-                color: const Color(0xFF6C63FF).withAlpha(15)),
+            border: Border.all(color: const Color(0xFF6C63FF).withAlpha(15)),
           ),
           child: Row(
             children: [
@@ -1393,7 +1530,9 @@ class _ProfileTab extends StatelessWidget {
                     Text(
                       l10n.t('language'),
                       style: TextStyle(
-                          color: Colors.white.withAlpha(80), fontSize: 11),
+                        color: Colors.white.withAlpha(80),
+                        fontSize: 11,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1419,8 +1558,7 @@ class _ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _profileRow(
-      IconData icon, String label, String value, Color color) {
+  Widget _profileRow(IconData icon, String label, String value, Color color) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -1446,15 +1584,18 @@ class _ProfileTab extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                    color: Colors.white.withAlpha(80), fontSize: 11),
+                  color: Colors.white.withAlpha(80),
+                  fontSize: 11,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600),
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
