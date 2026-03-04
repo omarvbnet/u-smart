@@ -61,10 +61,11 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
 
     final provider = context.read<RegistrationRequestProvider>();
     String? url;
-    if (path != null && path.isNotEmpty) {
-      url = await provider.uploadEvidence(path);
-    } else if (bytes != null && bytes.isNotEmpty && filename.isNotEmpty) {
+    // Prefer bytes over path - iOS paths can be inaccessible after picker dismisses
+    if (bytes != null && bytes.isNotEmpty && filename.isNotEmpty) {
       url = await provider.uploadEvidenceFromBytes(bytes, filename);
+    } else if (path != null && path.isNotEmpty) {
+      url = await provider.uploadEvidence(path);
     }
     if (url != null && mounted) {
       setState(() => _evidenceUrl = url);
