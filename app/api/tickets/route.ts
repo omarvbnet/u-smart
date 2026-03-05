@@ -154,7 +154,6 @@ export async function POST(req: NextRequest) {
     const maintenanceReason = typeof body.maintenanceReason === 'string' ? body.maintenanceReason.trim() : '';
     const beforeImageUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
 
-    const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
     const companyPayloadObj: Record<string, unknown> = {
       _ticket: 1,
       siteName,
