@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { RequesterRole } from '@prisma/client';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -68,7 +69,7 @@ export async function PATCH(
       const passwordHash = await bcrypt.hash(password, 10);
 
       const serviceSlug = (rr.role === 'ENGINEER' || rr.role === 'TECHNICIAN') ? 'quality-control-supervision' : 'enterprise-networking';
-      const requesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL'].includes(rr.role) ? rr.role : 'COMPANY';
+      const requesterRole: RequesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL'].includes(rr.role) ? (rr.role as RequesterRole) : 'COMPANY';
 
       await prisma.ticketRequester.create({
         data: {
