@@ -141,10 +141,22 @@ export default function AdminRegistrationRequestsPage() {
                   <td className="px-4 py-3 text-sm">
                     <span
                       className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                        r.role === 'ENGINEER' ? 'bg-amber-100 text-amber-800' : 'bg-cyan-100 text-cyan-800'
+                        r.role === 'ENGINEER'
+                          ? 'bg-amber-100 text-amber-800'
+                          : r.role === 'TECHNICIAN'
+                            ? 'bg-violet-100 text-violet-800'
+                            : r.role === 'PERSONAL'
+                              ? 'bg-sky-100 text-sky-800'
+                              : 'bg-cyan-100 text-cyan-800'
                       }`}
                     >
-                      {r.role === 'ENGINEER' ? 'Engineer' : 'Company'}
+                      {r.role === 'ENGINEER'
+                        ? 'Engineer'
+                        : r.role === 'TECHNICIAN'
+                          ? 'Technician'
+                          : r.role === 'PERSONAL'
+                            ? 'Personal'
+                            : 'Company'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
