@@ -30,12 +30,14 @@ export async function GET(
   } catch { /* fallback to COMPANY */ }
 
   try {
-    // For COMPANY users: must own the ticket.
-    // For ENGINEER users: ticket must be PENDING or assigned to them.
+    // ENGINEER: any ticket. TECHNICIAN: only maintenance tickets. COMPANY/PERSONAL: own tickets only.
+    const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let whereClause: any;
     if (requesterRole === 'ENGINEER') {
       whereClause = { id };
+    } else if (requesterRole === 'TECHNICIAN') {
+      whereClause = { id, technique: { in: MAINTENANCE_TECHNIQUES } };
     } else {
       whereClause = { id, requesterId: payload.requesterId };
     }
@@ -206,6 +208,13 @@ export async function GET(
     const ticketRequesterRole = req?.role ?? null;
     const requesterPhone = req?.phone ?? null;
 
+    const maintenanceReason = (() => {
+      try {
+        const p = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+        return (p._ticket && typeof p.maintenanceReason === 'string') ? p.maintenanceReason : null;
+      } catch { return null; }
+    })();
+
     return NextResponse.json({
       success: true,
       ticket: {
@@ -219,6 +228,7 @@ export async function GET(
         completedAt,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
         maintenanceDescription,
+        maintenanceReason,
         beforeImageUrls,
         finishingImageUrls,
         assignedTeam,

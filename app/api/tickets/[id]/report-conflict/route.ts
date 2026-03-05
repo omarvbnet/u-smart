@@ -5,10 +5,13 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 const prisma = _prisma as any;
 
 const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
+const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+const CONFLICT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function toConflictPayload(row: any, parsed: Record<string, unknown>) {
-  const inspectionResult = (parsed.inspectionResult as string) ?? 'not_accepted';
-  return {
+function toConflictPayload(row: any, parsed: Record<string, unknown>, technique: string) {
+  const isMaint = MAINTENANCE_TECHNIQUES.includes((technique ?? '').toLowerCase());
+  const inspectionResult = isMaint ? 'maintenance' : ((parsed.inspectionResult as string) ?? 'not_accepted');
+  const payload: Record<string, unknown> = {
     id: row.id,
     ticketId: row.id,
     siteName: parsed.siteName ?? null,
@@ -28,7 +31,12 @@ function toConflictPayload(row: any, parsed: Record<string, unknown>) {
     conflictReportComment: (parsed.conflictReportComment as string) ?? null,
     reportedBy: parsed.conflictReportedBy ?? null,
     reportedAt: parsed.conflictReportedAt ?? null,
+    isMaintenanceConflict: isMaint,
   };
+  if (isMaint && Array.isArray(parsed.conflictImageUrls)) {
+    payload.conflictImageUrls = parsed.conflictImageUrls.filter((u: unknown) => typeof u === 'string');
+  }
+  return payload;
 }
 
 export async function POST(
@@ -51,8 +59,8 @@ export async function POST(
     /* ignore */
   }
 
-  if (requesterRole !== 'COMPANY') {
-    return NextResponse.json({ success: false, message: 'Only company can report conflicts' }, { status: 403 });
+  if (requesterRole !== 'COMPANY' && requesterRole !== 'PERSONAL') {
+    return NextResponse.json({ success: false, message: 'Only company or personal can report conflicts' }, { status: 403 });
   }
 
   const { id } = await params;
@@ -63,15 +71,31 @@ export async function POST(
   try {
     const ticket = await prisma.visitorRequest.findFirst({
       where: { id, requesterId: auth.payload.requesterId },
-      select: { id: true, company: true, status: true },
+      select: { id: true, company: true, status: true, technique: true, completedAt: true },
     });
 
     if (!ticket) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
     }
 
-    if (ticket.status !== 'COMPLETED' && ticket.status !== 'IN_PROGRESS') {
-      return NextResponse.json({ success: false, message: 'Only completed or in-progress tickets can be reported as conflicts' }, { status: 400 });
+    const technique = (ticket.technique ?? '').toLowerCase();
+    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
+
+    if (isMaintenance) {
+      if (ticket.status !== 'COMPLETED') {
+        return NextResponse.json({ success: false, message: 'Only completed maintenance tickets can be reported as conflicts' }, { status: 400 });
+      }
+      const completedAt = ticket.completedAt ? new Date(ticket.completedAt).getTime() : null;
+      if (!completedAt || Date.now() - completedAt > CONFLICT_WINDOW_MS) {
+        return NextResponse.json(
+          { success: false, message: 'Conflict can only be reported within 24 hours of completion' },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (ticket.status !== 'COMPLETED' && ticket.status !== 'IN_PROGRESS') {
+        return NextResponse.json({ success: false, message: 'Only completed or in-progress tickets can be reported as conflicts' }, { status: 400 });
+      }
     }
 
     let parsed: Record<string, unknown> = {};
@@ -81,33 +105,48 @@ export async function POST(
       /* ignore */
     }
 
-    const inspectionResult = ((parsed.inspectionResult as string) ?? '').toLowerCase();
-    if (!CONFLICT_RESULTS.includes(inspectionResult)) {
-      return NextResponse.json(
-        { success: false, message: 'Ticket result must be not_accepted, ncr, or accepted_with_comments to report conflict' },
-        { status: 400 }
-      );
+    if (!isMaintenance) {
+      const inspectionResult = ((parsed.inspectionResult as string) ?? '').toLowerCase();
+      if (!CONFLICT_RESULTS.includes(inspectionResult)) {
+        return NextResponse.json(
+          { success: false, message: 'Ticket result must be not_accepted, ncr, or accepted_with_comments to report conflict' },
+          { status: 400 }
+        );
+      }
     }
 
     if (parsed.conflictReported === true) {
-      return NextResponse.json({ success: false, message: 'Conflict already reported' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Conflict already reported. Each ticket can have only one conflict request.' }, { status: 400 });
     }
 
     const body = await req.json().catch(() => ({}));
     const comment = typeof body.comment === 'string' ? body.comment.trim() : null;
+    const imageUrls = Array.isArray(body.imageUrls)
+      ? body.imageUrls.filter((u: unknown) => typeof u === 'string')
+      : [];
+
+    if (isMaintenance) {
+      if (!comment || comment.length === 0) {
+        return NextResponse.json({ success: false, message: 'Conflict reason is required' }, { status: 400 });
+      }
+      if (imageUrls.length === 0) {
+        return NextResponse.json({ success: false, message: 'At least one image is required' }, { status: 400 });
+      }
+    }
 
     parsed.conflictReported = true;
     parsed.conflictReportedBy = auth.payload.requesterId;
     parsed.conflictReportedAt = new Date().toISOString();
     parsed.conflictStatus = 'pending';
     if (comment) parsed.conflictReportComment = comment;
+    if (isMaintenance && imageUrls.length > 0) parsed.conflictImageUrls = imageUrls;
 
     await prisma.visitorRequest.update({
       where: { id },
       data: { company: JSON.stringify(parsed) },
     });
 
-    const conflict = toConflictPayload(ticket, parsed);
+    const conflict = toConflictPayload(ticket, parsed, technique);
     return NextResponse.json({ success: true, conflict });
   } catch (err) {
     console.error('POST /api/tickets/[id]/report-conflict:', err);

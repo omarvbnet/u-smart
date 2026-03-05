@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { X, Building2, UserCog, Upload, Loader2 } from 'lucide-react';
+import { X, Building2, UserCog, User, Wrench, Upload, Loader2 } from 'lucide-react';
 
 export default function RequesterLoginPage() {
   const router = useRouter();
@@ -18,7 +18,7 @@ export default function RequesterLoginPage() {
   const [checking, setChecking] = useState(true);
   const [showRegistration, setShowRegistration] = useState(false);
   const [regStep, setRegStep] = useState<'role' | 'form'>('role');
-  const [regRole, setRegRole] = useState<'COMPANY' | 'ENGINEER' | null>(null);
+  const [regRole, setRegRole] = useState<'COMPANY' | 'ENGINEER' | 'TECHNICIAN' | 'PERSONAL' | null>(null);
   const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '', province: '' });
   const [regEvidenceUrl, setRegEvidenceUrl] = useState('');
   const [regEvidenceUploading, setRegEvidenceUploading] = useState(false);
@@ -200,6 +200,24 @@ export default function RequesterLoginPage() {
                     <span className="font-medium text-white">{t('ticketForm.roleEngineer') || 'Engineer'}</span>
                     <span className="text-xs text-gray-400 text-center">{t('ticketForm.roleEngineerHint') || 'Inspect & complete tickets'}</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRegRole('TECHNICIAN'); setRegStep('form'); }}
+                    className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
+                  >
+                    <Wrench className="w-10 h-10 text-cyan-400" />
+                    <span className="font-medium text-white">{t('ticketForm.roleTechnician') || 'Technician'}</span>
+                    <span className="text-xs text-gray-400 text-center">{t('ticketForm.roleTechnicianHint') || 'Maintenance & field work'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRegRole('PERSONAL'); setRegStep('form'); }}
+                    className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
+                  >
+                    <User className="w-10 h-10 text-cyan-400" />
+                    <span className="font-medium text-white">{t('ticketForm.rolePersonal') || 'Personal'}</span>
+                    <span className="text-xs text-gray-400 text-center">{t('ticketForm.rolePersonalHint') || 'Individual use'}</span>
+                  </button>
                 </div>
                 <button type="button" onClick={() => setRegStep('role')} className="text-sm text-gray-500 hover:text-white">
                   ← {t('ticketForm.back') || 'Back'}
@@ -247,7 +265,7 @@ export default function RequesterLoginPage() {
                 }}
               >
                 <button type="button" onClick={() => setRegStep('role')} className="text-sm text-gray-500 hover:text-white mb-2">
-                  ← {t('ticketForm.back') || 'Back'} ({regRole === 'COMPANY' ? t('ticketForm.roleCompany') || 'Company' : t('ticketForm.roleEngineer') || 'Engineer'})
+                  ← {t('ticketForm.back') || 'Back'} ({regRole === 'COMPANY' ? t('ticketForm.roleCompany') || 'Company' : regRole === 'ENGINEER' ? t('ticketForm.roleEngineer') || 'Engineer' : regRole === 'TECHNICIAN' ? t('ticketForm.roleTechnician') || 'Technician' : t('ticketForm.rolePersonal') || 'Personal'})
                 </button>
 
                 {regError && (

@@ -5,7 +5,8 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 const prisma = _prisma as any;
 
 const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
-const VALID_RESOLUTIONS = ['accepted', 'not_accepted', 'ncr', 'accepted_with_comments', 're_inspection', 'keep_same'];
+const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+const VALID_RESOLUTIONS = ['accepted', 'not_accepted', 'ncr', 'accepted_with_comments', 're_inspection', 'keep_same', 're_maintain', 'no_need'];
 
 function rowToConflict(row: any): any {
   let parsed: Record<string, unknown> = {};
@@ -14,14 +15,17 @@ function rowToConflict(row: any): any {
   } catch {
     return null;
   }
-  return {
+  const technique = (row.technique ?? '').toLowerCase();
+  const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
+  const inspectionResult = isMaintenance ? 'maintenance' : ((parsed.inspectionResult as string) ?? 'not_accepted');
+  const out: Record<string, unknown> = {
     id: row.id,
     ticketId: row.id,
     siteName: parsed.siteName ?? null,
     siteCoordinator: parsed.siteCoordinator ?? null,
     assignedEngineerId: parsed.assignedEngineerId ?? null,
     assignedEngineerName: parsed.assignedEngineerName ?? null,
-    inspectionResult: (parsed.inspectionResult as string) ?? 'not_accepted',
+    inspectionResult,
     inspectionComments: parsed.inspectionComments ?? null,
     ncrReason: parsed.ncrReason ?? null,
     inspectionChecklist: Array.isArray(parsed.inspectionChecklist)
@@ -35,7 +39,12 @@ function rowToConflict(row: any): any {
     reportedBy: parsed.conflictReportedBy ?? null,
     reportedAt: parsed.conflictReportedAt ?? null,
     conflictReportComment: parsed.conflictReportComment ?? null,
+    isMaintenanceConflict: isMaintenance,
   };
+  if (isMaintenance && Array.isArray(parsed.conflictImageUrls)) {
+    out.conflictImageUrls = parsed.conflictImageUrls.filter((u: unknown) => typeof u === 'string');
+  }
+  return out;
 }
 
 export async function GET(
@@ -66,7 +75,7 @@ export async function GET(
   try {
     const row = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, company: true, status: true, requesterId: true },
+      select: { id: true, company: true, status: true, requesterId: true, technique: true },
     });
 
     if (!row) {
@@ -94,7 +103,7 @@ export async function GET(
       }
     }
 
-    const conflict = rowToConflict({ ...row, company: JSON.stringify(parsedCheck) });
+    const conflict = rowToConflict({ ...row, technique: row.technique, company: JSON.stringify(parsedCheck) });
     return NextResponse.json({ success: true, conflict });
   } catch (err) {
     console.error('GET /api/conflicts/[id]:', err);
@@ -126,7 +135,7 @@ export async function PATCH(
   }
 
   if (requesterRole !== 'ENGINEER' && requesterRole !== 'ADMIN') {
-    return NextResponse.json({ success: false, message: 'Only engineers or managers can resolve conflicts' }, { status: 403 });
+    return NextResponse.json({ success: false, message: 'Only engineers or admins can resolve conflicts' }, { status: 403 });
   }
 
   const { id } = await params;
@@ -152,7 +161,7 @@ export async function PATCH(
     }
     const ticket = await prisma.visitorRequest.findFirst({
       where: whereClause,
-      select: { id: true, company: true, requesterId: true },
+      select: { id: true, company: true, requesterId: true, technique: true },
     });
 
     if (!ticket) {
@@ -166,14 +175,18 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: 'Invalid ticket data' }, { status: 500 });
     }
 
-    parsed.conflictStatus = resolution === 're_inspection' || resolution === 'keep_same' ? 're_inspection' : 'resolved';
+    const isMaintenanceResolution = resolution === 're_maintain' || resolution === 'no_need';
+    parsed.conflictStatus = (resolution === 're_inspection' || resolution === 'keep_same') ? 're_inspection' : 'resolved';
     parsed.conflictResolvedBy = auth.payload.requesterId;
     parsed.conflictResolvedAt = new Date().toISOString();
     parsed.conflictResolution = resolution;
     if (comment) parsed.conflictResolutionComment = comment;
 
     let newTicketStatus: string | null = null;
-    if (resolution === 're_inspection') {
+    if (resolution === 're_maintain') {
+      parsed.status = 'PENDING';
+      newTicketStatus = 'PENDING';
+    } else if (resolution === 're_inspection') {
       // Preserve previous inspection (checklist, comments, result) in history before clearing
       const checklistHistory = Array.isArray(parsed.checklistHistory) ? parsed.checklistHistory : [];
       if (parsed.inspectionChecklist || parsed.inspectionResult || parsed.inspectionComments) {
@@ -191,7 +204,7 @@ export async function PATCH(
       parsed.checklistResponse = null;
       parsed.status = 'IN_PROGRESS';
       newTicketStatus = 'IN_PROGRESS';
-    } else if (resolution !== 'keep_same') {
+    } else if (resolution !== 'keep_same' && !isMaintenanceResolution) {
       parsed.inspectionResult = resolution;
     }
 
@@ -206,7 +219,7 @@ export async function PATCH(
       data: updateData,
     });
 
-    if (newTicketStatus === 'IN_PROGRESS') {
+    if (newTicketStatus === 'IN_PROGRESS' || newTicketStatus === 'PENDING') {
       try {
         await prisma.ticketStatusLog.create({
           data: {
@@ -219,7 +232,7 @@ export async function PATCH(
       }
     }
 
-    const conflict = rowToConflict({ ...ticket, company: JSON.stringify(parsed) });
+    const conflict = rowToConflict({ ...ticket, technique: ticket.technique, company: JSON.stringify(parsed) });
     return NextResponse.json({ success: true, conflict });
   } catch (err) {
     console.error('PATCH /api/conflicts/[id]:', err);

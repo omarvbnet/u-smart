@@ -4,6 +4,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 const prisma = _prisma as any;
 
 const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
+const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
 function rowToConflict(row: any): any {
   let parsed: Record<string, unknown> = {};
@@ -13,9 +14,12 @@ function rowToConflict(row: any): any {
     return null;
   }
   if (parsed.conflictReported !== true) return null;
-  const inspectionResult = (parsed.inspectionResult as string) ?? 'not_accepted';
-  if (!CONFLICT_RESULTS.includes(inspectionResult.toLowerCase())) return null;
-  return {
+  const technique = (row.technique ?? '').toLowerCase();
+  const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
+  const inspectionResult = isMaintenance ? 'maintenance' : ((parsed.inspectionResult as string) ?? 'not_accepted');
+  if (!isMaintenance && !CONFLICT_RESULTS.includes(inspectionResult.toLowerCase())) return null;
+
+  const out: Record<string, unknown> = {
     id: row.id,
     ticketId: row.id,
     siteName: parsed.siteName ?? null,
@@ -35,7 +39,12 @@ function rowToConflict(row: any): any {
     conflictReportComment: parsed.conflictReportComment ?? null,
     reportedBy: parsed.conflictReportedBy ?? null,
     reportedAt: parsed.conflictReportedAt ?? null,
+    isMaintenanceConflict: isMaintenance,
   };
+  if (isMaintenance && Array.isArray(parsed.conflictImageUrls)) {
+    out.conflictImageUrls = parsed.conflictImageUrls.filter((u: unknown) => typeof u === 'string');
+  }
+  return out;
 }
 
 export async function GET(req: NextRequest) {
@@ -60,12 +69,13 @@ export async function GET(req: NextRequest) {
     || 'quality-control-supervision';
 
   try {
+    const isRequester = requesterRole === 'COMPANY' || requesterRole === 'PERSONAL';
     const where: any = {
       serviceSlug,
-      status: { in: ['COMPLETED', 'IN_PROGRESS'] },
+      status: { in: ['COMPLETED', 'IN_PROGRESS', 'PENDING'] },
       AND: [
         { company: { contains: 'conflictReported' } },
-        requesterRole === 'COMPANY'
+        isRequester
           ? { requesterId: auth.payload.requesterId }
           : { company: { contains: auth.payload.requesterId } },
       ],
@@ -74,7 +84,7 @@ export async function GET(req: NextRequest) {
     const rows = await prisma.visitorRequest.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, company: true },
+      select: { id: true, company: true, technique: true },
     });
 
     const conflicts = rows

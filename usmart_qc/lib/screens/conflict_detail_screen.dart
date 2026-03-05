@@ -6,6 +6,7 @@ import '../models/evidence.dart';
 import '../providers/auth_provider.dart';
 import '../providers/conflicts_provider.dart';
 import '../providers/tickets_provider.dart';
+import '../config/api_config.dart';
 import 'attachment_viewer_screen.dart';
 import 'ticket_detail_screen.dart';
 
@@ -91,6 +92,7 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
     if (lower == 'ncr') return l10n.t('ncr');
     if (lower == 'accepted_with_comments') return l10n.t('accepted_with_comments');
     if (lower == 'accepted') return l10n.t('accepted');
+    if (lower == 'maintenance') return l10n.t('ticket_type_maintenance');
     return r;
   }
 
@@ -98,6 +100,8 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
     final r = (c.resolution ?? '').toLowerCase();
     if (r == 're_inspection') return l10n.t('resolution_re_inspection');
     if (r == 'keep_same') return l10n.t('resolution_keep_same');
+    if (r == 're_maintain') return l10n.t('re_maintain');
+    if (r == 'no_need') return l10n.t('no_need');
     if (r == 'accepted' || r == 'not_accepted' || r == 'ncr' || r == 'accepted_with_comments') {
       return '${l10n.t('resolution_changed_to')} ${_resultLabel(r, l10n)}';
     }
@@ -244,7 +248,7 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
             );
           }
 
-          if (_evidence == null && !_evidenceLoading) {
+          if (!c.isMaintenanceConflict && _evidence == null && !_evidenceLoading) {
             _loadEvidence(c.ticketId);
           }
 
@@ -317,7 +321,59 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                   ),
                 ],
 
-                if (_evidence != null && _evidence!.isNotEmpty) ...[
+                if (c.isMaintenanceConflict &&
+                    c.conflictImageUrls.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _glassSection(l10n.t('conflict_evidence'), [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: c.conflictImageUrls.map((url) {
+                          final displayUrl = url.startsWith('http')
+                              ? url
+                              : (url.startsWith('/')
+                                  ? '${ApiConfig.baseUrl}$url'
+                                  : '${ApiConfig.baseUrl}/$url');
+                          return GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AttachmentViewerScreen(
+                                  url: url,
+                                  label: url.split('/').last,
+                                ),
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                displayUrl,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 100,
+                                  height: 100,
+                                  color: const Color(0xFF12122A),
+                                  child: Icon(
+                                    Icons.broken_image_rounded,
+                                    color: Colors.white.withAlpha(100),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
+                if (!c.isMaintenanceConflict &&
+                    _evidence != null &&
+                    _evidence!.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   _glassSection(l10n.t('conflict_evidence'), [
                     Padding(
@@ -386,7 +442,8 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                if (c.inspectionChecklist != null &&
+                if (!c.isMaintenanceConflict &&
+                    c.inspectionChecklist != null &&
                     c.inspectionChecklist!.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   _glassSection(l10n.t('inspection_checklist'), [
@@ -468,29 +525,47 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _actionTile(
-                    icon: Icons.edit_rounded,
-                    label: l10n.t('change_result'),
-                    subtitle: l10n.t('accepted'),
-                    color: const Color(0xFF4ADE80),
-                    onTap: _resolving ? null : () => _showChangeResultSheet(l10n),
-                  ),
-                  const SizedBox(height: 8),
-                  _actionTile(
-                    icon: Icons.refresh_rounded,
-                    label: l10n.t('re_inspection'),
-                    subtitle: l10n.t('re_inspection'),
-                    color: const Color(0xFF6C63FF),
-                    onTap: _resolving ? null : () => _resolve('re_inspection'),
-                  ),
-                  const SizedBox(height: 8),
-                  _actionTile(
-                    icon: Icons.check_circle_outline_rounded,
-                    label: l10n.t('keep_same'),
-                    subtitle: l10n.t('resolved'),
-                    color: const Color(0xFF9CA3AF),
-                    onTap: _resolving ? null : () => _resolve('keep_same'),
-                  ),
+                  if (c.isMaintenanceConflict) ...[
+                    _actionTile(
+                      icon: Icons.build_circle_outlined,
+                      label: l10n.t('re_maintain'),
+                      subtitle: l10n.t('re_maintain'),
+                      color: const Color(0xFF6C63FF),
+                      onTap: _resolving ? null : () => _resolve('re_maintain'),
+                    ),
+                    const SizedBox(height: 8),
+                    _actionTile(
+                      icon: Icons.check_circle_outline_rounded,
+                      label: l10n.t('no_need'),
+                      subtitle: l10n.t('no_need'),
+                      color: const Color(0xFF4ADE80),
+                      onTap: _resolving ? null : () => _resolve('no_need'),
+                    ),
+                  ] else ...[
+                    _actionTile(
+                      icon: Icons.edit_rounded,
+                      label: l10n.t('change_result'),
+                      subtitle: l10n.t('accepted'),
+                      color: const Color(0xFF4ADE80),
+                      onTap: _resolving ? null : () => _showChangeResultSheet(l10n),
+                    ),
+                    const SizedBox(height: 8),
+                    _actionTile(
+                      icon: Icons.refresh_rounded,
+                      label: l10n.t('re_inspection'),
+                      subtitle: l10n.t('re_inspection'),
+                      color: const Color(0xFF6C63FF),
+                      onTap: _resolving ? null : () => _resolve('re_inspection'),
+                    ),
+                    const SizedBox(height: 8),
+                    _actionTile(
+                      icon: Icons.check_circle_outline_rounded,
+                      label: l10n.t('keep_same'),
+                      subtitle: l10n.t('resolved'),
+                      color: const Color(0xFF9CA3AF),
+                      onTap: _resolving ? null : () => _resolve('keep_same'),
+                    ),
+                  ],
                   if (_resolving)
                     const Padding(
                       padding: EdgeInsets.only(top: 16),

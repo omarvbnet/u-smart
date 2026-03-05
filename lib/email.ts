@@ -440,6 +440,30 @@ export async function notifyTicketsTrainingRequest(data: { id: string; serviceSl
   sendTicketsNotification(`New training request: ${data.serviceTitle}`, html).catch((e) => console.error('Tickets notification (training):', e));
 }
 
+/** Notify tickets@ of new Provisor registration request (full info). */
+export async function notifyTicketsRegistrationRequest(data: {
+  id: string;
+  legalName: string;
+  phone: string;
+  email: string;
+  province: string;
+  evidenceUrl: string;
+  role: string;
+}): Promise<void> {
+  const roleLabels: Record<string, string> = {
+    COMPANY: 'Company',
+    ENGINEER: 'Engineer',
+    TECHNICIAN: 'Technician',
+    PERSONAL: 'Personal',
+  };
+  const roleText = roleLabels[data.role] || data.role;
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New Provisor registration request</strong></p>
+    <table style="border-collapse:collapse;">${row('Request ID', data.id)}${row('Legal name', data.legalName)}${row('Email', data.email)}${row('Phone', data.phone)}${row('Province', data.province)}${row('Role', roleText)}${row('Evidence', data.evidenceUrl)}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New registration: ${data.legalName} (${roleText})`, html).catch((e) => console.error('Tickets notification (registration):', e));
+}
+
 /** Notify tickets@ of new product request (full info). */
 export async function notifyTicketsProductRequest(data: { productTitle: string; productType: string; name: string; email: string; phone: string; message?: string | null }): Promise<void> {
   const html = `

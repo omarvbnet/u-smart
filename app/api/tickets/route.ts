@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
         where: { id: payload.requesterId },
         select: { role: true },
       })) as { role?: string } | null;
-      const allowedRoles = ['TECHNICIAN', 'COMPANY', 'ENGINEER'];
+      const allowedRoles = ['TECHNICIAN', 'COMPANY', 'ENGINEER', 'PERSONAL'];
       if (!requesterRole?.role || !allowedRoles.includes(requesterRole.role)) {
         return NextResponse.json(
           { success: false, message: 'Only company, engineer, or technician can create maintenance tickets' },
@@ -151,8 +151,11 @@ export async function POST(req: NextRequest) {
 
     const designSpecifications = typeof body.designSpecifications === 'string' ? body.designSpecifications.trim() : '';
     const attachmentUrls = Array.isArray(body.attachmentUrls) ? body.attachmentUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
+    const maintenanceReason = typeof body.maintenanceReason === 'string' ? body.maintenanceReason.trim() : '';
+    const beforeImageUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
 
-    const companyPayload = JSON.stringify({
+    const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
+    const companyPayloadObj: Record<string, unknown> = {
       _ticket: 1,
       siteName,
       siteCoordinator,
@@ -160,7 +163,11 @@ export async function POST(req: NextRequest) {
       company: company || null,
       designSpecifications: designSpecifications || null,
       attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : null,
-    });
+    };
+    if (isMaintenanceTicket && maintenanceReason) {
+      companyPayloadObj.maintenanceReason = maintenanceReason;
+    }
+    const companyPayload = JSON.stringify(companyPayloadObj);
 
     const serviceSlug = QUALITY_CONTROL_TECHNIQUES.includes(technique)
       ? 'quality-control-supervision'
@@ -178,6 +185,7 @@ export async function POST(req: NextRequest) {
       serviceSlug: string;
       siteName?: string;
       requesterId?: string;
+      beforeImageUrls?: string[];
     } = {
       buildingType: 'n/a',
       phone,
@@ -191,6 +199,9 @@ export async function POST(req: NextRequest) {
 
     if (payload) {
       ticketData.requesterId = payload.requesterId;
+    }
+    if (isMaintenanceTicket && beforeImageUrls.length > 0) {
+      ticketData.beforeImageUrls = beforeImageUrls;
     }
 
     const ticket = await prisma.visitorRequest.create({
@@ -405,14 +416,10 @@ export async function GET(req: NextRequest) {
         ],
       };
     } else if (requesterRole === 'TECHNICIAN') {
-      // Technicians see: their own tickets + maintenance tickets (PENDING or assigned)
+      // Technicians see ONLY maintenance tickets
       where = {
         serviceSlug: filterServiceSlug,
-        OR: [
-          { requesterId: payload.requesterId },
-          { technique: { in: MAINTENANCE_TECHNIQUES } },
-          { company: { contains: payload.requesterId } },
-        ],
+        technique: { in: MAINTENANCE_TECHNIQUES },
       };
     } else {
       // COMPANY: only their tickets (including maintenance they created)

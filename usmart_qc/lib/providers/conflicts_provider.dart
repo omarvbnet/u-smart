@@ -66,14 +66,17 @@ class ConflictsProvider extends ChangeNotifier {
     return _selectedConflict;
   }
 
-  /// Report a conflict for a ticket (company only).
-  Future<ConflictCase?> reportConflict(String ticketId, {String? comment}) async {
+  /// Report a conflict for a ticket (company/personal).
+  /// For maintenance: comment and imageUrls required. For QC: comment optional.
+  Future<ConflictCase?> reportConflict(String ticketId,
+      {String? comment, List<String>? imageUrls}) async {
     try {
+      final body = <String, dynamic>{};
+      if (comment != null && comment.isNotEmpty) body['comment'] = comment;
+      if (imageUrls != null && imageUrls.isNotEmpty) body['imageUrls'] = imageUrls;
       final data = await _api.post(
         ApiConfig.ticketReportConflict(ticketId),
-        body: comment != null && comment.isNotEmpty
-            ? {'comment': comment}
-            : null,
+        body: body.isNotEmpty ? body : null,
       );
       if (data['success'] == true && data['conflict'] != null) {
         final conflict =

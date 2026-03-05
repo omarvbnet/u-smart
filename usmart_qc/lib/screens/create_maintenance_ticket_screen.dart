@@ -31,12 +31,13 @@ class _CreateMaintenanceTicketScreenState
   final _siteNameCtrl = TextEditingController();
   final _coordinatorCtrl = TextEditingController();
   final _slaCtrl = TextEditingController(text: '24');
+  final _reasonCtrl = TextEditingController();
   final _designSpecsCtrl = TextEditingController();
   final _picker = ImagePicker();
   String _maintenanceType = 'fiber_route';
   bool _submitting = false;
   bool _uploading = false;
-  final List<String> _attachmentUrls = [];
+  final List<String> _beforePhotoUrls = [];
 
   Future<void> _submit() async {
     final siteName = _siteNameCtrl.text.trim();
@@ -44,10 +45,22 @@ class _CreateMaintenanceTicketScreenState
     final sla = int.tryParse(_slaCtrl.text.trim()) ?? 24;
     final l10n = AppLocalizations.of(context);
 
+    final reason = _reasonCtrl.text.trim();
     if (siteName.isEmpty || coordinator.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.t('site_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+    if (reason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('maint_reason_required')),
           backgroundColor: const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -65,7 +78,8 @@ class _CreateMaintenanceTicketScreenState
       technique: _maintenanceType,
       slaHours: sla,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
-      attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
+      maintenanceReason: reason,
+      beforeImageUrls: _beforePhotoUrls.isEmpty ? null : List.from(_beforePhotoUrls),
     );
 
     if (!mounted) return;
@@ -111,7 +125,7 @@ class _CreateMaintenanceTicketScreenState
       );
       if (url != null && mounted) {
         final u = url;
-        setState(() => _attachmentUrls.add(u));
+        setState(() => _beforePhotoUrls.add(u));
       } else if (mounted) {
         _showError(AppLocalizations.of(context).t('upload_failed'));
       }
@@ -146,7 +160,7 @@ class _CreateMaintenanceTicketScreenState
       }
       if (url != null && mounted) {
         final u = url;
-        setState(() => _attachmentUrls.add(u));
+        setState(() => _beforePhotoUrls.add(u));
       } else if (mounted) {
         _showError(AppLocalizations.of(context).t('upload_failed'));
       }
@@ -158,7 +172,7 @@ class _CreateMaintenanceTicketScreenState
     if (mounted) setState(() => _uploading = false);
   }
 
-  void _removeAttachment(int index) => setState(() => _attachmentUrls.removeAt(index));
+  void _removeAttachment(int index) => setState(() => _beforePhotoUrls.removeAt(index));
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -176,6 +190,7 @@ class _CreateMaintenanceTicketScreenState
     _siteNameCtrl.dispose();
     _coordinatorCtrl.dispose();
     _slaCtrl.dispose();
+    _reasonCtrl.dispose();
     _designSpecsCtrl.dispose();
     super.dispose();
   }
@@ -306,6 +321,14 @@ class _CreateMaintenanceTicketScreenState
           ),
           const SizedBox(height: 16),
           _buildField(
+            controller: _reasonCtrl,
+            label: l10n.t('maint_reason'),
+            hint: l10n.t('maint_reason_hint'),
+            icon: Icons.info_outline_rounded,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          _buildField(
             controller: _slaCtrl,
             label: l10n.t('sla_hours'),
             hint: '24',
@@ -412,7 +435,7 @@ class _CreateMaintenanceTicketScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          l10n.t('add_attachments').toUpperCase(),
+          l10n.t('before_photos').toUpperCase(),
           style: TextStyle(
             color: Colors.white.withAlpha(80),
             fontSize: 11,
@@ -422,7 +445,7 @@ class _CreateMaintenanceTicketScreenState
         ),
         const SizedBox(height: 8),
         Text(
-          l10n.t('add_attachments_hint'),
+          l10n.t('before_photos_hint'),
           style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12),
         ),
         const SizedBox(height: 10),
@@ -441,12 +464,12 @@ class _CreateMaintenanceTicketScreenState
             ),
           ],
         ),
-        if (_attachmentUrls.isNotEmpty) ...[
+        if (_beforePhotoUrls.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _attachmentUrls.asMap().entries.map((e) {
+            children: _beforePhotoUrls.asMap().entries.map((e) {
               final url = e.value;
               final idx = e.key;
               final isImage = url.toLowerCase().contains('image') ||
@@ -583,6 +606,7 @@ class _CreateMaintenanceTicketScreenState
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,6 +624,7 @@ class _CreateMaintenanceTicketScreenState
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          maxLines: maxLines,
           style: const TextStyle(color: Colors.white, fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,

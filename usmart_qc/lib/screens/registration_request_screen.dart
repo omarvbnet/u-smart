@@ -38,7 +38,7 @@ const List<String> _iraqProvinces = [
 
 class _RegistrationRequestContentState extends State<_RegistrationRequestContent> {
   int _step = 0; // 0=role, 1=form
-  String? _role; // COMPANY | ENGINEER
+  String? _role; // COMPANY | ENGINEER | TECHNICIAN | PERSONAL
   final _legalName = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
@@ -246,6 +246,16 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
     return _buildFormStep(l10n);
   }
 
+  String _roleLabel(AppLocalizations l10n) {
+    switch (_role) {
+      case 'COMPANY': return l10n.t('role_company');
+      case 'ENGINEER': return l10n.t('role_engineer');
+      case 'TECHNICIAN': return l10n.t('role_technician');
+      case 'PERSONAL': return l10n.t('role_personal');
+      default: return '';
+    }
+  }
+
   Widget _buildRoleStep(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,6 +296,38 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _RoleCard(
+                icon: Icons.build_circle_outlined,
+                label: l10n.t('role_technician'),
+                hint: l10n.t('reg_role_technician_hint'),
+                onTap: () {
+                  setState(() {
+                    _role = 'TECHNICIAN';
+                    _step = 1;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _RoleCard(
+                icon: Icons.person_outline_rounded,
+                label: l10n.t('role_personal'),
+                hint: l10n.t('reg_role_personal_hint'),
+                onTap: () {
+                  setState(() {
+                    _role = 'PERSONAL';
+                    _step = 1;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -299,7 +341,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
         TextButton(
           onPressed: () => setState(() => _step = 0),
           child: Text(
-            '← ${l10n.t('reg_back')} (${_role == 'COMPANY' ? l10n.t('role_company') : l10n.t('role_engineer')})',
+            '← ${l10n.t('reg_back')} (${_roleLabel(l10n)})',
             style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13),
           ),
         ),

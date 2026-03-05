@@ -117,7 +117,8 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
           ),
         ),
       ),
-      floatingActionButton: _currentTab == 0
+      floatingActionButton: _currentTab == 0 &&
+              !context.read<AuthProvider>().isTechnician
           ? Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(

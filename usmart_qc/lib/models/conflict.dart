@@ -19,6 +19,8 @@ class ConflictCase {
   final String? conflictReportComment;
   final String? reportedBy;
   final String? reportedAt;
+  final bool isMaintenanceConflict;
+  final List<String> conflictImageUrls;
 
   ConflictCase({
     required this.id,
@@ -39,6 +41,8 @@ class ConflictCase {
     this.conflictReportComment,
     this.reportedBy,
     this.reportedAt,
+    this.isMaintenanceConflict = false,
+    this.conflictImageUrls = const [],
   });
 
   bool get isPending => status == 'pending';
@@ -69,6 +73,11 @@ class ConflictCase {
       conflictReportComment: json['conflictReportComment'] as String?,
       reportedBy: json['reportedBy'] as String?,
       reportedAt: json['reportedAt'] as String?,
+      isMaintenanceConflict: json['isMaintenanceConflict'] == true,
+      conflictImageUrls: (json['conflictImageUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
     );
   }
 }

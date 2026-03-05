@@ -101,6 +101,12 @@ class Ticket {
   final String? conflictReportComment;
   final String? conflictReportedAt;
   final String? conflictResolvedAt;
+  /// Maintenance: reason for maintenance (stored in company.maintenanceReason)
+  final String? maintenanceReason;
+  /// Maintenance: before photos (from VisitorRequest.beforeImageUrls)
+  final List<String> beforeImageUrls;
+  /// Maintenance: after photos (from VisitorRequest.finishingImageUrls)
+  final List<String> finishingImageUrls;
 
   Ticket({
     required this.id,
@@ -133,6 +139,9 @@ class Ticket {
     this.conflictReportComment,
     this.conflictReportedAt,
     this.conflictResolvedAt,
+    this.maintenanceReason,
+    this.beforeImageUrls = const [],
+    this.finishingImageUrls = const [],
   });
 
   bool get isPending => status == 'PENDING';
@@ -227,6 +236,21 @@ class Ticket {
       conflictReportComment: json['conflictReportComment'] as String?,
       conflictReportedAt: json['conflictReportedAt'] as String?,
       conflictResolvedAt: json['conflictResolvedAt'] as String?,
+      maintenanceReason: json['maintenanceReason'] as String?,
+      beforeImageUrls: (json['beforeImageUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      finishingImageUrls: (json['finishingImageUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
     );
   }
+
+  static const List<String> maintenanceTechniques = [
+    'fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth',
+  ];
+
+  bool get isMaintenance => maintenanceTechniques.contains(technique.toLowerCase());
 }

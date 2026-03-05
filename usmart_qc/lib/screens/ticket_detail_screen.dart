@@ -23,6 +23,7 @@ import '../widgets/checklist_widget.dart';
 import '../widgets/evidence_upload_widget.dart';
 import 'ncr_resubmit_screen.dart';
 import 'conflict_detail_screen.dart';
+import 'report_maintenance_conflict_screen.dart';
 import 'attachment_viewer_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
@@ -994,8 +995,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ncrResubmitRecordsSection(t, l10n),
       ],
 
-      // Conflict button (company only, when result is ncr, not_accepted, or accepted_with_comments, and not yet reported)
-      if (!isEngineer && t.isCompleted && t.isConflictResult && !t.conflictReported) ...[
+      // Conflict button: QC (ncr/not_accepted/accepted_with_comments) or Maintenance (24h window)
+      if (!isEngineer &&
+          t.isCompleted &&
+          !t.conflictReported &&
+          ((t.isConflictResult) ||
+              (t.isMaintenance && _isWithin24hOfCompletion(t)))) ...[
         const SizedBox(height: 16),
         _conflictButton(t, l10n),
       ],
@@ -1043,6 +1048,51 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
       ],
 
+      if (t.isMaintenance &&
+          t.maintenanceReason != null &&
+          t.maintenanceReason!.trim().isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('maint_reason'), [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              t.maintenanceReason!,
+              style: TextStyle(
+                  color: Colors.white.withAlpha(180), fontSize: 14),
+            ),
+          ),
+        ]),
+      ],
+      if (t.isMaintenance && t.beforeImageUrls.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('before_photos'), [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: t.beforeImageUrls
+                  .map((url) => _buildAttachmentThumbnail(url, l10n))
+                  .toList(),
+            ),
+          ),
+        ]),
+      ],
+      if (t.isMaintenance && t.finishingImageUrls.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('after_photos'), [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: t.finishingImageUrls
+                  .map((url) => _buildAttachmentThumbnail(url, l10n))
+                  .toList(),
+            ),
+          ),
+        ]),
+      ],
       if (t.designSpecifications != null &&
           t.designSpecifications!.isNotEmpty) ...[
         const SizedBox(height: 16),
@@ -1612,9 +1662,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return r;
   }
 
+  bool _isWithin24hOfCompletion(Ticket t) {
+    if (t.completedAt == null || t.completedAt!.isEmpty) return false;
+    final completed = DateTime.tryParse(t.completedAt!);
+    if (completed == null) return false;
+    return DateTime.now().difference(completed).inMilliseconds <= 24 * 60 * 60 * 1000;
+  }
+
   Widget _conflictButton(Ticket t, AppLocalizations l10n) {
     return GestureDetector(
-      onTap: () => _reportConflict(t, l10n),
+      onTap: () => t.isMaintenance ? _reportMaintenanceConflict(t, l10n) : _reportConflict(t, l10n),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
@@ -1641,6 +1698,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _reportMaintenanceConflict(Ticket t, AppLocalizations l10n) async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ReportMaintenanceConflictScreen(ticketId: t.id),
+      ),
+    );
+    if (ok == true && mounted) await _load();
   }
 
   Future<void> _reportConflict(Ticket t, AppLocalizations l10n) async {

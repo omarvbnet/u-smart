@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { notifyTicketsRegistrationRequest } from '@/lib/email';
+
+const VALID_ROLES = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL'] as const;
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +12,8 @@ export async function POST(req: NextRequest) {
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() : '';
     const evidenceUrl = typeof body.evidenceUrl === 'string' ? body.evidenceUrl.trim() : '';
-    const role = body.role === 'ENGINEER' ? 'ENGINEER' : 'COMPANY';
+    const roleRaw = typeof body.role === 'string' ? body.role.toUpperCase() : '';
+    const role = VALID_ROLES.includes(roleRaw as (typeof VALID_ROLES)[number]) ? roleRaw : 'COMPANY';
 
     if (!legalName || !phone || !email || !province || !evidenceUrl) {
       return NextResponse.json(
@@ -26,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await delegate.create({
+    const created = await delegate.create({
       data: {
         legalName,
         phone,
@@ -35,7 +39,17 @@ export async function POST(req: NextRequest) {
         evidenceUrl,
         role,
       },
-    });
+    }) as { id: string };
+
+    notifyTicketsRegistrationRequest({
+      id: created.id,
+      legalName,
+      phone,
+      email,
+      province,
+      evidenceUrl,
+      role,
+    }).catch((e) => console.error('Tickets notification (registration):', e));
 
     return NextResponse.json({
       success: true,

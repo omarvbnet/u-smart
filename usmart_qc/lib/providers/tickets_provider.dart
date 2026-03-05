@@ -286,6 +286,8 @@ class TicketsProvider extends ChangeNotifier {
     String? province,
     String? designSpecifications,
     List<String>? attachmentUrls,
+    String? maintenanceReason,
+    List<String>? beforeImageUrls,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -300,6 +302,12 @@ class TicketsProvider extends ChangeNotifier {
       }
       if (attachmentUrls != null && attachmentUrls.isNotEmpty) {
         body['attachmentUrls'] = attachmentUrls;
+      }
+      if (maintenanceReason != null && maintenanceReason.trim().isNotEmpty) {
+        body['maintenanceReason'] = maintenanceReason.trim();
+      }
+      if (beforeImageUrls != null && beforeImageUrls.isNotEmpty) {
+        body['beforeImageUrls'] = beforeImageUrls;
       }
       final data = await _api.post(ApiConfig.tickets, body: body);
       if (data['success'] == true) {

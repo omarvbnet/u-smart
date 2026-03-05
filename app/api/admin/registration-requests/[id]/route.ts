@@ -3,9 +3,16 @@ import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { sendCompanyAccountApprovedEmail } from '@/lib/email';
 
 function generateUsername(role: string): string {
-  const prefix = role === 'ENGINEER' ? 'eng' : 'req';
+  const prefixes: Record<string, string> = {
+    ENGINEER: 'eng',
+    TECHNICIAN: 'tech',
+    PERSONAL: 'per',
+    COMPANY: 'req',
+  };
+  const prefix = prefixes[role] || 'req';
   return `${prefix}_${crypto.randomBytes(4).toString('hex')}`;
 }
 
@@ -60,7 +67,8 @@ export async function PATCH(
       const password = generatePassword();
       const passwordHash = await bcrypt.hash(password, 10);
 
-      const serviceSlug = rr.role === 'ENGINEER' ? 'quality-control-supervision' : 'enterprise-networking';
+      const serviceSlug = (rr.role === 'ENGINEER' || rr.role === 'TECHNICIAN') ? 'quality-control-supervision' : 'enterprise-networking';
+      const requesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL'].includes(rr.role) ? rr.role : 'COMPANY';
 
       await prisma.ticketRequester.create({
         data: {
@@ -71,7 +79,7 @@ export async function PATCH(
           phone: rr.phone,
           companyCertificationUrl: rr.evidenceUrl,
           serviceSlug,
-          role: rr.role === 'ENGINEER' ? 'ENGINEER' : 'COMPANY',
+          role: requesterRole,
         },
       });
 
@@ -79,6 +87,12 @@ export async function PATCH(
         where: { id },
         data: { status: 'APPROVED' },
       });
+
+      sendCompanyAccountApprovedEmail(rr.email, {
+        name: rr.legalName,
+        username,
+        password,
+      }).catch((e) => console.error('Approval email failed:', e));
 
       return NextResponse.json({
         success: true,

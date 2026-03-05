@@ -362,7 +362,7 @@ model User {
     email       String
     province    String                    // Iraq province
     evidenceUrl String                    // identification document (ID, passport, etc.)
-    role        RequesterRole             // COMPANY or ENGINEER
+    role        RequesterRole             // COMPANY, ENGINEER, TECHNICIAN, or PERSONAL
     status      RegistrationRequestStatus @default(PENDING)
     createdAt   DateTime                  @default(now())
     updatedAt   DateTime                  @updatedAt
@@ -427,6 +427,7 @@ model User {
     COMPANY
     ENGINEER
     TECHNICIAN
+    PERSONAL
   }
 
   enum TicketStatus {
