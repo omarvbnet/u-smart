@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { RequesterRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -77,6 +78,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Admin privileges required' }, { status: 403 });
   }
 
+  const VALID_ROLES: RequesterRole[] = ['COMPANY', 'PERSONAL', 'ENGINEER', 'TECHNICIAN'];
+
   try {
     const body = await req.json();
     const username = typeof body.username === 'string' ? body.username.trim() : generateUsername();
@@ -84,7 +87,12 @@ export async function POST(req: NextRequest) {
     const name = typeof body.name === 'string' ? body.name.trim() || null : null;
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const company = typeof body.company === 'string' ? body.company.trim() || null : null;
-    const serviceSlug = typeof body.serviceSlug === 'string' ? body.serviceSlug : 'enterprise-networking';
+    const email = typeof body.email === 'string' ? body.email.trim() || null : null;
+    const roleRaw = typeof body.role === 'string' ? (body.role as string).toUpperCase() : 'COMPANY';
+    const role: RequesterRole = VALID_ROLES.includes(roleRaw as RequesterRole) ? (roleRaw as RequesterRole) : 'COMPANY';
+    const serviceSlug = (role === 'ENGINEER' || role === 'TECHNICIAN')
+      ? 'quality-control-supervision'
+      : (typeof body.serviceSlug === 'string' ? body.serviceSlug : 'enterprise-networking');
 
     if (!phone) {
       return NextResponse.json({ success: false, message: 'Phone is required' }, { status: 400 });
@@ -100,9 +108,10 @@ export async function POST(req: NextRequest) {
         username,
         passwordHash,
         name,
-        email: null,
+        email,
         phone,
         company,
+        role,
         serviceSlug: serviceSlug as (typeof SERVICE_SLUGS)[number],
       },
       select: {
@@ -113,6 +122,7 @@ export async function POST(req: NextRequest) {
         company: true,
         serviceSlug: true,
         status: true,
+        role: true,
         createdAt: true,
       },
     });
@@ -122,6 +132,7 @@ export async function POST(req: NextRequest) {
       requester: {
         ...requester,
         status: (requester as { status?: string }).status ?? 'ACTIVE',
+        role: (requester as { role?: string }).role ?? role,
       },
       credentials: { username, password },
     });

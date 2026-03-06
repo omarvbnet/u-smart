@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { notifyTicketsRegistrationRequest } from '@/lib/email';
 
-const VALID_ROLES = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL'] as const;
+// Only COMPANY and PERSONAL can self-register. ENGINEER and TECHNICIAN are added by admin only.
+const VALID_ROLES = ['COMPANY', 'PERSONAL'] as const;
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +13,13 @@ export async function POST(req: NextRequest) {
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() : '';
     const evidenceUrl = typeof body.evidenceUrl === 'string' ? body.evidenceUrl.trim() : '';
-    const roleRaw = typeof body.role === 'string' ? body.role.toUpperCase() : '';
+    const roleRaw = typeof body.role === 'string' ? body.role.toUpperCase().trim() : '';
+    if (roleRaw === 'ENGINEER' || roleRaw === 'TECHNICIAN') {
+      return NextResponse.json(
+        { success: false, message: 'Engineer and Technician roles can only be assigned by admin. Please register as Company or Personal.' },
+        { status: 400 }
+      );
+    }
     const role = VALID_ROLES.includes(roleRaw as (typeof VALID_ROLES)[number]) ? roleRaw : 'COMPANY';
 
     if (!legalName || !phone || !email || !province || !evidenceUrl) {

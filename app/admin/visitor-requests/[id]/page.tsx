@@ -60,6 +60,9 @@ export default function VisitorRequestDetailPage() {
   const [ncrAdminImageUrls, setNcrAdminImageUrls] = useState<string[]>([]);
   const [savingNcrAccept, setSavingNcrAccept] = useState(false);
   const [savingNcrResubmit, setSavingNcrResubmit] = useState(false);
+  const [adminResubmitReason, setAdminResubmitReason] = useState('');
+  const [adminResubmitImageUrls, setAdminResubmitImageUrls] = useState<string[]>([]);
+  const [savingAdminResubmit, setSavingAdminResubmit] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -416,6 +419,38 @@ export default function VisitorRequestDetailPage() {
     }
   };
 
+  const handleAdminResubmitForEdit = async () => {
+    if (!id) return;
+    const reason = adminResubmitReason.trim();
+    if (!reason) {
+      alert('Reason for resubmit is required.');
+      return;
+    }
+    setSavingAdminResubmit(true);
+    try {
+      const res = await fetch(`/api/visitor-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminResubmitForEdit: { reason, imageUrls: adminResubmitImageUrls },
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.request) {
+        setRequest(data.request);
+        setAdminResubmitReason('');
+        setAdminResubmitImageUrls([]);
+      } else {
+        alert(data.message || 'Failed to resubmit.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to resubmit.');
+    } finally {
+      setSavingAdminResubmit(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -555,6 +590,64 @@ export default function VisitorRequestDetailPage() {
           </div>
         </dl>
       </div>
+
+      {/* Admin resubmit for edit: send back to requester when there is an error (ticket types, not completed) */}
+      {(request.serviceSlug === 'enterprise-networking' || request.serviceSlug === 'quality-control-supervision') && !isCompleted && (
+        <div className="mt-6 bg-amber-50/80 border border-amber-200 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-amber-200 bg-amber-100/50">
+            <h2 className="text-lg font-semibold text-amber-900">Resubmit to requester for edit</h2>
+            <p className="text-sm text-amber-800 mt-0.5">If there is an error, send the request back to the requester to fix. They will be notified with your reason.</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason for resubmit <span className="text-red-500">*</span></label>
+              <textarea
+                value={adminResubmitReason}
+                onChange={(e) => setAdminResubmitReason(e.target.value)}
+                rows={3}
+                className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm"
+                placeholder="Describe the error or what needs to be corrected..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Attach images (optional)</label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {adminResubmitImageUrls.map((url) => (
+                  <span key={url} className="relative inline-block">
+                    <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt="" className="w-20 h-20 object-cover rounded border" />
+                    <button type="button" onClick={() => setAdminResubmitImageUrls((p) => p.filter((u) => u !== url))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs">×</button>
+                  </span>
+                ))}
+                <label className="w-20 h-20 rounded border border-dashed border-amber-300 flex items-center justify-center cursor-pointer hover:bg-amber-50">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={imageUploading}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const url = await uploadTicketImage(file);
+                        if (url) setAdminResubmitImageUrls((p) => [...p, url]);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <PhotoIcon className="w-6 h-6 text-amber-500" />
+                </label>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleAdminResubmitForEdit}
+              disabled={savingAdminResubmit || !adminResubmitReason.trim()}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingAdminResubmit ? 'Sending...' : 'Resubmit to requester'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {attachmentUrls.length > 0 && (
         <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
@@ -878,7 +971,9 @@ export default function VisitorRequestDetailPage() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="font-medium text-gray-900">{entry.by === 'admin' ? 'Admin' : 'Requester'}</span>
                   <span className="text-gray-500">—</span>
-                  <span className="text-gray-600">{entry.action === 'accept' ? 'Accepted (NCR closed)' : 'Resubmitted'}</span>
+                  <span className="text-gray-600">
+                    {entry.action === 'accept' ? 'Accepted (NCR closed)' : entry.action === 'resubmit_for_edit' ? 'Resubmit for edit' : 'Resubmitted'}
+                  </span>
                   <span className="text-gray-400">{new Date(entry.at).toLocaleString()}</span>
                 </div>
                 {entry.comment && <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{entry.comment}</p>}

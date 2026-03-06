@@ -133,10 +133,10 @@ export async function POST(req: NextRequest) {
         where: { id: payload.requesterId },
         select: { role: true },
       })) as { role?: string } | null;
-      const allowedRoles = ['TECHNICIAN', 'COMPANY', 'ENGINEER', 'PERSONAL'];
+      const allowedRoles = ['COMPANY', 'PERSONAL'];
       if (!requesterRole?.role || !allowedRoles.includes(requesterRole.role)) {
         return NextResponse.json(
-          { success: false, message: 'Only company, engineer, or technician can create maintenance tickets' },
+          { success: false, message: 'Only company or personal can create maintenance tickets. Technicians handle them; engineers handle QC only.' },
           { status: 403 }
         );
       }
@@ -402,13 +402,14 @@ export async function GET(req: NextRequest) {
     let where: any;
 
     if (requesterRole === 'ENGINEER') {
-      // Engineers see: PENDING tickets (province-filtered if active) + tickets assigned to them (including maintenance)
+      // Engineers see ONLY QC tickets (inspection, supervision, etc.). Maintenance tickets are for Technicians and Admin only.
       const pendingFilter: any = { status: 'PENDING' };
       if (provinceFilterActive && requesterProvince) {
         pendingFilter.province = requesterProvince;
       }
       where = {
         serviceSlug: filterServiceSlug,
+        technique: { notIn: MAINTENANCE_TECHNIQUES },
         OR: [
           pendingFilter,
           { company: { contains: payload.requesterId } },

@@ -475,7 +475,11 @@ class TicketsProvider extends ChangeNotifier {
 
   // ─── Complete Ticket ───
   Future<bool> completeTicket(
-      String ticketId, Map<String, dynamic>? checklistResponse) async {
+    String ticketId,
+    Map<String, dynamic>? checklistResponse, {
+    List<String>? beforeImageUrls,
+    List<String>? finishingImageUrls,
+  }) async {
     try {
       final body = <String, dynamic>{};
       if (checklistResponse != null) {
@@ -489,6 +493,12 @@ class TicketsProvider extends ChangeNotifier {
             (inspectionComments as String).isNotEmpty) {
           body['inspectionComments'] = inspectionComments;
         }
+      }
+      if (beforeImageUrls != null && beforeImageUrls.isNotEmpty) {
+        body['beforeImageUrls'] = beforeImageUrls;
+      }
+      if (finishingImageUrls != null && finishingImageUrls.isNotEmpty) {
+        body['finishingImageUrls'] = finishingImageUrls;
       }
       final data = await _api.patch(
         ApiConfig.ticketComplete(ticketId),

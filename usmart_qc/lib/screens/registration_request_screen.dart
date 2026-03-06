@@ -283,38 +283,6 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
             const SizedBox(width: 12),
             Expanded(
               child: _RoleCard(
-                icon: Icons.engineering_rounded,
-                label: l10n.t('role_engineer'),
-                hint: l10n.t('reg_role_engineer_hint'),
-                onTap: () {
-                  setState(() {
-                    _role = 'ENGINEER';
-                    _step = 1;
-                  });
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _RoleCard(
-                icon: Icons.build_circle_outlined,
-                label: l10n.t('role_technician'),
-                hint: l10n.t('reg_role_technician_hint'),
-                onTap: () {
-                  setState(() {
-                    _role = 'TECHNICIAN';
-                    _step = 1;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _RoleCard(
                 icon: Icons.person_outline_rounded,
                 label: l10n.t('role_personal'),
                 hint: l10n.t('reg_role_personal_hint'),

@@ -94,6 +94,12 @@ export async function PATCH(
     const ncrAction = body.ncrAction === 'accept' || body.ncrAction === 'resubmit' ? body.ncrAction : undefined;
     const ncrAdminComment = typeof body.ncrAdminComment === 'string' ? body.ncrAdminComment.trim() : undefined;
     const ncrAdminImageUrls = Array.isArray(body.ncrAdminImageUrls) ? body.ncrAdminImageUrls.filter((u: unknown) => typeof u === 'string') : undefined;
+    const adminResubmitForEdit = body.adminResubmitForEdit && typeof body.adminResubmitForEdit === 'object'
+      ? {
+          reason: typeof body.adminResubmitForEdit.reason === 'string' ? body.adminResubmitForEdit.reason.trim() : '',
+          imageUrls: Array.isArray(body.adminResubmitForEdit.imageUrls) ? body.adminResubmitForEdit.imageUrls.filter((u: unknown) => typeof u === 'string') : [],
+        }
+      : undefined;
 
     // When setting status to IN_PROGRESS, require a team to be assigned (body or already on record)
     if (status === 'IN_PROGRESS') {
@@ -132,9 +138,10 @@ export async function PATCH(
       }
     }
 
-    const existing = await prisma.visitorRequest.findUnique({ where: { id }, select: { company: true } });
+    const existing = await prisma.visitorRequest.findUnique({ where: { id }, select: { company: true, requesterId: true } });
     let companyPayload: string | undefined;
     let statusToApply = status;
+    let adminResubmitForEditReason: string | null = null;
     if (existing?.company && typeof existing.company === 'string') {
       try {
         const parsed = JSON.parse(existing.company) as Record<string, unknown>;
@@ -172,6 +179,28 @@ export async function PATCH(
             });
             parsed.ncrResubmissions = list;
             companyPayload = JSON.stringify(parsed);
+          }
+          // Admin resubmit for edit: send back to requester with reason (for any non-completed ticket with errors)
+          else if (adminResubmitForEdit !== undefined) {
+            if (!adminResubmitForEdit.reason) {
+              return NextResponse.json(
+                { success: false, message: 'Reason for resubmit is required' },
+                { status: 400 }
+              );
+            }
+            const list = Array.isArray(parsed.ncrResubmissions) ? (parsed.ncrResubmissions as Array<Record<string, unknown>>) : [];
+            list.push({
+              at: new Date().toISOString(),
+              by: 'admin',
+              action: 'resubmit_for_edit',
+              comment: adminResubmitForEdit.reason,
+              imageUrls: adminResubmitForEdit.imageUrls || [],
+            });
+            parsed.ncrResubmissions = list;
+            parsed.status = 'PENDING';
+            statusToApply = 'PENDING';
+            companyPayload = JSON.stringify(parsed);
+            adminResubmitForEditReason = adminResubmitForEdit.reason;
           }
           // Normal inspection save (including NCR with reason + images)
           else {
@@ -276,7 +305,7 @@ export async function PATCH(
       }
     }
 
-    // Notify requester when status changes (in-app + email)
+    // Notify requester when status changes or admin resubmits for edit (in-app + email)
     try {
       if (updated.requesterId && updated.requester) {
         const statusLabels: Record<string, string> = {
@@ -285,11 +314,17 @@ export async function PATCH(
           IN_PROGRESS: 'In progress',
           COMPLETED: 'Completed',
         };
+        const notifMessage = adminResubmitForEditReason
+          ? `Admin sent your request back for edit. Reason: ${adminResubmitForEditReason}`
+          : `Your ticket status is now: ${statusLabels[statusToApply] || statusToApply}`;
+        const notifTitle = adminResubmitForEditReason
+          ? 'Resubmit for edit'
+          : 'Ticket status updated';
         await prisma.notification.create({
           data: {
             type: 'status_changed',
-            title: 'Ticket status updated',
-            message: `Your ticket status is now: ${statusLabels[status] || status}`,
+            title: notifTitle,
+            message: notifMessage,
             ticketId: id,
             requesterId: updated.requesterId,
             forAdmin: false,

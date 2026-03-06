@@ -44,7 +44,7 @@ export async function PATCH(
     } catch { /* fallback */ }
 
     let row: any;
-    if (requesterRole === 'ENGINEER') {
+    if (requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN') {
       row = await prisma.visitorRequest.findUnique({
         where: { id },
         select: { id: true, status: true, company: true, requesterId: true },
@@ -71,11 +71,11 @@ export async function PATCH(
       } catch { /* fallback */ }
     }
 
-    if (requesterRole === 'ENGINEER') {
-      const assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
-      if (assignedEngineerId !== auth.payload.requesterId) {
+    if (requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN') {
+      const assignedId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+      if (assignedId !== auth.payload.requesterId) {
         return NextResponse.json(
-          { success: false, message: 'Only the assigned engineer can update this ticket' },
+          { success: false, message: 'Only the assigned technician/engineer can update this ticket' },
           { status: 403 }
         );
       }

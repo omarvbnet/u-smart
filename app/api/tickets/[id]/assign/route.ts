@@ -28,16 +28,28 @@ export async function PATCH(
     }
 
     const role = requester.role ?? 'COMPANY';
-    if (role !== 'ENGINEER') {
-      return NextResponse.json({ success: false, message: 'Only engineers can assign tickets to themselves' }, { status: 403 });
+    const isEngineer = role === 'ENGINEER';
+    const isTechnician = role === 'TECHNICIAN';
+    if (!isEngineer && !isTechnician) {
+      return NextResponse.json({ success: false, message: 'Only engineers or technicians can assign tickets' }, { status: 403 });
     }
 
     const row = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, status: true, company: true, requesterId: true },
+      select: { id: true, status: true, company: true, requesterId: true, technique: true },
     });
     if (!row) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+    }
+
+    const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+    const tech = (row.technique ?? '').toLowerCase();
+    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(tech);
+    if (isTechnician && !isMaintenance) {
+      return NextResponse.json({ success: false, message: 'Technicians can only assign maintenance tickets' }, { status: 403 });
+    }
+    if (isEngineer && isMaintenance) {
+      return NextResponse.json({ success: false, message: 'Engineers handle QC only; maintenance tickets are for technicians' }, { status: 403 });
     }
 
     let currentStatus = row.status ?? 'PENDING';
@@ -60,7 +72,7 @@ export async function PATCH(
 
     if (parsed._ticket && parsed.assignedEngineerId) {
       return NextResponse.json(
-        { success: false, message: 'Ticket is already assigned to an engineer' },
+        { success: false, message: 'Ticket is already assigned' },
         { status: 400 }
       );
     }
@@ -102,14 +114,15 @@ export async function PATCH(
       });
     } catch { /* ignore */ }
 
-    // Notify the company that an engineer has been assigned
+    // Notify the company that a technician/engineer has been assigned
     if (row.requesterId && typeof prisma.notification?.create === 'function') {
       try {
+        const assigneeLabel = isTechnician ? 'Technician' : 'Engineer';
         await prisma.notification.create({
           data: {
             type: 'status_changed',
-            title: 'Engineer assigned',
-            message: `Engineer ${requester.name || requester.username} has been assigned to your ticket`,
+            title: `${assigneeLabel} assigned`,
+            message: `${assigneeLabel} ${requester.name || requester.username} has been assigned to your ticket`,
             ticketId: id,
             requesterId: row.requesterId,
             forAdmin: false,

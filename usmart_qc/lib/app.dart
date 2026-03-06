@@ -93,21 +93,21 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // Logo entrance: scale + rotate + fade
+    // Logo entrance: scale + rotate + fade with satisfying bounce
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1400),
     );
-    _logoScale = Tween<double>(begin: 0.3, end: 1.0).animate(
+    _logoScale = Tween<double>(begin: 0.2, end: 1.0).animate(
       CurvedAnimation(
         parent: _logoController,
-        curve: const Interval(0, 0.7, curve: Curves.elasticOut),
+        curve: const Interval(0, 0.75, curve: Curves.elasticOut),
       ),
     );
     _logoOpacity = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
         parent: _logoController,
-        curve: const Interval(0, 0.4, curve: Curves.easeOut),
+        curve: const Interval(0, 0.5, curve: Curves.easeOut),
       ),
     );
     _logoRotation = Tween<double>(begin: -0.1, end: 0).animate(
@@ -172,9 +172,9 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _particleAnim = Tween<double>(begin: 0, end: 1).animate(_particleController);
 
-    // Staggered start
+    // Staggered start: logo animates first, then content
     _logoController.forward();
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) _contentController.forward();
     });
     Future.delayed(const Duration(milliseconds: 800), () {

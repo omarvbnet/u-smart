@@ -17,6 +17,9 @@ import 'conflict_detail_screen.dart';
 import 'ticket_type_picker_screen.dart';
 import '../providers/sites_provider.dart';
 import '../providers/conflicts_provider.dart';
+import '../widgets/stats_card.dart';
+import 'filtered_tickets_screen.dart';
+import 'conflicts_screen.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -76,6 +79,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
                 _EngineerInboxTab(),
                 _AvailableTicketsTab(),
                 _MyTicketsTab(),
+                _EngineerAnalyticsTab(),
                 _EngineerSitesTab(),
                 _EngineerProfileTab(),
               ],
@@ -107,6 +111,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
                 _navItem(Icons.mail_rounded, l10n.t('nav_inbox')),
                 _navItem(Icons.inbox_rounded, l10n.t('nav_available')),
                 _navItem(Icons.assignment_turned_in_rounded, l10n.t('nav_my_tickets')),
+                _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                 _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
                 _navItem(Icons.person_rounded, l10n.t('nav_profile')),
               ],
@@ -976,6 +981,106 @@ class _Section {
   final List<Ticket> tickets;
   final Color color;
   _Section(this.title, this.tickets, this.color);
+}
+
+// ─── Engineer Analytics Tab (total, over SLA, conflicted only) ───
+class _EngineerAnalyticsTab extends StatelessWidget {
+  const _EngineerAnalyticsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Consumer2<TicketsProvider, ConflictsProvider>(
+      builder: (context, ticketsProvider, conflictsProvider, _) {
+        final stats = ticketsProvider.stats;
+        final totalTickets = stats?.total ?? ticketsProvider.tickets.length;
+        final overSla = stats?.outOfSla ?? ticketsProvider.ticketsOutOfSla.length;
+        final conflictedCount = conflictsProvider.conflicts.length;
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            await ticketsProvider.fetchTickets();
+            await ticketsProvider.fetchStats();
+            await conflictsProvider.fetchConflicts();
+          },
+          color: const Color(0xFF6C63FF),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                  ).createShader(bounds),
+                  child: Text(
+                    l10n.t('nav_analytics'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.2,
+                children: [
+                  StatsCard(
+                    label: l10n.t('total_tickets'),
+                    value: '$totalTickets',
+                    icon: Icons.assignment_rounded,
+                    color: const Color(0xFF6C63FF),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('total_tickets'),
+                          tickets: ticketsProvider.tickets,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('out_of_sla'),
+                    value: '$overSla',
+                    icon: Icons.warning_amber_rounded,
+                    color: const Color(0xFFFF4757),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('out_of_sla'),
+                          tickets: ticketsProvider.ticketsOutOfSla,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('conflicted_tickets'),
+                    value: '$conflictedCount',
+                    icon: Icons.gavel_rounded,
+                    color: const Color(0xFFFBBF24),
+                    onTap: conflictedCount > 0
+                        ? () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ConflictsScreen(),
+                              ),
+                            )
+                        : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 // ─── Engineer Sites Tab ───

@@ -37,19 +37,26 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
 
   Future<void> _loadData() async {
     final tickets = context.read<TicketsProvider>();
-    final sites = context.read<SitesProvider>();
     final conflicts = context.read<ConflictsProvider>();
-    await Future.wait([
+    final isTechnician = context.read<AuthProvider>().isTechnician;
+    final futures = [
       tickets.fetchTickets(),
       tickets.fetchStats(),
-      sites.fetchSites(),
       conflicts.fetchConflicts(),
-    ]);
+    ];
+    if (!isTechnician) {
+      futures.add(context.read<SitesProvider>().fetchSites());
+    }
+    await Future.wait(futures);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final isTechnician = context.read<AuthProvider>().isTechnician;
+    final tabChildren = isTechnician
+        ? const [_TicketsTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()]
+        : const [_TicketsTab(), _SitesTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()];
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       body: Stack(
@@ -74,14 +81,8 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
           ),
           SafeArea(
             child: IndexedStack(
-              index: _currentTab,
-              children: const [
-                _TicketsTab(),
-                _SitesTab(),
-                _StatsTab(),
-                _ConflictsTab(),
-                _ProfileTab(),
-              ],
+              index: _currentTab.clamp(0, tabChildren.length - 1),
+              children: tabChildren,
             ),
           ),
         ],
@@ -97,7 +98,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               ),
             ),
             child: BottomNavigationBar(
-              currentIndex: _currentTab,
+              currentIndex: _currentTab.clamp(0, (isTechnician ? 3 : 4)),
               onTap: (i) => setState(() => _currentTab = i),
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.transparent,
@@ -106,13 +107,20 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               selectedFontSize: 10,
               unselectedFontSize: 10,
               elevation: 0,
-              items: [
-                _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
-                _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
-                _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
-                _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
-                _navItem(Icons.person_rounded, l10n.t('nav_profile')),
-              ],
+              items: isTechnician
+                  ? [
+                      _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                      _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                      _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                      _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                    ]
+                  : [
+                      _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                      _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                      _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                      _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                      _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                    ],
             ),
           ),
         ),
@@ -826,6 +834,10 @@ class _StatsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final isTechnician = context.read<AuthProvider>().isTechnician;
+    if (isTechnician) {
+      return _TechnicianStatsContent(l10n: l10n);
+    }
     return Consumer<TicketsProvider>(
       builder: (context, provider, _) {
         final stats = provider.stats;
@@ -1320,6 +1332,107 @@ class _StatsTab extends StatelessWidget {
                   ],
                 ),
               ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Technician Stats (simplified: total, over SLA, conflicted) ───
+class _TechnicianStatsContent extends StatelessWidget {
+  final AppLocalizations l10n;
+
+  const _TechnicianStatsContent({required this.l10n});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer2<TicketsProvider, ConflictsProvider>(
+      builder: (context, ticketsProvider, conflictsProvider, _) {
+        final stats = ticketsProvider.stats;
+        final totalTickets = stats?.total ?? ticketsProvider.tickets.length;
+        final overSla = stats?.outOfSla ?? ticketsProvider.ticketsOutOfSla.length;
+        final conflictedCount = conflictsProvider.conflicts.length;
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            await ticketsProvider.fetchTickets();
+            await ticketsProvider.fetchStats();
+            await conflictsProvider.fetchConflicts();
+          },
+          color: const Color(0xFF6C63FF),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                  ).createShader(bounds),
+                  child: Text(
+                    l10n.t('nav_analytics'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.2,
+                children: [
+                  StatsCard(
+                    label: l10n.t('total_tickets'),
+                    value: '$totalTickets',
+                    icon: Icons.assignment_rounded,
+                    color: const Color(0xFF6C63FF),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('total_tickets'),
+                          tickets: ticketsProvider.tickets,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('out_of_sla'),
+                    value: '$overSla',
+                    icon: Icons.warning_amber_rounded,
+                    color: const Color(0xFFFF4757),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('out_of_sla'),
+                          tickets: ticketsProvider.ticketsOutOfSla,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('conflicted_tickets'),
+                    value: '$conflictedCount',
+                    icon: Icons.gavel_rounded,
+                    color: const Color(0xFFFBBF24),
+                    onTap: conflictedCount > 0
+                        ? () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ConflictsScreen(),
+                              ),
+                            )
+                        : null,
+                  ),
+                ],
+              ),
             ],
           ),
         );

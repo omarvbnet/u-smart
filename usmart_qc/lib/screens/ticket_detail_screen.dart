@@ -47,10 +47,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _loadingEvidence = false;
   bool _loadingChecklists = false;
   bool _uploading = false;
+  bool _completingMaintenance = false;
+
+  /// Maintenance: before (4–6) and after (4–6) image URLs for completion
+  List<String> _maintenanceBeforeUrls = [];
+  List<String> _maintenanceAfterUrls = [];
 
   final _picker = ImagePicker();
 
   bool get _isEngineer => context.read<AuthProvider>().isEngineer;
+  bool get _isTechnician => context.read<AuthProvider>().isTechnician;
 
   @override
   void initState() {
@@ -66,6 +72,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       setState(() {
         _ticket = t;
         _loading = false;
+        if (t != null && _isTechnician && t.isMaintenance) {
+          _maintenanceBeforeUrls = List.from(t.beforeImageUrls);
+          _maintenanceAfterUrls = List.from(t.finishingImageUrls);
+        }
       });
       // Load comments & evidence for both company and engineer (both can view/reply/upload)
       _loadCommentsAndEvidence();
@@ -670,8 +680,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final siteUpdated = _siteLastUpdated;
 
     return [
-      // ─── Engineer action buttons ───
+      // ─── Engineer/Technician action buttons ───
       if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
+      if (_isTechnician && t.isMaintenance) ..._buildTechnicianActions(t, isMyTicket, l10n),
 
       // Details
       _glassSection(l10n.t('details'), [
@@ -1034,8 +1045,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           showUploadButtons: !t.isCompleted,
         ),
       ),
+      // QC checklists: only for engineers on QC tickets (not maintenance)
       if (isEngineer &&
           isMyTicket &&
+          !t.isMaintenance &&
           !t.isCompleted &&
           (!t.isNcr || _isNcrResolved(t))) ...[
         const SizedBox(height: 16),
@@ -1046,6 +1059,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             onComplete: _completeWithChecklist,
           ),
         ),
+      ],
+      // Maintenance complete: only Complete button + before/after images (no checklist)
+      if (_isTechnician &&
+          t.isMaintenance &&
+          isMyTicket &&
+          !t.isCompleted &&
+          t.isInProgress) ...[
+        const SizedBox(height: 16),
+        _maintenanceCompleteSection(l10n),
       ],
 
       if (t.isMaintenance &&
@@ -1217,6 +1239,310 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
 
     return widgets;
+  }
+
+  List<Widget> _buildTechnicianActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
+    final widgets = <Widget>[];
+    final hasActive = context.read<TicketsProvider>().hasActiveTicket;
+
+    if (t.canBeAssigned) {
+      if (hasActive) {
+        widgets.add(Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBBF24).withAlpha(15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFBBF24).withAlpha(40)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  color: Color(0xFFFBBF24), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.t('complete_before_assign'),
+                  style: TextStyle(
+                    color: const Color(0xFFFBBF24).withAlpha(220),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
+      } else {
+        widgets.add(_actionButton(
+          icon: Icons.person_add_rounded,
+          label: l10n.t('assign_to_me'),
+          gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+          loading: _assigning,
+          onTap: _assignToMe,
+        ));
+      }
+      widgets.add(const SizedBox(height: 12));
+    }
+
+    if (isMyTicket && !t.isCompleted) {
+      if (t.isOnSite) {
+        widgets.add(_actionButton(
+          icon: Icons.play_arrow_rounded,
+          label: l10n.t('start_maintenance'),
+          gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
+          loading: _updatingStatus,
+          onTap: () => _updateStatus('IN_PROGRESS'),
+        ));
+        widgets.add(const SizedBox(height: 12));
+      }
+      widgets.add(_buildStatusStepper(t, l10n));
+      widgets.add(const SizedBox(height: 16));
+    }
+
+    if (t.isCompleted && isMyTicket) {
+      widgets.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4ADE80).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF4ADE80).withAlpha(40)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                color: Color(0xFF4ADE80), size: 22),
+            const SizedBox(width: 10),
+            Text(
+              l10n.t('ticket_completed'),
+              style: TextStyle(
+                color: Color(0xFF4ADE80),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ));
+      widgets.add(const SizedBox(height: 16));
+    }
+
+    return widgets;
+  }
+
+  Widget _maintenanceCompleteSection(AppLocalizations l10n) {
+    const minImages = 4;
+    const maxImages = 6;
+    final beforeOk = _maintenanceBeforeUrls.length >= minImages && _maintenanceBeforeUrls.length <= maxImages;
+    final afterOk = _maintenanceAfterUrls.length >= minImages && _maintenanceAfterUrls.length <= maxImages;
+    final canComplete = beforeOk && afterOk;
+
+    return _glassContainer(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Text(
+              l10n.t('maint_complete_title'),
+              style: TextStyle(
+                color: Colors.white.withAlpha(100),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              l10n.t('maint_complete_hint'),
+              style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _maintImageRow(l10n.t('before_photos'), _maintenanceBeforeUrls, true, minImages, maxImages),
+          const SizedBox(height: 12),
+          _maintImageRow(l10n.t('after_photos'), _maintenanceAfterUrls, false, minImages, maxImages),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: canComplete && !_completingMaintenance
+                  ? () => _completeMaintenance(l10n)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D4AA),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: _completingMaintenance
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(l10n.t('complete_ticket'), style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _maintImageRow(String label, List<String> urls, bool isBefore, int min, int max) {
+    final count = urls.length;
+    final valid = count >= min && count <= max;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(label, style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            Text(
+              '($count/$min–$max)',
+              style: TextStyle(
+                color: valid ? const Color(0xFF00D4AA) : const Color(0xFFFBBF24),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 90,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              ...urls.asMap().entries.map((e) => _maintThumb(e.value, isBefore, e.key)),
+              if (count < max && !_uploading)
+                GestureDetector(
+                  onTap: () => _pickAndAddMaintenanceImage(isBefore),
+                  child: Container(
+                    width: 80,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(8),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withAlpha(20)),
+                    ),
+                    child: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF6C63FF), size: 28),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _maintThumb(String url, bool isBefore, int index) {
+    return Stack(
+      children: [
+        Container(
+          width: 80,
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withAlpha(15)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              width: 80,
+              height: 90,
+              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Color(0xFF4B5563)),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 12,
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                if (isBefore) {
+                  _maintenanceBeforeUrls.removeAt(index);
+                } else {
+                  _maintenanceAfterUrls.removeAt(index);
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(color: Color(0xFFFF4757), shape: BoxShape.circle),
+              child: const Icon(Icons.close, color: Colors.white, size: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickAndAddMaintenanceImage(bool isBefore) async {
+    setState(() => _uploading = true);
+    try {
+      final XFile? file = await _picker.pickImage(source: ImageSource.camera);
+      if (file == null || !mounted) return;
+      final provider = context.read<TicketsProvider>();
+      final url = await provider.uploadFile(file.path);
+      if (url != null && mounted) {
+        setState(() {
+          if (isBefore) {
+            if (_maintenanceBeforeUrls.length < 6) _maintenanceBeforeUrls.add(url);
+          } else {
+            if (_maintenanceAfterUrls.length < 6) _maintenanceAfterUrls.add(url);
+          }
+        });
+      } else if (mounted) {
+        _showUploadError(AppLocalizations.of(context).t('upload_failed'));
+      }
+    } catch (e) {
+      if (mounted) _showUploadError(AppLocalizations.of(context).t('upload_failed'));
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
+
+  Future<void> _completeMaintenance(AppLocalizations l10n) async {
+    setState(() => _completingMaintenance = true);
+    try {
+      final ok = await context.read<TicketsProvider>().completeTicket(
+        widget.ticketId,
+        null,
+        beforeImageUrls: _maintenanceBeforeUrls,
+        finishingImageUrls: _maintenanceAfterUrls,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? l10n.t('ticket_completed') : l10n.t('complete_failed')),
+            backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        if (ok) await _load();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('complete_failed')),
+            backgroundColor: const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _completingMaintenance = false);
   }
 
   Widget _buildStatusStepper(Ticket t, AppLocalizations l10n) {
@@ -1815,9 +2141,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             : (r.by == 'engineer' ? l10n.t('engineer') : r.by);
         final actionLabel = r.action == 'resubmit'
             ? l10n.t('resubmit')
-            : (r.action == 'approved'
-                ? l10n.t('ncr_approved')
-                : (r.action == 'rework' ? l10n.t('ncr_rework') : r.action));
+            : (r.action == 'resubmit_for_edit'
+                ? l10n.t('admin_resubmit_for_edit')
+                : (r.action == 'approved'
+                    ? l10n.t('ncr_approved')
+                    : (r.action == 'rework' ? l10n.t('ncr_rework') : r.action)));
         final dateStr = r.at.isNotEmpty
             ? _formatDateShort(DateTime.tryParse(r.at) ?? DateTime.now())
             : '';

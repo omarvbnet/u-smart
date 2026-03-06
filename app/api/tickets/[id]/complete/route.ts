@@ -13,10 +13,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
 
+  const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+
   try {
     const ticket = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, status: true, company: true, requesterId: true },
+      select: { id: true, status: true, company: true, requesterId: true, technique: true, beforeImageUrls: true, finishingImageUrls: true },
     });
 
     if (!ticket) {
@@ -28,17 +30,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
     } catch { /* ignore */ }
 
-    const assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
-    if (assignedEngineerId !== auth.payload.requesterId) {
-      return NextResponse.json({ success: false, message: 'Only the assigned engineer can complete this ticket' }, { status: 403 });
+    const assignedId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
+    if (assignedId !== auth.payload.requesterId) {
+      return NextResponse.json({ success: false, message: 'Only the assigned technician or engineer can complete this ticket' }, { status: 403 });
     }
 
     if (ticket.status === 'COMPLETED') {
       return NextResponse.json({ success: false, message: 'Ticket is already completed' }, { status: 400 });
     }
 
+    const tech = (ticket.technique ?? '').toLowerCase();
+    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(tech);
+
     const body = await req.json();
     const checklistResponse = body.checklistResponse ?? null;
+
+    // Maintenance: no checklist; require 4–6 before and 4–6 after images
+    if (isMaintenance) {
+      if (checklistResponse) {
+        return NextResponse.json({ success: false, message: 'Maintenance tickets do not use checklists. Attach 4–6 before and 4–6 after photos and complete.' }, { status: 400 });
+      }
+      const beforeUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim()) : [];
+      const afterUrls = Array.isArray(body.finishingImageUrls) ? body.finishingImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim()) : [];
+      if (beforeUrls.length < 4 || beforeUrls.length > 6) {
+        return NextResponse.json({ success: false, message: 'Before images must be between 4 and 6' }, { status: 400 });
+      }
+      if (afterUrls.length < 4 || afterUrls.length > 6) {
+        return NextResponse.json({ success: false, message: 'After images must be between 4 and 6' }, { status: 400 });
+      }
+      parsed.beforeImageUrls = beforeUrls;
+      parsed.finishingImageUrls = afterUrls;
+    }
     const inspectionResult = typeof body.inspectionResult === 'string' ? body.inspectionResult.trim().toLowerCase() : null;
     const inspectionComments = typeof body.inspectionComments === 'string' ? body.inspectionComments.trim() : null;
     const ncrReason = typeof body.ncrReason === 'string' ? body.ncrReason.trim() : (inspectionResult === 'ncr' ? inspectionComments : null);
@@ -75,14 +97,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       parsed.inspectionComments = inspectionComments;
     }
 
+    const updateData: Record<string, unknown> = {
+      status: isNcr ? 'IN_PROGRESS' : 'COMPLETED',
+      completedAt: isNcr ? null : new Date(),
+      company: JSON.stringify(parsed),
+      checklistResponse: checklistResponse ? JSON.stringify(checklistResponse) : undefined,
+    };
+    if (isMaintenance && !isNcr) {
+      updateData.beforeImageUrls = parsed.beforeImageUrls ?? [];
+      updateData.finishingImageUrls = parsed.finishingImageUrls ?? [];
+    }
     await prisma.visitorRequest.update({
       where: { id },
-      data: {
-        status: isNcr ? 'IN_PROGRESS' : 'COMPLETED',
-        completedAt: isNcr ? null : new Date(),
-        company: JSON.stringify(parsed),
-        checklistResponse: checklistResponse ? JSON.stringify(checklistResponse) : undefined,
-      },
+      data: updateData,
     });
 
     if (!isNcr) {

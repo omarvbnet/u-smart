@@ -30,12 +30,12 @@ export async function GET(
   } catch { /* fallback to COMPANY */ }
 
   try {
-    // ENGINEER: any ticket. TECHNICIAN: only maintenance tickets. COMPANY/PERSONAL: own tickets only.
+    // ENGINEER: QC tickets only (no maintenance). TECHNICIAN: only maintenance. COMPANY/PERSONAL: own tickets only.
     const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let whereClause: any;
     if (requesterRole === 'ENGINEER') {
-      whereClause = { id };
+      whereClause = { id, technique: { notIn: MAINTENANCE_TECHNIQUES } };
     } else if (requesterRole === 'TECHNICIAN') {
       whereClause = { id, technique: { in: MAINTENANCE_TECHNIQUES } };
     } else {
