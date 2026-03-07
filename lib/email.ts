@@ -109,6 +109,24 @@ export async function sendOtpEmail(to: string, code: string): Promise<boolean> {
   });
 }
 
+/** Send OTP email for forgot password reset. */
+export async function sendForgotPasswordOtp(to: string, code: string): Promise<boolean> {
+  const safeCode = escapeHtml(code);
+  const html = `
+    <p style="margin:0 0 16px; color:#475569; font-size:16px;">رمز إعادة تعيين كلمة المرور:</p>
+    <p style="margin:0 0 24px; font-size:28px; font-weight:700; letter-spacing:4px; color:#0f172a;">${safeCode}</p>
+    <p style="margin:0; color:#64748b; font-size:14px;">صالح لمدة 10 دقائق.</p>
+    <p style="margin:16px 0 0; color:#94a3b8; font-size:12px;">فريق U-SMART</p>
+  `.trim();
+  const text = `رمز إعادة تعيين كلمة المرور: ${code}\nصالح لمدة 10 دقائق.\nفريق U-SMART`;
+  return sendEmail({
+    to,
+    subject: 'إعادة تعيين كلمة المرور - U-SMART',
+    html,
+    text,
+  });
+}
+
 /** Ticket data for completed email (full details). */
 export type TicketCompletedData = {
   ticketId: string;

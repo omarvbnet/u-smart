@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkEmailUnique } from '@/lib/check-unique-email-phone';
 
 const ROLES = ['ADMIN', 'EDITOR', 'USER', 'TECHNICAL', 'ENGINEER'] as const;
 
@@ -76,9 +77,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid role' }, { status: 400 });
     }
 
-    const existing = await (prisma as any).user.findUnique({ where: { email } });
-    if (existing) {
-      return NextResponse.json({ success: false, message: 'Email already in use' }, { status: 400 });
+    const emailCheck = await checkEmailUnique(prisma, email);
+    if (emailCheck.taken) {
+      return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use' }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

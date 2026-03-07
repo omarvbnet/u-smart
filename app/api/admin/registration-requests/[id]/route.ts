@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendCompanyAccountApprovedEmail } from '@/lib/email';
+import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 function generateUsername(role: string): string {
   const prefixes: Record<string, string> = {
@@ -64,6 +65,15 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
+      const emailCheck = await checkEmailUnique(prisma, rr.email);
+      if (emailCheck.taken) {
+        return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use. Reject or ask user to use a different email.' }, { status: 400 });
+      }
+      const phoneCheck = await checkPhoneUnique(prisma, rr.phone);
+      if (phoneCheck.taken) {
+        return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone already in use. Reject or ask user to use a different phone.' }, { status: 400 });
+      }
+
       const username = generateUsername(rr.role);
       const password = generatePassword();
       const passwordHash = await bcrypt.hash(password, 10);

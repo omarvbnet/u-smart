@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma as _prisma } from '@/lib/prisma';
+import { checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 const prisma = _prisma as any;
 
@@ -125,6 +126,11 @@ export async function POST(req: NextRequest) {
     }
     if (!phone) {
       return NextResponse.json({ success: false, message: 'Phone is required' }, { status: 400 });
+    }
+
+    const phoneCheck = await checkPhoneUnique(prisma, phone);
+    if (phoneCheck.taken) {
+      return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone number already in use' }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
 import '../widgets/ticket_card.dart';
+import '../widgets/update_password_sheet.dart';
 import '../widgets/stats_card.dart';
 import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
@@ -850,6 +852,8 @@ class _ProfileTab extends StatelessWidget {
                 user.status, const Color(0xFF4ADE80)),
             _profileRow(Icons.engineering_rounded, 'Role',
                 'QC Engineer', const Color(0xFFFBBF24)),
+            const SizedBox(height: 12),
+            _updatePasswordRow(context),
             const SizedBox(height: 32),
             Container(
               decoration: BoxDecoration(
@@ -896,6 +900,71 @@ class _ProfileTab extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  Widget _updatePasswordRow(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Material(
+      color: const Color(0xFF12122A),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => showUpdatePasswordSheet(context),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFF00D4AA).withAlpha(15)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00D4AA).withAlpha(20),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.lock_reset_rounded,
+                  color: Color(0xFF00D4AA),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.t('update_password'),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(80),
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.t('update_password_hint'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: Colors.white.withAlpha(100),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

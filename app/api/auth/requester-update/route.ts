@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 export async function PATCH(req: NextRequest) {
   try {
@@ -45,7 +46,13 @@ export async function PATCH(req: NextRequest) {
       data.passwordHash = await bcrypt.hash(newPassword, 10);
     }
     if (name !== undefined) data.name = name || null;
-    if (phone !== undefined) data.phone = phone || '';
+    if (phone !== undefined) {
+      const phoneCheck = await checkPhoneUnique(prisma, phone, { requesterId: payload.requesterId });
+      if (phoneCheck.taken) {
+        return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone number already in use' }, { status: 400 });
+      }
+      data.phone = phone || '';
+    }
     if (company !== undefined) data.company = company || null;
     if (companyCertificationUrl !== undefined) data.companyCertificationUrl = companyCertificationUrl;
     data.hasUpdatedCredentials = true;

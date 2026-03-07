@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 const GRADE_VALUES = ['TECHNICIAN_C', 'TECHNICIAN_B', 'TECHNICIAN_A', 'ENGINEER', 'SUPERVISOR', 'TEAM_LEADER', 'SECTION_HEAD', 'MANAGER'] as const;
 const SPECIALIZED_VALUES = ['ELECTRICAL_TECHNICIAN', 'TELECOM_TECHNICIAN', 'FIBER_TECHNICIAN', 'ENGINEER'] as const;
@@ -62,6 +63,13 @@ export async function PATCH(
     }
     if (specialized !== undefined && !SPECIALIZED_VALUES.includes(specialized as (typeof SPECIALIZED_VALUES)[number])) {
       return NextResponse.json({ success: false, message: 'Invalid specialized' }, { status: 400 });
+    }
+
+    if (phone !== undefined) {
+      const phoneCheck = await checkPhoneUnique(prisma, phone, { employeeId: id });
+      if (phoneCheck.taken) {
+        return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone number already in use' }, { status: 400 });
+      }
     }
 
     const data: Record<string, unknown> = {};

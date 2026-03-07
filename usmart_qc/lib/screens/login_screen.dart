@@ -1,8 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import 'registration_request_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,6 +20,11 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordCtrl = TextEditingController();
   bool _obscure = true;
   bool _submitting = false;
+  String _forgotUsername = '';
+  String _forgotCode = '';
+  String _forgotPassword = '';
+  bool _forgotSending = false;
+  bool _forgotVerifying = false;
   late AnimationController _animCtrl;
   late Animation<double> _fadeIn;
   late Animation<Offset> _slideUp;
@@ -35,6 +42,16 @@ class _LoginScreenState extends State<LoginScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSavedCredentials());
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final auth = context.read<AuthProvider>();
+    final creds = await auth.getSavedCredentials();
+    if (mounted && creds != null) {
+      _usernameCtrl.text = creds.username;
+      _passwordCtrl.text = creds.password;
+    }
   }
 
   Future<void> _login() async {
@@ -58,6 +75,169 @@ class _LoginScreenState extends State<LoginScreen>
       );
     }
     if (mounted) setState(() => _submitting = false);
+  }
+
+  Future<void> _requestForgotCode() async {
+    final u = _forgotUsername.trim();
+    if (u.isEmpty) return;
+    setState(() => _forgotSending = true);
+    try {
+      final api = context.read<ApiService>();
+      final res = await api.post(ApiConfig.forgotPassword, body: {'usernameOrEmail': u});
+      if (mounted) {
+        if (res['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context).t('code_sent')), behavior: SnackBarBehavior.floating),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res['message'] ?? 'Failed'), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Network error'), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+    if (mounted) setState(() => _forgotSending = false);
+  }
+
+  void _showForgotFlow(BuildContext context, AppLocalizations l10n) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (_, sc) => Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0A1F),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: Colors.white.withAlpha(15)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: ListView(
+            controller: sc,
+            children: [
+              Text(l10n.t('forgot_password'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(l10n.t('forgot_password_hint'), style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13)),
+              const SizedBox(height: 20),
+              TextField(
+                onChanged: (v) => setState(() => _forgotUsername = v),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: l10n.t('login_username') + ' / Email',
+                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (v) => setState(() => _forgotCode = v),
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: l10n.t('reg_code_placeholder'),
+                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (v) => setState(() => _forgotPassword = v),
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: l10n.t('new_password'),
+                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _forgotSending ? null : _requestForgotCode,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                      child: _forgotSending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('send_code')),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _forgotVerifying || _forgotCode.length < 4 || _forgotPassword.length < 6
+                          ? null
+                          : _resetPassword,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00D4AA)),
+                      child: _forgotVerifying ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('reset_password')),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('← ' + l10n.t('cancel'), style: TextStyle(color: Colors.white.withAlpha(150))),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resetPassword() async {
+    final u = _forgotUsername.trim();
+    final c = _forgotCode.replaceAll(RegExp(r'\D'), '');
+    final p = _forgotPassword;
+    if (u.isEmpty || c.length < 4 || p.length < 6) return;
+    setState(() => _forgotVerifying = true);
+    try {
+      final api = context.read<ApiService>();
+      final res = await api.post(ApiConfig.resetPassword, body: {
+        'usernameOrEmail': u,
+        'code': c,
+        'newPassword': p,
+      });
+      if (mounted) {
+        if (res['success'] == true) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context).t('reset_password') + ' – Sign in with new password.', maxLines: 2), behavior: SnackBarBehavior.floating),
+          );
+          setState(() {
+            _forgotUsername = '';
+            _forgotCode = '';
+            _forgotPassword = '';
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res['message'] ?? AppLocalizations.of(context).t('invalid_code')), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Network error'), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+    if (mounted) setState(() => _forgotVerifying = false);
   }
 
   @override
@@ -269,20 +449,35 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 20),
-                                  TextButton(
-                                    onPressed: () =>
-                                        showRegistrationRequestModal(context),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: const Color(0xFF6C63FF),
-                                    ),
-                                    child: Text(
-                                      l10n.t('reg_request_title'),
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      TextButton(
+                                        onPressed: () => _showForgotFlow(context, l10n),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(0xFF6C63FF),
+                                        ),
+                                        child: Text(
+                                          l10n.t('forgot_password'),
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
                                       ),
-                                    ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            showRegistrationRequestModal(context),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(0xFF6C63FF),
+                                        ),
+                                        child: Text(
+                                          l10n.t('reg_request_title'),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

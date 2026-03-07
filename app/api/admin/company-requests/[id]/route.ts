@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendCompanyAccountApprovedEmail } from '@/lib/email';
+import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 function generateUsername(): string {
   return `company_${crypto.randomBytes(4).toString('hex')}`;
@@ -59,6 +60,18 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
+      const pocEmail = (companyRequest as { pocEmail?: string | null }).pocEmail;
+      if (pocEmail) {
+        const emailCheck = await checkEmailUnique(prisma, pocEmail);
+        if (emailCheck.taken) {
+          return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use.' }, { status: 400 });
+        }
+      }
+      const phoneCheck = await checkPhoneUnique(prisma, companyRequest.pocPhone);
+      if (phoneCheck.taken) {
+        return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone already in use.' }, { status: 400 });
+      }
+
       if (!companyDelegate?.create) {
         return NextResponse.json({ success: false, message: 'Companies feature not available' }, { status: 503 });
       }
@@ -69,7 +82,6 @@ export async function PATCH(
         ? 'quality-control-supervision'
         : 'enterprise-networking';
 
-      const pocEmail = (companyRequest as { pocEmail?: string | null }).pocEmail;
       const requester = await prisma.ticketRequester.create({
         data: {
           username,

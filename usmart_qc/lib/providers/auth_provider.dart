@@ -72,4 +72,8 @@ class AuthProvider extends ChangeNotifier {
     _user = null;
     notifyListeners();
   }
+
+  Future<({String username, String password})?> getSavedCredentials() async {
+    return _authService.getSavedCredentials();
+  }
 }

@@ -12,6 +12,12 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [changePwdOpen, setChangePwdOpen] = useState(false);
+  const [changePwdStep, setChangePwdStep] = useState<'send' | 'verify'>('send');
+  const [changePwdCode, setChangePwdCode] = useState('');
+  const [changePwdNew, setChangePwdNew] = useState('');
+  const [changePwdLoading, setChangePwdLoading] = useState(false);
+  const [changePwdError, setChangePwdError] = useState('');
   const isLoginPage = pathname === '/admin/login';
 
   useEffect(() => {
@@ -37,6 +43,64 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
     setUser(null);
     router.replace('/admin/login');
     router.refresh();
+  };
+
+  const handleSendChangePwdCode = async () => {
+    if (!user?.email) return;
+    setChangePwdLoading(true);
+    setChangePwdError('');
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChangePwdStep('verify');
+        setChangePwdCode('');
+        setChangePwdNew('');
+      } else {
+        setChangePwdError(data.message || 'Failed to send code');
+      }
+    } catch {
+      setChangePwdError('Network error');
+    } finally {
+      setChangePwdLoading(false);
+    }
+  };
+
+  const handleResetChangePwd = async () => {
+    if (!user?.email || !changePwdCode.trim() || changePwdNew.length < 6) {
+      setChangePwdError('Enter a 6-digit code and new password (min 6 chars)');
+      return;
+    }
+    setChangePwdLoading(true);
+    setChangePwdError('');
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          code: changePwdCode.trim(),
+          newPassword: changePwdNew,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChangePwdOpen(false);
+        setChangePwdStep('send');
+        setChangePwdCode('');
+        setChangePwdNew('');
+      } else {
+        setChangePwdError(data.message || 'Failed to reset password');
+      }
+    } catch {
+      setChangePwdError('Network error');
+    } finally {
+      setChangePwdLoading(false);
+    }
   };
 
   if (loading && !isLoginPage) {
@@ -83,6 +147,13 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
             </div>
             <button
               type="button"
+              onClick={() => { setChangePwdOpen(true); setChangePwdStep('send'); setChangePwdError(''); }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+            >
+              Change password
+            </button>
+            <button
+              type="button"
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
             >
@@ -100,6 +171,81 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
       <main className="pl-64">
         {children}
       </main>
+
+      {changePwdOpen && user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setChangePwdOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-900">Update password</h3>
+            <p className="mt-1 text-sm text-slate-500">We will send a verification code to your email.</p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Email</label>
+                <input type="email" value={user.email} readOnly className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600" />
+              </div>
+              {changePwdStep === 'send' ? (
+                <button
+                  type="button"
+                  onClick={handleSendChangePwdCode}
+                  disabled={changePwdLoading}
+                  className="w-full rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-cyan-700 disabled:opacity-50"
+                >
+                  {changePwdLoading ? 'Sending...' : 'Send verification code'}
+                </button>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600">Verification code</label>
+                    <input
+                      type="text"
+                      value={changePwdCode}
+                      onChange={e => setChangePwdCode(e.target.value)}
+                      placeholder="6-digit code"
+                      maxLength={6}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600">New password</label>
+                    <input
+                      type="password"
+                      value={changePwdNew}
+                      onChange={e => setChangePwdNew(e.target.value)}
+                      placeholder="Min 6 characters"
+                      minLength={6}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setChangePwdStep('send')}
+                      className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetChangePwd}
+                      disabled={changePwdLoading}
+                      className="flex-1 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-cyan-700 disabled:opacity-50"
+                    >
+                      {changePwdLoading ? 'Updating...' : 'Update password'}
+                    </button>
+                  </div>
+                </>
+              )}
+              {changePwdError && <p className="text-sm text-red-600">{changePwdError}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setChangePwdOpen(false)}
+              className="mt-4 w-full rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

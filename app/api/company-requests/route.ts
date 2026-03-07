@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getVerifiedEmailFromCookie } from '@/lib/otp-auth';
 import { notifyTicketsCompanyRequest } from '@/lib/email';
+import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +36,15 @@ export async function POST(req: NextRequest) {
         { success: false, message: 'Email must match the verified email address.' },
         { status: 400 }
       );
+    }
+
+    const emailCheck = await checkEmailUnique(prisma, pocEmail);
+    if (emailCheck.taken) {
+      return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use' }, { status: 400 });
+    }
+    const phoneCheck = await checkPhoneUnique(prisma, pocPhone);
+    if (phoneCheck.taken) {
+      return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone number already in use' }, { status: 400 });
     }
 
     let request: { id: string };

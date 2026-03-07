@@ -2,6 +2,10 @@ class ApiConfig {
   static const String baseUrl = 'https://www.usmart-iot.com';
 
   static const String login = '/api/auth/requester-login';
+  static const String forgotPassword = '/api/auth/requester-forgot-password';
+  static const String resetPassword = '/api/auth/requester-reset-password';
+  static const String sendChangePasswordOtp = '/api/auth/requester-send-change-password-otp';
+  static const String changePassword = '/api/auth/requester-change-password';
   static const String me = '/api/auth/requester-me';
   static const String updateProfile = '/api/auth/requester-update';
   static const String logout = '/api/auth/requester-logout';
@@ -32,6 +36,10 @@ class ApiConfig {
   static const String notifications = '/api/notifications';
   static const String notificationCount = '/api/notifications/count';
   static String notificationMarkRead(String id) => '/api/notifications/$id';
+
+  // OTP (public, no auth)
+  static const String otpEmailSend = '/api/otp/email/send';
+  static const String otpEmailVerify = '/api/otp/email/verify';
 
   // Registration requests (public, no auth)
   static const String registrationRequests = '/api/registration-requests';

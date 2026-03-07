@@ -7,6 +7,8 @@ class AuthService {
   final ApiService _api;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   static const _tokenKey = 'requester_token';
+  static const _savedUsernameKey = 'saved_username';
+  static const _savedPasswordKey = 'saved_password';
 
   AuthService(this._api);
 
@@ -44,6 +46,8 @@ class AuthService {
     if (data['success'] == true && data['token'] != null) {
       final token = data['token'] as String;
       await _saveToken(token);
+      await _storage.write(key: _savedUsernameKey, value: username);
+      await _storage.write(key: _savedPasswordKey, value: password);
 
       final userJson = data['user'] as Map<String, dynamic>;
       // If login response doesn't include role, fetch it separately
@@ -83,5 +87,16 @@ class AuthService {
       await _api.post(ApiConfig.logout);
     } catch (_) {}
     await clearToken();
+    // Keep saved credentials for next login (do not delete)
+  }
+
+  /// Returns saved username and password for prefilling login form.
+  Future<({String username, String password})?> getSavedCredentials() async {
+    final username = await _storage.read(key: _savedUsernameKey);
+    final password = await _storage.read(key: _savedPasswordKey);
+    if (username != null && password != null && username.isNotEmpty) {
+      return (username: username, password: password);
+    }
+    return null;
   }
 }

@@ -198,6 +198,7 @@
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				117AE380E6C071C039991F94 /* [CP] Embed Pods Frameworks */,
+				A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */,
 			);
 			buildRules = (
 			);
@@ -360,6 +361,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Clear xattrs before Code Sign";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "xattr -cr \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/${FLUTTER_BUILD_DIR}/ios/Release-iphoneos\" 2>/dev/null || true";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 

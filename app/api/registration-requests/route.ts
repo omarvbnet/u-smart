@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { notifyTicketsRegistrationRequest } from '@/lib/email';
+import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 // Only COMPANY and PERSONAL can self-register. ENGINEER and TECHNICIAN are added by admin only.
 const VALID_ROLES = ['COMPANY', 'PERSONAL'] as const;
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
         { success: false, message: 'Legal name, phone, email, province, and identification evidence are required' },
         { status: 400 }
       );
+    }
+
+    const emailCheck = await checkEmailUnique(prisma, email);
+    if (emailCheck.taken) {
+      return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use' }, { status: 400 });
+    }
+    const phoneCheck = await checkPhoneUnique(prisma, phone);
+    if (phoneCheck.taken) {
+      return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone number already in use' }, { status: 400 });
     }
 
     const delegate = (prisma as { registrationRequest?: { create: (args: unknown) => Promise<unknown> } }).registrationRequest;

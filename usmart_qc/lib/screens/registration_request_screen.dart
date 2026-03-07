@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/registration_request_provider.dart';
+import '../services/device_phone_service.dart';
 
 /// Modal for requesting registration (Company or Engineer).
 /// Mirrors the web login page flow: role selection → form + evidence upload → submit.
@@ -37,21 +39,42 @@ const List<String> _iraqProvinces = [
 ];
 
 class _RegistrationRequestContentState extends State<_RegistrationRequestContent> {
-  int _step = 0; // 0=role, 1=form
-  String? _role; // COMPANY | ENGINEER | TECHNICIAN | PERSONAL
+  int _step = 0; // 0=role, 1=email, 2=otp, 3=form
+  String? _role;
   final _legalName = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
   String? _selectedProvince;
   String? _evidenceUrl;
   bool _success = false;
+  bool _otpSending = false;
+  bool _otpVerifying = false;
+  final _otpCode = TextEditingController();
 
   @override
   void dispose() {
     _legalName.dispose();
     _phone.dispose();
     _email.dispose();
+    _otpCode.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchDevicePhone() async {
+    final l10n = AppLocalizations.of(context);
+    final number = await DevicePhoneService.getDevicePhoneNumber();
+    if (mounted) {
+      if (number != null && number.isNotEmpty) {
+        _phone.text = number;
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Platform.isIOS ? l10n.t('use_my_phone_ios_hint') : 'Could not get phone number'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _pickAndUploadFile() async {
@@ -240,10 +263,113 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
   }
 
   Widget _buildForm(AppLocalizations l10n) {
-    if (_step == 0) {
-      return _buildRoleStep(l10n);
-    }
+    if (_step == 0) return _buildRoleStep(l10n);
+    if (_step == 1) return _buildEmailStep(l10n);
+    if (_step == 2) return _buildOtpStep(l10n);
     return _buildFormStep(l10n);
+  }
+
+  Widget _buildEmailStep(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton(
+          onPressed: () => setState(() => _step = 0),
+          child: Text('← ${l10n.t('reg_back')}', style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13)),
+        ),
+        const SizedBox(height: 8),
+        Text(l10n.t('reg_email_verify_title'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(l10n.t('reg_email_verify_hint'), style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 13)),
+        const SizedBox(height: 16),
+        _TextField(
+          controller: _email,
+          label: l10n.t('reg_email'),
+          hint: 'email@example.com',
+          icon: Icons.email_outlined,
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _otpSending || !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim())
+                ? null
+                : () async {
+                    setState(() => _otpSending = true);
+                    final ok = await context.read<RegistrationRequestProvider>().sendEmailOtp(_email.text.trim());
+                    if (mounted) {
+                      setState(() => _otpSending = false);
+                      if (ok) {
+                        setState(() => _step = 2);
+                        _otpCode.clear();
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(context.read<RegistrationRequestProvider>().error ?? 'Failed'),
+                            backgroundColor: const Color(0xFFFF4757),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
+                  },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), padding: const EdgeInsets.symmetric(vertical: 14)),
+            child: _otpSending ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('reg_send_otp')),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtpStep(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton(
+          onPressed: () => setState(() => _step = 1),
+          child: Text('← ${l10n.t('reg_back')}', style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13)),
+        ),
+        const SizedBox(height: 8),
+        Text('${l10n.t('reg_code_placeholder')} — ${_email.text}', style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13)),
+        const SizedBox(height: 12),
+        _TextField(
+          controller: _otpCode,
+          label: l10n.t('reg_code_placeholder'),
+          hint: '000000',
+          icon: Icons.pin_outlined,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _otpVerifying || _otpCode.text.replaceAll(RegExp(r'\D'), '').length < 4
+                ? null
+                : () async {
+                    setState(() => _otpVerifying = true);
+                    final ok = await context.read<RegistrationRequestProvider>().verifyEmailOtp(_email.text.trim(), _otpCode.text);
+                    if (mounted) {
+                      setState(() => _otpVerifying = false);
+                      if (ok) {
+                        setState(() => _step = 3);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.t('invalid_code')),
+                            backgroundColor: const Color(0xFFFF4757),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
+                  },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), padding: const EdgeInsets.symmetric(vertical: 14)),
+            child: _otpVerifying ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('reg_verify_otp')),
+          ),
+        ),
+      ],
+    );
   }
 
   String _roleLabel(AppLocalizations l10n) {
@@ -276,6 +402,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
                   setState(() {
                     _role = 'COMPANY';
                     _step = 1;
+                    _email.clear();
                   });
                 },
               ),
@@ -290,6 +417,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
                   setState(() {
                     _role = 'PERSONAL';
                     _step = 1;
+                    _email.clear();
                   });
                 },
               ),
@@ -307,7 +435,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextButton(
-          onPressed: () => setState(() => _step = 0),
+          onPressed: () => setState(() => _step = 2),
           child: Text(
             '← ${l10n.t('reg_back')} (${_roleLabel(l10n)})',
             style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13),
@@ -322,12 +450,28 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           keyboardType: TextInputType.name,
         ),
         const SizedBox(height: 12),
-        _TextField(
-          controller: _phone,
-          label: l10n.t('reg_phone'),
-          hint: '+964...',
-          icon: Icons.phone_outlined,
-          keyboardType: TextInputType.phone,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: _TextField(
+                controller: _phone,
+                label: l10n.t('reg_phone'),
+                hint: '+964...',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: TextButton.icon(
+                onPressed: _fetchDevicePhone,
+                icon: const Icon(Icons.phone_android, size: 18, color: Color(0xFF6C63FF)),
+                label: Text(l10n.t('use_my_phone'), style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         _TextField(

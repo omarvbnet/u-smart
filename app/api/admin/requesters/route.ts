@@ -3,6 +3,7 @@ import { RequesterRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 const SERVICE_SLUGS = ['enterprise-networking', 'quality-control-supervision'] as const;
 
@@ -99,6 +100,17 @@ export async function POST(req: NextRequest) {
     }
     if (!SERVICE_SLUGS.includes(serviceSlug as (typeof SERVICE_SLUGS)[number])) {
       return NextResponse.json({ success: false, message: 'Invalid service slug' }, { status: 400 });
+    }
+
+    const phoneCheck = await checkPhoneUnique(prisma, phone);
+    if (phoneCheck.taken) {
+      return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone number already in use' }, { status: 400 });
+    }
+    if (email) {
+      const emailCheck = await checkEmailUnique(prisma, email);
+      if (emailCheck.taken) {
+        return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use' }, { status: 400 });
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
