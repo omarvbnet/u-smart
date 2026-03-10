@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen>
                 onChanged: (v) => setState(() => _forgotUsername = v),
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: l10n.t('login_username') + ' / Email',
+                  hintText: '${l10n.t('login_username')} / Email',
                   hintStyle: const TextStyle(color: Color(0xFF4B5563)),
                   filled: true,
                   fillColor: const Color(0xFF12122A),
@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen>
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
-                child: Text('← ' + l10n.t('cancel'), style: TextStyle(color: Colors.white.withAlpha(150))),
+                child: Text('← ${l10n.t('cancel')}', style: TextStyle(color: Colors.white.withAlpha(150))),
               ),
             ],
           ),
@@ -217,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen>
         if (res['success'] == true) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context).t('reset_password') + ' – Sign in with new password.', maxLines: 2), behavior: SnackBarBehavior.floating),
+            SnackBar(content: Text('${AppLocalizations.of(context).t('reset_password')} – Sign in with new password.', maxLines: 2), behavior: SnackBarBehavior.floating),
           );
           setState(() {
             _forgotUsername = '';

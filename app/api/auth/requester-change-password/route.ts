@@ -58,8 +58,10 @@ export async function POST(req: NextRequest) {
     if (!valid) {
       try {
         const db = prisma as unknown as {
-          emailOtp?: { findFirst: (args: { where: { email: string }; orderBy: { expiresAt: 'desc' } }) => Promise<{ code: string; expiresAt: Date } | null> };
-          emailOtp?: { deleteMany: (args: { where: { email: string } }) => Promise<unknown> };
+          emailOtp?: {
+            findFirst: (args: { where: { email: string }; orderBy: { expiresAt: 'desc' } }) => Promise<{ code: string; expiresAt: Date } | null>;
+            deleteMany: (args: { where: { email: string } }) => Promise<unknown>;
+          };
         };
         if (db.emailOtp?.findFirst) {
           const record = await db.emailOtp.findFirst({

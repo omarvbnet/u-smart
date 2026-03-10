@@ -324,7 +324,7 @@ class _ProvinceDropdown extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value != null && items.contains(value) ? value : null,
+          initialValue: value != null && items.contains(value) ? value : null,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: Color(0xFF4B5563)),

@@ -31,14 +31,14 @@ class _ReportMaintenanceConflictScreenState
   Future<void> _pickImage() async {
     final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (!mounted || x == null) return;
+    final provider = context.read<TicketsProvider>();
     final path = x.path;
     final bytes = await x.readAsBytes();
-    if (bytes.isEmpty) return;
+    if (!mounted || bytes.isEmpty) return;
     final ext = (path.split('.').lastOrNull ?? 'jpg').toLowerCase();
     final filename = 'conflict_${DateTime.now().millisecondsSinceEpoch}.$ext';
     setState(() => _uploading = true);
     try {
-      final provider = context.read<TicketsProvider>();
       final url = await provider.uploadFileFromBytes(bytes, filename);
       if (url != null && mounted) {
         setState(() {

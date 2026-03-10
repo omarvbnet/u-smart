@@ -2454,14 +2454,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () async {
+                          final ticketsProvider = context.read<TicketsProvider>();
+                          final messenger = ScaffoldMessenger.of(context);
                           final comment = await _showNcrReworkDialog(l10n);
                           if (comment == null || !mounted) return;
-                          final ok = await context
-                              .read<TicketsProvider>()
+                          final ok = await ticketsProvider
                               .submitNcrEngineerResponse(t.id, 'rework',
                                   comment: comment);
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
                                 content: Text(ok
                                     ? l10n.t('ncr_rework_sent')
@@ -2490,11 +2491,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final ok = await context
-                              .read<TicketsProvider>()
+                          final ticketsProvider = context.read<TicketsProvider>();
+                          final messenger = ScaffoldMessenger.of(context);
+                          final ok = await ticketsProvider
                               .submitNcrEngineerResponse(t.id, 'approved');
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
                                 content: Text(ok
                                     ? l10n.t('ncr_approved_reinspect')
