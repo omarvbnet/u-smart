@@ -127,6 +127,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Worker cannot create any tickets – view-only, admin-assigned
+    if (payload) {
+      const requesterRole = (await prisma.ticketRequester.findUnique({
+        where: { id: payload.requesterId },
+        select: { role: true },
+      })) as { role?: string } | null;
+      if (requesterRole?.role === 'WORKER') {
+        return NextResponse.json(
+          { success: false, message: 'Workers cannot create tickets. You can only view tickets assigned to you.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
     if (isMaintenanceTicket && payload) {
       const requesterRole = (await prisma.ticketRequester.findUnique({
@@ -420,6 +434,12 @@ export async function GET(req: NextRequest) {
       where = {
         serviceSlug: filterServiceSlug,
         technique: { in: MAINTENANCE_TECHNIQUES },
+      };
+    } else if (requesterRole === 'WORKER') {
+      // Workers see ONLY tickets assigned to them by admin (assignedEngineerId in company JSON)
+      where = {
+        serviceSlug: filterServiceSlug,
+        company: { contains: payload.requesterId },
       };
     } else {
       // COMPANY: only their tickets (including maintenance they created)

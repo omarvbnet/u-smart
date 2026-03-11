@@ -45,7 +45,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       tickets.fetchStats(),
       conflicts.fetchConflicts(),
     ];
-    if (!isTechnician) {
+    if (!isTechnician && !context.read<AuthProvider>().isWorker) {
       futures.add(context.read<SitesProvider>().fetchSites());
     }
     await Future.wait(futures);
@@ -55,7 +55,9 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isTechnician = context.read<AuthProvider>().isTechnician;
-    final tabChildren = isTechnician
+    final isWorker = context.read<AuthProvider>().isWorker;
+    final readOnlyRole = isTechnician || isWorker; // no create ticket, no sites
+    final tabChildren = readOnlyRole
         ? const [_TicketsTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()]
         : const [_TicketsTab(), _SitesTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()];
     return Scaffold(
@@ -99,7 +101,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               ),
             ),
             child: BottomNavigationBar(
-              currentIndex: _currentTab.clamp(0, (isTechnician ? 3 : 4)),
+              currentIndex: _currentTab.clamp(0, (readOnlyRole ? 3 : 4)),
               onTap: (i) => setState(() => _currentTab = i),
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.transparent,
@@ -108,7 +110,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               selectedFontSize: 10,
               unselectedFontSize: 10,
               elevation: 0,
-              items: isTechnician
+              items: readOnlyRole
                   ? [
                       _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
                       _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
@@ -127,7 +129,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
         ),
       ),
       floatingActionButton: _currentTab == 0 &&
-              !context.read<AuthProvider>().isTechnician
+              !readOnlyRole
           ? Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(

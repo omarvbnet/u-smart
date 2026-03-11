@@ -21,7 +21,9 @@ function getBaseUrl(): string {
 
 export async function GET() {
   const baseUrl = getBaseUrl();
-  const ipaUrl = `${baseUrl}/app/usmart_qc.ipa`;
+  const ipaUrl = `${baseUrl}/app/proviser.ipa`;
+  const displayImageUrl = `${baseUrl}/app/icon-57.png`;
+  const fullSizeImageUrl = `${baseUrl}/app/icon-512.png`;
 
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -37,6 +39,18 @@ export async function GET() {
           <string>software-package</string>
           <key>url</key>
           <string>${ipaUrl}</string>
+        </dict>
+        <dict>
+          <key>kind</key>
+          <string>display-image</string>
+          <key>url</key>
+          <string>${displayImageUrl}</string>
+        </dict>
+        <dict>
+          <key>kind</key>
+          <string>full-size-image</string>
+          <key>url</key>
+          <string>${fullSizeImageUrl}</string>
         </dict>
       </array>
       <key>metadata</key>

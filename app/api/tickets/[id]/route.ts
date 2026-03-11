@@ -38,6 +38,8 @@ export async function GET(
       whereClause = { id, technique: { notIn: MAINTENANCE_TECHNIQUES } };
     } else if (requesterRole === 'TECHNICIAN') {
       whereClause = { id, technique: { in: MAINTENANCE_TECHNIQUES } };
+    } else if (requesterRole === 'WORKER') {
+      whereClause = { id, company: { contains: payload.requesterId } };
     } else {
       whereClause = { id, requesterId: payload.requesterId };
     }

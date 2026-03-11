@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Admin privileges required' }, { status: 403 });
   }
 
-  const VALID_ROLES: RequesterRole[] = ['COMPANY', 'PERSONAL', 'ENGINEER', 'TECHNICIAN'];
+  const VALID_ROLES: RequesterRole[] = ['COMPANY', 'PERSONAL', 'ENGINEER', 'TECHNICIAN', 'WORKER'];
 
   try {
     const body = await req.json();
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     const email = typeof body.email === 'string' ? body.email.trim() || null : null;
     const roleRaw = typeof body.role === 'string' ? (body.role as string).toUpperCase() : 'COMPANY';
     const role: RequesterRole = VALID_ROLES.includes(roleRaw as RequesterRole) ? (roleRaw as RequesterRole) : 'COMPANY';
-    const serviceSlug = (role === 'ENGINEER' || role === 'TECHNICIAN')
+    const serviceSlug = (role === 'ENGINEER' || role === 'TECHNICIAN' || role === 'WORKER')
       ? 'quality-control-supervision'
       : (typeof body.serviceSlug === 'string' ? body.serviceSlug : 'enterprise-networking');
 

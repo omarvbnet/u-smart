@@ -26,12 +26,12 @@ echo "Building iOS release (requires macOS, Xcode, and Apple Developer account).
 if flutter build ipa 2>/dev/null; then
   IPA_PATH="build/ios/ipa/usmart_qc.ipa"
   if [ -f "$IPA_PATH" ]; then
-    cp "$IPA_PATH" ../public/app/usmart_qc.ipa
-    echo "iOS IPA copied to public/app/usmart_qc.ipa"
-    echo "Set NEXT_PUBLIC_QC_APP_IOS_URL=/app/usmart_qc.ipa in .env.local"
+    cp "$IPA_PATH" ../public/app/proviser.ipa
+    echo "iOS IPA copied to public/app/proviser.ipa"
+    echo "Set NEXT_PUBLIC_QC_APP_IOS_URL=/app/proviser.ipa in .env.local"
   fi
 else
-  echo "iOS build skipped (requires codesigning). Use Xcode to archive and export IPA for ad-hoc or enterprise, then place usmart_qc.ipa in public/app/"
+  echo "iOS build skipped (requires codesigning). Use Xcode to archive and export proviser.ipa, then place it in public/app/proviser.ipa"
 fi
 
 echo ""

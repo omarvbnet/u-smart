@@ -428,6 +428,7 @@ model User {
     ENGINEER
     TECHNICIAN
     PERSONAL
+    WORKER
   }
 
   enum TicketStatus {

@@ -15,9 +15,9 @@ export async function POST(req: NextRequest) {
     const province = typeof body.province === 'string' ? body.province.trim() : '';
     const evidenceUrl = typeof body.evidenceUrl === 'string' ? body.evidenceUrl.trim() : '';
     const roleRaw = typeof body.role === 'string' ? body.role.toUpperCase().trim() : '';
-    if (roleRaw === 'ENGINEER' || roleRaw === 'TECHNICIAN') {
+    if (roleRaw === 'ENGINEER' || roleRaw === 'TECHNICIAN' || roleRaw === 'WORKER') {
       return NextResponse.json(
-        { success: false, message: 'Engineer and Technician roles can only be assigned by admin. Please register as Company or Personal.' },
+        { success: false, message: 'Engineer, Technician, and Worker roles can only be assigned by admin. Please register as Company or Personal.' },
         { status: 400 }
       );
     }

@@ -11,6 +11,7 @@ function generateUsername(role: string): string {
   const prefixes: Record<string, string> = {
     ENGINEER: 'eng',
     TECHNICIAN: 'tech',
+    WORKER: 'wrk',
     PERSONAL: 'per',
     COMPANY: 'req',
   };
@@ -78,8 +79,8 @@ export async function PATCH(
       const password = generatePassword();
       const passwordHash = await bcrypt.hash(password, 10);
 
-      const serviceSlug = (rr.role === 'ENGINEER' || rr.role === 'TECHNICIAN') ? 'quality-control-supervision' : 'enterprise-networking';
-      const requesterRole: RequesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL'].includes(rr.role) ? (rr.role as RequesterRole) : 'COMPANY';
+      const serviceSlug = (rr.role === 'ENGINEER' || rr.role === 'TECHNICIAN' || rr.role === 'WORKER') ? 'quality-control-supervision' : 'enterprise-networking';
+      const requesterRole: RequesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL', 'WORKER'].includes(rr.role) ? (rr.role as RequesterRole) : 'COMPANY';
 
       await prisma.ticketRequester.create({
         data: {

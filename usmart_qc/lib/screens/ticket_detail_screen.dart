@@ -1867,6 +1867,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         return l10n.t('role_company');
       case 'TECHNICIAN':
         return l10n.t('role_technician');
+      case 'WORKER':
+        return l10n.t('role_worker');
       default:
         return role;
     }

@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isEngineer => _user?.isEngineer ?? false;
   bool get isCompany => _user?.isCompany ?? true;
   bool get isTechnician => _user?.isTechnician ?? false;
+  bool get isWorker => _user?.isWorker ?? false;
   bool get isAdmin => _user?.isAdmin ?? false;
 
   Future<void> tryAutoLogin() async {

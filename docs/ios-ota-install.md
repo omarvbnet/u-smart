@@ -43,7 +43,7 @@ flutter build ipa
 
 1. Copy the IPA to your site’s static folder:
    ```bash
-   cp usmart_qc/build/ios/ipa/usmart_qc.ipa public/app/usmart_qc.ipa
+   cp path/to/proviser.ipa public/app/proviser.ipa
    ```
 
 2. Ensure the file is served over **HTTPS** (required for iOS OTA install).
@@ -69,9 +69,13 @@ If using Vercel, `VERCEL_URL` is used as fallback (e.g. `https://your-app.vercel
 
 ## Troubleshooting
 
-- **"Unable to install"**: Confirm the IPA is signed for ad-hoc/enterprise and the device UDID is registered (ad-hoc) or your enterprise cert is valid
+- **"Unable to install"**: 
+  1. **Manifest images**: iOS 8+ requires `display-image` (57x57) and `full-size-image` (512x512) in the manifest—these are included automatically. Icons are at `/app/icon-57.png` and `/app/icon-512.png`.
+  2. **IPA signing**: The IPA must be signed for **Ad Hoc** or **Enterprise**—`flutter build ipa` alone produces an App Store build. Use Xcode: Archive → Distribute App → **Ad Hoc** (or Enterprise), then export.
+  3. **Device UDID** (Ad Hoc): The device must be in your provisioning profile. Add it in [developer.apple.com](https://developer.apple.com) → Certificates, IDs & Profiles → Devices.
+  4. **Developer Mode** (iOS 16+): Enable Settings → Privacy & Security → Developer Mode.
 - **Manifest not loading**: Verify `NEXT_PUBLIC_SITE_URL` is set and uses HTTPS
-- **404 on IPA**: Check that `public/app/usmart_qc.ipa` exists and is deployed
+- **404 on IPA**: Check that `public/app/proviser.ipa` exists and is deployed
 
 ## Bundle Info
 

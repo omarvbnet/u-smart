@@ -72,6 +72,8 @@ export async function PATCH(
     const body = await req.json();
     const status = typeof body.status === 'string' ? body.status.toUpperCase() : '';
     const assignedTeamId = typeof body.assignedTeamId === 'string' ? body.assignedTeamId.trim() || null : undefined;
+    const assignedEngineerId = typeof body.assignedEngineerId === 'string' ? body.assignedEngineerId.trim() || null : undefined;
+    const assignedEngineerName = typeof body.assignedEngineerName === 'string' ? body.assignedEngineerName.trim() || null : undefined;
     const maintenanceDescription = typeof body.maintenanceDescription === 'string' ? body.maintenanceDescription.trim() : undefined;
     const beforeImageUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls : undefined;
     const finishingImageUrls = Array.isArray(body.finishingImageUrls) ? body.finishingImageUrls : undefined;
@@ -141,6 +143,26 @@ export async function PATCH(
     const existing = await prisma.visitorRequest.findUnique({ where: { id }, select: { company: true, requesterId: true } });
     let companyPayload: string | undefined;
     let statusToApply = status;
+
+    // Admin assign worker/engineer to ticket (for QC tickets)
+    if (assignedEngineerId !== undefined && existing?.company) {
+      try {
+        const parsed = JSON.parse(existing.company) as Record<string, unknown>;
+        if (parsed._ticket) {
+          if (assignedEngineerId) {
+            parsed.assignedEngineerId = assignedEngineerId;
+            parsed.assignedEngineerName = assignedEngineerName || assignedEngineerId;
+            parsed.assignedAt = new Date().toISOString();
+            if (!statusToApply) statusToApply = 'ON_SITE';
+          } else {
+            delete parsed.assignedEngineerId;
+            delete parsed.assignedEngineerName;
+            delete parsed.assignedAt;
+          }
+          companyPayload = JSON.stringify(parsed);
+        }
+      } catch { /* ignore */ }
+    }
     let adminResubmitForEditReason: string | null = null;
     if (existing?.company && typeof existing.company === 'string') {
       try {
