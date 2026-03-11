@@ -21,7 +21,10 @@ function getBaseUrl(): string {
 
 export async function GET() {
   const baseUrl = getBaseUrl();
-  const ipaUrl = `${baseUrl}/app/proviser.ipa`;
+  const ipaUrl =
+    process.env.NEXT_PUBLIC_QC_APP_IPA_URL?.startsWith('http')
+      ? process.env.NEXT_PUBLIC_QC_APP_IPA_URL
+      : `${baseUrl}/app/proviser.ipa`;
   const displayImageUrl = `${baseUrl}/app/icon-57.png`;
   const fullSizeImageUrl = `${baseUrl}/app/icon-512.png`;
 
@@ -72,8 +75,9 @@ export async function GET() {
 
   return new NextResponse(plist, {
     headers: {
-      'Content-Type': 'application/xml',
+      'Content-Type': 'text/xml; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
+      'Access-Control-Allow-Origin': '*',
     },
   });
 }

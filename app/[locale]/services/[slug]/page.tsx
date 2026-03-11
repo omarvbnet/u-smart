@@ -51,13 +51,14 @@ const ANDROID_APP_URL = process.env.NEXT_PUBLIC_QC_APP_ANDROID_URL || '/app/usma
 function getIosInstallLink(): string {
   const custom = process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
   if (custom) return custom;
-  const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (base) {
-    const siteUrl = base.startsWith('http') ? base : `https://${base}`.replace(/\/$/, '');
-    return `itms-services://?action=download-manifest&url=${encodeURIComponent(`${siteUrl}/api/app/ios-manifest`)}`;
-  }
+  let siteUrl = '';
   if (typeof window !== 'undefined') {
-    const siteUrl = window.location.origin;
+    siteUrl = window.location.origin;
+  } else {
+    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'usmart-iot.com';
+    siteUrl = base.startsWith('http') ? base : `https://${base}`.replace(/\/$/, '');
+  }
+  if (siteUrl) {
     return `itms-services://?action=download-manifest&url=${encodeURIComponent(`${siteUrl}/api/app/ios-manifest`)}`;
   }
   return '';
