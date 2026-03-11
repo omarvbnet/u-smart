@@ -6,21 +6,29 @@ import { NextResponse } from 'next/server';
  * which opens itms-services://?action=download-manifest&url=... and iOS fetches
  * this manifest to download and install the IPA.
  *
- * Set NEXT_PUBLIC_SITE_URL (or VERCEL_URL) so the IPA URL is absolute HTTPS.
+ * Uses the request URL for base so manifest/IPA links match the domain the user visits.
  */
 const BUNDLE_ID = 'com.usmart.usmartQc';
 const APP_TITLE = 'Provisor';
 const VERSION = '1.0.0';
 
-function getBaseUrl(): string {
+function getBaseUrl(request: Request): string {
+  try {
+    const url = new URL(request.url);
+    if (url.origin && url.origin !== 'null') return url.origin;
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
+    const proto = (request.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim();
+    if (host) return `${proto === 'https' ? 'https' : 'http'}://${host}`.replace(/\/$/, '');
+  } catch {
+    // fallback
+  }
   const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
   if (!raw) return 'https://localhost:3000';
-  const base = raw.startsWith('http') ? raw : `https://${raw}`;
-  return base.replace(/\/$/, '');
+  return raw.startsWith('http') ? raw.replace(/\/$/, '') : `https://${raw}`.replace(/\/$/, '');
 }
 
-export async function GET() {
-  const baseUrl = getBaseUrl();
+export async function GET(request: Request) {
+  const baseUrl = getBaseUrl(request);
   const ipaUrl =
     process.env.NEXT_PUBLIC_QC_APP_IPA_URL?.startsWith('http')
       ? process.env.NEXT_PUBLIC_QC_APP_IPA_URL
@@ -75,7 +83,7 @@ export async function GET() {
 
   return new NextResponse(plist, {
     headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
+      'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
     },
