@@ -167,7 +167,13 @@ export default function ServiceDetailPage() {
     province: '',
   });
   const [cleanEnergyForm, setCleanEnergyForm] = useState({ phone: '', email: '', currentAmps: '', kwh: '' });
-  const [designForm, setDesignForm] = useState({ currentAmps: '', kwh: '' });
+  const [designForm, setDesignForm] = useState({
+    energyKwh: '',
+    runtimeHours: '',
+    inverterPower: '',
+    efficiency: '0.9',
+    safety: '0.8',
+  });
   const [pricePerWattCents, setPricePerWattCents] = useState<number>(50);
   const [createDashboardForm, setCreateDashboardForm] = useState({
     companyName: '',
@@ -226,8 +232,25 @@ export default function ServiceDetailPage() {
           if (data.success && typeof data.pricePerWattCents === 'number') setPricePerWattCents(data.pricePerWattCents);
         })
         .catch(() => {});
+      try {
+        const saved = localStorage.getItem('cleanEnergyCalc');
+        if (saved) {
+          const parsed = JSON.parse(saved) as Partial<typeof designForm>;
+          if (parsed && typeof parsed === 'object') {
+            setDesignForm((f) => ({ ...f, ...parsed }));
+          }
+        }
+      } catch { /* ignore */ }
     }
   }, [slug]);
+
+  useEffect(() => {
+    if (slug === CLEAN_ENERGY_SLUG && designForm.energyKwh && designForm.runtimeHours && designForm.inverterPower) {
+      try {
+        localStorage.setItem('cleanEnergyCalc', JSON.stringify(designForm));
+      } catch { /* ignore */ }
+    }
+  }, [slug, designForm]);
 
   useEffect(() => {
     if (!slug) return;
@@ -478,89 +501,213 @@ export default function ServiceDetailPage() {
               ))}
             </div>
 
-            {/* Design your system - Calculator */}
+            {/* Battery + Inverter + Solar Calculator */}
             <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-transparent p-8 mb-8">
               <h3 className="text-xl font-bold text-amber-400 mb-2 flex items-center gap-2">
                 <Ruler className="w-6 h-6" />
-                {t('cleanEnergyTechnologies.designTitle')}
+                {t('cleanEnergyTechnologies.calcTitle')}
               </h3>
-              <p className="text-gray-400 mb-6">{t('cleanEnergyTechnologies.designIntro')}</p>
-              <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <p className="text-gray-400 mb-6">{t('cleanEnergyTechnologies.calcIntro')}</p>
+
+              {/* Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">{t('cleanEnergyTechnologies.currentLabel')} (A)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputCapacity')} (kWh)</label>
                   <input
                     type="number"
                     min="0.1"
                     step="0.1"
-                    value={designForm.currentAmps}
-                    onChange={(e) => setDesignForm((f) => ({ ...f, currentAmps: e.target.value }))}
+                    value={designForm.energyKwh}
+                    onChange={(e) => setDesignForm((f) => ({ ...f, energyKwh: e.target.value }))}
                     placeholder="e.g. 10"
                     className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">{t('cleanEnergyTechnologies.kwhLabel')} (kWh)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputRuntime')} (h)</label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="range"
+                      min="1"
+                      max="24"
+                      step="0.5"
+                      value={Math.min(24, Math.max(1, parseFloat(designForm.runtimeHours) || 8))}
+                      onChange={(e) => setDesignForm((f) => ({ ...f, runtimeHours: e.target.value }))}
+                      className="flex-1 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      value={designForm.runtimeHours}
+                      onChange={(e) => setDesignForm((f) => ({ ...f, runtimeHours: e.target.value }))}
+                      placeholder="8"
+                      className="w-20 px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-center focus:border-amber-500 outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputInverter')} (W)</label>
                   <input
                     type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={designForm.kwh}
-                    onChange={(e) => setDesignForm((f) => ({ ...f, kwh: e.target.value }))}
-                    placeholder="e.g. 5"
+                    min="100"
+                    step="100"
+                    value={designForm.inverterPower}
+                    onChange={(e) => setDesignForm((f) => ({ ...f, inverterPower: e.target.value }))}
+                    placeholder="e.g. 3000"
                     className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                   />
                 </div>
+                <div className="sm:col-span-2 lg:col-span-1 flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputEfficiency')}</label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="1"
+                      step="0.05"
+                      value={designForm.efficiency}
+                      onChange={(e) => setDesignForm((f) => ({ ...f, efficiency: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:border-amber-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputSafety')}</label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="1"
+                      step="0.05"
+                      value={designForm.safety}
+                      onChange={(e) => setDesignForm((f) => ({ ...f, safety: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:border-amber-500 outline-none"
+                    />
+                  </div>
+                </div>
               </div>
+
               {(() => {
-                const current = parseFloat(designForm.currentAmps);
-                const kwh = parseFloat(designForm.kwh);
-                const valid = !isNaN(current) && current > 0 && !isNaN(kwh) && kwh > 0;
-                const VOLTAGE = 24; // Standard 24V system
-                const PANEL_WATTS = 600; // 600W per panel
-                const SUN_HOURS_PER_DAY = 5; // Effective peak sun hours for charging
-                const powerWatts = valid ? VOLTAGE * current : 0;
-                const chargingHours = valid ? (kwh * 1000) / (VOLTAGE * current) : 0;
-                const usageAt = (amps: number) => (kwh * 1000) / (VOLTAGE * amps);
-                const photocellsQty = valid ? Math.ceil((kwh * 1000) / (SUN_HOURS_PER_DAY * PANEL_WATTS)) : 0;
-                const priceUsd = valid ? (powerWatts * (pricePerWattCents / 100)) : 0;
-                const USAGE_CURRENTS = [10, 20, 30, 40, 60, 80];
-                return valid ? (
-                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-6 space-y-4">
-                    <h4 className="font-semibold text-amber-400">{t('cleanEnergyTechnologies.resultsTitle')}</h4>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCurrent')}</p>
-                        <p className="text-lg font-bold text-white">{current} A</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPhotocells')}</p>
-                        <p className="text-lg font-bold text-white">{photocellsQty} {t('cleanEnergyTechnologies.photocellsUnit')}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCharging')}</p>
-                        <p className="text-lg font-bold text-white">{chargingHours.toFixed(1)} h</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPrice')}</p>
-                        <p className="text-lg font-bold text-amber-400">${priceUsd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
-                      </div>
+                const energyKwh = parseFloat(designForm.energyKwh);
+                const runtimeHours = parseFloat(designForm.runtimeHours);
+                const inverterPower = parseFloat(designForm.inverterPower);
+                const efficiency = parseFloat(designForm.efficiency) || 0.9;
+                const safety = parseFloat(designForm.safety) || 0.8;
+                const valid = !isNaN(energyKwh) && energyKwh > 0 && !isNaN(runtimeHours) && runtimeHours > 0 && !isNaN(inverterPower) && inverterPower > 0;
+
+                const VOLTAGE = 220;
+                const PANEL_W = 0.615;
+                const SUN_HOURS = 5.5;
+                const PANEL_EFFICIENCY = 0.75;
+                const CHARGE_EFFICIENCY = 0.85;
+
+                const usableEnergy = valid ? energyKwh * efficiency * safety : 0;
+                const requiredCurrent = valid && runtimeHours > 0 ? (usableEnergy * 1000) / (VOLTAGE * runtimeHours) : 0;
+                const maxCurrent = valid ? inverterPower / VOLTAGE : 0;
+                const safeCurrent = valid ? maxCurrent * 0.7 : 0;
+                const actualRuntime = (amps: number) => (usableEnergy * 1000) / (VOLTAGE * amps);
+                const panelEnergy = PANEL_W * SUN_HOURS;
+                const requiredPanels = valid ? Math.ceil(energyKwh / (panelEnergy * PANEL_EFFICIENCY)) : 0;
+                const totalSolarPower = requiredPanels * PANEL_W;
+                const chargeTime = valid && totalSolarPower > 0 ? energyKwh / (totalSolarPower * CHARGE_EFFICIENCY) : 0;
+
+                const status = requiredCurrent > maxCurrent ? 'danger' : requiredCurrent >= safeCurrent ? 'warning' : 'safe';
+
+                if (!valid) return null;
+
+                return (
+                  <div className="space-y-5">
+                    {/* Alert status */}
+                    <div className={`rounded-xl px-4 py-3 ${
+                      status === 'danger' ? 'bg-red-500/20 border border-red-500/40 text-red-400' :
+                      status === 'warning' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400' :
+                      'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+                    }`}>
+                      <p className="text-sm font-medium">
+                        {status === 'danger' ? t('cleanEnergyTechnologies.alertDanger') :
+                         status === 'warning' ? t('cleanEnergyTechnologies.alertWarning') :
+                         t('cleanEnergyTechnologies.alertSafe')}
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-amber-400/90 mb-2">{t('cleanEnergyTechnologies.usageByCurrent')}</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {USAGE_CURRENTS.map((amps) => (
-                          <div key={amps} className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-center">
-                            <p className="text-xs text-gray-500">{amps} A</p>
-                            <p className="text-base font-bold text-white">{usageAt(amps).toFixed(1)} h</p>
+
+                    {/* Result cards */}
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4">
+                        <h4 className="text-sm font-semibold text-emerald-400 mb-3">{t('cleanEnergyTechnologies.cardMain')}</h4>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultRequiredCurrent')}</p>
+                            <p className="text-xl font-bold text-white">{requiredCurrent.toFixed(1)} A</p>
                           </div>
-                        ))}
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultRuntime')}</p>
+                            <p className="text-xl font-bold text-white">{runtimeHours} h</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
+                        <h4 className="text-sm font-semibold text-red-400 mb-3">{t('cleanEnergyTechnologies.cardProtection')}</h4>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultMaxCurrent')}</p>
+                            <p className="text-xl font-bold text-white">{maxCurrent.toFixed(1)} A</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultSafeCurrent')}</p>
+                            <p className="text-xl font-bold text-white">{safeCurrent.toFixed(1)} A</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4">
+                        <h4 className="text-sm font-semibold text-amber-400 mb-3">{t('cleanEnergyTechnologies.cardSolar')}</h4>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPanels')} (615W)</p>
+                            <p className="text-xl font-bold text-white">{requiredPanels}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultTotalSolar')}</p>
+                            <p className="text-xl font-bold text-white">{totalSolarPower.toFixed(1)} kW</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/30 p-4">
+                        <h4 className="text-sm font-semibold text-cyan-400 mb-3">{t('cleanEnergyTechnologies.cardCharge')}</h4>
+                        <div>
+                          <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultChargeTime')}</p>
+                          <p className="text-xl font-bold text-white">{chargeTime.toFixed(1)} {t('cleanEnergyTechnologies.hours')}</p>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-400">{t('cleanEnergyTechnologies.priceNote')}</p>
+
+                    {/* Dynamic runtime table */}
+                    <div>
+                      <p className="text-sm font-medium text-amber-400/90 mb-3">{t('cleanEnergyTechnologies.runtimeTableTitle')}</p>
+                      <div className="overflow-x-auto rounded-xl border border-white/10">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-white/5 border-b border-white/10">
+                              <th className={`px-4 py-2 text-gray-400 font-medium ${isRtl ? 'text-right' : 'text-left'}`}>{t('cleanEnergyTechnologies.tableCurrent')}</th>
+                              <th className={`px-4 py-2 text-gray-400 font-medium ${isRtl ? 'text-left' : 'text-right'}`}>{t('cleanEnergyTechnologies.tableRuntime')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: Math.min(Math.floor(maxCurrent), 50) }, (_, i) => i + 1)
+                              .filter((a) => a <= maxCurrent)
+                              .map((amps) => (
+                                <tr key={amps} className="border-b border-white/5 hover:bg-white/5">
+                                  <td className={`px-4 py-2 font-medium ${isRtl ? 'text-right' : 'text-left'} ${amps <= safeCurrent ? 'text-emerald-400' : amps <= maxCurrent ? 'text-amber-400' : 'text-gray-400'}`}>{amps} A</td>
+                                  <td className={`px-4 py-2 text-white ${isRtl ? 'text-left' : 'text-right'}`}>{actualRuntime(amps).toFixed(1)} h</td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => {
-                        setCleanEnergyForm((f) => ({ ...f, currentAmps: designForm.currentAmps, kwh: designForm.kwh }));
+                        setCleanEnergyForm((f) => ({ ...f, currentAmps: String(requiredCurrent.toFixed(1)), kwh: String(energyKwh) }));
                         setRequestModalOpen(true);
                       }}
                       className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl"
@@ -568,7 +715,7 @@ export default function ServiceDetailPage() {
                       {t('cleanEnergyTechnologies.requestQuote')}
                     </button>
                   </div>
-                ) : null;
+                );
               })()}
             </div>
           </section>
