@@ -168,10 +168,9 @@ export default function ServiceDetailPage() {
   });
   const [cleanEnergyForm, setCleanEnergyForm] = useState({ phone: '', email: '', currentAmps: '', kwh: '' });
   const [designForm, setDesignForm] = useState({
-    energyKwh: '',
-    runtimeHours: '',
+    runtimeHours: '8',
+    usageCurrent: '10',
     inverterPower: '',
-    usageCurrent: '',
     efficiency: '0.9',
     safety: '0.8',
   });
@@ -246,7 +245,7 @@ export default function ServiceDetailPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (slug === CLEAN_ENERGY_SLUG && designForm.energyKwh && designForm.runtimeHours && designForm.inverterPower) {
+    if (slug === CLEAN_ENERGY_SLUG && designForm.runtimeHours && designForm.usageCurrent) {
       try {
         localStorage.setItem('cleanEnergyCalc', JSON.stringify(designForm));
       } catch { /* ignore */ }
@@ -510,22 +509,10 @@ export default function ServiceDetailPage() {
               </h3>
               <p className="text-gray-400 mb-6">{t('cleanEnergyTechnologies.calcIntro')}</p>
 
-              {/* Inputs */}
+              {/* Inputs - Primary: Time & Current */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputCapacity')} (kWh)</label>
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={designForm.energyKwh}
-                    onChange={(e) => setDesignForm((f) => ({ ...f, energyKwh: e.target.value }))}
-                    placeholder="e.g. 10"
-                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputRuntime')} (h)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputRuntime')} (h) *</label>
                   <div className="flex gap-2 items-center">
                     <input
                       type="range"
@@ -548,26 +535,26 @@ export default function ServiceDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputInverter')} (W)</label>
-                  <input
-                    type="number"
-                    min="100"
-                    step="100"
-                    value={designForm.inverterPower}
-                    onChange={(e) => setDesignForm((f) => ({ ...f, inverterPower: e.target.value }))}
-                    placeholder="e.g. 3000"
-                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputUsageCurrent')} (A)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputCurrent')} (A) *</label>
                   <input
                     type="number"
                     min="0.5"
                     step="0.5"
                     value={designForm.usageCurrent}
                     onChange={(e) => setDesignForm((f) => ({ ...f, usageCurrent: e.target.value }))}
-                    placeholder={t('cleanEnergyTechnologies.usageCurrentPlaceholder')}
+                    placeholder="e.g. 10"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputInverter')} (W) {t('cleanEnergyTechnologies.optional')}</label>
+                  <input
+                    type="number"
+                    min="100"
+                    step="100"
+                    value={designForm.inverterPower}
+                    onChange={(e) => setDesignForm((f) => ({ ...f, inverterPower: e.target.value }))}
+                    placeholder={t('cleanEnergyTechnologies.inverterPlaceholder')}
                     className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                   />
                 </div>
@@ -600,13 +587,12 @@ export default function ServiceDetailPage() {
               </div>
 
               {(() => {
-                const energyKwh = parseFloat(designForm.energyKwh);
                 const runtimeHours = parseFloat(designForm.runtimeHours);
-                const inverterPower = parseFloat(designForm.inverterPower);
                 const usageCurrent = parseFloat(designForm.usageCurrent);
+                const inverterPower = parseFloat(designForm.inverterPower);
                 const efficiency = parseFloat(designForm.efficiency) || 0.9;
                 const safety = parseFloat(designForm.safety) || 0.8;
-                const valid = !isNaN(energyKwh) && energyKwh > 0 && !isNaN(runtimeHours) && runtimeHours > 0 && !isNaN(inverterPower) && inverterPower > 0;
+                const valid = !isNaN(runtimeHours) && runtimeHours > 0 && !isNaN(usageCurrent) && usageCurrent > 0;
 
                 const VOLTAGE = 220;
                 const SAFETY_MARGIN = 1.2;
@@ -615,21 +601,24 @@ export default function ServiceDetailPage() {
                 const PANEL_EFFICIENCY = 0.75;
                 const CHARGE_EFFICIENCY = 0.85;
 
-                const usableEnergy = valid ? energyKwh * efficiency * safety : 0;
-                const requiredCurrent = valid && runtimeHours > 0 ? (usableEnergy * 1000) / (VOLTAGE * runtimeHours) : 0;
-                const maxCurrent = valid ? inverterPower / VOLTAGE : 0;
-                const safeCurrent = valid ? maxCurrent * 0.7 : 0;
+                // Derive all from time + current
+                const energyConsumed = valid ? (VOLTAGE * usageCurrent * runtimeHours) / 1000 : 0; // kWh
+                const energyKwh = valid ? energyConsumed / (efficiency * safety) : 0; // battery capacity needed
+                const usableEnergy = valid ? energyKwh * efficiency * safety : 0; // same as energyConsumed
+                const requiredCurrent = usageCurrent;
+                const minInverterW = valid ? VOLTAGE * usageCurrent : 0;
+                const inverterSafeW = Math.ceil((minInverterW * SAFETY_MARGIN) / 100) * 100;
+                const inverterPowerOrRecommended = !isNaN(inverterPower) && inverterPower > 0 ? inverterPower : inverterSafeW;
+                const maxCurrent = inverterPowerOrRecommended / VOLTAGE;
+                const safeCurrent = maxCurrent * 0.7;
                 const actualRuntime = (amps: number) => (usableEnergy * 1000) / (VOLTAGE * amps);
                 const panelEnergy = PANEL_W * SUN_HOURS;
                 const requiredPanels = valid ? Math.ceil(energyKwh / (panelEnergy * PANEL_EFFICIENCY)) : 0;
                 const totalSolarPower = requiredPanels * PANEL_W;
                 const chargeTime = valid && totalSolarPower > 0 ? energyKwh / (totalSolarPower * CHARGE_EFFICIENCY) : 0;
-                const inverterSafeW = Math.ceil((requiredCurrent * VOLTAGE * SAFETY_MARGIN) / 100) * 100;
-                const batterySafeKwh = (energyKwh / (efficiency * safety)) * SAFETY_MARGIN;
-                const usageCurrentValid = !isNaN(usageCurrent) && usageCurrent > 0;
-                const usageTimeAtCurrent = usageCurrentValid ? actualRuntime(usageCurrent) : 0;
+                const batterySafeKwh = energyKwh * SAFETY_MARGIN;
 
-                const status = requiredCurrent > maxCurrent ? 'danger' : requiredCurrent >= safeCurrent ? 'warning' : 'safe';
+                const status = !isNaN(inverterPower) && inverterPower > 0 && requiredCurrent > maxCurrent ? 'danger' : requiredCurrent >= safeCurrent ? 'warning' : 'safe';
 
                 if (!valid) return null;
 
@@ -654,19 +643,21 @@ export default function ServiceDetailPage() {
                         <h4 className="text-sm font-semibold text-emerald-400 mb-3">{t('cleanEnergyTechnologies.cardMain')}</h4>
                         <div className="space-y-2">
                           <div>
-                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultRequiredCurrent')}</p>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCurrent')}</p>
                             <p className="text-xl font-bold text-white">{requiredCurrent.toFixed(1)} A</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultRuntime')}</p>
                             <p className="text-xl font-bold text-white">{runtimeHours} h</p>
                           </div>
-                          {usageCurrentValid && (
-                            <div>
-                              <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultUsageAtCurrent', { current: usageCurrent })}</p>
-                              <p className="text-xl font-bold text-white">{usageTimeAtCurrent.toFixed(1)} h</p>
-                            </div>
-                          )}
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultBatteryNeeded')}</p>
+                            <p className="text-xl font-bold text-white">{energyKwh.toFixed(1)} kWh</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultEnergyConsumed')}</p>
+                            <p className="text-lg font-bold text-white">{energyConsumed.toFixed(1)} kWh</p>
+                          </div>
                         </div>
                       </div>
                       <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
@@ -683,13 +674,13 @@ export default function ServiceDetailPage() {
                             <p className="text-xs text-gray-400">{t('cleanEnergyTechnologies.usageTime')}: {actualRuntime(safeCurrent).toFixed(1)} h</p>
                           </div>
                           <div className="pt-2 border-t border-red-500/20">
-                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.inverterCapacity')}</p>
-                            <p className="text-lg font-bold text-white">{inverterPower} W</p>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.inverterMin')}</p>
+                            <p className="text-lg font-bold text-white">{minInverterW.toFixed(0)} W</p>
                             <p className="text-xs text-emerald-400">{t('cleanEnergyTechnologies.inverterSafe')}: {inverterSafeW} W</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.batteryCapacity')}</p>
-                            <p className="text-lg font-bold text-white">{energyKwh} kWh</p>
+                            <p className="text-lg font-bold text-white">{energyKwh.toFixed(1)} kWh</p>
                             <p className="text-xs text-emerald-400">{t('cleanEnergyTechnologies.batterySafe')}: {batterySafeKwh.toFixed(1)} kWh</p>
                           </div>
                         </div>
@@ -728,7 +719,7 @@ export default function ServiceDetailPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {Array.from({ length: Math.min(Math.floor(maxCurrent), 50) }, (_, i) => i + 1)
+                            {Array.from({ length: Math.min(Math.max(1, Math.ceil(maxCurrent)), 80) }, (_, i) => i + 1)
                               .filter((a) => a <= maxCurrent)
                               .map((amps) => (
                                 <tr key={amps} className="border-b border-white/5 hover:bg-white/5">
