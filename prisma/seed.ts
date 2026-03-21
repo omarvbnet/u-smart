@@ -74,6 +74,20 @@ async function main() {
       create: stat,
     })
   }
+  // Clean energy price per watt (value in cents, e.g. 50 = $0.50/watt)
+  await prisma.statistic.upsert({
+    where: { key: 'clean_energy_price_per_watt' },
+    update: {},
+    create: {
+      key: 'clean_energy_price_per_watt',
+      value: 50,
+      label: 'Price per watt (cents)',
+      suffix: '¢',
+      icon: '⚡',
+      isActive: true,
+      order: 99,
+    },
+  })
   console.log('✅ Hero statistics ready')
 
   // إنشاء الخدمات
@@ -158,6 +172,48 @@ async function main() {
           priceRange: 'Özel',
           duration: 'Devam Eden',
           category: 'Kalite'
+        }
+      }
+    },
+    {
+      title: 'Clean Energy',
+      slug: 'clean-energy',
+      description: 'Solar and clean energy solutions for homes, industrial, and farms. We offer installation, maintenance, deployment, and purchasing with high standards and specifications.',
+      content: 'Complete clean energy solutions including solar panels, battery storage, and inverters. We serve residential, commercial, industrial, and agricultural sectors with certified installations and ongoing maintenance.',
+      icon: 'Zap',
+      features: ['Solar Installation', 'Battery Storage', 'Maintenance & Support', 'Deployment', 'Purchase Options'],
+      category: 'Clean Energy',
+      priceRange: 'Custom',
+      duration: '2-8 weeks',
+      featured: true,
+      userId: admin.id,
+      translations: {
+        ar: {
+          title: 'الطاقة النظيفة',
+          description: 'حلول الطاقة الشمسية والنظيفة للمنازل والصناعات والمزارع. نقدم التركيب والصيانة والنشر والشراء بمعايير ومواصفات عالية.',
+          content: 'حلول طاقة نظيفة شاملة تشمل الألواح الشمسية وتخزين البطاريات والمحولات. نخدم القطاعات السكنية والتجارية والصناعية والزراعية بتركيبات معتمدة وصيانة مستمرة.',
+          features: ['تركيب الطاقة الشمسية', 'تخزين البطاريات', 'الصيانة والدعم', 'النشر', 'خيارات الشراء'],
+          priceRange: 'مخصص',
+          duration: '2-8 أسابيع',
+          category: 'الطاقة النظيفة'
+        },
+        ku: {
+          title: 'وزەی پاک',
+          description: 'چارەسەرەکانی وزەی خۆر و وزەی پاک بۆ خانوو و پیشەسازی و جووتیارەکان. دابینکردنی نۆرکردن، چاککردنەوە، جێبەجێکردن و کڕین بە ستاندارد و تایبەتمەندیی بەرز.',
+          content: 'چارەسەری تەواوی وزەی پاک لەوانە تەختەکانی خۆر، کۆگای بەتری و گۆڕینی وزە. خزمەتگوزاری بۆ سەکتۆرە نیشتەجێبووەکان، بازرگانی، پیشەسازی و کشتوکاڵی بە دامەزراندنی ئەوراق و چاککردنەوەی بەردەوام.',
+          features: ['دامەزراندنی وزەی خۆر', 'کۆگای بەتری', 'چاککردنەوە و پشتگیری', 'جێبەجێکردن', 'هەڵبژاردنی کڕین'],
+          priceRange: 'تایبەت',
+          duration: '2-8 هەفتە',
+          category: 'وزەی پاک'
+        },
+        tr: {
+          title: 'Temiz Enerji',
+          description: 'Evler, endüstri ve çiftlikler için güneş ve temiz enerji çözümleri. Yüksek standartlar ve özelliklerle kurulum, bakım, devreye alma ve satın alma sunuyoruz.',
+          content: 'Güneş panelleri, batarya depolama ve invertörler dahil eksiksiz temiz enerji çözümleri. Sertifikalı kurulumlar ve sürekli bakım ile konut, ticari, endüstriyel ve tarımsal sektörlere hizmet veriyoruz.',
+          features: ['Güneş Enerjisi Kurulumu', 'Batarya Depolama', 'Bakım ve Destek', 'Devreye Alma', 'Satın Alma Seçenekleri'],
+          priceRange: 'Özel',
+          duration: '2-8 hafta',
+          category: 'Temiz Enerji'
         }
       }
     }

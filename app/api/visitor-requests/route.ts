@@ -8,6 +8,7 @@ const PROGRAMMING_TECHNIQUES = ['nodejs', 'flutter', 'python', 'mysql', 'postgre
 const PROGRAMMING_SLUGS = ['custom-software', 'programming'];
 const ENTERPRISE_NETWORKING_TECHNIQUES = ['maintenance', 'fiber', 'cable_systemization', 'closures', 'splice', 'qgis', 'asbuilt_design'];
 const ENTERPRISE_NETWORKING_SLUGS = ['enterprise-networking'];
+const CLEAN_ENERGY_SLUGS = ['clean-energy'];
 
 const prisma = new PrismaClient();
 
@@ -40,12 +41,36 @@ export async function POST(req: NextRequest) {
     const serviceSlug = typeof body.serviceSlug === 'string' ? body.serviceSlug.trim().toLowerCase() : 'smart-home-automation';
     const isProgramming = PROGRAMMING_SLUGS.includes(serviceSlug);
     const isEnterpriseNetworking = ENTERPRISE_NETWORKING_SLUGS.includes(serviceSlug);
+    const isCleanEnergy = CLEAN_ENERGY_SLUGS.includes(serviceSlug);
     const buildingType = typeof body.buildingType === 'string' ? body.buildingType.trim().toLowerCase() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() : '';
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const currentAmps = typeof body.currentAmps === 'number' ? body.currentAmps : (typeof body.currentAmps === 'string' && body.currentAmps.trim() ? parseFloat(body.currentAmps) : undefined);
+    const kwh = typeof body.kwh === 'number' ? body.kwh : (typeof body.kwh === 'string' && body.kwh.trim() ? parseFloat(body.kwh) : undefined);
     let technique = typeof body.technique === 'string' ? body.technique.trim().toLowerCase() : '';
 
-    if (isEnterpriseNetworking) {
+    if (isCleanEnergy) {
+      technique = 'request';
+      if (!phone || !email) {
+        return NextResponse.json(
+          { success: false, message: 'Phone and email are required' },
+          { status: 400 }
+        );
+      }
+      if (currentAmps == null || isNaN(currentAmps) || currentAmps <= 0) {
+        return NextResponse.json(
+          { success: false, message: 'Valid current (Amps) is required' },
+          { status: 400 }
+        );
+      }
+      if (kwh == null || isNaN(kwh) || kwh <= 0) {
+        return NextResponse.json(
+          { success: false, message: 'Valid kWh capacity is required' },
+          { status: 400 }
+        );
+      }
+    } else if (isEnterpriseNetworking) {
       const techniquesRaw = Array.isArray(body.techniques) ? body.techniques : [];
       const techniques = techniquesRaw
         .filter((t: unknown) => typeof t === 'string' && t.trim())
@@ -60,7 +85,7 @@ export async function POST(req: NextRequest) {
       technique = techniques.join(',');
     }
 
-    if (!phone || !province || !technique) {
+    if (!isCleanEnergy && (!phone || !province || !technique)) {
       return NextResponse.json(
         { success: false, message: isEnterpriseNetworking ? 'Phone, province and at least one technique are required' : 'Phone, province and technique are required' },
         { status: 400 }
@@ -74,7 +99,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-    } else if (!isEnterpriseNetworking) {
+    } else if (!isEnterpriseNetworking && !isCleanEnergy) {
       if (!buildingType) {
         return NextResponse.json(
           { success: false, message: 'Building type is required' },
@@ -97,14 +122,18 @@ export async function POST(req: NextRequest) {
 
     const request = await prisma.visitorRequest.create({
       data: {
-        buildingType: isProgramming || isEnterpriseNetworking ? 'n/a' : buildingType,
+        buildingType: isProgramming || isEnterpriseNetworking || isCleanEnergy ? 'n/a' : buildingType,
         phone,
-        province,
+        province: isCleanEnergy ? (province || 'n/a') : province,
         technique,
         name: body.name?.trim() || null,
         company: body.company?.trim() || null,
-        email: body.email?.trim() || null,
+        email: isCleanEnergy ? email : (body.email?.trim() || null),
         serviceSlug,
+        ...(isCleanEnergy && {
+          currentAmps: currentAmps!,
+          kwh: kwh!,
+        }),
       },
     });
 
@@ -112,12 +141,12 @@ export async function POST(req: NextRequest) {
       id: request.id,
       serviceSlug,
       name: body.name?.trim() || null,
-      email: body.email?.trim() || null,
+      email: isCleanEnergy ? email : (body.email?.trim() || null),
       phone,
       company: body.company?.trim() || null,
-      province,
-      technique,
-      buildingType: isProgramming || isEnterpriseNetworking ? null : buildingType || null,
+      province: isCleanEnergy ? 'n/a' : province,
+      technique: isCleanEnergy ? `current: ${currentAmps}A, ${kwh}kWh` : technique,
+      buildingType: isProgramming || isEnterpriseNetworking || isCleanEnergy ? null : buildingType || null,
     });
 
     return NextResponse.json({ success: true, request });

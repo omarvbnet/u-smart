@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "visitor_requests" ADD COLUMN IF NOT EXISTS "currentAmps" DOUBLE PRECISION;
+ALTER TABLE "visitor_requests" ADD COLUMN IF NOT EXISTS "kwh" DOUBLE PRECISION;

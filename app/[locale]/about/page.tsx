@@ -11,6 +11,7 @@ import {
   Wifi,
   Code2,
   Home,
+  Zap,
   Mail,
   Phone,
   MessageCircle,
@@ -134,6 +135,14 @@ export default function AboutPage() {
       description: t("smartHomesDescription"),
       href: "/services/smart-home-automation",
       gradient: "from-amber-500/20 to-orange-500/15",
+    },
+    {
+      key: "cleanEnergy",
+      icon: Zap,
+      title: t("cleanEnergyTitle"),
+      description: t("cleanEnergyDescription"),
+      href: "/services/clean-energy",
+      gradient: "from-amber-500/20 to-yellow-500/15",
     },
   ];
 

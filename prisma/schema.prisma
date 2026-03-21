@@ -235,6 +235,8 @@ model User {
     siteName        String?
     siteCoordinator String?
     slaHours        Int?
+    currentAmps     Float?         // clean-energy: required current (A)
+    kwh             Float?         // clean-energy: required kWh capacity
     status          TicketStatus   @default(PENDING)
     completedAt     DateTime?
     assignedTeamId String?

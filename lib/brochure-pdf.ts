@@ -29,6 +29,7 @@ export type BrochureMessages = {
   serviceQuality: string;
   serviceSmartHome: string;
   serviceTelecom: string;
+  serviceProgramming: string;
   serviceCleanEnergy: string;
   qrScan: string;
   downloadPdf?: string;
@@ -164,6 +165,7 @@ export async function generateBrochurePdf(
     messages.serviceQuality,
     messages.serviceSmartHome,
     messages.serviceTelecom,
+    messages.serviceProgramming,
     messages.serviceCleanEnergy,
   ];
   doc.setFont('helvetica', 'normal');

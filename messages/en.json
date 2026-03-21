@@ -47,6 +47,7 @@
     "serviceQuality": "Quality & Safety Management",
     "serviceSmartHome": "Smart Home Systems",
     "serviceTelecom": "Telecommunications Maintenance",
+    "serviceProgramming": "Custom Software & Programming",
     "serviceCleanEnergy": "Clean Energy & Solar Systems",
     "qrScan": "Scan to visit our website or client dashboard",
     "downloadPdf": "Download Brochure (PDF)",
@@ -60,13 +61,15 @@
       "quality-control-supervision": "Certified oversight from on-site inspection and HSE to compliance tracking and root-cause investigation. Real-time dashboards, automated reporting, and QR-based verification ensure transparency and measurable compliance.",
       "smart-home-automation": "Lighting, climate, security, and energy management with KNX, HDL Buspro, Zigbee, and electrical solutions. Designed for reliability, interoperability, and a seamless connected experience.",
       "enterprise-networking": "FOA-certified expertise in fiber optics, fusion splice, cable systemization, GIS mapping, and SLA-backed maintenance. We keep your enterprise and fiber networks running at peak performance.",
-      "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business."
+      "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business.",
+      "clean-energy": "Solar and clean energy solutions for homes, industrial facilities, and farms. Installation, maintenance, deployment, and purchasing with high standards and specifications."
     },
     "servicePageDesc": {
       "quality-control-supervision": "Our certified team delivers rigorous oversight from on-site inspection and HSE to compliance tracking and root-cause investigation. We combine real-time digital dashboards, automated reporting, and QR-based verification tools to ensure transparency, accuracy, and measurable compliance across every project.",
       "smart-home-automation": "End-to-end smart home and building automation with KNX, HDL Buspro, Zigbee, and electrical solutions. We design and install lighting, climate, security, and energy management systems for reliability, interoperability, and a seamless connected experience.",
       "enterprise-networking": "Design, installation, and maintenance of enterprise and fiber networks with FOA-certified expertise. We specialize in fiber optics, fusion splice, cable systemization, GIS mapping, closures, and SLA-backed maintenance. Over 12 years of experience.",
-      "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business. Full-stack development with clean architecture and deployment."
+      "custom-software": "Scalable, secure software built with Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation—solutions that grow with your business. Full-stack development with clean architecture and deployment.",
+      "clean-energy": "Solar and clean energy solutions for homes, industrial facilities, and farms. We offer installation, maintenance, deployment, and purchasing with high standards and specifications."
     },
     "servicePageHighlights": {
       "quality-control-supervision": ["On-site inspection & HSE—certified oversight of construction quality", "Real-time dashboards—live project monitoring and reporting", "QR-based verification—instant field compliance checks", "Compliance tracking—audit-ready documentation", "Root-cause investigation—systematic problem resolution"],
@@ -159,6 +162,8 @@
     "programmingDescription": "Scalable, secure software built with modern stacks—Node.js, Flutter, Python, and robust databases. From web and mobile apps to APIs and automation, we deliver solutions that grow with your business.",
     "smartHomesTitle": "Smart Homes & Building Automation",
     "smartHomesDescription": "End-to-end smart home and building automation with KNX, HDL Buspro, Zigbee, and electrical solutions. Lighting, climate, security, and energy management—designed for reliability, interoperability, and a seamless connected experience.",
+    "cleanEnergyTitle": "Clean Energy & Solar Systems",
+    "cleanEnergyDescription": "Solar and clean energy solutions for homes, industrial facilities, and farms. We offer installation, maintenance, deployment, and purchasing with high standards and specifications.",
     "contactTitle": "Get in Touch",
     "contactSubtitle": "We'd love to hear from you",
     "contactDescription": "Reach out for projects, partnerships, or support. Our team is ready to help you achieve your goals.",
@@ -350,6 +355,47 @@
       "appDownloadDescription": "Engineers: download the Provisor mobile app for on-site quality inspections and ticket management.",
       "downloadAndroid": "Download for Android",
       "downloadIOS": "Install on iOS"
+    },
+    "cleanEnergyTechnologies": {
+      "title": "Clean Energy Solutions",
+      "intro": "We offer solar and clean energy solutions for homes, industrial facilities, and farms with high standards and specifications. Services include installation, maintenance, deployment, and purchasing options.",
+      "homes": {
+        "name": "Residential",
+        "description": "Solar and battery solutions for homes. Reduce electricity bills with grid-tied or off-grid systems. High-efficiency panels and certified installations."
+      },
+      "industrial": {
+        "name": "Industrial",
+        "description": "Large-scale solar and clean energy for factories and industrial facilities. Custom design, robust inverters, and professional deployment with maintenance agreements."
+      },
+      "farms": {
+        "name": "Agricultural",
+        "description": "Solar solutions for farms and agricultural use. Power pumps, irrigation, and farm equipment. Durable systems suited for rural and outdoor environments."
+      },
+      "maintenance": {
+        "name": "Maintenance",
+        "description": "Ongoing maintenance and support for your clean energy systems. Regular inspections, panel cleaning, and performance monitoring."
+      },
+      "deployment": {
+        "name": "Deployment",
+        "description": "Professional installation and commissioning. We handle permits, grid connection, and system optimization for maximum output."
+      },
+      "purchase": {
+        "name": "Purchase",
+        "description": "Direct purchase of solar panels, batteries, inverters, and accessories. We offer quality equipment at competitive prices."
+      },
+      "designTitle": "Design Your System",
+      "designIntro": "Enter your required current (Amps) and energy capacity (kWh) to estimate charging time, usage hours, and indicative price. Price is based on system wattage (voltage × current).",
+      "currentLabel": "Current",
+      "kwhLabel": "Energy capacity",
+      "resultsTitle": "Estimate",
+      "resultCurrent": "System current",
+      "resultCharging": "Charging time (approx)",
+      "resultUsage": "Usage hours (at this current)",
+      "resultPrice": "Indicative price",
+      "priceNote": "Price is estimated from admin-configured price per watt. Final quote may vary based on equipment and installation.",
+      "requestQuote": "Request quote",
+      "phoneLabel": "Phone",
+      "emailLabel": "Email"
     },
     "serviceDetail": {
       "backToServices": "Back to services",

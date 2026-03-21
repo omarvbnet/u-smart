@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple } from 'lucide-react';
+import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple, Zap, Ruler } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 
@@ -12,6 +12,7 @@ const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
 const ENTERPRISE_NETWORKING_SLUG = 'enterprise-networking';
 const QUALITY_CONTROL_SLUG = 'quality-control-supervision';
+const CLEAN_ENERGY_SLUG = 'clean-energy';
 const PROGRAMMING_SLUGS = ['custom-software', 'programming'] as const;
 const TECH_KEYS = ['knx', 'buspro', 'zigbee'] as const;
 const PROGRAMMING_TECH_KEYS = ['nodejs', 'flutter', 'python', 'mysql', 'postgresql', 'nosql'] as const;
@@ -145,8 +146,9 @@ export default function ServiceDetailPage() {
   const showProgrammingTechnologies = (PROGRAMMING_SLUGS as readonly string[]).includes(slug);
   const showEnterpriseNetworkingTechnologies = slug === ENTERPRISE_NETWORKING_SLUG;
   const showQualityControlTechnologies = slug === QUALITY_CONTROL_SLUG;
+  const showCleanEnergyTechnologies = slug === CLEAN_ENERGY_SLUG;
   const showDashboardButtons = showEnterpriseNetworkingTechnologies || showQualityControlTechnologies;
-  const showRequestButton = showTechnologies || showProgrammingTechnologies || showEnterpriseNetworkingTechnologies || showQualityControlTechnologies;
+  const showRequestButton = showTechnologies || showProgrammingTechnologies || showEnterpriseNetworkingTechnologies || showQualityControlTechnologies || showCleanEnergyTechnologies;
   const [service, setService] = useState<Service | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,6 +166,9 @@ export default function ServiceDetailPage() {
     phone: '',
     province: '',
   });
+  const [cleanEnergyForm, setCleanEnergyForm] = useState({ phone: '', email: '', currentAmps: '', kwh: '' });
+  const [designForm, setDesignForm] = useState({ currentAmps: '', kwh: '' });
+  const [pricePerWattCents, setPricePerWattCents] = useState<number>(50);
   const [createDashboardForm, setCreateDashboardForm] = useState({
     companyName: '',
     pocName: '',
@@ -212,6 +217,17 @@ export default function ServiceDetailPage() {
   }, [slug]);
 
   const dashboardHref = showQualityControlTechnologies ? '/dashboard/quality-control' : '/dashboard';
+
+  useEffect(() => {
+    if (slug === CLEAN_ENERGY_SLUG) {
+      fetch('/api/clean-energy-config')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && typeof data.pricePerWattCents === 'number') setPricePerWattCents(data.pricePerWattCents);
+        })
+        .catch(() => {});
+    }
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -436,6 +452,109 @@ export default function ServiceDetailPage() {
                 </Link>
               </div>
               <QcAppDownloadSection t={t} />
+            </div>
+          </section>
+        )}
+
+        {/* Clean Energy - Features & Design Calculator */}
+        {showCleanEnergyTechnologies && (
+          <section className="mb-16">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3 flex items-center gap-2">
+              <Zap className="w-8 h-8 text-amber-400" />
+              {t('cleanEnergyTechnologies.title')}
+            </h2>
+            <p className="text-gray-400 mb-8 max-w-3xl leading-relaxed">
+              {t('cleanEnergyTechnologies.intro')}
+            </p>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+              {(['homes', 'industrial', 'farms', 'maintenance', 'deployment', 'purchase'] as const).map((key) => (
+                <div
+                  key={key}
+                  className="group rounded-2xl border border-white/10 bg-gradient-to-br from-amber-500/5 to-transparent p-6 hover:border-amber-500/30 transition-all"
+                >
+                  <h3 className="text-lg font-bold text-amber-400 mb-2">{t(`cleanEnergyTechnologies.${key}.name`)}</h3>
+                  <p className="text-sm text-gray-400 leading-relaxed">{t(`cleanEnergyTechnologies.${key}.description`)}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Design your system - Calculator */}
+            <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-transparent p-8 mb-8">
+              <h3 className="text-xl font-bold text-amber-400 mb-2 flex items-center gap-2">
+                <Ruler className="w-6 h-6" />
+                {t('cleanEnergyTechnologies.designTitle')}
+              </h3>
+              <p className="text-gray-400 mb-6">{t('cleanEnergyTechnologies.designIntro')}</p>
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">{t('cleanEnergyTechnologies.currentLabel')} (A)</label>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={designForm.currentAmps}
+                    onChange={(e) => setDesignForm((f) => ({ ...f, currentAmps: e.target.value }))}
+                    placeholder="e.g. 10"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">{t('cleanEnergyTechnologies.kwhLabel')} (kWh)</label>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={designForm.kwh}
+                    onChange={(e) => setDesignForm((f) => ({ ...f, kwh: e.target.value }))}
+                    placeholder="e.g. 5"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+              {(() => {
+                const current = parseFloat(designForm.currentAmps);
+                const kwh = parseFloat(designForm.kwh);
+                const valid = !isNaN(current) && current > 0 && !isNaN(kwh) && kwh > 0;
+                const VOLTAGE = 24; // Standard 24V system
+                const powerWatts = valid ? VOLTAGE * current : 0;
+                const chargingHours = valid ? (kwh * 1000) / (VOLTAGE * current) : 0;
+                const usageHours = valid ? (kwh * 1000) / (VOLTAGE * current) : 0;
+                const priceUsd = valid ? (powerWatts * (pricePerWattCents / 100)) : 0;
+                return valid ? (
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-6 space-y-4">
+                    <h4 className="font-semibold text-amber-400">{t('cleanEnergyTechnologies.resultsTitle')}</h4>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCurrent')}</p>
+                        <p className="text-lg font-bold text-white">{current} A</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCharging')}</p>
+                        <p className="text-lg font-bold text-white">{chargingHours.toFixed(1)} h</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultUsage')}</p>
+                        <p className="text-lg font-bold text-white">{usageHours.toFixed(1)} h</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPrice')}</p>
+                        <p className="text-lg font-bold text-amber-400">${priceUsd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-400">{t('cleanEnergyTechnologies.priceNote')}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCleanEnergyForm((f) => ({ ...f, currentAmps: designForm.currentAmps, kwh: designForm.kwh }));
+                        setRequestModalOpen(true);
+                      }}
+                      className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl"
+                    >
+                      {t('cleanEnergyTechnologies.requestQuote')}
+                    </button>
+                  </div>
+                ) : null;
+              })()}
             </div>
           </section>
         )}
@@ -1386,6 +1505,114 @@ export default function ServiceDetailPage() {
                 </div>
               </form>
               )}
+              {showCleanEnergyTechnologies && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setRequestMessage(null);
+                  setRequestSubmitting(true);
+                  try {
+                    const res = await fetch('/api/visitor-requests', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        phone: cleanEnergyForm.phone.trim(),
+                        email: cleanEnergyForm.email.trim(),
+                        currentAmps: parseFloat(cleanEnergyForm.currentAmps) || 0,
+                        kwh: parseFloat(cleanEnergyForm.kwh) || 0,
+                        serviceSlug: CLEAN_ENERGY_SLUG,
+                      }),
+                    });
+                    let data: { success?: boolean; message?: string } = {};
+                    try {
+                      data = await res.json();
+                    } catch {
+                      setRequestMessage({ type: 'error', text: t('visitorRequestForm.errorMessage') });
+                      setRequestSubmitting(false);
+                      return;
+                    }
+                    if (res.ok && data.success) {
+                      setRequestMessage({ type: 'success', text: t('visitorRequestForm.successMessage') });
+                      setCleanEnergyForm({ phone: '', email: '', currentAmps: '', kwh: '' });
+                      setTimeout(() => { setRequestModalOpen(false); setRequestMessage(null); }, 2000);
+                    } else {
+                      const msg = typeof data.message === 'string' && data.message.trim() ? data.message : t('visitorRequestForm.errorMessage');
+                      setRequestMessage({ type: 'error', text: msg });
+                    }
+                  } catch {
+                    setRequestMessage({ type: 'error', text: t('visitorRequestForm.errorMessage') });
+                  } finally {
+                    setRequestSubmitting(false);
+                  }
+                }}
+                className="space-y-2.5 sm:space-y-3"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('cleanEnergyTechnologies.phoneLabel')}</label>
+                    <input
+                      type="tel"
+                      value={cleanEnergyForm.phone}
+                      onChange={(e) => setCleanEnergyForm((f) => ({ ...f, phone: e.target.value }))}
+                      placeholder="+964..."
+                      className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('cleanEnergyTechnologies.emailLabel')}</label>
+                    <input
+                      type="email"
+                      value={cleanEnergyForm.email}
+                      onChange={(e) => setCleanEnergyForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="you@example.com"
+                      className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('cleanEnergyTechnologies.currentLabel')} (A)</label>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={cleanEnergyForm.currentAmps}
+                      onChange={(e) => setCleanEnergyForm((f) => ({ ...f, currentAmps: e.target.value }))}
+                      placeholder="e.g. 10"
+                      className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('cleanEnergyTechnologies.kwhLabel')} (kWh)</label>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={cleanEnergyForm.kwh}
+                      onChange={(e) => setCleanEnergyForm((f) => ({ ...f, kwh: e.target.value }))}
+                      placeholder="e.g. 5"
+                      className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2 sm:pt-3">
+                  <button
+                    type="submit"
+                    disabled={requestSubmitting}
+                    className="flex-1 py-2.5 sm:py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+                  >
+                    {requestSubmitting ? '...' : t('visitorRequestForm.submitButton')}
+                  </button>
+                  <button type="button" onClick={() => setRequestModalOpen(false)} className="px-4 py-2.5 sm:px-5 sm:py-3 border border-white/20 rounded-lg text-sm text-gray-400 hover:text-white hover:border-white/30">
+                    {t('visitorRequestForm.close')}
+                  </button>
+                </div>
+              </form>
+              )}
             </div>
           </div>
         )}
@@ -1452,7 +1679,7 @@ export default function ServiceDetailPage() {
               type="button"
               onClick={() => setRequestModalOpen(true)}
               className={`flex items-center gap-2 px-4 py-3 sm:px-5 text-sm sm:text-base font-semibold rounded-full shadow-lg transition-all min-h-[48px] ${
-                showQualityControlTechnologies
+                showQualityControlTechnologies || showCleanEnergyTechnologies
                   ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/30 hover:shadow-amber-500/40'
                   : showEnterpriseNetworkingTechnologies
                     ? 'bg-cyan-600 hover:bg-cyan-500 shadow-cyan-500/30 hover:shadow-cyan-500/40'

@@ -17,6 +17,7 @@ export default function HeroAdminPage() {
   const [projects, setProjects] = useState<FeaturedProject[]>([]);
   const [solutions, setSolutions] = useState<Solution[]>([]);
   const [cvCount, setCvCount] = useState<number | null>(null);
+  const [cleanEnergyPriceCents, setCleanEnergyPriceCents] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingStat, setEditingStat] = useState<string | null>(null);
   const [editedValue, setEditedValue] = useState<number>(0);
@@ -28,14 +29,16 @@ export default function HeroAdminPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statsRes, projectsRes, solutionsRes, cvRes] = await Promise.all([
+      const [statsRes, projectsRes, solutionsRes, cvRes, ceConfigRes] = await Promise.all([
         heroApi.getStats(),
         heroApi.getFeaturedProjects(),
         heroApi.getSolutions(),
         fetch('/api/admin/cv-stats').then((r) => r.json()),
+        fetch('/api/clean-energy-config').then((r) => r.json()),
       ]);
 
       if (statsRes.success) setStats(statsRes.statistics);
+      if (ceConfigRes?.success && typeof ceConfigRes.pricePerWattCents === 'number') setCleanEnergyPriceCents(ceConfigRes.pricePerWattCents);
       if (projectsRes.success) setProjects(projectsRes.projects);
       if (solutionsRes.success) setSolutions(solutionsRes.solutions);
       if (cvRes?.success && typeof cvRes.count === 'number') setCvCount(cvRes.count);
@@ -69,6 +72,39 @@ export default function HeroAdminPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">
         إدارة قسم الهيرو
       </h1>
+
+      {/* Clean Energy Price (cents per watt) */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-l-4 border-amber-500">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Clean Energy — Price per Watt</h2>
+        <p className="text-sm text-gray-500 mb-4">Value in cents (e.g. 50 = $0.50/watt). Used for the design calculator on the Clean Energy service page.</p>
+        <div className="flex items-center gap-4">
+          <input
+            type="number"
+            min="1"
+            value={cleanEnergyPriceCents ?? 50}
+            onChange={(e) => setCleanEnergyPriceCents(parseInt(e.target.value, 10) || 50)}
+            className="w-24 px-3 py-2 border rounded-lg"
+          />
+          <span className="text-gray-600">cents/watt</span>
+          <button
+            onClick={async () => {
+              const val = cleanEnergyPriceCents ?? 50;
+              const res = await fetch('/api/hero/statistics/clean_energy_price_per_watt', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: val }),
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.success) setCleanEnergyPriceCents(val);
+              }
+            }}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+          >
+            Save
+          </button>
+        </div>
+      </div>
 
       {/* CV creations count */}
       <div className="bg-white rounded-lg shadow-lg p-6 mb-8 border-l-4 border-blue-500">

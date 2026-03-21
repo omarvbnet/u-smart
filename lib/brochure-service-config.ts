@@ -8,7 +8,8 @@ export type ServiceSlug =
   | 'enterprise-networking'
   | 'smart-home-automation'
   | 'custom-software'
-  | 'programming';
+  | 'programming'
+  | 'clean-energy';
 
 export type BrochureServiceConfig = {
   indexKey: string;
@@ -109,13 +110,27 @@ export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
     pageBg: '#ecfdf5',
     boxBg: '#ffffff',
   },
+  'clean-energy': {
+    indexKey: 'cleanEnergyTechnologies',
+    featureKeys: ['homes', 'industrial', 'farms', 'maintenance', 'deployment', 'purchase'],
+    aboutTitleKey: 'cleanEnergyTitle',
+    aboutDescKey: 'cleanEnergyDescription',
+    accent: '#b45309',
+    accentLight: '#f59e0b',
+    accentDark: '#92400e',
+    accentBg: 'rgba(245, 158, 11, 0.12)',
+    coverBg: '#1c1917',
+    pageBg: '#fffbeb',
+    boxBg: '#ffffff',
+  },
 };
 
 export const BROCHURE_SERVICES_ORDER: { slug: string; brochureKey: string; icon: string }[] = [
   { slug: 'quality-control-supervision', brochureKey: 'serviceQuality', icon: 'ClipboardCheck' },
   { slug: 'smart-home-automation', brochureKey: 'serviceSmartHome', icon: 'Home' },
   { slug: 'enterprise-networking', brochureKey: 'serviceTelecom', icon: 'Network' },
-  { slug: 'custom-software', brochureKey: 'serviceCleanEnergy', icon: 'Code2' },
+  { slug: 'custom-software', brochureKey: 'serviceProgramming', icon: 'Code2' },
+  { slug: 'clean-energy', brochureKey: 'serviceCleanEnergy', icon: 'Zap' },
 ];
 
 /** Feature-specific image URLs – one per feature key (Unsplash – free to use) */
@@ -156,6 +171,8 @@ export const SERVICE_IMAGES: Record<string, string> = {
     'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=900&q=85',
   'custom-software':
     'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=900&q=85',
+  'clean-energy':
+    'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=900&q=85',
 };
 
 /** Icons for Why Choose strengths (7 items) */
@@ -191,4 +208,10 @@ export const FEATURE_ICONS: Record<string, string> = {
   mysql: 'Database',
   postgresql: 'Database',
   nosql: 'HardDrive',
+  homes: 'Home',
+  industrial: 'Factory',
+  farms: 'TreeDeciduous',
+  maintenance: 'Wrench',
+  deployment: 'Rocket',
+  purchase: 'ShoppingCart',
 };
