@@ -171,6 +171,7 @@ export default function ServiceDetailPage() {
     energyKwh: '',
     runtimeHours: '',
     inverterPower: '',
+    usageCurrent: '',
     efficiency: '0.9',
     safety: '0.8',
   });
@@ -558,6 +559,18 @@ export default function ServiceDetailPage() {
                     className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputUsageCurrent')} (A)</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={designForm.usageCurrent}
+                    onChange={(e) => setDesignForm((f) => ({ ...f, usageCurrent: e.target.value }))}
+                    placeholder={t('cleanEnergyTechnologies.usageCurrentPlaceholder')}
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                  />
+                </div>
                 <div className="sm:col-span-2 lg:col-span-1 flex gap-3">
                   <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.inputEfficiency')}</label>
@@ -590,11 +603,13 @@ export default function ServiceDetailPage() {
                 const energyKwh = parseFloat(designForm.energyKwh);
                 const runtimeHours = parseFloat(designForm.runtimeHours);
                 const inverterPower = parseFloat(designForm.inverterPower);
+                const usageCurrent = parseFloat(designForm.usageCurrent);
                 const efficiency = parseFloat(designForm.efficiency) || 0.9;
                 const safety = parseFloat(designForm.safety) || 0.8;
                 const valid = !isNaN(energyKwh) && energyKwh > 0 && !isNaN(runtimeHours) && runtimeHours > 0 && !isNaN(inverterPower) && inverterPower > 0;
 
                 const VOLTAGE = 220;
+                const SAFETY_MARGIN = 1.2;
                 const PANEL_W = 0.615;
                 const SUN_HOURS = 5.5;
                 const PANEL_EFFICIENCY = 0.75;
@@ -609,6 +624,10 @@ export default function ServiceDetailPage() {
                 const requiredPanels = valid ? Math.ceil(energyKwh / (panelEnergy * PANEL_EFFICIENCY)) : 0;
                 const totalSolarPower = requiredPanels * PANEL_W;
                 const chargeTime = valid && totalSolarPower > 0 ? energyKwh / (totalSolarPower * CHARGE_EFFICIENCY) : 0;
+                const inverterSafeW = Math.ceil((requiredCurrent * VOLTAGE * SAFETY_MARGIN) / 100) * 100;
+                const batterySafeKwh = (energyKwh / (efficiency * safety)) * SAFETY_MARGIN;
+                const usageCurrentValid = !isNaN(usageCurrent) && usageCurrent > 0;
+                const usageTimeAtCurrent = usageCurrentValid ? actualRuntime(usageCurrent) : 0;
 
                 const status = requiredCurrent > maxCurrent ? 'danger' : requiredCurrent >= safeCurrent ? 'warning' : 'safe';
 
@@ -642,6 +661,12 @@ export default function ServiceDetailPage() {
                             <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultRuntime')}</p>
                             <p className="text-xl font-bold text-white">{runtimeHours} h</p>
                           </div>
+                          {usageCurrentValid && (
+                            <div>
+                              <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultUsageAtCurrent', { current: usageCurrent })}</p>
+                              <p className="text-xl font-bold text-white">{usageTimeAtCurrent.toFixed(1)} h</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
@@ -649,11 +674,23 @@ export default function ServiceDetailPage() {
                         <div className="space-y-2">
                           <div>
                             <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultMaxCurrent')}</p>
-                            <p className="text-xl font-bold text-white">{maxCurrent.toFixed(1)} A</p>
+                            <p className="text-lg font-bold text-white">{maxCurrent.toFixed(1)} A</p>
+                            <p className="text-xs text-gray-400">{t('cleanEnergyTechnologies.usageTime')}: {actualRuntime(maxCurrent).toFixed(1)} h</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultSafeCurrent')}</p>
-                            <p className="text-xl font-bold text-white">{safeCurrent.toFixed(1)} A</p>
+                            <p className="text-lg font-bold text-white">{safeCurrent.toFixed(1)} A</p>
+                            <p className="text-xs text-gray-400">{t('cleanEnergyTechnologies.usageTime')}: {actualRuntime(safeCurrent).toFixed(1)} h</p>
+                          </div>
+                          <div className="pt-2 border-t border-red-500/20">
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.inverterCapacity')}</p>
+                            <p className="text-lg font-bold text-white">{inverterPower} W</p>
+                            <p className="text-xs text-emerald-400">{t('cleanEnergyTechnologies.inverterSafe')}: {inverterSafeW} W</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.batteryCapacity')}</p>
+                            <p className="text-lg font-bold text-white">{energyKwh} kWh</p>
+                            <p className="text-xs text-emerald-400">{t('cleanEnergyTechnologies.batterySafe')}: {batterySafeKwh.toFixed(1)} kWh</p>
                           </div>
                         </div>
                       </div>
