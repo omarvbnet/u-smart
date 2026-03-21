@@ -211,7 +211,6 @@ export const FEATURE_ICONS: Record<string, string> = {
   homes: 'Home',
   industrial: 'Factory',
   farms: 'TreeDeciduous',
-  maintenance: 'Wrench',
   deployment: 'Rocket',
   purchase: 'ShoppingCart',
 };
