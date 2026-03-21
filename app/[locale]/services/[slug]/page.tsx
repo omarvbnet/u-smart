@@ -516,29 +516,44 @@ export default function ServiceDetailPage() {
                 const kwh = parseFloat(designForm.kwh);
                 const valid = !isNaN(current) && current > 0 && !isNaN(kwh) && kwh > 0;
                 const VOLTAGE = 24; // Standard 24V system
+                const PANEL_WATTS = 600; // 600W per panel
+                const SUN_HOURS_PER_DAY = 5; // Effective peak sun hours for charging
                 const powerWatts = valid ? VOLTAGE * current : 0;
                 const chargingHours = valid ? (kwh * 1000) / (VOLTAGE * current) : 0;
-                const usageHours = valid ? (kwh * 1000) / (VOLTAGE * current) : 0;
+                const usageAt = (amps: number) => (kwh * 1000) / (VOLTAGE * amps);
+                const photocellsQty = valid ? Math.ceil((kwh * 1000) / (SUN_HOURS_PER_DAY * PANEL_WATTS)) : 0;
                 const priceUsd = valid ? (powerWatts * (pricePerWattCents / 100)) : 0;
+                const USAGE_CURRENTS = [10, 20, 30, 40, 60, 80];
                 return valid ? (
                   <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-6 space-y-4">
                     <h4 className="font-semibold text-amber-400">{t('cleanEnergyTechnologies.resultsTitle')}</h4>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div>
                         <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCurrent')}</p>
                         <p className="text-lg font-bold text-white">{current} A</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPhotocells')}</p>
+                        <p className="text-lg font-bold text-white">{photocellsQty} {t('cleanEnergyTechnologies.photocellsUnit')}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultCharging')}</p>
                         <p className="text-lg font-bold text-white">{chargingHours.toFixed(1)} h</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultUsage')}</p>
-                        <p className="text-lg font-bold text-white">{usageHours.toFixed(1)} h</p>
-                      </div>
-                      <div>
                         <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPrice')}</p>
                         <p className="text-lg font-bold text-amber-400">${priceUsd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-amber-400/90 mb-2">{t('cleanEnergyTechnologies.usageByCurrent')}</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        {USAGE_CURRENTS.map((amps) => (
+                          <div key={amps} className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-center">
+                            <p className="text-xs text-gray-500">{amps} A</p>
+                            <p className="text-base font-bold text-white">{usageAt(amps).toFixed(1)} h</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <p className="text-sm text-gray-400">{t('cleanEnergyTechnologies.priceNote')}</p>
