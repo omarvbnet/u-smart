@@ -47,6 +47,25 @@ const QUALITY_CONTROL_ICONS: Record<string, typeof ClipboardCheck> = {
   tracking: Activity,
 };
 
+/** Parse number from string - accepts "1,234.56", "1234,56", "1234", etc. */
+function parseFlexibleNumber(val: unknown): number | undefined {
+  if (val == null) return undefined;
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  let s = String(val).trim().replace(/\s/g, '');
+  if (!s) return undefined;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    s = s.replace(/,/g, '.');
+  } else if (lastDot >= 0) {
+    s = s.replace(/,/g, '');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? undefined : n;
+}
+
 const ANDROID_APP_URL = process.env.NEXT_PUBLIC_QC_APP_ANDROID_URL || '/app/usmart_qc.apk';
 // iOS OTA install: itms-services link points to our manifest, which references the IPA. Override with NEXT_PUBLIC_QC_APP_IOS_URL for custom install link.
 function getIosInstallLink(): string {
@@ -166,7 +185,7 @@ export default function ServiceDetailPage() {
     phone: '',
     province: '',
   });
-  const [cleanEnergyForm, setCleanEnergyForm] = useState({ phone: '', email: '', currentAmps: '', kwh: '' });
+  const [cleanEnergyForm, setCleanEnergyForm] = useState({ phone: '', email: '', currentAmps: '', kwh: '', price: '' });
   const [designForm, setDesignForm] = useState({
     runtimeHours: '8',
     usageCurrent: '10',
@@ -323,7 +342,7 @@ export default function ServiceDetailPage() {
             </div>
             <div>
               <h1 className="text-3xl md:text-4xl font-bold mb-2">{service.title}</h1>
-              {(service.priceRange || service.duration) && (
+              {!showCleanEnergyTechnologies && (service.priceRange || service.duration) && (
                 <div className="flex flex-wrap gap-4 text-sm text-gray-400">
                   {service.priceRange && (
                     <span>
@@ -638,7 +657,7 @@ export default function ServiceDetailPage() {
                     </div>
 
                     {/* Result cards */}
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
                       <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4">
                         <h4 className="text-sm font-semibold text-emerald-400 mb-3">{t('cleanEnergyTechnologies.cardMain')}</h4>
                         <div className="space-y-2">
@@ -705,6 +724,22 @@ export default function ServiceDetailPage() {
                           <p className="text-xl font-bold text-white">{chargeTime.toFixed(1)} {t('cleanEnergyTechnologies.hours')}</p>
                         </div>
                       </div>
+                      <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4">
+                        <h4 className="text-sm font-semibold text-emerald-400 mb-3">{t('cleanEnergyTechnologies.cardPrice')}</h4>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultTotalSolar')}</p>
+                            <p className="text-lg font-bold text-white">{totalSolarPower.toFixed(1)} kW ({(requiredPanels * 615).toLocaleString()} W)</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.resultPrice')}</p>
+                            <p className="text-xl font-bold text-white">
+                              ${(totalSolarPower * 1000 * (pricePerWattCents / 100)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <p className="text-xs text-gray-500">{t('cleanEnergyTechnologies.priceNote')}</p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Dynamic runtime table */}
@@ -735,7 +770,13 @@ export default function ServiceDetailPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setCleanEnergyForm((f) => ({ ...f, currentAmps: String(requiredCurrent.toFixed(1)), kwh: String(energyKwh) }));
+                        const totalPrice = totalSolarPower * 1000 * (pricePerWattCents / 100);
+                        setCleanEnergyForm((f) => ({
+                          ...f,
+                          currentAmps: String(requiredCurrent.toFixed(1)),
+                          kwh: String(energyKwh),
+                          price: String(totalPrice.toFixed(0)),
+                        }));
                         setRequestModalOpen(true);
                       }}
                       className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl"
@@ -1701,6 +1742,19 @@ export default function ServiceDetailPage() {
                   e.preventDefault();
                   setRequestMessage(null);
                   setRequestSubmitting(true);
+                  const parsedCurrent = parseFlexibleNumber(cleanEnergyForm.currentAmps);
+                  const parsedKwh = parseFlexibleNumber(cleanEnergyForm.kwh);
+                  const parsedPrice = parseFlexibleNumber(cleanEnergyForm.price);
+                  if (parsedCurrent == null || parsedCurrent <= 0) {
+                    setRequestMessage({ type: 'error', text: t('cleanEnergyTechnologies.invalidCurrent') });
+                    setRequestSubmitting(false);
+                    return;
+                  }
+                  if (parsedKwh == null || parsedKwh <= 0) {
+                    setRequestMessage({ type: 'error', text: t('cleanEnergyTechnologies.invalidKwh') });
+                    setRequestSubmitting(false);
+                    return;
+                  }
                   try {
                     const res = await fetch('/api/visitor-requests', {
                       method: 'POST',
@@ -1708,8 +1762,9 @@ export default function ServiceDetailPage() {
                       body: JSON.stringify({
                         phone: cleanEnergyForm.phone.trim(),
                         email: cleanEnergyForm.email.trim(),
-                        currentAmps: parseFloat(cleanEnergyForm.currentAmps) || 0,
-                        kwh: parseFloat(cleanEnergyForm.kwh) || 0,
+                        currentAmps: parsedCurrent,
+                        kwh: parsedKwh,
+                        price: parsedPrice ?? undefined,
                         serviceSlug: CLEAN_ENERGY_SLUG,
                       }),
                     });
@@ -1723,7 +1778,7 @@ export default function ServiceDetailPage() {
                     }
                     if (res.ok && data.success) {
                       setRequestMessage({ type: 'success', text: t('visitorRequestForm.successMessage') });
-                      setCleanEnergyForm({ phone: '', email: '', currentAmps: '', kwh: '' });
+                      setCleanEnergyForm({ phone: '', email: '', currentAmps: '', kwh: '', price: '' });
                       setTimeout(() => { setRequestModalOpen(false); setRequestMessage(null); }, 2000);
                     } else {
                       const msg = typeof data.message === 'string' && data.message.trim() ? data.message : t('visitorRequestForm.errorMessage');
@@ -1765,12 +1820,11 @@ export default function ServiceDetailPage() {
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('cleanEnergyTechnologies.currentLabel')} (A)</label>
                     <input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
+                      type="text"
+                      inputMode="decimal"
                       value={cleanEnergyForm.currentAmps}
                       onChange={(e) => setCleanEnergyForm((f) => ({ ...f, currentAmps: e.target.value }))}
-                      placeholder="e.g. 10"
+                      placeholder="e.g. 10 or 10.5"
                       className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                       required
                     />
@@ -1778,17 +1832,22 @@ export default function ServiceDetailPage() {
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-0.5 sm:mb-1">{t('cleanEnergyTechnologies.kwhLabel')} (kWh)</label>
                     <input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
+                      type="text"
+                      inputMode="decimal"
                       value={cleanEnergyForm.kwh}
                       onChange={(e) => setCleanEnergyForm((f) => ({ ...f, kwh: e.target.value }))}
-                      placeholder="e.g. 5"
+                      placeholder="e.g. 5 or 5.5 or 1,234.56"
                       className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                       required
                     />
                   </div>
                 </div>
+                {cleanEnergyForm.price && (
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                    <span className="text-xs text-gray-400">{t('cleanEnergyTechnologies.resultPrice')}: </span>
+                    <span className="text-sm font-semibold text-amber-400">${Number(cleanEnergyForm.price).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-2 sm:pt-3">
                   <button
                     type="submit"

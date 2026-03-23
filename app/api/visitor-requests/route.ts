@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { notifyTicketsVisitorRequest } from '@/lib/email';
 
+/** Parse number from string or number - accepts "1,234.56", "1234,56", "1234", 1234, etc. */
+function parseFlexibleNumber(val: unknown): number | undefined {
+  if (val == null) return undefined;
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  let s = String(val).trim().replace(/\s/g, '');
+  if (!s) return undefined;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    s = s.replace(/,/g, '.');
+  } else if (lastDot >= 0) {
+    s = s.replace(/,/g, '');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? undefined : n;
+}
+
 const BUILDING_TYPES = ['home', 'villa', 'hotel', 'complex', 'other'];
 const SMART_HOME_TECHNIQUES = ['knx', 'buspro', 'zigbee'];
 const PROGRAMMING_TECHNIQUES = ['nodejs', 'flutter', 'python', 'mysql', 'postgresql', 'nosql'];
@@ -46,8 +65,9 @@ export async function POST(req: NextRequest) {
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
-    const currentAmps = typeof body.currentAmps === 'number' ? body.currentAmps : (typeof body.currentAmps === 'string' && body.currentAmps.trim() ? parseFloat(body.currentAmps) : undefined);
-    const kwh = typeof body.kwh === 'number' ? body.kwh : (typeof body.kwh === 'string' && body.kwh.trim() ? parseFloat(body.kwh) : undefined);
+    const currentAmps = parseFlexibleNumber(body.currentAmps);
+    const kwh = parseFlexibleNumber(body.kwh);
+    const price = body.price != null ? parseFlexibleNumber(body.price) : undefined;
     let technique = typeof body.technique === 'string' ? body.technique.trim().toLowerCase() : '';
 
     if (isCleanEnergy) {
@@ -137,6 +157,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const baseUrl = (() => {
+      const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+      return raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+    })();
+    const ticketUrl = `${baseUrl}/admin/visitor-requests/${request.id}`;
     notifyTicketsVisitorRequest({
       id: request.id,
       serviceSlug,
@@ -144,9 +169,15 @@ export async function POST(req: NextRequest) {
       email: isCleanEnergy ? email : (body.email?.trim() || null),
       phone,
       company: body.company?.trim() || null,
-      province: isCleanEnergy ? 'n/a' : province,
-      technique: isCleanEnergy ? `current: ${currentAmps}A, ${kwh}kWh` : technique,
+      province: isCleanEnergy ? (province || 'n/a') : province,
+      technique: isCleanEnergy ? 'Clean Energy' : technique,
       buildingType: isProgramming || isEnterpriseNetworking || isCleanEnergy ? null : buildingType || null,
+      ticketUrl,
+      ...(isCleanEnergy && {
+        currentAmps: currentAmps!,
+        kwh: kwh!,
+        price: price != null ? price : undefined,
+      }),
     });
 
     return NextResponse.json({ success: true, request });

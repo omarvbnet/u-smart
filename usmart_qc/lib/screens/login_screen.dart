@@ -5,6 +5,7 @@ import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import 'privacy_policy_screen.dart';
 import 'registration_request_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen>
   String _forgotPassword = '';
   bool _forgotSending = false;
   bool _forgotVerifying = false;
+  bool _agreedToTerms = false;
   late AnimationController _animCtrl;
   late Animation<double> _fadeIn;
   late Animation<Offset> _slideUp;
@@ -55,6 +57,16 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).t('privacy_agree_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final username = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text;
     if (username.isEmpty || password.isEmpty) return;
@@ -293,7 +305,12 @@ class _LoginScreenState extends State<LoginScreen>
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
+                padding: EdgeInsets.only(
+                  left: 28,
+                  right: 28,
+                  top: 16,
+                  bottom: 24 + MediaQuery.of(context).padding.bottom,
+                ),
                 child: FadeTransition(
                   opacity: _fadeIn,
                   child: SlideTransition(
@@ -391,7 +408,52 @@ class _LoginScreenState extends State<LoginScreen>
                                           () => _obscure = !_obscure),
                                     ),
                                   ),
-                                  const SizedBox(height: 28),
+                                  const SizedBox(height: 16),
+                                  InkWell(
+                                    onTap: () => setState(() => _agreedToTerms = !_agreedToTerms),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: Checkbox(
+                                              value: _agreedToTerms,
+                                              onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                                              activeColor: const Color(0xFF6C63FF),
+                                              fillColor: MaterialStateProperty.resolveWith((_) => _agreedToTerms ? const Color(0xFF6C63FF) : Colors.transparent),
+                                              side: BorderSide(color: Colors.white.withAlpha(100)),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Wrap(
+                                              children: [
+                                                Text(
+                                                  l10n.t('privacy_agree'),
+                                                  style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 13, height: 1.4),
+                                                ),
+                                                GestureDetector(
+                                                  onTap: () => Navigator.of(context).push(
+                                                    MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                                                  ),
+                                                  child: Text(
+                                                    ' ${l10n.t('privacy_view_full')}',
+                                                    style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
                                   SizedBox(
                                     width: double.infinity,
                                     height: 54,
@@ -416,7 +478,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                       child: ElevatedButton(
                                         onPressed:
-                                            _submitting ? null : _login,
+                                            (_submitting || !_agreedToTerms) ? null : _login,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               Colors.transparent,
@@ -450,34 +512,48 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   ),
                                   const SizedBox(height: 12),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      TextButton(
-                                        onPressed: () => _showForgotFlow(context, l10n),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: const Color(0xFF6C63FF),
-                                        ),
-                                        child: Text(
-                                          l10n.t('forgot_password'),
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            showRegistrationRequestModal(context),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: const Color(0xFF6C63FF),
-                                        ),
-                                        child: Text(
-                                          l10n.t('reg_request_title'),
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final narrow = constraints.maxWidth < 300;
+                                      return Wrap(
+                                        alignment: WrapAlignment.spaceBetween,
+                                        runSpacing: 4,
+                                        children: [
+                                          TextButton(
+                                            onPressed: () => _showForgotFlow(context, l10n),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: const Color(0xFF6C63FF),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                            child: Text(
+                                              l10n.t('forgot_password'),
+                                              style: TextStyle(fontSize: narrow ? 12 : 13),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ],
+                                          TextButton(
+                                            onPressed: () =>
+                                                showRegistrationRequestModal(context),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: const Color(0xFF6C63FF),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                            child: Text(
+                                              l10n.t('reg_request_title'),
+                                              style: TextStyle(
+                                                fontSize: narrow ? 12 : 14,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ],
                               ),

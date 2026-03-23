@@ -50,7 +50,13 @@ class GeofenceService {
     );
 
     _positionSub = Geolocator.getPositionStream(locationSettings: settings)
-        .listen(_onPosition);
+        .listen(
+          _onPosition,
+          onError: (Object e, StackTrace st) {
+            // kCLErrorDomain error 1 = location denied or services disabled
+            stop();
+          },
+        );
   }
 
   void stop() {

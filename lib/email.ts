@@ -432,10 +432,44 @@ export async function notifyTicketsCompanyRequest(data: { id: string; companyNam
 }
 
 /** Notify tickets@ of new visitor request (full info). */
-export async function notifyTicketsVisitorRequest(data: { id: string; serviceSlug: string; name?: string | null; email?: string | null; phone: string; company?: string | null; province: string; technique: string; buildingType?: string | null }): Promise<void> {
+export async function notifyTicketsVisitorRequest(data: {
+  id: string;
+  serviceSlug: string;
+  name?: string | null;
+  email?: string | null;
+  phone: string;
+  company?: string | null;
+  province: string;
+  technique: string;
+  buildingType?: string | null;
+  ticketUrl?: string | null;
+  price?: number | string | null;
+  currentAmps?: number | string | null;
+  kwh?: number | string | null;
+}): Promise<void> {
+  const baseUrl = (() => {
+    const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+    return raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+  })();
+  const ticketUrl = data.ticketUrl ?? `${baseUrl}/admin/visitor-requests/${data.id}`;
+  const rows = [
+    row('ID', data.id),
+    row('Ticket URL', ticketUrl),
+    row('Service', data.serviceSlug),
+    row('Name', data.name || '—'),
+    row('Email', data.email || '—'),
+    row('Phone', data.phone),
+    row('Company', data.company || '—'),
+    row('Province', data.province),
+    row('Technique', data.technique),
+    data.buildingType ? row('Building type', data.buildingType) : '',
+    data.currentAmps != null ? row('Current (A)', data.currentAmps) : '',
+    data.kwh != null ? row('Battery kWh', data.kwh) : '',
+    data.price != null ? row('Estimated price ($)', data.price) : '',
+  ].filter(Boolean);
   const html = `
     <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New visitor / service request</strong></p>
-    <table style="border-collapse:collapse;">${row('ID', data.id)}${row('Service', data.serviceSlug)}${row('Name', data.name || '—')}${row('Email', data.email || '—')}${row('Phone', data.phone)}${row('Company', data.company || '—')}${row('Province', data.province)}${row('Technique', data.technique)}${data.buildingType ? row('Building type', data.buildingType) : ''}</table>
+    <table style="border-collapse:collapse;">${rows.join('')}</table>
     <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
   sendTicketsNotification(`New visitor request: ${data.serviceSlug}`, html).catch((e) => console.error('Tickets notification (visitor request):', e));
 }

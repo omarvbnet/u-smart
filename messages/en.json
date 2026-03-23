@@ -402,6 +402,7 @@
       "cardProtection": "Protection limits",
       "cardSolar": "Solar panels",
       "cardCharge": "Charging",
+      "cardPrice": "Estimated price",
       "resultCurrent": "Current",
       "resultRequiredCurrent": "Required current",
       "resultRuntime": "Runtime",
@@ -436,7 +437,9 @@
       "priceNote": "Price is estimated from admin-configured price per watt. Final quote may vary based on equipment and installation.",
       "requestQuote": "Request quote",
       "phoneLabel": "Phone",
-      "emailLabel": "Email"
+      "emailLabel": "Email",
+      "invalidCurrent": "Please enter a valid current (Amps).",
+      "invalidKwh": "Please enter a valid energy capacity (kWh)."
     },
     "serviceDetail": {
       "backToServices": "Back to services",
