@@ -140,6 +140,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const cleanEnergyMeta = isCleanEnergy
+      ? JSON.stringify({
+          _cleanEnergy: true,
+          estimatedPrice: price != null ? Number(price) : null,
+        })
+      : null;
+
     const request = await prisma.visitorRequest.create({
       data: {
         buildingType: isProgramming || isEnterpriseNetworking || isCleanEnergy ? 'n/a' : buildingType,
@@ -147,7 +154,7 @@ export async function POST(req: NextRequest) {
         province: isCleanEnergy ? (province || 'n/a') : province,
         technique,
         name: body.name?.trim() || null,
-        company: body.company?.trim() || null,
+        company: isCleanEnergy ? cleanEnergyMeta : (body.company?.trim() || null),
         email: isCleanEnergy ? email : (body.email?.trim() || null),
         serviceSlug,
         ...(isCleanEnergy && {
@@ -179,6 +186,24 @@ export async function POST(req: NextRequest) {
         price: price != null ? price : undefined,
       }),
     });
+
+    // Admin in-app notification for clean energy inbox
+    if (isCleanEnergy) {
+      try {
+        const db = prisma as unknown as { notification?: { create: (args: { data: { type: string; title: string; message: string; ticketId: string; forAdmin: boolean } }) => Promise<unknown> } };
+        await db.notification?.create({
+          data: {
+            type: 'new_clean_energy_request',
+            title: 'New clean energy request',
+            message: `Clean Energy request ${request.id.slice(-8)} received${price != null ? ` | Budget: $${Number(price).toLocaleString()}` : ''}`,
+            ticketId: request.id,
+            forAdmin: true,
+          },
+        });
+      } catch {
+        /* notification table may not exist in some environments */
+      }
+    }
 
     return NextResponse.json({ success: true, request });
   } catch (error) {

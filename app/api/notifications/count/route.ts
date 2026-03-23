@@ -30,6 +30,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, count: 0 });
       }
     }
+    if (type === 'pending_clean_energy_tickets') {
+      try {
+        const count = await prisma.visitorRequest.count({
+          where: {
+            serviceSlug: 'clean-energy',
+            status: 'PENDING',
+          },
+        });
+        return NextResponse.json({ success: true, count });
+      } catch {
+        return NextResponse.json({ success: true, count: 0 });
+      }
+    }
     if (type === 'pending_qc_tickets') {
       try {
         const count = await prisma.visitorRequest.count({

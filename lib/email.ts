@@ -314,6 +314,43 @@ export async function sendTicketNotificationEmail(options: {
   });
 }
 
+/** Send status update email for Clean Energy visitor request (non-dashboard requester). */
+export async function sendCleanEnergyRequestStatusEmail(options: {
+  to: string;
+  requestId: string;
+  status: string;
+  currentAmps?: number | null;
+  kwh?: number | null;
+  estimatedPrice?: number | null;
+}): Promise<boolean> {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const baseUrl = raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+  const ticketUrl = `${baseUrl}/admin/visitor-requests/${options.requestId}`;
+  const statusLabels: Record<string, string> = {
+    PENDING: 'Pending',
+    ON_SITE: 'On site',
+    IN_PROGRESS: 'In progress',
+    COMPLETED: 'Completed',
+  };
+  const html = `
+    <p style="margin:0 0 12px; color:#111827; font-size:16px;"><strong>Clean Energy request update</strong></p>
+    <p style="margin:0 0 14px; color:#374151;">Your request status is now: <strong>${escapeHtml(statusLabels[options.status] || options.status)}</strong></p>
+    <table style="border-collapse:collapse; margin:0 0 14px;">
+      ${row('Request ID', options.requestId)}
+      ${options.currentAmps != null ? row('Current (A)', options.currentAmps) : ''}
+      ${options.kwh != null ? row('Battery (kWh)', options.kwh) : ''}
+      ${options.estimatedPrice != null ? row('Estimated budget ($)', options.estimatedPrice) : ''}
+      ${row('Tracking URL', ticketUrl)}
+    </table>
+    <p style="margin:0; color:#6b7280; font-size:12px;">U-SMART Team</p>
+  `;
+  return sendEmail({
+    to: options.to,
+    subject: `Clean Energy request update #${options.requestId.slice(-8)} - U-SMART`,
+    html,
+  });
+}
+
 /** Send a professional welcome email after newsletter subscription. */
 export async function sendSubscriptionConfirmation(
   to: string,

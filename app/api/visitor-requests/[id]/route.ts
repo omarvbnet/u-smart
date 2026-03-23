@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendTicketNotificationEmail, sendTicketCompletedEmail } from '@/lib/email';
+import { sendTicketNotificationEmail, sendTicketCompletedEmail, sendCleanEnergyRequestStatusEmail } from '@/lib/email';
 
 const TICKET_STATUSES = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'] as const;
 
@@ -388,6 +388,34 @@ export async function PATCH(
       }
     } catch (e) {
       console.error('Create status notification:', e);
+    }
+
+    // Clean-energy direct requester email update (for records without requester account).
+    try {
+      const updatedEmail = (updated as { email?: string | null }).email;
+      const updatedService = (updated as { serviceSlug?: string | null }).serviceSlug;
+      if (status && updatedService === 'clean-energy' && updatedEmail && typeof updatedEmail === 'string' && updatedEmail.trim()) {
+        let estimatedPrice: number | null = null;
+        try {
+          const rawCompany = (updated as { company?: string | null }).company;
+          if (rawCompany) {
+            const parsed = JSON.parse(rawCompany) as { estimatedPrice?: number | null; _cleanEnergy?: boolean };
+            if (parsed._cleanEnergy && typeof parsed.estimatedPrice === 'number') estimatedPrice = parsed.estimatedPrice;
+          }
+        } catch {
+          /* ignore */
+        }
+        sendCleanEnergyRequestStatusEmail({
+          to: updatedEmail.trim(),
+          requestId: id,
+          status: status as string,
+          currentAmps: (updated as { currentAmps?: number | null }).currentAmps ?? null,
+          kwh: (updated as { kwh?: number | null }).kwh ?? null,
+          estimatedPrice,
+        }).catch((e) => console.error('Clean Energy status email:', e));
+      }
+    } catch (e) {
+      console.error('Clean Energy email notification:', e);
     }
 
     return NextResponse.json({ success: true, request: updated });

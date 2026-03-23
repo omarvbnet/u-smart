@@ -61,7 +61,7 @@ export default function VisitorRequestsAdminPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/visitor-requests?onlySlugs=smart-home-automation,custom-software,programming,clean-energy');
+      const res = await fetch('/api/visitor-requests?onlySlugs=smart-home-automation,custom-software,programming');
       const data = await res.json();
       if (data.success && data.requests) setList(data.requests);
     } catch (e) {
