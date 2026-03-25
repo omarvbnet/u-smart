@@ -3,6 +3,7 @@
 import { useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowPathIcon, EyeIcon, FunnelIcon, XMarkIcon, BoltIcon } from '@heroicons/react/24/outline';
+import { CLEAN_ENERGY_IP_LABELS, isCleanEnergyIpKey } from '@/lib/clean-energy-request';
 
 type VisitorRequest = {
   id: string;
@@ -22,6 +23,8 @@ type VisitorRequest = {
 type CleanEnergyMeta = {
   _cleanEnergy?: boolean;
   estimatedPrice?: number | null;
+  ipRatings?: string[];
+  designSnapshot?: { solarPanels615W?: number } | null;
 };
 
 const STATUS_OPTIONS = [
@@ -264,6 +267,8 @@ export default function CleanEnergyRequestsAdminPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Phone</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Current (A)</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Battery (kWh)</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">IP</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Panels</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Budget ($)</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
@@ -272,6 +277,17 @@ export default function CleanEnergyRequestsAdminPage() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {filteredList.map((r) => {
                     const meta = parseMeta(r.company);
+                    const ipText =
+                      meta.ipRatings?.length
+                        ? meta.ipRatings
+                            .filter(isCleanEnergyIpKey)
+                            .map((k) => CLEAN_ENERGY_IP_LABELS[k])
+                            .join(', ') || meta.ipRatings.join(', ')
+                        : '—';
+                    const panels =
+                      meta.designSnapshot && typeof meta.designSnapshot.solarPanels615W === 'number'
+                        ? meta.designSnapshot.solarPanels615W
+                        : '—';
                     const displayStatus = (r.status || 'PENDING').toUpperCase();
                     const isUpdating = updatingId === r.id;
                     return (
@@ -282,6 +298,10 @@ export default function CleanEnergyRequestsAdminPage() {
                         <td className="px-4 py-3 text-sm text-gray-900">{r.phone}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{r.currentAmps != null ? r.currentAmps : '—'}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{r.kwh != null ? r.kwh : '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-800 max-w-[140px]" title={ipText}>
+                          {ipText}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{panels}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{meta.estimatedPrice != null ? `$${Number(meta.estimatedPrice).toLocaleString()}` : '—'}</td>
                         <td className="px-4 py-3 text-sm">
                           <select

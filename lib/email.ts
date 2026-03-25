@@ -483,12 +483,18 @@ export async function notifyTicketsVisitorRequest(data: {
   price?: number | string | null;
   currentAmps?: number | string | null;
   kwh?: number | string | null;
+  /** Extra label/value rows (e.g. clean energy IP ratings + design snapshot). */
+  extraRows?: { label: string; value: string | number }[];
 }): Promise<void> {
   const baseUrl = (() => {
     const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
     return raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
   })();
   const ticketUrl = data.ticketUrl ?? `${baseUrl}/admin/visitor-requests/${data.id}`;
+  const extra =
+    Array.isArray(data.extraRows) && data.extraRows.length > 0
+      ? data.extraRows.map((r) => row(r.label, r.value))
+      : [];
   const rows = [
     row('ID', data.id),
     row('Ticket URL', ticketUrl),
@@ -503,6 +509,7 @@ export async function notifyTicketsVisitorRequest(data: {
     data.currentAmps != null ? row('Current (A)', data.currentAmps) : '',
     data.kwh != null ? row('Battery kWh', data.kwh) : '',
     data.price != null ? row('Estimated price ($)', data.price) : '',
+    ...extra,
   ].filter(Boolean);
   const html = `
     <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New visitor / service request</strong></p>

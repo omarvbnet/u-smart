@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { notifyTicketsVisitorRequest } from '@/lib/email';
+import {
+  CLEAN_ENERGY_IP_LABELS,
+  isCleanEnergyIpKey,
+  type CleanEnergyDesignSnapshot,
+} from '@/lib/clean-energy-request';
 
 /** Parse number from string or number - accepts "1,234.56", "1234,56", "1234", 1234, etc. */
 function parseFlexibleNumber(val: unknown): number | undefined {
@@ -30,6 +35,68 @@ const ENTERPRISE_NETWORKING_SLUGS = ['enterprise-networking'];
 const CLEAN_ENERGY_SLUGS = ['clean-energy'];
 
 const prisma = new PrismaClient();
+
+const CLEAN_SNAPSHOT_NUM_KEYS: (keyof CleanEnergyDesignSnapshot)[] = [
+  'runtimeHours',
+  'usageCurrentA',
+  'efficiency',
+  'safetyFactor',
+  'energyConsumedKwh',
+  'batteryKwh',
+  'batterySafeKwh',
+  'solarPanels615W',
+  'totalSolarKw',
+  'chargeTimeHours',
+  'minInverterW',
+  'inverterSafeW',
+  'maxCurrentA',
+  'safeCurrentA',
+  'estimatedPriceUsd',
+];
+
+function sanitizeCleanEnergyDesignSnapshot(raw: unknown): Partial<CleanEnergyDesignSnapshot> | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+  const out: Partial<CleanEnergyDesignSnapshot> = {};
+  for (const key of CLEAN_SNAPSHOT_NUM_KEYS) {
+    const v = num(o[key as string]);
+    if (v !== undefined) (out as Record<string, number>)[key as string] = v;
+  }
+  if (o.inverterPowerW === null) {
+    (out as { inverterPowerW?: number | null }).inverterPowerW = null;
+  } else {
+    const v = num(o.inverterPowerW);
+    if (v !== undefined) (out as { inverterPowerW?: number | null }).inverterPowerW = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function cleanEnergyEmailExtraRows(
+  ipKeys: string[],
+  snap: Partial<CleanEnergyDesignSnapshot> | undefined
+): { label: string; value: string | number }[] {
+  const rows: { label: string; value: string | number }[] = [];
+  const ipLabels = ipKeys.filter(isCleanEnergyIpKey).map((k) => CLEAN_ENERGY_IP_LABELS[k]);
+  if (ipLabels.length) rows.push({ label: 'IP ratings', value: ipLabels.join(', ') });
+  if (!snap) return rows;
+  if (snap.runtimeHours != null) rows.push({ label: 'Calc: runtime (h)', value: snap.runtimeHours });
+  if (snap.usageCurrentA != null) rows.push({ label: 'Calc: usage current (A)', value: snap.usageCurrentA });
+  if (snap.inverterPowerW != null) rows.push({ label: 'Calc: inverter (W)', value: snap.inverterPowerW });
+  if (snap.energyConsumedKwh != null) rows.push({ label: 'Calc: energy consumed (kWh)', value: snap.energyConsumedKwh });
+  if (snap.batteryKwh != null) rows.push({ label: 'Calc: battery needed (kWh)', value: snap.batteryKwh });
+  if (snap.batterySafeKwh != null) rows.push({ label: 'Calc: battery safe (kWh)', value: snap.batterySafeKwh });
+  if (snap.solarPanels615W != null) rows.push({ label: 'Calc: solar panels (615 W)', value: snap.solarPanels615W });
+  if (snap.totalSolarKw != null) rows.push({ label: 'Calc: total solar (kW)', value: snap.totalSolarKw });
+  if (snap.chargeTimeHours != null) rows.push({ label: 'Calc: charge time (h)', value: snap.chargeTimeHours });
+  if (snap.minInverterW != null) rows.push({ label: 'Calc: min inverter (W)', value: snap.minInverterW });
+  if (snap.inverterSafeW != null) rows.push({ label: 'Calc: recommended inverter (W)', value: snap.inverterSafeW });
+  if (snap.maxCurrentA != null) rows.push({ label: 'Calc: max current (A)', value: snap.maxCurrentA });
+  if (snap.safeCurrentA != null) rows.push({ label: 'Calc: safe current (A)', value: snap.safeCurrentA });
+  if (snap.estimatedPriceUsd != null) rows.push({ label: 'Calc: estimated price ($)', value: snap.estimatedPriceUsd });
+  return rows;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -69,12 +136,24 @@ export async function POST(req: NextRequest) {
     const kwh = parseFlexibleNumber(body.kwh);
     const price = body.price != null ? parseFlexibleNumber(body.price) : undefined;
     let technique = typeof body.technique === 'string' ? body.technique.trim().toLowerCase() : '';
+    let cleanEnergyIpRatings: string[] = [];
+    let cleanEnergyDesignSanitized: Partial<CleanEnergyDesignSnapshot> | undefined;
 
     if (isCleanEnergy) {
       technique = 'request';
+      const ipRaw: unknown[] = Array.isArray(body.ipRatings) ? body.ipRatings : [];
+      const ipStrings = ipRaw.filter((x): x is string => typeof x === 'string' && Boolean(x.trim()));
+      cleanEnergyIpRatings = [...new Set(ipStrings.map((x) => x.trim().toLowerCase()).filter(isCleanEnergyIpKey))];
+      cleanEnergyDesignSanitized = sanitizeCleanEnergyDesignSnapshot(body.designSnapshot);
       if (!phone || !email) {
         return NextResponse.json(
           { success: false, message: 'Phone and email are required' },
+          { status: 400 }
+        );
+      }
+      if (cleanEnergyIpRatings.length === 0) {
+        return NextResponse.json(
+          { success: false, message: 'Select at least one IP rating (IP 65, IP 21, IP 66, or IP 54)' },
           { status: 400 }
         );
       }
@@ -144,6 +223,10 @@ export async function POST(req: NextRequest) {
       ? JSON.stringify({
           _cleanEnergy: true,
           estimatedPrice: price != null ? Number(price) : null,
+          ipRatings: cleanEnergyIpRatings,
+          ...(cleanEnergyDesignSanitized && Object.keys(cleanEnergyDesignSanitized).length > 0
+            ? { designSnapshot: cleanEnergyDesignSanitized }
+            : {}),
         })
       : null;
 
@@ -184,18 +267,25 @@ export async function POST(req: NextRequest) {
         currentAmps: currentAmps!,
         kwh: kwh!,
         price: price != null ? price : undefined,
+        extraRows: cleanEnergyEmailExtraRows(cleanEnergyIpRatings, cleanEnergyDesignSanitized),
       }),
     });
 
     // Admin in-app notification for clean energy inbox
     if (isCleanEnergy) {
       try {
+        const ipLabels = cleanEnergyIpRatings.filter(isCleanEnergyIpKey).map((k) => CLEAN_ENERGY_IP_LABELS[k]);
+        const panels =
+          cleanEnergyDesignSanitized?.solarPanels615W != null
+            ? ` | Panels (615W): ${cleanEnergyDesignSanitized.solarPanels615W}`
+            : '';
+        const ipPart = ipLabels.length ? ` | IP: ${ipLabels.join(', ')}` : '';
         const db = prisma as unknown as { notification?: { create: (args: { data: { type: string; title: string; message: string; ticketId: string; forAdmin: boolean } }) => Promise<unknown> } };
         await db.notification?.create({
           data: {
             type: 'new_clean_energy_request',
             title: 'New clean energy request',
-            message: `Clean Energy request ${request.id.slice(-8)} received${price != null ? ` | Budget: $${Number(price).toLocaleString()}` : ''}`,
+            message: `Clean Energy ${request.id.slice(-8)}${ipPart}${panels}${price != null ? ` | Budget: $${Number(price).toLocaleString()}` : ''}`,
             ticketId: request.id,
             forAdmin: true,
           },

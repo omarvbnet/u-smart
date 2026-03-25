@@ -439,7 +439,14 @@
       "phoneLabel": "Phone",
       "emailLabel": "Email",
       "invalidCurrent": "Please enter a valid current (Amps).",
-      "invalidKwh": "Please enter a valid energy capacity (kWh)."
+      "invalidKwh": "Please enter a valid energy capacity (kWh).",
+      "ipRatingsLabel": "Enclosure IP rating",
+      "ipRatingsHint": "Select one or more protection classes for your equipment.",
+      "invalidIpRatings": "Please select at least one IP rating.",
+      "ip65": "IP 65",
+      "ip21": "IP 21",
+      "ip66": "IP 66",
+      "ip54": "IP 54"
     },
     "serviceDetail": {
       "backToServices": "Back to services",

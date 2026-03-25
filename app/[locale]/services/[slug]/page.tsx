@@ -6,7 +6,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple, Zap, Ruler } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
-
+import { computeCleanEnergySnapshot, CLEAN_ENERGY_CALC_VOLTAGE, CLEAN_ENERGY_IP_KEYS } from '@/lib/clean-energy-request';
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
@@ -186,6 +186,7 @@ export default function ServiceDetailPage() {
     province: '',
   });
   const [cleanEnergyForm, setCleanEnergyForm] = useState({ phone: '', email: '', currentAmps: '', kwh: '', price: '' });
+  const [cleanEnergyIpRatings, setCleanEnergyIpRatings] = useState<string[]>([]);
   const [designForm, setDesignForm] = useState({
     runtimeHours: '8',
     usageCurrent: '10',
@@ -1745,6 +1746,11 @@ export default function ServiceDetailPage() {
                   const parsedCurrent = parseFlexibleNumber(cleanEnergyForm.currentAmps);
                   const parsedKwh = parseFlexibleNumber(cleanEnergyForm.kwh);
                   const parsedPrice = parseFlexibleNumber(cleanEnergyForm.price);
+                  if (cleanEnergyIpRatings.length === 0) {
+                    setRequestMessage({ type: 'error', text: t('cleanEnergyTechnologies.invalidIpRatings') });
+                    setRequestSubmitting(false);
+                    return;
+                  }
                   if (parsedCurrent == null || parsedCurrent <= 0) {
                     setRequestMessage({ type: 'error', text: t('cleanEnergyTechnologies.invalidCurrent') });
                     setRequestSubmitting(false);
@@ -1755,6 +1761,7 @@ export default function ServiceDetailPage() {
                     setRequestSubmitting(false);
                     return;
                   }
+                  const designSnapshot = computeCleanEnergySnapshot(designForm, pricePerWattCents);
                   try {
                     const res = await fetch('/api/visitor-requests', {
                       method: 'POST',
@@ -1766,6 +1773,8 @@ export default function ServiceDetailPage() {
                         kwh: parsedKwh,
                         price: parsedPrice ?? undefined,
                         serviceSlug: CLEAN_ENERGY_SLUG,
+                        ipRatings: cleanEnergyIpRatings,
+                        ...(designSnapshot ? { designSnapshot } : {}),
                       }),
                     });
                     let data: { success?: boolean; message?: string } = {};
@@ -1779,6 +1788,7 @@ export default function ServiceDetailPage() {
                     if (res.ok && data.success) {
                       setRequestMessage({ type: 'success', text: t('visitorRequestForm.successMessage') });
                       setCleanEnergyForm({ phone: '', email: '', currentAmps: '', kwh: '', price: '' });
+                      setCleanEnergyIpRatings([]);
                       setTimeout(() => { setRequestModalOpen(false); setRequestMessage(null); }, 2000);
                     } else {
                       const msg = typeof data.message === 'string' && data.message.trim() ? data.message : t('visitorRequestForm.errorMessage');
@@ -1814,6 +1824,33 @@ export default function ServiceDetailPage() {
                       className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:border-amber-500 outline-none"
                       required
                     />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1">{t('cleanEnergyTechnologies.ipRatingsLabel')}</label>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mb-2">{t('cleanEnergyTechnologies.ipRatingsHint')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {CLEAN_ENERGY_IP_KEYS.map((key) => {
+                      const selected = cleanEnergyIpRatings.includes(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() =>
+                            setCleanEnergyIpRatings((prev) =>
+                              prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+                            )
+                          }
+                          className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border transition-colors ${
+                            selected
+                              ? 'bg-amber-500/25 border-amber-500/60 text-amber-200'
+                              : 'bg-white/5 border-white/15 text-gray-400 hover:border-white/25'
+                          }`}
+                        >
+                          {t(`cleanEnergyTechnologies.${key}` as 'cleanEnergyTechnologies.ip65')}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">

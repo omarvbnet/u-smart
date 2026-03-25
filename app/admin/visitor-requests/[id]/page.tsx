@@ -5,8 +5,14 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeftIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
+import { CLEAN_ENERGY_IP_LABELS, isCleanEnergyIpKey } from '@/lib/clean-energy-request';
 
 type Team = { id: string; name: string; leader?: { id: string; fullName: string; phone?: string } };
+type CleanEnergyAdminMeta = {
+  ipRatings: string[];
+  designSnapshot: Record<string, unknown> | null;
+  estimatedPrice: number | null;
+};
 type VisitorRequest = {
   id: string;
   buildingType: string | null;
@@ -17,6 +23,8 @@ type VisitorRequest = {
   company: string | null;
   email: string | null;
   serviceSlug: string;
+  currentAmps?: number | null;
+  kwh?: number | null;
   siteName?: string | null;
   siteCoordinator?: string | null;
   slaHours?: number | null;
@@ -120,11 +128,30 @@ export default function VisitorRequestDetailPage() {
   type NcrResubmission = { at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] };
   type ChecklistItem = { id: string; label: string; checked: boolean; comment?: string; weight?: 'minor' | 'major' };
   const parseTicketData = (r: VisitorRequest | null) => {
-    if (!r) return { siteName: null, siteCoordinator: null, slaHours: null, displayCompany: null, designSpecifications: null, attachmentUrls: [], inspectionResult: null, inspectionComments: null, inspectionChecklist: [] as ChecklistItem[], ncrReason: null, ncrImageUrls: [] as string[], ncrResubmissions: [] as NcrResubmission[], assignedEngineerId: null, assignedEngineerName: null };
+    if (!r) {
+      return {
+        siteName: null,
+        siteCoordinator: null,
+        slaHours: null,
+        displayCompany: null,
+        designSpecifications: null,
+        attachmentUrls: [],
+        inspectionResult: null,
+        inspectionComments: null,
+        inspectionChecklist: [] as ChecklistItem[],
+        ncrReason: null,
+        ncrImageUrls: [] as string[],
+        ncrResubmissions: [] as NcrResubmission[],
+        assignedEngineerId: null,
+        assignedEngineerName: null,
+        cleanEnergyMeta: null as CleanEnergyAdminMeta | null,
+      };
+    }
     let siteName = r.siteName ?? null;
     let siteCoordinator = r.siteCoordinator ?? null;
     let slaHours = r.slaHours ?? null;
     let displayCompany = r.company ?? null;
+    let cleanEnergyMeta: CleanEnergyAdminMeta | null = null;
     let designSpecifications: string | null = null;
     let attachmentUrls: string[] = [];
     let inspectionResult: string | null = null;
@@ -138,7 +165,21 @@ export default function VisitorRequestDetailPage() {
     if (typeof r.company === 'string') {
       try {
         const parsed = JSON.parse(r.company) as Record<string, unknown>;
-        if (parsed._ticket) {
+        if (parsed._cleanEnergy === true) {
+          cleanEnergyMeta = {
+            ipRatings: Array.isArray(parsed.ipRatings)
+              ? parsed.ipRatings.filter((x): x is string => typeof x === 'string')
+              : [],
+            designSnapshot:
+              parsed.designSnapshot &&
+              typeof parsed.designSnapshot === 'object' &&
+              !Array.isArray(parsed.designSnapshot)
+                ? (parsed.designSnapshot as Record<string, unknown>)
+                : null,
+            estimatedPrice: typeof parsed.estimatedPrice === 'number' ? parsed.estimatedPrice : null,
+          };
+          displayCompany = null;
+        } else if (parsed._ticket) {
           siteName = (parsed.siteName as string) ?? siteName;
           siteCoordinator = (parsed.siteCoordinator as string) ?? siteCoordinator;
           slaHours = (parsed.slaHours as number) ?? slaHours;
@@ -162,7 +203,23 @@ export default function VisitorRequestDetailPage() {
         /* not ticket JSON */
       }
     }
-    return { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist, ncrReason, ncrImageUrls, ncrResubmissions, assignedEngineerId, assignedEngineerName };
+    return {
+      siteName,
+      siteCoordinator,
+      slaHours,
+      displayCompany,
+      designSpecifications,
+      attachmentUrls,
+      inspectionResult,
+      inspectionComments,
+      inspectionChecklist,
+      ncrReason,
+      ncrImageUrls,
+      ncrResubmissions,
+      assignedEngineerId,
+      assignedEngineerName,
+      cleanEnergyMeta,
+    };
   };
 
   const parsed = parseTicketData(request);
@@ -331,7 +388,20 @@ export default function VisitorRequestDetailPage() {
     );
   }
 
-  const { siteName, siteCoordinator, slaHours, displayCompany, designSpecifications, attachmentUrls, inspectionResult, inspectionComments, inspectionChecklist, assignedEngineerId, assignedEngineerName } = parsed;
+  const {
+    siteName,
+    siteCoordinator,
+    slaHours,
+    displayCompany,
+    designSpecifications,
+    attachmentUrls,
+    inspectionResult,
+    inspectionComments,
+    inspectionChecklist,
+    assignedEngineerId,
+    assignedEngineerName,
+    cleanEnergyMeta,
+  } = parsed;
   const effectiveStatus = (request.status ?? '').toString().toUpperCase();
   const isCompleted = effectiveStatus === 'COMPLETED';
 
@@ -456,11 +526,22 @@ export default function VisitorRequestDetailPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Link
-            href={request.serviceSlug === 'quality-control-supervision' ? '/admin/quality-requests' : '/admin/visitor-requests'}
+            href={
+              request.serviceSlug === 'quality-control-supervision'
+                ? '/admin/quality-requests'
+                : request.serviceSlug === 'clean-energy'
+                  ? '/admin/clean-energy-requests'
+                  : '/admin/visitor-requests'
+            }
             className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeftIcon className="w-5 h-5" />
-            Back to {request.serviceSlug === 'quality-control-supervision' ? 'Quality Requests' : 'Visitor Requests'}
+            Back to{' '}
+            {request.serviceSlug === 'quality-control-supervision'
+              ? 'Quality Requests'
+              : request.serviceSlug === 'clean-energy'
+                ? 'Clean Energy Inbox'
+                : 'Visitor Requests'}
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Ticket #{request.id.slice(-8)}</h1>
           {pendingCount > 0 && (
@@ -588,8 +669,91 @@ export default function VisitorRequestDetailPage() {
             <dt className="text-sm text-gray-500">Technique</dt>
             <dd className="text-sm text-gray-900">{request.technique}</dd>
           </div>
+          {request.serviceSlug === 'clean-energy' && (
+            <>
+              <div className="flex justify-between py-3">
+                <dt className="text-sm text-gray-500">Email</dt>
+                <dd className="text-sm text-gray-900">{request.email?.trim() || '—'}</dd>
+              </div>
+              <div className="flex justify-between py-3">
+                <dt className="text-sm text-gray-500">Requested current (A)</dt>
+                <dd className="text-sm text-gray-900">{request.currentAmps != null ? request.currentAmps : '—'}</dd>
+              </div>
+              <div className="flex justify-between py-3">
+                <dt className="text-sm text-gray-500">Battery / capacity (kWh)</dt>
+                <dd className="text-sm text-gray-900">{request.kwh != null ? request.kwh : '—'}</dd>
+              </div>
+              <div className="flex justify-between py-3">
+                <dt className="text-sm text-gray-500">Budget (estimate)</dt>
+                <dd className="text-sm text-gray-900">
+                  {cleanEnergyMeta?.estimatedPrice != null
+                    ? `$${Number(cleanEnergyMeta.estimatedPrice).toLocaleString()}`
+                    : '—'}
+                </dd>
+              </div>
+              <div className="flex justify-between py-3 items-start">
+                <dt className="text-sm text-gray-500 shrink-0 pr-4">IP ratings</dt>
+                <dd className="text-sm text-gray-900 text-right">
+                  {cleanEnergyMeta?.ipRatings?.length
+                    ? cleanEnergyMeta.ipRatings
+                        .filter(isCleanEnergyIpKey)
+                        .map((k) => CLEAN_ENERGY_IP_LABELS[k])
+                        .join(', ') || cleanEnergyMeta.ipRatings.join(', ')
+                    : '—'}
+                </dd>
+              </div>
+            </>
+          )}
         </dl>
       </div>
+
+      {request.serviceSlug === 'clean-energy' &&
+        cleanEnergyMeta?.designSnapshot &&
+        Object.keys(cleanEnergyMeta.designSnapshot).length > 0 && (
+        <div className="mt-6 bg-gradient-to-br from-amber-50 to-white rounded-lg border border-amber-200/80 shadow-sm overflow-hidden">
+          <div className="px-6 py-3 border-b border-amber-200/80 bg-amber-100/40">
+            <h2 className="text-lg font-semibold text-amber-950">Calculator snapshot (615W panels)</h2>
+            <p className="text-xs text-amber-900/80 mt-0.5">Values from the visitor&apos;s design calculator when submitted.</p>
+          </div>
+          <div className="p-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+            {(
+              [
+                ['solarPanels615W', 'Solar panels (qty, 615W)'],
+                ['totalSolarKw', 'Total solar (kW)'],
+                ['chargeTimeHours', 'Charge time (h)'],
+                ['runtimeHours', 'Runtime (h)'],
+                ['usageCurrentA', 'Usage current (A)'],
+                ['batteryKwh', 'Battery needed (kWh)'],
+                ['batterySafeKwh', 'Battery safe (kWh)'],
+                ['energyConsumedKwh', 'Energy consumed (kWh)'],
+                ['minInverterW', 'Min inverter (W)'],
+                ['inverterSafeW', 'Recommended inverter (W)'],
+                ['inverterPowerW', 'Inverter entered (W)'],
+                ['maxCurrentA', 'Max current (A)'],
+                ['safeCurrentA', 'Safe current (A)'],
+                ['efficiency', 'Efficiency'],
+                ['safetyFactor', 'Safety margin'],
+                ['estimatedPriceUsd', 'Est. price from calc ($)'],
+              ] as const
+            ).map(([key, label]) => {
+              const raw = cleanEnergyMeta!.designSnapshot![key];
+              if (raw === undefined || raw === null) return null;
+              const text =
+                typeof raw === 'number'
+                  ? Number.isInteger(raw)
+                    ? String(raw)
+                    : raw.toFixed(2)
+                  : String(raw);
+              return (
+                <div key={key} className="rounded-lg bg-white/80 border border-amber-100 px-3 py-2">
+                  <p className="text-xs text-gray-500">{label}</p>
+                  <p className="font-medium text-gray-900">{text}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Admin resubmit for edit: send back to requester when there is an error (ticket types, not completed) */}
       {(request.serviceSlug === 'enterprise-networking' || request.serviceSlug === 'quality-control-supervision') && !isCompleted && (
