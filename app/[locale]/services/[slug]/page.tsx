@@ -66,7 +66,7 @@ function parseFlexibleNumber(val: unknown): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
-const ANDROID_APP_URL = process.env.NEXT_PUBLIC_QC_APP_ANDROID_URL || '/app/usmart_qc.apk';
+const ANDROID_APP_URL = '/api/app/android-download';
 // iOS OTA install: itms-services link points to our manifest, which references the IPA. Override with NEXT_PUBLIC_QC_APP_IOS_URL for custom install link.
 function getIosInstallLink(): string {
   const custom = process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
