@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
 
     const [statistics, featuredProjects, services, clients, careers] = await Promise.all([
       prisma.statistic.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          key: { not: 'clean_energy_price_per_watt' },
+        },
         orderBy: { order: 'asc' },
         take: 4,
       }),
