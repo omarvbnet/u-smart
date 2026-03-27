@@ -25,6 +25,8 @@ export async function GET() {
     return NextResponse.redirect(configured, { status: 302 });
   }
 
+  const githubFallback = (process.env.QC_APP_ANDROID_GITHUB_RAW_URL || '').trim();
+
   const publicAppDir = path.join(process.cwd(), 'public', 'app');
   for (const fileName of CANDIDATE_APK_NAMES) {
     try {
@@ -35,11 +37,15 @@ export async function GET() {
     }
   }
 
+  if (githubFallback) {
+    return NextResponse.redirect(githubFallback, { status: 302 });
+  }
+
   return NextResponse.json(
     {
       success: false,
       message:
-        'Android app package not found. Upload an APK to public/app or set QC_APP_ANDROID_URL.',
+        'Android app package not found. Upload an APK to public/app or set QC_APP_ANDROID_URL (or QC_APP_ANDROID_GITHUB_RAW_URL).',
     },
     { status: 404 }
   );
