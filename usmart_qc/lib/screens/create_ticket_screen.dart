@@ -8,8 +8,8 @@ import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import 'attachment_viewer_screen.dart';
 
-const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_hse', 'tech_investigation', 'tech_tracking'];
-const _qcTechniqueIds = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'];
+const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_building', 'tech_hse', 'tech_investigation', 'tech_tracking'];
+const _qcTechniqueIds = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'];
 
 class CreateTicketScreen extends StatefulWidget {
   const CreateTicketScreen({super.key});

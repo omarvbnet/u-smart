@@ -233,7 +233,7 @@ export default function TicketDetailPage() {
   };
 
   const ENTERPRISE_TECH_KEYS = ['maintenance', 'fiber', 'cable_systemization', 'closures', 'splice', 'qgis', 'asbuilt_design'] as const;
-  const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'] as const;
+  const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'] as const;
 
   const getTechniqueLabel = (tech: string) => {
     if (ENTERPRISE_TECH_KEYS.includes(tech as typeof ENTERPRISE_TECH_KEYS[number])) {

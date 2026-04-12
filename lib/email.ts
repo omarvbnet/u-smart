@@ -182,6 +182,7 @@ export async function sendTicketCompletedEmail(
     asbuilt_design: 'التصميم والتنفيذ الفعلي',
     inspection: 'الفحص',
     supervision: 'الإشراف',
+    building: 'البناء',
     hse: 'الصحة والسلامة والبيئة',
     investigation: 'التحقيق',
     tracking: 'التتبع',

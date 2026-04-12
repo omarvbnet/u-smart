@@ -385,7 +385,7 @@
       "techniquesLabel": "Teknikler / özellikler seçin",
       "techniquesRequired": "Lütfen en az bir teknik veya özellik seçin.",
       "enterpriseTechniques": { "fiber": "Fiber Optik", "cable_systemization": "Kablo Sistematizasyonu", "closures": "Kapanışlar ve Muhafazalar", "splice": "Kaynak", "qgis": "QGIS ve CBS", "asbuilt_design": "As-Built ve Tasarım", "maintenance": "Bakım" },
-      "qualityControlTechniques": { "inspection": "Denetim", "supervision": "Gözetim", "hse": "İSG", "investigation": "İnceleme", "tracking": "İzleme" },
+      "qualityControlTechniques": { "inspection": "Denetim", "supervision": "Gözetim", "building": "Bina / İnşaat", "hse": "İSG", "investigation": "İnceleme", "tracking": "İzleme" },
       "ctaDescriptionEnterprise": "İhtiyaç duyduğunuz teknikleri seçin ve gereksinimlerinizi bildirin. Ağlarınızı SLA destekli teslimatla tasarlayıp sürdüreceğiz."
     },
     "companyRequest": {
@@ -580,6 +580,7 @@
       "intro": "Projelerinizin en yüksek standartları karşılamasını sağlamak için kapsamlı kalite güvence, denetim ve gözetim hizmetleri sunuyoruz.",
       "inspection": { "name": "Denetim", "description": "Şartname, standart ve en iyi uygulamalara uyumu doğrulamak için kapsamlı saha ve sahada denetimler. Bulguları detaylı raporlar ve fotoğraf kanıtlarıyla belgeliyoruz.", "highlights": ["Detaylı uyum raporları", "Fotoğraf belgeleri", "Tam izlenebilirlik", "Standart doğrulama"] },
       "supervision": { "name": "Gözetim", "description": "Sahada nitelikli mühendislerle profesyonel proje gözetimi. Teslim edilebilirlerin gereksinimlerinizi ve zaman çizelgenizi karşılamasını sağlamak için yürütme kalitesi, ilerleme ve yüklenici performansını denetliyoruz.", "highlights": ["Sahada mühendisler", "İlerleme izleme", "Yüklenici denetimi", "Zaman çizelgesi uyumu"] },
+      "building": { "name": "Bina / İnşaat", "description": "Yapı ve inşaat kalite gözetimi—taşıyıcı ve tesisat koordinasyonundan ince işlere ve geçiş kontrollerine kadar. İşçiliği projelere ve mevzuata göre doğrular, kusurları belgeleriz; güvenli ve uyumlu teslimi destekleriz.", "highlights": ["Taşıyıcı ve tesisat koordinasyonu", "Proje ve mevzuat uyumu", "Kusur dokümantasyonu", "Geçiş hazırlığı"] },
       "hse": { "name": "İSG (İş Sağlığı ve Güvenliği)", "description": "İşçileri ve çevreyi korumak için Sağlık, Güvenlik ve Çevre yönetimi. Risk değerlendirmeleri, güvenlik denetimleri, çevresel uyum kontrolleri ve düzeltici eylem planlarıyla olay soruşturması.", "highlights": ["Risk değerlendirmeleri", "Güvenlik denetimleri", "Çevresel uyum", "Olay soruşturması"] },
       "investigation": { "name": "Soruşturma", "description": "Kusurlar, arızalar veya uyumsuzlukların kök neden analizi ve teknik soruşturması. Tekrarlamayı önlemek için net bulgular, öneriler ve düzeltici planlar sunuyoruz.", "highlights": ["Kök neden analizi", "Teknik bulgular", "Düzeltici planlar", "Tekrarlamayı önleme"] },
       "tracking": { "name": "İzleme", "description": "Kalite metrikleri, denetim durumu ve uyumluluğun gerçek zamanlı izlenmesi ve raporlanması. Panolar ve periyodik raporlar, proje kalite performansından her aşamada haberdar olmanızı sağlar.", "highlights": ["Gerçek zamanlı panolar", "Periyodik raporlar", "Uyumluluk durumu", "Kalite metrikleri"] },

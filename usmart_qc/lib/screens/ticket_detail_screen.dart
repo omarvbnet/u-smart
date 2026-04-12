@@ -2831,6 +2831,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (lower == 'ftth') return 'maint_ftth';
     if (upper.contains('INSPECTION')) return 'tech_inspection';
     if (upper.contains('SUPERVISION')) return 'tech_supervision';
+    if (upper.contains('BUILDING')) return 'tech_building';
     if (upper.contains('HSE')) return 'tech_hse';
     if (upper.contains('INVESTIGATION')) return 'tech_investigation';
     if (upper.contains('TRACKING')) return 'tech_tracking';

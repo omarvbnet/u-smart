@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ClipboardList, LogOut, Loader2, Bell, UserCog, PlusCircle, X, Clock, CheckCircle, BarChart3, Building2, MapPin, Activity, Map, Edit2, Trash2, Filter, ShieldCheck, FileText, Paperclip, TrendingUp, TrendingDown, Minus, Download, Upload } from 'lucide-react';
 
-const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'] as const;
+const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'] as const;
 
 type Ticket = {
   id: string;

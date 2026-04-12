@@ -45,7 +45,7 @@ const defaultPalette = {
 export const BROCHURE_SERVICE_CONFIG: Record<string, BrochureServiceConfig> = {
   'quality-control-supervision': {
     indexKey: 'qualityControlTechnologies',
-    featureKeys: ['inspection', 'supervision', 'hse', 'investigation', 'tracking'],
+    featureKeys: ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'],
     aboutTitleKey: 'qualityTitle',
     aboutDescKey: 'qualityDescription',
     accent: '#b45309',

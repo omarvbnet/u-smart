@@ -12,7 +12,7 @@ import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTic
 const prisma = _prisma as any;
 
 const ENTERPRISE_TECHNIQUES = ['maintenance', 'fiber', 'cable_systemization', 'closures', 'splice', 'qgis', 'asbuilt_design'];
-const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'];
+const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'];
 // Maintenance ticket types (technician only): stored as technique
 const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES, ...MAINTENANCE_TECHNIQUES];

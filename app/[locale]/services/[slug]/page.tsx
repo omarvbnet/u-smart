@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple, Zap, Ruler } from 'lucide-react';
+import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple, Zap, Ruler, Building2 } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 import { computeCleanEnergySnapshot, CLEAN_ENERGY_CALC_VOLTAGE, CLEAN_ENERGY_IP_KEYS } from '@/lib/clean-energy-request';
 import { isValidEmailFormat, normalizeEmailInput } from '@/lib/email-input';
@@ -39,10 +39,11 @@ const ENTERPRISE_NETWORKING_ICONS: Record<string, typeof Cable> = {
   maintenance: Wrench,
 };
 
-const QUALITY_CONTROL_KEYS = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'] as const;
+const QUALITY_CONTROL_KEYS = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'] as const;
 const QUALITY_CONTROL_ICONS: Record<string, typeof ClipboardCheck> = {
   inspection: ClipboardCheck,
   supervision: Eye,
+  building: Building2,
   hse: ShieldCheck,
   investigation: FileSearch,
   tracking: Activity,
@@ -241,6 +242,20 @@ export default function ServiceDetailPage() {
       .then((r) => r.json())
       .then((data) => setRequesterLoggedIn(Boolean(data.success && data.user)))
       .catch(() => setRequesterLoggedIn(false));
+  }, [slug]);
+
+  useEffect(() => {
+    if (slug === QUALITY_CONTROL_SLUG) {
+      setEnterpriseForm((f) => ({
+        ...f,
+        technique: (QUALITY_CONTROL_KEYS as readonly string[]).includes(f.technique) ? f.technique : 'inspection',
+      }));
+    } else if (slug === ENTERPRISE_NETWORKING_SLUG) {
+      setEnterpriseForm((f) => ({
+        ...f,
+        technique: (ENTERPRISE_NETWORKING_TECH_KEYS as readonly string[]).includes(f.technique) ? f.technique : 'maintenance',
+      }));
+    }
   }, [slug]);
 
   const dashboardHref = showQualityControlTechnologies ? '/dashboard/quality-control' : '/dashboard';
@@ -1494,7 +1509,7 @@ export default function ServiceDetailPage() {
                         siteName: '',
                         siteCoordinator: '',
                         slaHours: 24,
-                        technique: 'maintenance',
+                        technique: showQualityControlTechnologies ? 'inspection' : 'maintenance',
                         name: '',
                         company: '',
                         phone: '',
@@ -1557,9 +1572,11 @@ export default function ServiceDetailPage() {
                       className="w-full px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl text-sm sm:text-base text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 outline-none transition-all"
                       required
                     >
-                      {ENTERPRISE_NETWORKING_TECH_KEYS.map((key) => (
+                      {(showQualityControlTechnologies ? QUALITY_CONTROL_KEYS : ENTERPRISE_NETWORKING_TECH_KEYS).map((key) => (
                         <option key={key} value={key} className="bg-[#0f1419] text-white">
-                          {t(`visitorRequestForm.enterpriseTechniques.${key}`)}
+                          {showQualityControlTechnologies
+                            ? t(`visitorRequestForm.qualityControlTechniques.${key}`)
+                            : t(`visitorRequestForm.enterpriseTechniques.${key}`)}
                         </option>
                       ))}
                     </select>

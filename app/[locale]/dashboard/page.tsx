@@ -9,7 +9,7 @@ import { ClipboardList, LogOut, Loader2, Bell, UserCog, PlusCircle, X, Clock, Ch
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 const ENTERPRISE_TECH_KEYS = ['maintenance', 'fiber', 'cable_systemization', 'closures', 'splice', 'qgis', 'asbuilt_design'] as const;
-const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'hse', 'investigation', 'tracking'] as const;
+const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'] as const;
 const ALL_TECH_KEYS = [...ENTERPRISE_TECH_KEYS, ...QUALITY_CONTROL_TECH_KEYS] as const;
 
 function TicketCard({

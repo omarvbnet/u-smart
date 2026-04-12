@@ -336,6 +336,11 @@
         "description": "Professional project supervision with qualified engineers on-site. We oversee execution quality, progress, and contractor performance to ensure deliverables meet your requirements and timeline.",
         "highlights": ["On-site engineers", "Progress monitoring", "Contractor oversight", "Timeline adherence"]
       },
+      "building": {
+        "name": "Building",
+        "description": "Construction and building quality oversight—from structure and MEP coordination to finishes and handover. We verify workmanship against drawings and codes, document defects, and support safe, compliant delivery.",
+        "highlights": ["Structure & MEP coordination", "Drawing and code compliance", "Defect documentation", "Handover readiness"]
+      },
       "hse": {
         "name": "HSE (Health, Safety & Environment)",
         "description": "Health, Safety and Environmental management to protect workers and the environment. Risk assessments, safety audits, environmental compliance checks, and incident investigation with corrective action plans.",
@@ -488,7 +493,7 @@
       "techniquesLabel": "Select techniques / features",
       "techniquesRequired": "Please select at least one technique or feature.",
       "enterpriseTechniques": { "fiber": "Fiber Optics", "cable_systemization": "Cable Systemization", "closures": "Closures & Enclosures", "splice": "Fusion Splice", "qgis": "QGIS & GIS", "asbuilt_design": "As-Built & Design", "maintenance": "Maintenance" },
-      "qualityControlTechniques": { "inspection": "Inspection", "supervision": "Supervision", "hse": "HSE", "investigation": "Investigation", "tracking": "Tracking" },
+      "qualityControlTechniques": { "inspection": "Inspection", "supervision": "Supervision", "building": "Building", "hse": "HSE", "investigation": "Investigation", "tracking": "Tracking" },
       "ctaDescriptionEnterprise": "Select your needed techniques and tell us your requirements. We'll design and maintain your networks with SLA-backed delivery."
     },
     "companyRequest": {
