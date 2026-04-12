@@ -7,6 +7,7 @@ import { Link } from '@/i18n/routing';
 import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code, Smartphone, Terminal, Database, Server, Layers, Cable, LayoutGrid, Package, GitMerge, Map, FileCheck, Wrench, LayoutDashboard, ClipboardCheck, Eye, ShieldCheck, FileSearch, Activity, Loader2, Apple, Zap, Ruler } from 'lucide-react';
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 import { computeCleanEnergySnapshot, CLEAN_ENERGY_CALC_VOLTAGE, CLEAN_ENERGY_IP_KEYS } from '@/lib/clean-energy-request';
+import { isValidEmailFormat, normalizeEmailInput } from '@/lib/email-input';
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
@@ -1120,7 +1121,9 @@ export default function ServiceDetailPage() {
                   )}
                   <div className="flex gap-2">
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
+                      autoComplete="email"
                       value={otpEmail}
                       onChange={(e) => setOtpEmail(e.target.value)}
                       placeholder={t('companyRequest.pocEmailPlaceholder')}
@@ -1128,18 +1131,20 @@ export default function ServiceDetailPage() {
                     />
                     <button
                       type="button"
-                      disabled={emailOtpSending || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otpEmail.trim())}
+                      disabled={emailOtpSending || !isValidEmailFormat(otpEmail)}
                       onClick={async () => {
                         setRequestMessage(null);
                         setEmailOtpSending(true);
                         try {
+                          const normalized = normalizeEmailInput(otpEmail).toLowerCase();
                           const res = await fetch('/api/otp/email/send', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email: otpEmail.trim().toLowerCase() }),
+                            body: JSON.stringify({ email: normalized }),
                           });
                           const data = await res.json();
                           if (res.ok && data.success) {
+                            setOtpEmail(normalized);
                             setOtpStep('code');
                             setRequestMessage({ type: 'success', text: t('companyRequest.emailCodeSent') });
                           } else {
@@ -1177,19 +1182,20 @@ export default function ServiceDetailPage() {
                     />
                     <button
                       type="button"
-                      disabled={emailOtpVerifying || otpCode.length < 4}
+                      disabled={emailOtpVerifying || otpCode.replace(/\D/g, '').length < 6}
                       onClick={async () => {
                         setRequestMessage(null);
                         setEmailOtpVerifying(true);
                         try {
+                          const normalized = normalizeEmailInput(otpEmail).toLowerCase();
                           const res = await fetch('/api/otp/email/verify', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email: otpEmail.trim().toLowerCase(), code: otpCode }),
+                            body: JSON.stringify({ email: normalized, code: otpCode }),
                           });
                           const data = await res.json();
                           if (res.ok && data.success) {
-                            setCreateDashboardForm((f) => ({ ...f, pocEmail: otpEmail.trim().toLowerCase() }));
+                            setCreateDashboardForm((f) => ({ ...f, pocEmail: normalized }));
                             setOtpStep('form');
                             setRequestMessage(null);
                           } else {

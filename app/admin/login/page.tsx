@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { normalizeEmailInput, isValidEmailFormat } from '@/lib/email-input';
 
 type Step = 'login' | 'forgot-request' | 'forgot-verify';
 
@@ -33,12 +34,13 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const emailNorm = normalizeEmailInput(email).toLowerCase();
     setLoading(true);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: emailNorm, password }),
       });
       const data = await res.json();
       if (data.success) {
@@ -57,15 +59,21 @@ export default function AdminLoginPage() {
   const handleForgotRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const emailNorm = normalizeEmailInput(email).toLowerCase();
+    if (!isValidEmailFormat(emailNorm)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: emailNorm }),
       });
       const data = await res.json();
       if (data.success) {
+        setEmail(emailNorm);
         setStep('forgot-verify');
       } else {
         setError(data.message || 'Failed to send code');
@@ -80,12 +88,13 @@ export default function AdminLoginPage() {
   const handleForgotVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const emailNorm = normalizeEmailInput(email).toLowerCase();
     setLoading(true);
     try {
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code, newPassword }),
+        body: JSON.stringify({ email: emailNorm, code, newPassword }),
       });
       const data = await res.json();
       if (data.success) {
@@ -265,7 +274,7 @@ export default function AdminLoginPage() {
               </div>
               <button
                 type="submit"
-                disabled={loading || code.length < 4 || newPassword.length < 6}
+                disabled={loading || code.replace(/\D/g, '').length < 6 || newPassword.length < 6}
                 className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {loading ? 'Resetting...' : 'Reset password'}

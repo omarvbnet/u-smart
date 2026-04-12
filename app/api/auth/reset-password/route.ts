@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { checkEmailOtp } from '@/lib/email-otp-store';
+import { normalizeEmailInput } from '@/lib/email-input';
 
 /** Admin reset password: verify OTP and set new password. */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const email = typeof body.email === 'string' ? normalizeEmailInput(body.email).toLowerCase() : '';
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
 

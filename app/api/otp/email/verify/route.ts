@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setEmailVerifiedCookie } from '@/lib/otp-auth';
 import { checkEmailOtp } from '@/lib/email-otp-store';
+import { normalizeEmailInput } from '@/lib/email-input';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const email = typeof body.email === 'string' ? normalizeEmailInput(body.email).toLowerCase() : '';
     const codeRaw = body.code != null ? String(body.code).trim() : '';
     const digits = codeRaw.replace(/\D/g, '');
     const code = digits.length >= 6 ? digits.slice(-6) : digits.padStart(6, '0');

@@ -1,3 +1,5 @@
+import { normalizeEmailInput } from '@/lib/email-input';
+
 /**
  * In-memory email OTP store for development when DB is unavailable.
  * Uses globalThis so the same store is shared across all API route invocations.
@@ -18,7 +20,7 @@ function getStore(): Map<string, { code: string; expiresAt: number }> {
 }
 
 function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+  return normalizeEmailInput(email).toLowerCase();
 }
 
 export function setEmailOtp(email: string, code: string): void {

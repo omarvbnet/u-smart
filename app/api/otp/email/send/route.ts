@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setEmailOtp } from '@/lib/email-otp-store';
 import { sendOtpEmail } from '@/lib/email';
+import { isValidEmailFormat, normalizeEmailInput } from '@/lib/email-input';
 
 const OTP_EXPIRY_MINUTES = 10;
 const CODE_LENGTH = 6;
@@ -15,16 +16,12 @@ function generateCode(): string {
   return code;
 }
 
-function isValidEmail(email: string): boolean {
-  const e = email.trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 254;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (!email || !isValidEmail(email)) {
+    const email =
+      typeof body.email === 'string' ? normalizeEmailInput(body.email).toLowerCase() : '';
+    if (!email || !isValidEmailFormat(email)) {
       return NextResponse.json(
         { success: false, message: 'Valid email address is required' },
         { status: 400 }

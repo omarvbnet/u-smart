@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { X, Building2, UserCog, User, Wrench, Upload, Loader2 } from 'lucide-react';
+import { normalizeEmailInput } from '@/lib/email-input';
 
 export default function RequesterLoginPage() {
   const router = useRouter();
@@ -245,7 +246,7 @@ export default function RequesterLoginPage() {
                       body: JSON.stringify({
                         legalName: regForm.legalName.trim(),
                         phone: regForm.phone.trim(),
-                        email: regForm.email.trim(),
+                        email: normalizeEmailInput(regForm.email).toLowerCase(),
                         province: regForm.province.trim(),
                         evidenceUrl: regEvidenceUrl,
                         role: regRole,
@@ -299,9 +300,12 @@ export default function RequesterLoginPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.email') || 'Email'}</label>
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
+                    autoComplete="email"
                     value={regForm.email}
                     onChange={(e) => setRegForm((f) => ({ ...f, email: e.target.value }))}
+                    onBlur={(e) => setRegForm((f) => ({ ...f, email: normalizeEmailInput(e.target.value) }))}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
                     placeholder="email@example.com"
                     required

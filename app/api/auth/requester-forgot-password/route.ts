@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setEmailOtp } from '@/lib/email-otp-store';
 import { sendForgotPasswordOtp } from '@/lib/email';
+import { normalizeEmailInput } from '@/lib/email-input';
 
 const OTP_EXPIRY_MINUTES = 10;
 const CODE_LENGTH = 6;
@@ -19,7 +20,8 @@ function generateCode(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const usernameOrEmail = typeof body.usernameOrEmail === 'string' ? body.usernameOrEmail.trim() : '';
+    const usernameOrEmailRaw = typeof body.usernameOrEmail === 'string' ? body.usernameOrEmail : '';
+    const usernameOrEmail = usernameOrEmailRaw.trim();
     if (!usernameOrEmail) {
       return NextResponse.json(
         { success: false, message: 'Username or email is required' },
@@ -28,9 +30,10 @@ export async function POST(req: NextRequest) {
     }
 
     const isEmail = usernameOrEmail.includes('@');
+    const emailLookup = isEmail ? normalizeEmailInput(usernameOrEmail).toLowerCase() : '';
     const requester = await prisma.ticketRequester.findFirst({
       where: isEmail
-        ? { email: usernameOrEmail.toLowerCase() }
+        ? { email: emailLookup }
         : { username: usernameOrEmail },
     });
 
