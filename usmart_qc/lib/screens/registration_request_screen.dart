@@ -288,6 +288,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           hint: 'email@example.com',
           icon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 20),
         SizedBox(
@@ -339,12 +340,13 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           hint: '000000',
           icon: Icons.pin_outlined,
           keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _otpVerifying || _otpCode.text.replaceAll(RegExp(r'\D'), '').length < 4
+            onPressed: _otpVerifying || _otpCode.text.replaceAll(RegExp(r'\D'), '').length != 6
                 ? null
                 : () async {
                     setState(() => _otpVerifying = true);
@@ -693,6 +695,7 @@ class _TextField extends StatelessWidget {
   final String hint;
   final IconData icon;
   final TextInputType keyboardType;
+  final ValueChanged<String>? onChanged;
 
   const _TextField({
     required this.controller,
@@ -700,6 +703,7 @@ class _TextField extends StatelessWidget {
     required this.hint,
     required this.icon,
     this.keyboardType = TextInputType.text,
+    this.onChanged,
   });
 
   @override
@@ -715,6 +719,7 @@ class _TextField extends StatelessWidget {
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          onChanged: onChanged,
           style: const TextStyle(color: Colors.white, fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
