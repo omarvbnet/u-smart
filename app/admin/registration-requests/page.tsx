@@ -19,7 +19,8 @@ export default function AdminRegistrationRequestsPage() {
   const [list, setList] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [approveResult, setApproveResult] = useState<{ id: string; username: string; password: string } | null>(null);
+  const [approveResult, setApproveResult] = useState<{ id: string; username: string; password: string | null } | null>(null);
+  const [actionError, setActionError] = useState<string>('');
 
   const load = async () => {
     setLoading(true);
@@ -37,6 +38,7 @@ export default function AdminRegistrationRequestsPage() {
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setActionId(id);
     setApproveResult(null);
+    setActionError('');
     try {
       const res = await fetch(`/api/admin/registration-requests/${id}`, {
         method: 'PATCH',
@@ -49,9 +51,12 @@ export default function AdminRegistrationRequestsPage() {
         if (action === 'approve' && data.credentials) {
           setApproveResult({ id, ...data.credentials });
         }
+      } else {
+        setActionError(data.message || 'Failed to process request.');
       }
     } catch (e) {
       console.error(e);
+      setActionError('Network error while processing request.');
     } finally {
       setActionId(null);
     }
@@ -97,7 +102,9 @@ export default function AdminRegistrationRequestsPage() {
         <div className="mb-4 p-4 rounded-lg border border-emerald-200 bg-emerald-50">
           <p className="text-sm font-medium text-emerald-800 mb-2">Credentials for new dashboard (share with user):</p>
           <p className="text-sm text-emerald-900 font-mono">Username: {approveResult.username}</p>
-          <p className="text-sm text-emerald-900 font-mono">Password: {approveResult.password}</p>
+          <p className="text-sm text-emerald-900 font-mono">
+            Password: {approveResult.password || 'Unchanged (existing account upgraded)'}
+          </p>
           <button
             type="button"
             onClick={() => setApproveResult(null)}
@@ -105,6 +112,11 @@ export default function AdminRegistrationRequestsPage() {
           >
             Dismiss
           </button>
+        </div>
+      )}
+      {actionError && (
+        <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+          {actionError}
         </div>
       )}
 

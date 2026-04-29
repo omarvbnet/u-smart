@@ -70,8 +70,10 @@ function parseFlexibleNumber(val: unknown): number | undefined {
 
 const ANDROID_APP_URL = '/api/app/android-download';
 // iOS OTA install: itms-services link points to our manifest, which references the IPA. Override with NEXT_PUBLIC_QC_APP_IOS_URL for custom install link.
-function getIosInstallLink(): string {
-  const custom = process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
+function getIosInstallLink(service: 'quality' | 'enterprise' = 'quality'): string {
+  const custom = service === 'enterprise'
+    ? (process.env.NEXT_PUBLIC_ENTERPRISE_APP_IOS_URL || process.env.NEXT_PUBLIC_QC_APP_IOS_URL)
+    : process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
   if (custom) return custom;
   let siteUrl = '';
   if (typeof window !== 'undefined') {
@@ -88,14 +90,14 @@ function getIosInstallLink(): string {
 
 function QcAppDownloadSection({ t }: { t: (key: string) => string }) {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
-  const [iosLink, setIosLink] = useState<string>(() => getIosInstallLink());
+  const [iosLink, setIosLink] = useState<string>(() => getIosInstallLink('quality'));
   useEffect(() => {
     if (typeof navigator === 'undefined') return;
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setPlatform('ios');
     else if (/Android/.test(ua)) setPlatform('android');
     else setPlatform('desktop');
-    setIosLink(getIosInstallLink());
+    setIosLink(getIosInstallLink('quality'));
   }, []);
   const showAndroid = platform === 'android' || platform === 'desktop';
   const showIOS = platform === 'ios' || platform === 'desktop';
@@ -125,6 +127,35 @@ function QcAppDownloadSection({ t }: { t: (key: string) => string }) {
             {t('qualityControlTechnologies.downloadIOS')}
           </a>
         )}
+      </div>
+    </div>
+  );
+}
+
+function EnterpriseIosDownloadSection({ t }: { t: (key: string) => string }) {
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [iosLink, setIosLink] = useState<string>(() => getIosInstallLink('enterprise'));
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) setPlatform('ios');
+    else if (/Android/.test(ua)) setPlatform('android');
+    else setPlatform('desktop');
+    setIosLink(getIosInstallLink('enterprise'));
+  }, []);
+  const showIOS = platform === 'ios' || platform === 'desktop';
+  if (!showIOS) return null;
+  return (
+    <div className="mt-8 pt-8 border-t border-cyan-500/20">
+      <p className="text-sm text-gray-400 mb-4">{t('enterpriseNetworkingTechnologies.appDownloadDescription')}</p>
+      <div className="flex items-center justify-center">
+        <a
+          href={iosLink || '#'}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-800/80 hover:bg-gray-700 text-white font-medium rounded-xl border border-white/20 transition-colors"
+        >
+          <Apple className="w-5 h-5" />
+          {t('enterpriseNetworkingTechnologies.downloadIOS')}
+        </a>
       </div>
     </div>
   );
@@ -432,6 +463,9 @@ export default function ServiceDetailPage() {
                   </div>
                 );
               })}
+            </div>
+            <div className="mt-8 rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-transparent p-8 text-center">
+              <EnterpriseIosDownloadSection t={t} />
             </div>
           </section>
         )}

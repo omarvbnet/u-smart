@@ -694,6 +694,8 @@
     "enterpriseNetworkingTechnologies": {
       "title": "Teklif Ettiğimiz Teknikler ve Özellikler",
       "intro": "Ekibimizin 12 yıldan fazla deneyimi ve FOA (Fiber Optik Derneği) özel sertifikaları bulunmaktadır. Ağlarınızı tasarlar ve bakımını yaparız; ekibimizin performansını izleyen özel bir sistemle. İhtiyacınıza uyan SLA'yı seçin ve şeffaf teslimattan yararlanın. Aşağıda sunduğumuz teknikler ve özellikler yer alıyor.",
+      "appDownloadDescription": "Telekomünikasyon ve kurumsal ağ saha operasyonları için iOS uygulamasını yükleyin.",
+      "downloadIOS": "iOS'ta Yükle",
       "fiber": { "name": "Fiber Optik", "description": "Ultra hızlı veri iletimi için yüksek kapasiteli fiber optik kablolama. Kurumsal ve veri merkezleri için fiber ağları tasarlıyor, kuruyor ve bakımını yapıyoruz; minimum sinyal kaybı ve maksimum güvenilirlikle." },
       "cable_systemization": { "name": "Kablo Sistematizasyonu", "description": "Profesyonel kablo yönetimi ve düzeni. Kolay bakım ve gelecekte ölçeklenebilirlik için etiketleme, yönlendirme ve dokümantasyonlu yapılandırılmış kablo sistemleri." },
       "closures": { "name": "Kapanışlar ve Muhafazalar", "description": "Fiber bağlantılarını korumak için kaynak ve dağıtım kapanışları. Uygun sızdırmazlıkla dış ve iç montaj için hava koşullarına dayanıklı muhafazalar." },

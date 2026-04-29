@@ -421,6 +421,8 @@
     "enterpriseNetworkingTechnologies": {
       "title": "Techniques & Features We Offer",
       "intro": "Our team has more than 12 years of experience and holds special certifications from FOA (Fiber Optic Association). We design and maintain your networks with a dedicated system for tracking and monitoring our team's performance. Choose the SLA that fits your needs and benefit from transparent delivery. Below are the techniques and features we offer.",
+      "appDownloadDescription": "Install the iOS app for telecommunication and enterprise networking field operations.",
+      "downloadIOS": "Install on iOS",
       "fiber": {
         "name": "Fiber Optics",
         "description": "High-capacity fiber optic cabling for ultra-fast data transmission. We design, install, and maintain fiber networks for enterprise and data centers with minimal signal loss and maximum reliability. Our FOA-certified team delivers end-to-end solutions from planning and route survey to fusion splicing, testing, and documentation—ensuring your infrastructure meets industry standards for years to come."

@@ -7,6 +7,18 @@ import crypto from 'crypto';
 import { sendCompanyAccountApprovedEmail } from '@/lib/email';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+function phonesMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const withZero = a.startsWith('964') ? '0' + a.slice(3) : a;
+  const with964 = a.startsWith('0') ? '964' + a.slice(1) : a;
+  return b === withZero || b === with964;
+}
+
 function generateUsername(role: string): string {
   const prefixes: Record<string, string> = {
     ENGINEER: 'eng',
@@ -66,6 +78,58 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
+      const normalizedEmail = rr.email.trim().toLowerCase();
+      const normalizedPhone = normalizePhone(rr.phone);
+      const existingRequesters = await prisma.ticketRequester.findMany({
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          email: true,
+          phone: true,
+          serviceSlug: true,
+        },
+      });
+      const existingRequester = existingRequesters.find((requester) => {
+        const emailMatches = Boolean(
+          requester.email && requester.email.trim().toLowerCase() === normalizedEmail
+        );
+        const phoneMatches = phonesMatch(normalizedPhone, normalizePhone(requester.phone));
+        return emailMatches || phoneMatches;
+      });
+
+      // Allow upgrading Personal account to Company account instead of failing with 400.
+      if (existingRequester && existingRequester.role === 'PERSONAL' && rr.role === 'COMPANY') {
+        const upgradeServiceSlug = 'enterprise-networking';
+        await prisma.ticketRequester.update({
+          where: { id: existingRequester.id },
+          data: {
+            role: 'COMPANY',
+            name: rr.legalName,
+            email: rr.email,
+            phone: rr.phone,
+            companyCertificationUrl: rr.evidenceUrl,
+            serviceSlug: upgradeServiceSlug,
+            status: 'ACTIVE',
+          },
+        });
+        await delegate.update({
+          where: { id },
+          data: { status: 'APPROVED' },
+        });
+
+        return NextResponse.json({
+          success: true,
+          status: 'APPROVED',
+          upgraded: true,
+          credentials: {
+            username: existingRequester.username,
+            password: null,
+          },
+          message: 'Existing personal account upgraded to company account successfully.',
+        });
+      }
+
       const emailCheck = await checkEmailUnique(prisma, rr.email);
       if (emailCheck.taken) {
         return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use. Reject or ask user to use a different email.' }, { status: 400 });
