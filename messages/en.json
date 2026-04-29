@@ -175,6 +175,51 @@
     "backToHome": "Back to home",
     "learnMore": "Learn more"
   },
+  "PrivacyPolicy": {
+    "legal": "Legal",
+    "title": "Privacy Policy",
+    "subtitle": "How we collect, use, and protect your data across our smart automation and energy management platforms.",
+    "secureByDesign": "Secure by design",
+    "lastUpdatedLabel": "Last Updated:",
+    "lastUpdatedValue": "April 2026",
+    "companyName": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems LLC",
+    "backToHomepage": "Back to homepage",
+    "intro": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems Limited Liability Company (\"we,\" \"us,\" or \"our\") operates the website usmart-iot.com and our associated mobile applications. We are committed to protecting your privacy and ensuring that your personal data is handled in a safe and responsible manner.",
+    "sections": {
+      "collect": {
+        "title": "1. Information We Collect",
+        "body": "We may collect personal information that you provide directly to us, such as your name, email address, and contact details, specifically when you register an account or use our smart automation and energy management services."
+      },
+      "usage": {
+        "title": "2. How We Use Your Information",
+        "lead": "We use the collected data to:",
+        "points": [
+          "Provide, operate, and maintain our smart systems and services.",
+          "Improve and personalize user experience.",
+          "Communicate with you regarding technical updates or support."
+        ]
+      },
+      "security": {
+        "title": "3. Data Security",
+        "body": "We implement industry-standard security measures to protect your information from unauthorized access, alteration, or disclosure. While we strive to use commercially acceptable means to protect your personal data, no method of transmission over the internet or method of electronic storage is 100% secure."
+      },
+      "sharing": {
+        "title": "4. Data Sharing",
+        "body": "We do not sell or share your personal data with third parties, except as required by law or to provide the core functionality of our services."
+      },
+      "deletion": {
+        "title": "5. Data Deletion Requests",
+        "body": "Users have the right to request the deletion of their personal data by contacting us at contact@usmart-iot.com."
+      },
+      "contact": {
+        "title": "6. Contact Us",
+        "lead": "If you have any questions about this Privacy Policy, please contact us at:",
+        "emailLabel": "Email:",
+        "addressLabel": "Address:",
+        "addressValue": "Kirkuk, Iraq."
+      }
+    }
+  },
   "Navbar": {
     "language": "Language",
     "home": "Home",

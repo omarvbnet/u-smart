@@ -173,6 +173,51 @@
     "backToHome": "Ana sayfaya dön",
     "learnMore": "Daha fazla"
   },
+  "PrivacyPolicy": {
+    "legal": "Yasal",
+    "title": "Gizlilik Politikası",
+    "subtitle": "Akıllı otomasyon ve enerji yönetimi platformlarımızda verilerinizi nasıl topladığımızı, kullandığımızı ve koruduğumuzu açıklıyoruz.",
+    "secureByDesign": "Tasarım gereği güvenli",
+    "lastUpdatedLabel": "Son Güncelleme:",
+    "lastUpdatedValue": "Nisan 2026",
+    "companyName": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems LLC",
+    "backToHomepage": "Ana sayfaya dön",
+    "intro": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems Limited Liability Company (\"biz\", \"bize\" veya \"bizim\") usmart-iot.com web sitesini ve ilişkili mobil uygulamalarımızı işletir. Gizliliğinizi korumaya ve kişisel verilerinizin güvenli ve sorumlu bir şekilde işlenmesini sağlamaya kararlıyız.",
+    "sections": {
+      "collect": {
+        "title": "1. Topladığımız Bilgiler",
+        "body": "Hesap oluşturduğunuzda veya akıllı otomasyon ve enerji yönetimi hizmetlerimizi kullandığınızda, adınız, e-posta adresiniz ve iletişim bilgileriniz gibi bize doğrudan sağladığınız kişisel bilgileri toplayabiliriz."
+      },
+      "usage": {
+        "title": "2. Bilgilerinizi Nasıl Kullanıyoruz",
+        "lead": "Toplanan verileri şu amaçlarla kullanırız:",
+        "points": [
+          "Akıllı sistemlerimizi ve hizmetlerimizi sunmak, işletmek ve sürdürmek.",
+          "Kullanıcı deneyimini iyileştirmek ve kişiselleştirmek.",
+          "Teknik güncellemeler veya destek hakkında sizinle iletişim kurmak."
+        ]
+      },
+      "security": {
+        "title": "3. Veri Güvenliği",
+        "body": "Bilgilerinizi yetkisiz erişim, değişiklik veya ifşaya karşı korumak için sektör standardı güvenlik önlemleri uygularız. Ticari olarak kabul edilebilir yöntemler kullanmaya çalışsak da internet üzerinden iletim veya elektronik depolama yöntemleri %100 güvenli değildir."
+      },
+      "sharing": {
+        "title": "4. Veri Paylaşımı",
+        "body": "Kişisel verilerinizi satmayız veya üçüncü taraflarla paylaşmayız; yalnızca yasa gereği zorunlu olduğunda veya hizmetlerimizin temel işlevlerini sağlamak için gerekli olduğunda paylaşırız."
+      },
+      "deletion": {
+        "title": "5. Veri Silme Talepleri",
+        "body": "Kullanıcılar, kişisel verilerinin silinmesini talep etme hakkına sahiptir. Bunun için contact@usmart-iot.com adresinden bize ulaşabilirsiniz."
+      },
+      "contact": {
+        "title": "6. Bize Ulaşın",
+        "lead": "Bu Gizlilik Politikası hakkında sorularınız varsa lütfen bizimle iletişime geçin:",
+        "emailLabel": "E-posta:",
+        "addressLabel": "Adres:",
+        "addressValue": "Kerkük, Irak."
+      }
+    }
+  },
   "Navbar": {
     "language": "Dil",
     "home": "Ana Sayfa",
