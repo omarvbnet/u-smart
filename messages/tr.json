@@ -218,6 +218,88 @@
       }
     }
   },
+  "TermsOfService": {
+    "legal": "Yasal",
+    "title": "Hizmet Şartları",
+    "subtitle": "Web sitemizi, uygulamalarımızı ve teknoloji hizmetlerimizi kullanmadan önce lütfen bu şartları dikkatlice okuyun.",
+    "lastUpdatedLabel": "Son Güncelleme:",
+    "lastUpdatedValue": "Nisan 2026",
+    "companyName": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems LLC",
+    "backToHomepage": "Ana sayfaya dön",
+    "intro": "Bu Hizmet Şartları, U-SMART web sitesi, uygulamaları ve ilgili hizmetlerin kullanımını düzenler. Hizmetlerimizi kullanarak bu şartlara uymayı kabul etmiş olursunuz.",
+    "sections": {
+      "acceptance": {
+        "title": "1. Şartların Kabulü",
+        "body": "Web sitemizi veya hizmetlerimizi kullanarak, bu Hizmet Şartlarını ve geçerli yasa ve düzenlemeleri okuduğunuzu, anladığınızı ve kabul ettiğinizi onaylarsınız."
+      },
+      "services": {
+        "title": "2. Sunduğumuz Hizmetler",
+        "body": "Akıllı otomasyon, ağ, yazılım, kalite denetimi ve temiz enerji çözümleri sunuyoruz. Hizmet kapsamı, zaman çizelgesi ve teslimatlar proje anlaşmalarına göre değişebilir."
+      },
+      "userResponsibilities": {
+        "title": "3. Kullanıcı Sorumlulukları",
+        "points": [
+          "Hizmetlerimizi kullanırken doğru ve güncel bilgi sağlamak.",
+          "Web sitemizi ve hizmetlerimizi yalnızca yasal amaçlarla kullanmak.",
+          "Sistemlerimizi bozacak, kötüye kullanacak veya yetkisiz erişim sağlayacak girişimlerde bulunmamak."
+        ]
+      },
+      "intellectualProperty": {
+        "title": "4. Fikri Mülkiyet",
+        "body": "Platformlarımızdaki tüm içerik, marka unsurları, tasarımlar, yazılımlar ve materyaller bize aittir veya lisanslıdır. Önceden yazılı izin olmadan kopyalanamaz, çoğaltılamaz, dağıtılamaz veya ticari olarak kullanılamaz."
+      },
+      "liability": {
+        "title": "5. Sorumluluğun Sınırlandırılması",
+        "body": "Yasanın izin verdiği azami ölçüde, hizmetlerimizi, web sitemizi veya uygulamalarımızı kullanımınızdan doğan dolaylı, arızi veya sonuçsal zararlardan sorumlu değiliz."
+      },
+      "contact": {
+        "title": "6. Bize Ulaşın",
+        "lead": "Bu Hizmet Şartları hakkında sorularınız varsa lütfen bizimle iletişime geçin:",
+        "emailLabel": "E-posta:",
+        "addressLabel": "Adres:",
+        "addressValue": "Kerkük, Irak."
+      }
+    }
+  },
+  "CookiePolicy": {
+    "legal": "Yasal",
+    "title": "Çerez Politikası",
+    "subtitle": "Bu politika, platformlarımızı ziyaret ettiğinizde çerezleri ve benzer teknolojileri nasıl kullandığımızı açıklar.",
+    "lastUpdatedLabel": "Son Güncelleme:",
+    "lastUpdatedValue": "Nisan 2026",
+    "companyName": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems LLC",
+    "backToHomepage": "Ana sayfaya dön",
+    "intro": "U-SMART olarak, gezinme deneyiminizi iyileştirmek, trafiği analiz etmek ve temel web sitesi işlevlerini desteklemek için çerezler ve benzer teknolojiler kullanıyoruz.",
+    "sections": {
+      "whatAreCookies": {
+        "title": "1. Çerez Nedir?",
+        "body": "Çerezler, bir web sitesini ziyaret ettiğinizde cihazınıza kaydedilen küçük metin dosyalarıdır. Web sitelerinin kullanıcı tercihlerini, oturumları ve teknik ayarları hatırlamasına yardımcı olur."
+      },
+      "howWeUse": {
+        "title": "2. Çerezleri Nasıl Kullanıyoruz",
+        "points": [
+          "Temel web sitesi işlevlerinin düzgün çalışmasını sağlamak için.",
+          "Performans iyileştirmeleri için trafik ve kullanım desenlerini anlamak için.",
+          "Dil ve kullanıcı deneyimi tercihlerini hatırlamak için."
+        ]
+      },
+      "types": {
+        "title": "3. Kullandığımız Çerez Türleri",
+        "body": "Zorunlu çerezler, analitik çerezler ve işlevsel çerezler kullanabiliriz. Bazı çerezler geçici oturum çerezleridir, bazıları ise ayarları hatırlamak için daha uzun süre kalır."
+      },
+      "control": {
+        "title": "4. Çerez Yönetimi",
+        "body": "Tarayıcı ayarlarınızdan çerezleri kontrol edebilir veya devre dışı bırakabilirsiniz. Bazı çerezlerin devre dışı bırakılması, web sitesi işlevlerini ve kullanıcı deneyimini etkileyebilir."
+      },
+      "contact": {
+        "title": "5. Bize Ulaşın",
+        "lead": "Bu Çerez Politikası hakkında sorularınız varsa lütfen bizimle iletişime geçin:",
+        "emailLabel": "E-posta:",
+        "addressLabel": "Adres:",
+        "addressValue": "Kerkük, Irak."
+      }
+    }
+  },
   "Navbar": {
     "language": "Dil",
     "home": "Ana Sayfa",

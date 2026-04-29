@@ -1265,12 +1265,12 @@ export default function ProfessionalHomePage() {
                   <Link href="/privacy-policy" className="hover:text-white transition-colors">
                     {t("footer.privacy")}
                   </Link>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link href="/terms-of-service" className="hover:text-white transition-colors">
                     {t("footer.terms")}
-                  </a>
-                  <a href="#" className="hover:text-white transition-colors">
+                  </Link>
+                  <Link href="/cookie-policy" className="hover:text-white transition-colors">
                     {t("footer.cookies")}
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>
