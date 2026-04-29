@@ -1262,9 +1262,15 @@ export default function ProfessionalHomePage() {
                   <span className="text-xs text-gray-500">{t("footer.status")}</span>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-500">
-                  <a href="#" className="hover:text-white transition-colors">{t("footer.privacy")}</a>
-                  <a href="#" className="hover:text-white transition-colors">{t("footer.terms")}</a>
-                  <a href="#" className="hover:text-white transition-colors">{t("footer.cookies")}</a>
+                  <Link href="/privacy-policy" className="hover:text-white transition-colors">
+                    {t("footer.privacy")}
+                  </Link>
+                  <a href="#" className="hover:text-white transition-colors">
+                    {t("footer.terms")}
+                  </a>
+                  <a href="#" className="hover:text-white transition-colors">
+                    {t("footer.cookies")}
+                  </a>
                 </div>
               </div>
             </div>
