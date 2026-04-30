@@ -11,6 +11,7 @@ class ApiConfig {
   static const String updateProfile = '/api/auth/requester-update';
   static const String logout = '/api/auth/requester-logout';
   static const String requesterRole = '/api/auth/requester-role';
+  static const String requesterPushToken = '/api/auth/requester-push-token';
   static const String provinceFilter = '/api/auth/requester-province-filter';
 
   static const String tickets = '/api/tickets';

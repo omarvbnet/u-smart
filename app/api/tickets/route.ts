@@ -6,6 +6,7 @@ import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME 
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTicket } from '@/lib/email';
+import { sendPushToRequesters } from '@/lib/push-notifications';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +43,11 @@ async function notifyEngineersNewTicket(ticketId: string, province: string, site
             requesterId: eng.id,
             forAdmin: false,
           },
+        });
+        await sendPushToRequesters(prisma, [eng.id], {
+          title: 'New ticket available',
+          body: `New QC ticket in ${province}: ${siteName}`,
+          data: { ticketId, type: 'new_ticket' },
         });
       } catch { /* skip */ }
     }

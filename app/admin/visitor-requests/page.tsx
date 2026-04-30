@@ -27,6 +27,9 @@ export default function VisitorRequestsAdminPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; read: boolean }[]>([]);
+  const [pushTitle, setPushTitle] = useState('System update');
+  const [pushMessage, setPushMessage] = useState('');
+  const [sendingPush, setSendingPush] = useState(false);
 
   const loadPendingCount = async () => {
     try {
@@ -91,6 +94,29 @@ export default function VisitorRequestsAdminPage() {
       setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)));
     } catch {
       /* ignore */
+    }
+  };
+
+  const sendBroadcastPush = async () => {
+    if (!pushTitle.trim() || !pushMessage.trim()) return;
+    setSendingPush(true);
+    try {
+      const res = await fetch('/api/admin/push-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: pushTitle.trim(), message: pushMessage.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Push sent successfully to ${data.sent ?? 0} devices.`);
+        setPushMessage('');
+      } else {
+        alert(data.message ?? 'Failed to send push notification');
+      }
+    } catch {
+      alert('Failed to send push notification');
+    } finally {
+      setSendingPush(false);
     }
   };
 
@@ -182,6 +208,34 @@ export default function VisitorRequestsAdminPage() {
           </ul>
         </div>
       )}
+
+      <div className="mb-4 p-4 rounded-lg border border-blue-200 bg-blue-50">
+        <h3 className="text-sm font-semibold text-blue-900 mb-3">Send push notification (Proviser app)</h3>
+        <div className="grid gap-2 md:grid-cols-3">
+          <input
+            value={pushTitle}
+            onChange={(e) => setPushTitle(e.target.value)}
+            className="px-3 py-2 rounded-md border border-blue-300 text-sm"
+            placeholder="Title"
+          />
+          <input
+            value={pushMessage}
+            onChange={(e) => setPushMessage(e.target.value)}
+            className="px-3 py-2 rounded-md border border-blue-300 text-sm md:col-span-2"
+            placeholder="Notification message"
+          />
+        </div>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={sendBroadcastPush}
+            disabled={sendingPush || !pushTitle.trim() || !pushMessage.trim()}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium disabled:opacity-60"
+          >
+            {sendingPush ? 'Sending…' : 'Send Notification'}
+          </button>
+        </div>
+      </div>
 
       {loading && list.length === 0 ? (
         <div className="py-12 text-center text-gray-500">Loading...</div>

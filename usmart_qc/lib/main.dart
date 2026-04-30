@@ -6,6 +6,7 @@ import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/geofence_service.dart';
+import 'services/firebase_messaging_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/tickets_provider.dart';
 import 'providers/sites_provider.dart';
@@ -27,6 +28,7 @@ void main() async {
   final authService = AuthService(apiService);
   final notifications = NotificationService();
   await notifications.init();
+  final firebaseMessaging = FirebaseMessagingService(apiService, notifications);
   final geofenceService = GeofenceService(apiService, notifications);
 
   final authProvider = AuthProvider(authService, apiService);
@@ -40,6 +42,7 @@ void main() async {
 
   await authProvider.tryAutoLogin();
   if (authProvider.isLoggedIn) {
+    await firebaseMessaging.init();
     ticketsProvider.setCurrentUserId(authProvider.user?.id);
     await ticketsProvider.fetchTickets();
     await sitesProvider.fetchSites();
@@ -51,6 +54,7 @@ void main() async {
 
   authProvider.addListener(() {
     if (authProvider.isLoggedIn) {
+      firebaseMessaging.init();
       ticketsProvider.setCurrentUserId(authProvider.user?.id);
       geofenceService.updateData(
           sitesProvider.sites, ticketsProvider.tickets);

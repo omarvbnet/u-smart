@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { sendPushToRequesters } from '@/lib/push-notifications';
 
 const prisma = _prisma as any;
 
@@ -120,15 +121,21 @@ export async function PATCH(
     // Notify company about status change
     if (row.requesterId && typeof prisma.notification?.create === 'function') {
       try {
+        const message = `Your ticket status is now: ${statusLabels[newStatus] || newStatus}`;
         await prisma.notification.create({
           data: {
             type: 'status_changed',
             title: 'Ticket status updated',
-            message: `Your ticket status is now: ${statusLabels[newStatus] || newStatus}`,
+            message,
             ticketId: id,
             requesterId: row.requesterId,
             forAdmin: false,
           },
+        });
+        await sendPushToRequesters(prisma, [row.requesterId], {
+          title: 'Ticket status updated',
+          body: message,
+          data: { ticketId: id, type: 'status_changed' },
         });
       } catch { /* ignore */ }
     }

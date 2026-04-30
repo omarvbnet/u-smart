@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { sendPushToRequesters } from '@/lib/push-notifications';
 
 const prisma = _prisma as any;
 
@@ -128,15 +129,21 @@ export async function PATCH(
     if (row.requesterId && typeof prisma.notification?.create === 'function') {
       try {
         const assigneeLabel = isTechnician ? 'Technician' : 'Engineer';
+        const message = `${assigneeLabel} ${requester.name || requester.username} has been assigned to your ticket`;
         await prisma.notification.create({
           data: {
             type: 'status_changed',
             title: `${assigneeLabel} assigned`,
-            message: `${assigneeLabel} ${requester.name || requester.username} has been assigned to your ticket`,
+            message,
             ticketId: id,
             requesterId: row.requesterId,
             forAdmin: false,
           },
+        });
+        await sendPushToRequesters(prisma, [row.requesterId], {
+          title: `${assigneeLabel} assigned`,
+          body: message,
+          data: { ticketId: id, type: 'status_changed' },
         });
       } catch { /* ignore */ }
     }

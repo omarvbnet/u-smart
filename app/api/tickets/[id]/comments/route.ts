@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { sendPushToRequesters } from '@/lib/push-notifications';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -123,26 +124,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const assignedEngineerId = company?.assignedEngineerId;
 
           if (authorRole === 'engineer' && ticket.requesterId) {
+            const message = `${requester?.name || requester?.username || 'Engineer'} replied on ticket`;
             await prisma.notification.create({
               data: {
                 type: 'comment_added',
                 title: 'New comment on your ticket',
-                message: `${requester?.name || requester?.username || 'Engineer'} replied on ticket`,
+                message,
                 ticketId: id,
                 requesterId: ticket.requesterId,
                 forAdmin: false,
               },
             });
+            await sendPushToRequesters(prisma, [ticket.requesterId], {
+              title: 'New comment on your ticket',
+              body: message,
+              data: { ticketId: id, type: 'comment_added' },
+            });
           } else if (authorRole === 'requester' && assignedEngineerId) {
+            const message = `${requester?.name || requester?.username || 'Company'} replied on ticket`;
             await prisma.notification.create({
               data: {
                 type: 'comment_added',
                 title: 'Company replied on ticket',
-                message: `${requester?.name || requester?.username || 'Company'} replied on ticket`,
+                message,
                 ticketId: id,
                 requesterId: assignedEngineerId,
                 forAdmin: false,
               },
+            });
+            await sendPushToRequesters(prisma, [assignedEngineerId], {
+              title: 'Company replied on ticket',
+              body: message,
+              data: { ticketId: id, type: 'comment_added' },
             });
           }
         }

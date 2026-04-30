@@ -16,12 +16,12 @@ export async function GET(req: NextRequest) {
     const notification = (prisma as { notification: { findMany: (args: unknown) => Promise<unknown[]>; count: (args: unknown) => Promise<number> } }).notification;
     if (forParam === 'admin') {
       const list = await notification.findMany({
-        where: { forAdmin: true },
+        where: { forAdmin: true, type: { not: 'push_token' } },
         orderBy: { createdAt: 'desc' },
         take: 50,
       });
       const unreadCount = await notification.count({
-        where: { forAdmin: true, read: false },
+        where: { forAdmin: true, read: false, type: { not: 'push_token' } },
       });
       return NextResponse.json({ success: true, notifications: list, unreadCount });
     }
@@ -39,12 +39,12 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
       }
       const list = await notification.findMany({
-        where: { requesterId: payload.requesterId, forAdmin: false },
+        where: { requesterId: payload.requesterId, forAdmin: false, type: { not: 'push_token' } },
         orderBy: { createdAt: 'desc' },
         take: 50,
       });
       const unreadCount = await notification.count({
-        where: { requesterId: payload.requesterId, forAdmin: false, read: false },
+        where: { requesterId: payload.requesterId, forAdmin: false, read: false, type: { not: 'push_token' } },
       });
       return NextResponse.json({ success: true, notifications: list, unreadCount });
     }

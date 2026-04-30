@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { sendPushToRequesters } from '@/lib/push-notifications';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -130,17 +131,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           ncr: 'NCR',
         };
         const resultText = inspectionResult ? (resultLabel[inspectionResult] ?? inspectionResult) : '';
+        const message = isNcr
+          ? 'An NCR has been raised on your ticket. Please resubmit with corrective action.'
+          : `Your ticket has been completed${resultText ? ` — Result: ${resultText}` : ''}`;
         await prisma.notification.create({
           data: {
             type: 'status_changed',
             title: isNcr ? 'NCR raised' : 'Ticket completed',
-            message: isNcr
-              ? 'An NCR has been raised on your ticket. Please resubmit with corrective action.'
-              : `Your ticket has been completed${resultText ? ` — Result: ${resultText}` : ''}`,
+            message,
             ticketId: id,
             requesterId: ticket.requesterId,
             forAdmin: false,
           },
+        });
+        await sendPushToRequesters(prisma, [ticket.requesterId], {
+          title: isNcr ? 'NCR raised' : 'Ticket completed',
+          body: message,
+          data: { ticketId: id, type: 'status_changed' },
         });
       } catch { /* ignore */ }
     }

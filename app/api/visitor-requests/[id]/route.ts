@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, sendCleanEnergyRequestStatusEmail } from '@/lib/email';
+import { sendPushToRequesters } from '@/lib/push-notifications';
 
 const TICKET_STATUSES = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'] as const;
 
@@ -351,6 +352,11 @@ export async function PATCH(
             requesterId: updated.requesterId,
             forAdmin: false,
           },
+        });
+        await sendPushToRequesters(prisma as any, [updated.requesterId], {
+          title: notifTitle,
+          body: notifMessage,
+          data: { ticketId: id, type: 'status_changed' },
         });
         const requesterEmail = (updated.requester as { email?: string | null })?.email;
         if (status && requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {
