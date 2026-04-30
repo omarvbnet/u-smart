@@ -24,22 +24,20 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>U-Smart QC uses background location to detect site arrival and update ticket status even when the app is in the background.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>U-Smart QC uses background location to detect site arrival and update ticket status.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>U-Smart QC needs your location to detect when you arrive at a site and automatically update ticket status.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Provisor needs camera access to capture evidence photos for inspection reports.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Provisor needs photo library access to upload evidence images for inspection reports.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Provisor needs permission to save photos to your library.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Provisor uses your location while the app is open to detect site arrival and update ticket status.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Provisor may use the microphone when recording video for evidence.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Provisor needs permission to save photos to your library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Provisor needs photo library access to upload evidence images for inspection reports.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -65,23 +63,21 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>location</string>
 		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>UIRequiresFullScreen</key>
-	<true/>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
