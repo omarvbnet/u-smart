@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -63,4 +64,27 @@ export async function GET(req: NextRequest) {
       provinceFilterActive,
     },
   });
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
+    return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+  }
+
+  try {
+    await prisma.ticketRequester.delete({
+      where: { id: auth.payload.requesterId },
+    });
+  } catch (err) {
+    console.error('DELETE /api/auth/requester-me:', err);
+    return NextResponse.json(
+      { success: false, message: 'Failed to delete account' },
+      { status: 500 }
+    );
+  }
+
+  const res = NextResponse.json({ success: true, message: 'Account deleted successfully' });
+  res.cookies.delete(REQUESTER_COOKIE_NAME);
+  return res;
 }

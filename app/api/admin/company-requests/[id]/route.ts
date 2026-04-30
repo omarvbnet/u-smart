@@ -62,13 +62,25 @@ export async function PATCH(
     if (action === 'approve') {
       const pocEmail = (companyRequest as { pocEmail?: string | null }).pocEmail;
       if (pocEmail) {
-        const emailCheck = await checkEmailUnique(prisma, pocEmail);
-        if (emailCheck.taken) {
+        const emailCheck = await checkEmailUnique(prisma, pocEmail, {
+          companyRequestId: id,
+        });
+        const blockedByPendingRequestOnly =
+          emailCheck.taken &&
+          (emailCheck.message?.includes('pending registration') ||
+            emailCheck.message?.includes('pending company request'));
+        if (emailCheck.taken && !blockedByPendingRequestOnly) {
           return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use.' }, { status: 400 });
         }
       }
-      const phoneCheck = await checkPhoneUnique(prisma, companyRequest.pocPhone);
-      if (phoneCheck.taken) {
+      const phoneCheck = await checkPhoneUnique(prisma, companyRequest.pocPhone, {
+        companyRequestId: id,
+      });
+      const phoneBlockedByPendingRequestOnly =
+        phoneCheck.taken &&
+        (phoneCheck.message?.includes('pending registration') ||
+          phoneCheck.message?.includes('pending company request'));
+      if (phoneCheck.taken && !phoneBlockedByPendingRequestOnly) {
         return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone already in use.' }, { status: 400 });
       }
 

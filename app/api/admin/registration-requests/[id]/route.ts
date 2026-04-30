@@ -130,12 +130,24 @@ export async function PATCH(
         });
       }
 
-      const emailCheck = await checkEmailUnique(prisma, rr.email);
-      if (emailCheck.taken) {
+      const emailCheck = await checkEmailUnique(prisma, rr.email, {
+        registrationRequestId: rr.id,
+      });
+      const blockedByPendingRequestOnly =
+        emailCheck.taken &&
+        (emailCheck.message?.includes('pending registration') ||
+          emailCheck.message?.includes('pending company request'));
+      if (emailCheck.taken && !blockedByPendingRequestOnly) {
         return NextResponse.json({ success: false, message: emailCheck.message ?? 'Email already in use. Reject or ask user to use a different email.' }, { status: 400 });
       }
-      const phoneCheck = await checkPhoneUnique(prisma, rr.phone);
-      if (phoneCheck.taken) {
+      const phoneCheck = await checkPhoneUnique(prisma, rr.phone, {
+        registrationRequestId: rr.id,
+      });
+      const phoneBlockedByPendingRequestOnly =
+        phoneCheck.taken &&
+        (phoneCheck.message?.includes('pending registration') ||
+          phoneCheck.message?.includes('pending company request'));
+      if (phoneCheck.taken && !phoneBlockedByPendingRequestOnly) {
         return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone already in use. Reject or ask user to use a different phone.' }, { status: 400 });
       }
 

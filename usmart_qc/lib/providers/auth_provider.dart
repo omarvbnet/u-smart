@@ -74,6 +74,19 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> deleteAccount() async {
+    _error = null;
+    notifyListeners();
+    final ok = await _authService.deleteAccount();
+    if (ok) {
+      _user = null;
+    } else {
+      _error = 'Failed to delete account. Please try again.';
+    }
+    notifyListeners();
+    return ok;
+  }
+
   Future<({String username, String password})?> getSavedCredentials() async {
     return _authService.getSavedCredentials();
   }

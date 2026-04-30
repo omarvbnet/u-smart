@@ -1388,6 +1388,41 @@ class _EngineerProfileTab extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
+                    color: const Color(0xFFFF6B6B).withAlpha(70)),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  onTap: () => _confirmDeleteAccount(context, auth),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.delete_forever_rounded,
+                            color: Color(0xFFFF6B6B), size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Delete my account',
+                          style: TextStyle(
+                            color: const Color(0xFFFF6B6B).withAlpha(220),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
                     color: const Color(0xFFFF4757).withAlpha(60)),
               ),
               child: Material(
@@ -1495,6 +1530,59 @@ class _EngineerProfileTab extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteAccount(
+    BuildContext context,
+    AuthProvider auth,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: const Text(
+          'Delete account',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'This will permanently delete your account and related data from our server. This action cannot be undone.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Color(0xFFFF6B6B)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final ok = await auth.deleteAccount();
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.error ?? 'Failed to delete account.'),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+    }
   }
 
   Widget _languageRow(BuildContext context, AppLocalizations l10n, LocaleProvider localeProv) {

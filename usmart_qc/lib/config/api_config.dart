@@ -7,6 +7,7 @@ class ApiConfig {
   static const String sendChangePasswordOtp = '/api/auth/requester-send-change-password-otp';
   static const String changePassword = '/api/auth/requester-change-password';
   static const String me = '/api/auth/requester-me';
+  static const String deleteAccount = '/api/auth/requester-me';
   static const String updateProfile = '/api/auth/requester-update';
   static const String logout = '/api/auth/requester-logout';
   static const String requesterRole = '/api/auth/requester-role';

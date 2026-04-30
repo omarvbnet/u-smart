@@ -90,6 +90,21 @@ class AuthService {
     // Keep saved credentials for next login (do not delete)
   }
 
+  Future<bool> deleteAccount() async {
+    try {
+      final data = await _api.delete(ApiConfig.deleteAccount);
+      if (data['success'] == true) {
+        await clearToken();
+        await _storage.delete(key: _savedUsernameKey);
+        await _storage.delete(key: _savedPasswordKey);
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Returns saved username and password for prefilling login form.
   Future<({String username, String password})?> getSavedCredentials() async {
     final username = await _storage.read(key: _savedUsernameKey);
