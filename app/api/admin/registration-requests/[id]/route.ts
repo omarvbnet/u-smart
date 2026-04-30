@@ -101,6 +101,8 @@ export async function PATCH(
       // Allow upgrading Personal account to Company account instead of failing with 400.
       if (existingRequester && existingRequester.role === 'PERSONAL' && rr.role === 'COMPANY') {
         const upgradeServiceSlug = 'enterprise-networking';
+        const upgradedPassword = generatePassword();
+        const upgradedPasswordHash = await bcrypt.hash(upgradedPassword, 10);
         await prisma.ticketRequester.update({
           where: { id: existingRequester.id },
           data: {
@@ -111,6 +113,8 @@ export async function PATCH(
             companyCertificationUrl: rr.evidenceUrl,
             serviceSlug: upgradeServiceSlug,
             status: 'ACTIVE',
+            passwordHash: upgradedPasswordHash,
+            hasUpdatedCredentials: false,
           },
         });
         await delegate.update({
@@ -118,13 +122,19 @@ export async function PATCH(
           data: { status: 'APPROVED' },
         });
 
+        sendCompanyAccountApprovedEmail(rr.email, {
+          name: rr.legalName,
+          username: existingRequester.username,
+          password: upgradedPassword,
+        }).catch((e) => console.error('Approval email failed:', e));
+
         return NextResponse.json({
           success: true,
           status: 'APPROVED',
           upgraded: true,
           credentials: {
             username: existingRequester.username,
-            password: null,
+            password: upgradedPassword,
           },
           message: 'Existing personal account upgraded to company account successfully.',
         });

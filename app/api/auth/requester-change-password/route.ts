@@ -107,7 +107,5 @@ export async function POST(req: NextRequest) {
       { success: false, message: 'Failed to update password' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

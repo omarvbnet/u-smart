@@ -85,7 +85,5 @@ export async function POST(req: NextRequest) {
       { success: false, message: 'Failed to send verification code' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

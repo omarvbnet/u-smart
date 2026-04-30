@@ -22,6 +22,18 @@ class NotificationService {
         iOS: iosSettings,
       ),
     );
+    // Ensure iOS foreground notifications are shown.
+    await _plugin
+        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+    // Android 13+ runtime notification permission.
+    await _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
   }
 
   Future<void> show({
@@ -38,7 +50,11 @@ class NotificationService {
     );
     const details = NotificationDetails(
       android: androidDetails,
-      iOS: DarwinNotificationDetails(),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
     );
     await _plugin.show(id: id, title: title, body: body, notificationDetails: details);
   }

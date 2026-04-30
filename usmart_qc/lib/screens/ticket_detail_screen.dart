@@ -502,9 +502,20 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _shareTicket() async {
     final t = _ticket!;
-    final url = '${ApiConfig.baseUrl}/en/ticket/${t.id}';
+    // Use API share endpoint so link works even if locale page routes differ.
+    final url = '${ApiConfig.baseUrl}${ApiConfig.ticketShare(t.id)}';
     final text = 'Ticket: ${t.siteName ?? t.id}\n$url';
-    await Share.share(text, subject: 'Ticket ${t.siteName ?? t.id}');
+    try {
+      await Share.share(text, subject: 'Ticket ${t.siteName ?? t.id}');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open share sheet'),
+          backgroundColor: Color(0xFFFF4757),
+        ),
+      );
+    }
   }
 
   SliverAppBar _buildAppBar() {

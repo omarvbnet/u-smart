@@ -15,6 +15,7 @@ class ApiConfig {
 
   static const String tickets = '/api/tickets';
   static String ticketDetail(String id) => '/api/tickets/$id';
+  static String ticketShare(String id) => '/api/tickets/share/$id';
   static String ticketStatus(String id) => '/api/tickets/$id/status';
   static String ticketAssign(String id) => '/api/tickets/$id/assign';
   static String ticketComplete(String id) => '/api/tickets/$id/complete';

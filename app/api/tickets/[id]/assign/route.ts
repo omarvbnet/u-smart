@@ -77,15 +77,25 @@ export async function PATCH(
       );
     }
 
-    // Check if engineer already has an uncompleted ticket
+    // Check if engineer already has an uncompleted assigned ticket.
+    // We parse ticket JSON payload instead of raw string search to avoid false positives.
     const activeTickets = await prisma.visitorRequest.findMany({
       where: {
         status: { not: 'COMPLETED' },
-        company: { contains: requester.id },
       },
-      select: { id: true },
+      select: { id: true, company: true },
     });
-    if (activeTickets.length > 0) {
+    const hasActiveAssignedTicket = activeTickets.some((t: { id: string; company: string | null }) => {
+      if (t.id === id) return false;
+      if (!t.company || typeof t.company !== 'string') return false;
+      try {
+        const payload = JSON.parse(t.company) as { _ticket?: boolean; assignedEngineerId?: string };
+        return payload._ticket === true && payload.assignedEngineerId === requester.id;
+      } catch {
+        return false;
+      }
+    });
+    if (hasActiveAssignedTicket) {
       return NextResponse.json(
         { success: false, message: 'You already have an active ticket. Complete it before taking a new one.' },
         { status: 400 }

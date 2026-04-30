@@ -68,11 +68,11 @@ class NotificationsProvider extends ChangeNotifier {
 
   Future<void> _fetchNotifications() async {
     try {
-      final data = await _api.getSafe(
+      final data = await _api.get(
         ApiConfig.notifications,
         query: {'for': 'requester'},
       );
-      if (data == null || data['success'] != true) return;
+      if (data['success'] != true) return;
 
       final list = (data['notifications'] as List? ?? [])
           .map((e) =>
@@ -101,7 +101,21 @@ class NotificationsProvider extends ChangeNotifier {
       _notifications = list;
       notifyListeners();
     } catch (_) {
-      // Silently handle errors (e.g. backend not redeployed yet)
+      // If JSON parse / transport fails, try safe mode once.
+      try {
+        final data = await _api.getSafe(
+          ApiConfig.notifications,
+          query: {'for': 'requester'},
+        );
+        if (data == null || data['success'] != true) return;
+        final list = (data['notifications'] as List? ?? [])
+            .map((e) =>
+                AppNotification.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _unreadCount = (data['unreadCount'] as int?) ?? 0;
+        _notifications = list;
+        notifyListeners();
+      } catch (_) {}
     }
   }
 
