@@ -1,0 +1,68 @@
+# Builds Provisor (usmart_qc) Android APK and attaches it to GitHub Releases when you push a tag
+# matching `provisor-v*` (e.g. `provisor-v1.0.2`).
+#
+# Host stable download URL for your site:
+#   https://github.com/<ORG>/<REPO>/releases/download/provisor-v1.0.2/provisor-android-release.apk
+# Then set deployment env: QC_APP_ANDROID_URL=<that URL>
+# (See app/api/app/android-download/route.ts — `/api/app/android-download` redirects there.)
+#
+# workflow_dispatch: builds APK and uploads an Actions artifact (no GitHub Release).
+
+name: Provisor Android release APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'provisor-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: usmart_qc
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: usmart_qc
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: provisor-android-apk
+          path: usmart_qc/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Copy APK for GitHub Release asset name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: cp usmart_qc/build/app/outputs/flutter-apk/app-release.apk provisor-android-release.apk
+
+      - name: Create GitHub Release with APK
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: provisor-android-release.apk
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -69,23 +69,41 @@ function parseFlexibleNumber(val: unknown): number | undefined {
 }
 
 const ANDROID_APP_URL = '/api/app/android-download';
-// iOS OTA install: itms-services link points to our manifest, which references the IPA. Override with NEXT_PUBLIC_QC_APP_IOS_URL for custom install link.
+
+/** Public App Store listing — https://apps.apple.com/us/app/proviser/id6760374377 */
+const IOS_APP_STORE_URL = 'https://apps.apple.com/us/app/proviser/id6760374377';
+
+/**
+ * iOS download link: App Store by default.
+ * Set NEXT_PUBLIC_QC_APP_IOS_URL (and optionally NEXT_PUBLIC_ENTERPRISE_APP_IOS_URL) to override
+ * (e.g. enterprise OTA: itms-services://?action=download-manifest&url=...).
+ */
 function getIosInstallLink(service: 'quality' | 'enterprise' = 'quality'): string {
-  const custom = service === 'enterprise'
-    ? (process.env.NEXT_PUBLIC_ENTERPRISE_APP_IOS_URL || process.env.NEXT_PUBLIC_QC_APP_IOS_URL)
-    : process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
-  if (custom) return custom;
-  let siteUrl = '';
-  if (typeof window !== 'undefined') {
-    siteUrl = window.location.origin;
-  } else {
-    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'usmart-iot.com';
-    siteUrl = base.startsWith('http') ? base : `https://${base}`.replace(/\/$/, '');
+  const custom =
+    service === 'enterprise'
+      ? process.env.NEXT_PUBLIC_ENTERPRISE_APP_IOS_URL || process.env.NEXT_PUBLIC_QC_APP_IOS_URL
+      : process.env.NEXT_PUBLIC_QC_APP_IOS_URL;
+  if (custom?.trim()) return custom.trim();
+
+  const useOta = process.env.NEXT_PUBLIC_IOS_USE_OTA === '1' || process.env.NEXT_PUBLIC_IOS_USE_OTA === 'true';
+  if (useOta) {
+    let siteUrl = '';
+    if (typeof window !== 'undefined') {
+      siteUrl = window.location.origin;
+    } else {
+      const base =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.VERCEL_URL ||
+        'usmart-iot.com';
+      siteUrl = base.startsWith('http') ? base : `https://${base}`.replace(/\/$/, '');
+    }
+    if (siteUrl) {
+      return `itms-services://?action=download-manifest&url=${encodeURIComponent(`${siteUrl}/api/app/ios-manifest`)}`;
+    }
   }
-  if (siteUrl) {
-    return `itms-services://?action=download-manifest&url=${encodeURIComponent(`${siteUrl}/api/app/ios-manifest`)}`;
-  }
-  return '';
+
+  return IOS_APP_STORE_URL;
 }
 
 function QcAppDownloadSection({ t }: { t: (key: string) => string }) {
@@ -102,7 +120,7 @@ function QcAppDownloadSection({ t }: { t: (key: string) => string }) {
   const showAndroid = platform === 'android' || platform === 'desktop';
   const showIOS = platform === 'ios' || platform === 'desktop';
   const hasAndroid = Boolean(ANDROID_APP_URL);
-  const hasIOS = true; // iOS OTA always available via manifest
+  const hasIOS = true;
   if (!hasAndroid && !hasIOS) return null;
   return (
     <div className="mt-8 pt-8 border-t border-amber-500/20">

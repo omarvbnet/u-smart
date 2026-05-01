@@ -1,3 +1,13 @@
+/**
+ * Redirects to the Android APK for side-loading / direct download.
+ *
+ * Configure production:
+ * - `QC_APP_ANDROID_URL` or `NEXT_PUBLIC_QC_APP_ANDROID_URL`: absolute HTTPS URL (recommended),
+ *   e.g. `https://github.com/<org>/<repo>/releases/download/provisor-v1.0.2/provisor-android-release.apk`
+ * - Or host files under `public/app/` (`usmart_qc.apk`, `proviser.apk`, …).
+ * - Or `QC_APP_ANDROID_GITHUB_RAW_URL` as extra fallback.
+ */
+
 import { NextResponse } from 'next/server';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
