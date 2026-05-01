@@ -71,7 +71,27 @@ export default function AdminPushNotificationsPage() {
       });
       const data = await res.json();
       if (data?.success) {
-        setStatus(`Sent${typeof data.sent === 'number' ? ` (${data.sent})` : ''}`);
+        const debug = data?.debug as
+          | {
+              hasFirebaseServiceJson?: boolean;
+              hasFirebaseProjectId?: boolean;
+              hasFirebaseClientEmail?: boolean;
+              hasFirebasePrivateKey?: boolean;
+              requesterTokensInDb?: number;
+            }
+          | undefined;
+        const hasFirebaseConfig = Boolean(
+          debug?.hasFirebaseServiceJson ||
+            (debug?.hasFirebaseProjectId &&
+              debug?.hasFirebaseClientEmail &&
+              debug?.hasFirebasePrivateKey)
+        );
+        setStatus(
+          `Sent${typeof data.sent === 'number' ? ` (${data.sent})` : ''}` +
+            (debug
+              ? ` | FirebaseConfigured=${hasFirebaseConfig ? 'yes' : 'no'} | TokensInDb=${typeof debug.requesterTokensInDb === 'number' ? debug.requesterTokensInDb : 'unknown'}`
+              : '')
+        );
         setTitle('');
         setMessage('');
       } else {

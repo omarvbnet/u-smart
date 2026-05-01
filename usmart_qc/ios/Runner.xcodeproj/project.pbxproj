@@ -201,10 +201,10 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
-				A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				BE41A276B6553924CA1445AC /* [CP] Embed Pods Frameworks */,
 				186152319E17C0104E556DDF /* [CP] Copy Pods Resources */,
+				A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */,
 			);
 			buildRules = (
 			);
@@ -307,13 +307,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -371,7 +367,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "xattr -cr \"${FLUTTER_APPLICATION_PATH}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/build\" 2>/dev/null || true\nxattr -cr \"${BUILT_PRODUCTS_DIR}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios\" 2>/dev/null || true\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+			shellScript = "export COPYFILE_DISABLE=1\nxattr -cr \"${FLUTTER_APPLICATION_PATH}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/build\" 2>/dev/null || true\nxattr -cr \"${BUILT_PRODUCTS_DIR}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios\" 2>/dev/null || true\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
 		};
 		A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -385,7 +381,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "xattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/${FLUTTER_BUILD_DIR}/ios\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios\" 2>/dev/null || true";
+			shellScript = "export COPYFILE_DISABLE=1\nxattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework/App\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/${FLUTTER_BUILD_DIR}/ios\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios\" 2>/dev/null || true";
 			showEnvVarsInLog = 0;
 		};
 		BE41A276B6553924CA1445AC /* [CP] Embed Pods Frameworks */ = {
@@ -396,13 +392,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

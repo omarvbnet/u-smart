@@ -22,12 +22,17 @@ class FirebaseMessagingService {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     final messaging = FirebaseMessaging.instance;
+    await messaging.setAutoInitEnabled(true);
     await messaging.requestPermission(alert: true, badge: true, sound: true);
-
-    final token = await _getSafeToken(messaging);
-    if (token != null && token.isNotEmpty) {
-      await _registerToken(token);
+    if (Platform.isIOS) {
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
     }
+
+    await _registerTokenWithRetry(messaging);
     FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
       await _registerToken(token);
     });
@@ -69,6 +74,18 @@ class FirebaseMessagingService {
     }
 
     return null;
+  }
+
+  Future<void> _registerTokenWithRetry(FirebaseMessaging messaging) async {
+    // iOS can provide APNS/FCM token after startup, so keep retrying for a while.
+    for (var i = 0; i < 24; i++) {
+      final token = await _getSafeToken(messaging);
+      if (token != null && token.isNotEmpty) {
+        await _registerToken(token);
+        return;
+      }
+      await Future<void>.delayed(const Duration(seconds: 5));
+    }
   }
 
   Future<void> _registerToken(String token) async {
