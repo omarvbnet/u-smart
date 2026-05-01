@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { X, Building2, UserCog, User, Wrench, Upload, Loader2 } from 'lucide-react';
+import { X, Building2, User, Upload, Loader2 } from 'lucide-react';
 import { normalizeEmailInput } from '@/lib/email-input';
 
 export default function RequesterLoginPage() {
@@ -19,8 +19,8 @@ export default function RequesterLoginPage() {
   const [checking, setChecking] = useState(true);
   const [showRegistration, setShowRegistration] = useState(false);
   const [regStep, setRegStep] = useState<'role' | 'form'>('role');
-  const [regRole, setRegRole] = useState<'COMPANY' | 'ENGINEER' | 'TECHNICIAN' | 'PERSONAL' | null>(null);
-  const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '', province: '' });
+  const [regRole, setRegRole] = useState<'COMPANY' | 'PERSONAL' | null>(null);
+  const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '', province: '', username: '', password: '' });
   const [regEvidenceUrl, setRegEvidenceUrl] = useState('');
   const [regEvidenceUploading, setRegEvidenceUploading] = useState(false);
   const [regSubmitting, setRegSubmitting] = useState(false);
@@ -147,7 +147,7 @@ export default function RequesterLoginPage() {
           <div className="mt-6 pt-6 border-t border-white/10">
             <button
               type="button"
-              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '', province: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
+              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '', province: '', username: '', password: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
               className="w-full py-2.5 text-sm text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-xl border border-cyan-500/30 transition-colors"
             >
               {t('ticketForm.requestRegistration') || 'Request for registration'}
@@ -194,25 +194,7 @@ export default function RequesterLoginPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setRegRole('ENGINEER'); setRegStep('form'); }}
-                    className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
-                  >
-                    <UserCog className="w-10 h-10 text-cyan-400" />
-                    <span className="font-medium text-white">{t('ticketForm.roleEngineer') || 'Engineer'}</span>
-                    <span className="text-xs text-gray-400 text-center">{t('ticketForm.roleEngineerHint') || 'Inspect & complete tickets'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setRegRole('TECHNICIAN'); setRegStep('form'); }}
-                    className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
-                  >
-                    <Wrench className="w-10 h-10 text-cyan-400" />
-                    <span className="font-medium text-white">{t('ticketForm.roleTechnician') || 'Technician'}</span>
-                    <span className="text-xs text-gray-400 text-center">{t('ticketForm.roleTechnicianHint') || 'Maintenance & field work'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setRegRole('PERSONAL'); setRegStep('form'); }}
+                    onClick={() => { setRegRole('PERSONAL'); setRegEvidenceUrl(''); setRegStep('form'); }}
                     className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-white/10 hover:border-cyan-500/50 bg-white/5 hover:bg-cyan-500/10 transition-all"
                   >
                     <User className="w-10 h-10 text-cyan-400" />
@@ -234,7 +216,15 @@ export default function RequesterLoginPage() {
                     setRegError(t('ticketForm.selectProvince') || 'Please select a province');
                     return;
                   }
-                  if (!regEvidenceUrl) {
+                  if (!regForm.username.trim() || regForm.username.trim().length < 4) {
+                    setRegError(t('ticketForm.usernameMin') || 'Username must be at least 4 characters');
+                    return;
+                  }
+                  if (!regForm.password || regForm.password.length < 6) {
+                    setRegError(t('ticketForm.passwordMin') || 'Password must be at least 6 characters');
+                    return;
+                  }
+                  if (regRole === 'COMPANY' && !regEvidenceUrl) {
                     setRegError(t('ticketForm.evidenceRequired') || 'Identification evidence is required');
                     return;
                   }
@@ -248,6 +238,8 @@ export default function RequesterLoginPage() {
                         phone: regForm.phone.trim(),
                         email: normalizeEmailInput(regForm.email).toLowerCase(),
                         province: regForm.province.trim(),
+                        username: regForm.username.trim(),
+                        password: regForm.password,
                         evidenceUrl: regEvidenceUrl,
                         role: regRole,
                       }),
@@ -266,7 +258,7 @@ export default function RequesterLoginPage() {
                 }}
               >
                 <button type="button" onClick={() => setRegStep('role')} className="text-sm text-gray-500 hover:text-white mb-2">
-                  ← {t('ticketForm.back') || 'Back'} ({regRole === 'COMPANY' ? t('ticketForm.roleCompany') || 'Company' : regRole === 'ENGINEER' ? t('ticketForm.roleEngineer') || 'Engineer' : regRole === 'TECHNICIAN' ? t('ticketForm.roleTechnician') || 'Technician' : t('ticketForm.rolePersonal') || 'Personal'})
+                  ← {t('ticketForm.back') || 'Back'} ({regRole === 'COMPANY' ? t('ticketForm.roleCompany') || 'Company' : t('ticketForm.rolePersonal') || 'Personal'})
                 </button>
 
                 {regError && (
@@ -312,6 +304,31 @@ export default function RequesterLoginPage() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.username') || 'Username'}</label>
+                  <input
+                    type="text"
+                    value={regForm.username}
+                    onChange={(e) => setRegForm((f) => ({ ...f, username: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
+                    placeholder="req_username"
+                    autoComplete="username"
+                    minLength={4}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.password') || 'Password'}</label>
+                  <input
+                    type="password"
+                    value={regForm.password}
+                    onChange={(e) => setRegForm((f) => ({ ...f, password: e.target.value }))}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 outline-none"
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.province') || 'Province'}</label>
                   <select
                     value={regForm.province}
@@ -325,43 +342,45 @@ export default function RequesterLoginPage() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.evidenceForIdentification') || 'Evidence for identification'}</label>
-                  <p className="text-xs text-gray-500 mb-2">{t('ticketForm.evidenceHint') || 'ID card, passport, or company certificate (PDF, JPEG, PNG)'}</p>
-                  {regEvidenceUrl ? (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                      <span className="text-sm text-emerald-400">✓ {t('ticketForm.fileUploaded') || 'File uploaded'}</span>
-                      <a href={regEvidenceUrl.startsWith('http') ? regEvidenceUrl : regEvidenceUrl.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${regEvidenceUrl}` : regEvidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline">View</a>
-                      <button type="button" onClick={() => setRegEvidenceUrl('')} className="text-xs text-red-400 hover:underline ml-auto">{t('ticketForm.remove') || 'Remove'}</button>
-                    </div>
-                  ) : (
-                    <label className={`flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/20 hover:border-cyan-500/50 cursor-pointer transition-colors ${regEvidenceUploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                      <input
-                        type="file"
-                        accept=".pdf,image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        disabled={regEvidenceUploading}
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setRegEvidenceUploading(true);
-                          try {
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            const res = await fetch('/api/upload/registration-evidence', { method: 'POST', body: fd });
-                            const data = await res.json();
-                            if (data.success && data.url) setRegEvidenceUrl(data.url);
-                          } finally {
-                            setRegEvidenceUploading(false);
-                            e.target.value = '';
-                          }
-                        }}
-                      />
-                      {regEvidenceUploading ? <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" /> : <Upload className="w-8 h-8 text-gray-400" />}
-                      <span className="text-sm text-gray-400">{regEvidenceUploading ? t('ticketForm.uploading') || 'Uploading...' : t('ticketForm.uploadEvidence') || 'Upload PDF or image'}</span>
-                    </label>
-                  )}
-                </div>
+                {regRole === 'COMPANY' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.evidenceForIdentification') || 'Evidence for identification'}</label>
+                    <p className="text-xs text-gray-500 mb-2">{t('ticketForm.evidenceHint') || 'ID card, passport, or company certificate (PDF, JPEG, PNG)'}</p>
+                    {regEvidenceUrl ? (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                        <span className="text-sm text-emerald-400">✓ {t('ticketForm.fileUploaded') || 'File uploaded'}</span>
+                        <a href={regEvidenceUrl.startsWith('http') ? regEvidenceUrl : regEvidenceUrl.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${regEvidenceUrl}` : regEvidenceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline">View</a>
+                        <button type="button" onClick={() => setRegEvidenceUrl('')} className="text-xs text-red-400 hover:underline ml-auto">{t('ticketForm.remove') || 'Remove'}</button>
+                      </div>
+                    ) : (
+                      <label className={`flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/20 hover:border-cyan-500/50 cursor-pointer transition-colors ${regEvidenceUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                        <input
+                          type="file"
+                          accept=".pdf,image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          disabled={regEvidenceUploading}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setRegEvidenceUploading(true);
+                            try {
+                              const fd = new FormData();
+                              fd.append('file', file);
+                              const res = await fetch('/api/upload/registration-evidence', { method: 'POST', body: fd });
+                              const data = await res.json();
+                              if (data.success && data.url) setRegEvidenceUrl(data.url);
+                            } finally {
+                              setRegEvidenceUploading(false);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        {regEvidenceUploading ? <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" /> : <Upload className="w-8 h-8 text-gray-400" />}
+                        <span className="text-sm text-gray-400">{regEvidenceUploading ? t('ticketForm.uploading') || 'Uploading...' : t('ticketForm.uploadEvidence') || 'Upload PDF or image'}</span>
+                      </label>
+                    )}
+                  </div>
+                )}
 
                 <button
                   type="submit"

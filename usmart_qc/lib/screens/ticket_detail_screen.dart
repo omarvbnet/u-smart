@@ -506,13 +506,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final url = '${ApiConfig.baseUrl}${ApiConfig.ticketShare(t.id)}';
     final text = 'Ticket: ${t.siteName ?? t.id}\n$url';
     try {
-      await Share.share(text, subject: 'Ticket ${t.siteName ?? t.id}');
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.share(
+        text,
+        subject: 'Ticket ${t.siteName ?? t.id}',
+        sharePositionOrigin: box == null
+            ? null
+            : Rect.fromLTWH(
+                box.localToGlobal(Offset.zero).dx,
+                box.localToGlobal(Offset.zero).dy,
+                box.size.width,
+                box.size.height,
+              ),
+      );
     } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to open share sheet'),
-          backgroundColor: Color(0xFFFF4757),
+          content: Text('Share sheet unavailable. Link copied to clipboard.'),
+          backgroundColor: Color(0xFF6C63FF),
         ),
       );
     }

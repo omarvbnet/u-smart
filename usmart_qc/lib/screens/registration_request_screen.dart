@@ -51,6 +51,8 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
   bool _otpVerifying = false;
   final _otpCode = TextEditingController();
 
+  bool get _isPersonalRole => _role == 'PERSONAL';
+
   @override
   void dispose() {
     _legalName.dispose();
@@ -127,7 +129,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
       );
       return;
     }
-    if (_evidenceUrl == null || _evidenceUrl!.isEmpty) {
+    if (!_isPersonalRole && (_evidenceUrl == null || _evidenceUrl!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.t('reg_evidence_required')),
@@ -145,7 +147,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
       phone: _phone.text.trim(),
       email: _email.text.trim(),
       province: province,
-      evidenceUrl: _evidenceUrl!,
+      evidenceUrl: _isPersonalRole ? '' : _evidenceUrl,
       role: _role!,
     );
 
@@ -491,79 +493,81 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           items: _iraqProvinces,
           onChanged: (v) => setState(() => _selectedProvince = v),
         ),
-        const SizedBox(height: 16),
-        Text(
-          l10n.t('reg_evidence_label'),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          l10n.t('reg_evidence_hint'),
-          style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
-        ),
-        const SizedBox(height: 8),
-        if (_evidenceUrl != null) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00D4AA).withAlpha(20),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF00D4AA).withAlpha(60)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF00D4AA), size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  l10n.t('reg_file_uploaded'),
-                  style: const TextStyle(color: Color(0xFF00D4AA), fontSize: 14),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => setState(() => _evidenceUrl = null),
-                  child: Text(l10n.t('reg_remove'), style: const TextStyle(color: Color(0xFFFF4757), fontSize: 12)),
-                ),
-              ],
+        if (!_isPersonalRole) ...[
+          const SizedBox(height: 16),
+          Text(
+            l10n.t('reg_evidence_label'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ] else
-          InkWell(
-            onTap: provider.uploading ? null : _pickAndUploadFile,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.all(20),
+          const SizedBox(height: 4),
+          Text(
+            l10n.t('reg_evidence_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          if (_evidenceUrl != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withAlpha(8),
+                color: const Color(0xFF00D4AA).withAlpha(20),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withAlpha(20), style: BorderStyle.solid),
+                border: Border.all(color: const Color(0xFF00D4AA).withAlpha(60)),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (provider.uploading)
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
-                    )
-                  else
-                    const Icon(Icons.upload_file_rounded, color: Color(0xFF6C63FF), size: 28),
-                  const SizedBox(width: 12),
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF00D4AA), size: 22),
+                  const SizedBox(width: 10),
                   Text(
-                    provider.uploading ? l10n.t('reg_uploading') : l10n.t('reg_upload_evidence'),
-                    style: TextStyle(
-                      color: provider.uploading ? Colors.white.withAlpha(120) : Colors.white,
-                      fontSize: 14,
-                    ),
+                    l10n.t('reg_file_uploaded'),
+                    style: const TextStyle(color: Color(0xFF00D4AA), fontSize: 14),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => setState(() => _evidenceUrl = null),
+                    child: Text(l10n.t('reg_remove'), style: const TextStyle(color: Color(0xFFFF4757), fontSize: 12)),
                   ),
                 ],
               ),
             ),
-          ),
+          ] else
+            InkWell(
+              onTap: provider.uploading ? null : _pickAndUploadFile,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(8),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withAlpha(20), style: BorderStyle.solid),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (provider.uploading)
+                      const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+                      )
+                    else
+                      const Icon(Icons.upload_file_rounded, color: Color(0xFF6C63FF), size: 28),
+                    const SizedBox(width: 12),
+                    Text(
+                      provider.uploading ? l10n.t('reg_uploading') : l10n.t('reg_upload_evidence'),
+                      style: TextStyle(
+                        color: provider.uploading ? Colors.white.withAlpha(120) : Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,

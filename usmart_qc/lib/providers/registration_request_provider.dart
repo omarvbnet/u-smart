@@ -64,7 +64,7 @@ class RegistrationRequestProvider extends ChangeNotifier {
     required String phone,
     required String email,
     required String province,
-    required String evidenceUrl,
+    String? evidenceUrl,
     required String role,
   }) async {
     _error = null;
@@ -76,7 +76,7 @@ class RegistrationRequestProvider extends ChangeNotifier {
         'phone': phone.trim(),
         'email': email.trim(),
         'province': province.trim(),
-        'evidenceUrl': evidenceUrl,
+        'evidenceUrl': (evidenceUrl ?? '').trim(),
         'role': role,
       });
       _submitting = false;

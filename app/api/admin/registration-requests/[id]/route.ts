@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { RequesterRole } from '@prisma/client';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { sendCompanyAccountApprovedEmail } from '@/lib/email';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
@@ -19,20 +19,13 @@ function phonesMatch(a: string, b: string): boolean {
   return b === withZero || b === with964;
 }
 
-function generateUsername(role: string): string {
-  const prefixes: Record<string, string> = {
-    ENGINEER: 'eng',
-    TECHNICIAN: 'tech',
-    WORKER: 'wrk',
-    PERSONAL: 'per',
-    COMPANY: 'req',
-  };
-  const prefix = prefixes[role] || 'req';
-  return `${prefix}_${crypto.randomBytes(4).toString('hex')}`;
+function generateUsernameFromEmail(email: string): string {
+  const base = email.split('@')[0]?.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() || 'req';
+  return `${base}_${crypto.randomBytes(2).toString('hex')}`;
 }
 
 function generatePassword(): string {
-  return crypto.randomBytes(8).toString('hex');
+  return crypto.randomBytes(6).toString('hex');
 }
 
 export async function PATCH(
@@ -61,7 +54,17 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: 'Feature not available' }, { status: 503 });
     }
 
-    const rr = await delegate.findUnique({ where: { id } }) as { id: string; legalName: string; phone: string; email: string; evidenceUrl: string; role: string; status: string } | null;
+    const rr = await delegate.findUnique({ where: { id } }) as {
+      id: string;
+      legalName: string;
+      phone: string;
+      email: string;
+      evidenceUrl: string;
+      role: string;
+      status: string;
+      username?: string | null;
+      passwordHash?: string | null;
+    } | null;
     if (!rr) {
       return NextResponse.json({ success: false, message: 'Request not found' }, { status: 404 });
     }
@@ -84,6 +87,7 @@ export async function PATCH(
         select: {
           id: true,
           username: true,
+          passwordHash: true,
           role: true,
           email: true,
           phone: true,
@@ -100,9 +104,14 @@ export async function PATCH(
 
       // Allow upgrading Personal account to Company account instead of failing with 400.
       if (existingRequester && existingRequester.role === 'PERSONAL' && rr.role === 'COMPANY') {
-        const upgradeServiceSlug = 'enterprise-networking';
-        const upgradedPassword = generatePassword();
-        const upgradedPasswordHash = await bcrypt.hash(upgradedPassword, 10);
+        const upgradeServiceSlug = 'quality-control-supervision';
+        let passwordForEmail = '(as submitted during registration)';
+        let nextPasswordHash = rr.passwordHash || existingRequester.passwordHash;
+        if (!nextPasswordHash) {
+          const generatedPassword = generatePassword();
+          nextPasswordHash = await bcrypt.hash(generatedPassword, 10);
+          passwordForEmail = generatedPassword;
+        }
         await prisma.ticketRequester.update({
           where: { id: existingRequester.id },
           data: {
@@ -113,7 +122,7 @@ export async function PATCH(
             companyCertificationUrl: rr.evidenceUrl,
             serviceSlug: upgradeServiceSlug,
             status: 'ACTIVE',
-            passwordHash: upgradedPasswordHash,
+            passwordHash: nextPasswordHash,
             hasUpdatedCredentials: false,
           },
         });
@@ -125,7 +134,7 @@ export async function PATCH(
         sendCompanyAccountApprovedEmail(rr.email, {
           name: rr.legalName,
           username: existingRequester.username,
-          password: upgradedPassword,
+          password: passwordForEmail,
         }).catch((e) => console.error('Approval email failed:', e));
 
         return NextResponse.json({
@@ -134,7 +143,7 @@ export async function PATCH(
           upgraded: true,
           credentials: {
             username: existingRequester.username,
-            password: upgradedPassword,
+            password: passwordForEmail,
           },
           message: 'Existing personal account upgraded to company account successfully.',
         });
@@ -161,11 +170,29 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: phoneCheck.message ?? 'Phone already in use. Reject or ask user to use a different phone.' }, { status: 400 });
       }
 
-      const username = generateUsername(rr.role);
-      const password = generatePassword();
-      const passwordHash = await bcrypt.hash(password, 10);
+      let username = (rr.username || '').trim();
+      let passwordHash = rr.passwordHash || '';
+      let passwordForEmail = '(as submitted during registration)';
+      if (!username) {
+        username = generateUsernameFromEmail(rr.email);
+      }
+      if (!passwordHash) {
+        const generatedPassword = generatePassword();
+        passwordHash = await bcrypt.hash(generatedPassword, 10);
+        passwordForEmail = generatedPassword;
+      }
+      const usernameTaken = await prisma.ticketRequester.findUnique({
+        where: { username },
+        select: { id: true },
+      });
+      if (usernameTaken) {
+        return NextResponse.json(
+          { success: false, message: 'Requested username is already in use. Ask user to submit another request with a different username.' },
+          { status: 400 }
+        );
+      }
 
-      const serviceSlug = (rr.role === 'ENGINEER' || rr.role === 'TECHNICIAN' || rr.role === 'WORKER') ? 'quality-control-supervision' : 'enterprise-networking';
+      const serviceSlug = 'quality-control-supervision';
       const requesterRole: RequesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL', 'WORKER'].includes(rr.role) ? (rr.role as RequesterRole) : 'COMPANY';
 
       await prisma.ticketRequester.create({
@@ -189,13 +216,13 @@ export async function PATCH(
       sendCompanyAccountApprovedEmail(rr.email, {
         name: rr.legalName,
         username,
-        password,
+        password: passwordForEmail,
       }).catch((e) => console.error('Approval email failed:', e));
 
       return NextResponse.json({
         success: true,
         status: 'APPROVED',
-        credentials: { username, password },
+        credentials: { username, password: passwordForEmail },
       });
     }
 

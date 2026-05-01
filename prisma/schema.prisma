@@ -368,6 +368,8 @@ model User {
     email       String
     province    String                    // Iraq province
     evidenceUrl String                    // identification document (ID, passport, etc.)
+    username    String?
+    passwordHash String?
     role        RequesterRole             // COMPANY, ENGINEER, TECHNICIAN, or PERSONAL
     status      RegistrationRequestStatus @default(PENDING)
     createdAt   DateTime                  @default(now())
