@@ -10,8 +10,24 @@ import 'screens/company_dashboard_screen.dart';
 import 'screens/engineer_dashboard_screen.dart';
 import 'screens/splash_screen.dart';
 
-class ProvisrApp extends StatelessWidget {
+class ProvisrApp extends StatefulWidget {
   const ProvisrApp({super.key});
+
+  @override
+  State<ProvisrApp> createState() => _ProvisrAppState();
+}
+
+class _ProvisrAppState extends State<ProvisrApp> {
+  bool _showBrandSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+      if (!mounted) return;
+      setState(() => _showBrandSplash = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +66,7 @@ class ProvisrApp extends StatelessWidget {
           },
         ),
             ),
-            home: auth.loading
+            home: (_showBrandSplash || auth.loading)
           ? const SplashScreen()
           : auth.isLoggedIn
               ? (auth.isEngineer

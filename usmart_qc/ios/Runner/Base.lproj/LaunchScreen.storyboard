@@ -22,11 +22,6 @@
                                     <constraint firstAttribute="width" constant="260" id="n0U-mw-fUe"/>
                                     <constraint firstAttribute="height" constant="260" id="ySx-FN-vIP"/>
                                 </constraints>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <real key="value" value="130"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
                             </view>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="p2b-3J-f5m">
                                 <color key="backgroundColor" red="0" green="0.831372549" blue="0.6666666667" alpha="0.16" colorSpace="custom" customColorSpace="sRGB"/>
@@ -34,11 +29,6 @@
                                     <constraint firstAttribute="width" constant="210" id="Y8N-V2-KW5"/>
                                     <constraint firstAttribute="height" constant="210" id="fQ1-rx-R5m"/>
                                 </constraints>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <real key="value" value="105"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
                             </view>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="J2s-7k-J2f">
                                 <color key="backgroundColor" red="1" green="1" blue="1" alpha="0.06" colorSpace="custom" customColorSpace="sRGB"/>
@@ -46,11 +36,6 @@
                                     <constraint firstAttribute="width" constant="126" id="Q8X-1o-Uyp"/>
                                     <constraint firstAttribute="height" constant="126" id="S7A-J7-VJz"/>
                                 </constraints>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <real key="value" value="63"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
                             </view>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="uR2-Eq-8f8">
                                 <constraints>
