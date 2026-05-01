@@ -65,6 +65,47 @@ async function getRequesterTokens(prisma: any, requesterIds: string[]): Promise<
   }
 }
 
+async function getLegacyRequesterTokens(prisma: any, requesterIds: string[]): Promise<string[]> {
+  if (!requesterIds.length) return [];
+  try {
+    const rows = (await prisma.notification.findMany({
+      where: {
+        type: 'push_token',
+        forAdmin: false,
+        requesterId: { in: requesterIds },
+      },
+      select: { message: true },
+    })) as Array<{ message: unknown }>;
+    return [
+      ...new Set(
+        rows
+          .map((r) => r.message)
+          .filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+      ),
+    ];
+  } catch {
+    return [];
+  }
+}
+
+async function getAllLegacyRequesterTokens(prisma: any): Promise<string[]> {
+  try {
+    const rows = (await prisma.notification.findMany({
+      where: { type: 'push_token', forAdmin: false },
+      select: { message: true },
+    })) as Array<{ message: unknown }>;
+    return [
+      ...new Set(
+        rows
+          .map((r) => r.message)
+          .filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+      ),
+    ];
+  } catch {
+    return [];
+  }
+}
+
 export async function registerRequesterPushToken(
   prisma: any,
   requesterId: string,
@@ -84,6 +125,22 @@ export async function registerRequesterPushToken(
   } catch (err) {
     if (!isMissingPushColumnsError(err)) throw err;
   }
+
+  // Backward compatibility while environments still use legacy storage.
+  try {
+    await prisma.notification.create({
+      data: {
+        type: 'push_token',
+        title: platform,
+        message: cleaned,
+        requesterId,
+        forAdmin: false,
+        read: true,
+      },
+    });
+  } catch {
+    // Ignore duplicate/legacy write failures.
+  }
 }
 
 export async function clearRequesterPushToken(prisma: any, requesterId: string): Promise<void> {
@@ -94,6 +151,14 @@ export async function clearRequesterPushToken(prisma: any, requesterId: string):
     });
   } catch (err) {
     if (!isMissingPushColumnsError(err)) throw err;
+  }
+
+  try {
+    await prisma.notification.deleteMany({
+      where: { type: 'push_token', forAdmin: false, requesterId },
+    });
+  } catch {
+    // Ignore legacy cleanup failures.
   }
 }
 
@@ -132,7 +197,11 @@ export async function sendPushToRequesters(
   payload: PushPayload
 ): Promise<void> {
   if (!ensureFirebase()) return;
-  const tokens = await getRequesterTokens(prisma, requesterIds);
+  const [primary, legacy] = await Promise.all([
+    getRequesterTokens(prisma, requesterIds),
+    getLegacyRequesterTokens(prisma, requesterIds),
+  ]);
+  const tokens = [...new Set([...primary, ...legacy])];
   if (!tokens.length) return;
   const messaging = admin.messaging();
   await Promise.allSettled(
@@ -156,18 +225,24 @@ export async function sendPushToRequesters(
 
 export async function sendPushToAllRequesters(prisma: any, payload: PushPayload): Promise<number> {
   if (!ensureFirebase()) return 0;
-  const rows = (await prisma.ticketRequester.findMany({
-    where: { phonePushToken: { not: null } },
-    select: { phonePushToken: true },
-  })) as Array<{ phonePushToken: unknown }>;
-
-  const tokens = [
-    ...new Set(
-      rows
-        .map((r) => r.phonePushToken)
-        .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
-    ),
-  ];
+  let primary: string[] = [];
+  try {
+    const rows = (await prisma.ticketRequester.findMany({
+      where: { phonePushToken: { not: null } },
+      select: { phonePushToken: true },
+    })) as Array<{ phonePushToken: unknown }>;
+    primary = [
+      ...new Set(
+        rows
+          .map((r) => r.phonePushToken)
+          .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+      ),
+    ];
+  } catch {
+    primary = [];
+  }
+  const legacy = await getAllLegacyRequesterTokens(prisma);
+  const tokens = [...new Set([...primary, ...legacy])];
   if (!tokens.length) return 0;
   const messaging = admin.messaging();
   const results = await Promise.allSettled(
