@@ -16,7 +16,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _obscure = true;
@@ -30,6 +30,10 @@ class _LoginScreenState extends State<LoginScreen>
   late AnimationController _animCtrl;
   late Animation<double> _fadeIn;
   late Animation<Offset> _slideUp;
+  late AnimationController _logoCtrl;
+  late Animation<double> _logoScale;
+  late Animation<double> _logoRotate;
+  late Animation<double> _logoGlow;
 
   @override
   void initState() {
@@ -43,6 +47,19 @@ class _LoginScreenState extends State<LoginScreen>
       begin: const Offset(0, 0.15),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
+    _logoCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat(reverse: true);
+    _logoScale = Tween<double>(begin: 0.96, end: 1.06).animate(
+      CurvedAnimation(parent: _logoCtrl, curve: Curves.easeInOutSine),
+    );
+    _logoRotate = Tween<double>(begin: -0.02, end: 0.02).animate(
+      CurvedAnimation(parent: _logoCtrl, curve: Curves.easeInOut),
+    );
+    _logoGlow = Tween<double>(begin: 40, end: 70).animate(
+      CurvedAnimation(parent: _logoCtrl, curve: Curves.easeInOutCubic),
+    );
     _animCtrl.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSavedCredentials());
   }
@@ -255,6 +272,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _animCtrl.dispose();
+    _logoCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
@@ -318,25 +336,58 @@ class _LoginScreenState extends State<LoginScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 88,
-                          height: 88,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    const Color(0xFF6C63FF).withAlpha(100),
-                                blurRadius: 40,
-                                spreadRadius: 2,
+                        AnimatedBuilder(
+                          animation: _logoCtrl,
+                          builder: (context, child) {
+                            return Transform.rotate(
+                              angle: _logoRotate.value,
+                              child: Transform.scale(
+                                scale: _logoScale.value,
+                                child: Container(
+                                  width: 98,
+                                  height: 98,
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(30),
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF6C63FF).withAlpha(120),
+                                        blurRadius: _logoGlow.value,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(26),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Image.asset('assets/provisor_icon.png', fit: BoxFit.cover),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Colors.white.withAlpha(24),
+                                                Colors.transparent,
+                                                Colors.black.withAlpha(20),
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(26),
-                            child: Image.asset('assets/provisor_icon.png',
-                                fit: BoxFit.cover),
-                          ),
+                            );
+                          },
                         ),
                         const SizedBox(height: 28),
                         ShaderMask(
@@ -424,7 +475,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               value: _agreedToTerms,
                                               onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
                                               activeColor: const Color(0xFF6C63FF),
-                                              fillColor: MaterialStateProperty.resolveWith((_) => _agreedToTerms ? const Color(0xFF6C63FF) : Colors.transparent),
+                                              fillColor: WidgetStateProperty.resolveWith((_) => _agreedToTerms ? const Color(0xFF6C63FF) : Colors.transparent),
                                               side: BorderSide(color: Colors.white.withAlpha(100)),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                             ),

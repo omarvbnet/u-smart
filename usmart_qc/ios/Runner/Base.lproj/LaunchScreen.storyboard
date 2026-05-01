@@ -16,15 +16,71 @@
                     <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleAspectFit" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="YRO-k0-Ey4">
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="wq5-hq-p1B">
+                                <color key="backgroundColor" red="0.4235294118" green="0.3882352941" blue="1" alpha="0.18" colorSpace="custom" customColorSpace="sRGB"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="260" id="n0U-mw-fUe"/>
+                                    <constraint firstAttribute="height" constant="260" id="ySx-FN-vIP"/>
+                                </constraints>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                        <real key="value" value="130"/>
+                                    </userDefinedRuntimeAttribute>
+                                </userDefinedRuntimeAttributes>
+                            </view>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="p2b-3J-f5m">
+                                <color key="backgroundColor" red="0" green="0.831372549" blue="0.6666666667" alpha="0.16" colorSpace="custom" customColorSpace="sRGB"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="210" id="Y8N-V2-KW5"/>
+                                    <constraint firstAttribute="height" constant="210" id="fQ1-rx-R5m"/>
+                                </constraints>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                        <real key="value" value="105"/>
+                                    </userDefinedRuntimeAttribute>
+                                </userDefinedRuntimeAttributes>
+                            </view>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="J2s-7k-J2f">
+                                <color key="backgroundColor" red="1" green="1" blue="1" alpha="0.06" colorSpace="custom" customColorSpace="sRGB"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="126" id="Q8X-1o-Uyp"/>
+                                    <constraint firstAttribute="height" constant="126" id="S7A-J7-VJz"/>
+                                </constraints>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                        <real key="value" value="63"/>
+                                    </userDefinedRuntimeAttribute>
+                                </userDefinedRuntimeAttributes>
+                            </view>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="uR2-Eq-8f8">
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="98" id="GkR-uR-kRs"/>
+                                    <constraint firstAttribute="height" constant="98" id="x6p-f4-zah"/>
+                                </constraints>
                             </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="PROVISER" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="f0V-TE-Hvg">
+                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="26"/>
+                                <color key="textColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Quality Control Supervision" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="b3F-WR-2Zp">
+                                <fontDescription key="fontDescription" type="system" weight="regular" pointSize="13"/>
+                                <color key="textColor" red="0.7647058824" green="0.7960784314" blue="0.9058823529" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </label>
                         </subviews>
-                        <color key="backgroundColor" red="0.0196078431372549" green="0.0196078431372549" blue="0.10196078431372549" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="0.0196078431" green="0.0196078431" blue="0.1019607843" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="1a2-6s-vTC"/>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="4X2-HB-R7a"/>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="width" constant="120" id="logo-w"/>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="height" constant="120" id="logo-h"/>
+                            <constraint firstItem="uR2-Eq-8f8" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="0T3-B3-a5d"/>
+                            <constraint firstItem="uR2-Eq-8f8" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-48" id="2Dm-DQ-8nW"/>
+                            <constraint firstItem="f0V-TE-Hvg" firstAttribute="top" secondItem="uR2-Eq-8f8" secondAttribute="bottom" constant="22" id="3Qf-Lq-XnR"/>
+                            <constraint firstItem="f0V-TE-Hvg" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="4bG-VN-H1o"/>
+                            <constraint firstItem="b3F-WR-2Zp" firstAttribute="top" secondItem="f0V-TE-Hvg" secondAttribute="bottom" constant="8" id="9yC-R2-B4l"/>
+                            <constraint firstItem="b3F-WR-2Zp" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="GE6-vK-Q3j"/>
+                            <constraint firstItem="wq5-hq-p1B" firstAttribute="centerX" secondItem="uR2-Eq-8f8" secondAttribute="centerX" id="Jq2-ru-eA6"/>
+                            <constraint firstItem="wq5-hq-p1B" firstAttribute="centerY" secondItem="uR2-Eq-8f8" secondAttribute="centerY" id="Q12-8M-uZQ"/>
+                            <constraint firstItem="p2b-3J-f5m" firstAttribute="centerX" secondItem="uR2-Eq-8f8" secondAttribute="centerX" constant="12" id="YZH-q4-xYm"/>
+                            <constraint firstItem="p2b-3J-f5m" firstAttribute="centerY" secondItem="uR2-Eq-8f8" secondAttribute="centerY" constant="12" id="d20-WL-W96"/>
+                            <constraint firstItem="J2s-7k-J2f" firstAttribute="centerX" secondItem="uR2-Eq-8f8" secondAttribute="centerX" id="p1Q-3K-tQP"/>
+                            <constraint firstItem="J2s-7k-J2f" firstAttribute="centerY" secondItem="uR2-Eq-8f8" secondAttribute="centerY" id="r9A-9M-zPz"/>
                         </constraints>
                     </view>
                 </viewController>

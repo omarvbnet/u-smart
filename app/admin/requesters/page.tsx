@@ -8,6 +8,8 @@ type Requester = {
   username: string;
   name: string | null;
   phone: string;
+  phonePushToken: string | null;
+  phonePlatform: string | null;
   company: string | null;
   companyCertificationUrl: string | null;
   status: string;
@@ -90,7 +92,7 @@ export default function AdminRequestersPage() {
       const data = await res.json();
       if (data.success) {
         const r = data.requester;
-        setList((prev) => [{ id: r.id, username: r.username, name: r.name, phone: r.phone, company: r.company ?? null, companyCertificationUrl: null, status: r.status ?? 'ACTIVE', role: r.role ?? 'COMPANY', createdAt: r.createdAt, ticketCount: 0 }, ...prev]);
+        setList((prev) => [{ id: r.id, username: r.username, name: r.name, phone: r.phone, phonePushToken: r.phonePushToken ?? null, phonePlatform: r.phonePlatform ?? null, company: r.company ?? null, companyCertificationUrl: null, status: r.status ?? 'ACTIVE', role: r.role ?? 'COMPANY', createdAt: r.createdAt, ticketCount: 0 }, ...prev]);
         setAddCredentials(data.credentials);
         setShowAddForm(false);
         setAddName('');
@@ -220,6 +222,8 @@ export default function AdminRequestersPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Push token</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Certification</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -255,6 +259,12 @@ export default function AdminRequestersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.phone}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[260px] truncate" title={r.phonePushToken ?? ''}>
+                    {r.phonePushToken ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {r.phonePlatform?.toUpperCase() ?? '—'}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.company ?? '—'}</td>
                   <td className="px-4 py-3 text-sm">
                     {r.companyCertificationUrl ? (

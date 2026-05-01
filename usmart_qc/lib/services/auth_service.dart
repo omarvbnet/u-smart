@@ -1,4 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:io' show Platform;
 import '../config/api_config.dart';
 import '../models/user.dart';
 import 'api_service.dart';
@@ -38,9 +40,19 @@ class AuthService {
 
   Future<({User user, String token})?> login(
       String username, String password) async {
+    String? pushToken;
+    String phonePlatform = 'unknown';
+    try {
+      phonePlatform =
+          Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'unknown');
+      pushToken = await FirebaseMessaging.instance.getToken();
+    } catch (_) {}
+
     final data = await _api.post(ApiConfig.login, body: {
       'username': username,
       'password': password,
+      if (pushToken != null && pushToken.isNotEmpty) 'pushToken': pushToken,
+      if (pushToken != null && pushToken.isNotEmpty) 'phonePlatform': phonePlatform,
     });
 
     if (data['success'] == true && data['token'] != null) {
