@@ -42,6 +42,10 @@ function ensureFirebase(): boolean {
   return true;
 }
 
+function isInvalidTokenErrorCode(code: string | undefined): boolean {
+  return code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token';
+}
+
 async function getRequesterTokens(prisma: any, requesterIds: string[]): Promise<string[]> {
   if (!requesterIds.length) return [];
   try {
@@ -103,6 +107,29 @@ async function getAllLegacyRequesterTokens(prisma: any): Promise<string[]> {
     ];
   } catch {
     return [];
+  }
+}
+
+async function removeTokenEverywhere(prisma: any, token: string): Promise<void> {
+  if (!token.trim()) return;
+
+  // New storage.
+  try {
+    await prisma.ticketRequester.updateMany({
+      where: { phonePushToken: token },
+      data: { phonePushToken: null, phonePlatform: null },
+    });
+  } catch {
+    // Ignore if schema/column is missing in older environments.
+  }
+
+  // Legacy storage.
+  try {
+    await prisma.notification.deleteMany({
+      where: { type: 'push_token', forAdmin: false, message: token },
+    });
+  } catch {
+    // Ignore cleanup errors.
   }
 }
 
@@ -195,16 +222,16 @@ export async function sendPushToRequesters(
   prisma: any,
   requesterIds: string[],
   payload: PushPayload
-): Promise<void> {
-  if (!ensureFirebase()) return;
+) : Promise<number> {
+  if (!ensureFirebase()) return 0;
   const [primary, legacy] = await Promise.all([
     getRequesterTokens(prisma, requesterIds),
     getLegacyRequesterTokens(prisma, requesterIds),
   ]);
   const tokens = [...new Set([...primary, ...legacy])];
-  if (!tokens.length) return;
+  if (!tokens.length) return 0;
   const messaging = admin.messaging();
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     tokens.map((token) =>
       messaging.send({
         token,
@@ -221,6 +248,18 @@ export async function sendPushToRequesters(
       })
     )
   );
+
+  const invalidTokens: string[] = [];
+  results.forEach((r, idx) => {
+    if (r.status !== 'rejected') return;
+    const code = (r.reason as { code?: string } | undefined)?.code;
+    if (isInvalidTokenErrorCode(code)) invalidTokens.push(tokens[idx]);
+  });
+  if (invalidTokens.length) {
+    await Promise.allSettled(invalidTokens.map((token) => removeTokenEverywhere(prisma, token)));
+  }
+
+  return results.filter((r) => r.status === 'fulfilled').length;
 }
 
 export async function sendPushToAllRequesters(prisma: any, payload: PushPayload): Promise<number> {
@@ -262,5 +301,16 @@ export async function sendPushToAllRequesters(prisma: any, payload: PushPayload)
       })
     )
   );
+
+  const invalidTokens: string[] = [];
+  results.forEach((r, idx) => {
+    if (r.status !== 'rejected') return;
+    const code = (r.reason as { code?: string } | undefined)?.code;
+    if (isInvalidTokenErrorCode(code)) invalidTokens.push(tokens[idx]);
+  });
+  if (invalidTokens.length) {
+    await Promise.allSettled(invalidTokens.map((token) => removeTokenEverywhere(prisma, token)));
+  }
+
   return results.filter((r) => r.status === 'fulfilled').length;
 }

@@ -18,8 +18,7 @@ export async function POST(req: NextRequest) {
     }
     let sent = 0;
     if (requesterId) {
-      await sendPushToRequesters(prisma as any, [requesterId], { title, body: message });
-      sent = 1;
+      sent = await sendPushToRequesters(prisma as any, [requesterId], { title, body: message });
     } else {
       sent = await sendPushToAllRequesters(prisma as any, { title, body: message });
     }
