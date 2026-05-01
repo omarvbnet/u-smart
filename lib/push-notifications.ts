@@ -8,6 +8,11 @@ type PushPayload = {
 
 let initialized = false;
 
+function isMissingPushColumnsError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  return msg.includes('P2022') && (msg.includes('phonePushToken') || msg.includes('phonePlatform'));
+}
+
 function getServiceAccount() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (raw) {
@@ -68,20 +73,28 @@ export async function registerRequesterPushToken(
 ): Promise<void> {
   const cleaned = token.trim();
   if (!cleaned) return;
-  await prisma.ticketRequester.update({
-    where: { id: requesterId },
-    data: {
-      phonePushToken: cleaned,
-      phonePlatform: platform,
-    },
-  });
+  try {
+    await prisma.ticketRequester.update({
+      where: { id: requesterId },
+      data: {
+        phonePushToken: cleaned,
+        phonePlatform: platform,
+      },
+    });
+  } catch (err) {
+    if (!isMissingPushColumnsError(err)) throw err;
+  }
 }
 
 export async function clearRequesterPushToken(prisma: any, requesterId: string): Promise<void> {
-  await prisma.ticketRequester.update({
-    where: { id: requesterId },
-    data: { phonePushToken: null, phonePlatform: null },
-  });
+  try {
+    await prisma.ticketRequester.update({
+      where: { id: requesterId },
+      data: { phonePushToken: null, phonePlatform: null },
+    });
+  } catch (err) {
+    if (!isMissingPushColumnsError(err)) throw err;
+  }
 }
 
 export async function registerUserPushToken(
@@ -92,17 +105,25 @@ export async function registerUserPushToken(
 ): Promise<void> {
   const cleaned = token.trim();
   if (!cleaned) return;
-  await prisma.user.update({
-    where: { id: userId },
-    data: { phonePushToken: cleaned, phonePlatform: platform },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { phonePushToken: cleaned, phonePlatform: platform },
+    });
+  } catch (err) {
+    if (!isMissingPushColumnsError(err)) throw err;
+  }
 }
 
 export async function clearUserPushToken(prisma: any, userId: string): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { phonePushToken: null, phonePlatform: null },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { phonePushToken: null, phonePlatform: null },
+    });
+  } catch (err) {
+    if (!isMissingPushColumnsError(err)) throw err;
+  }
 }
 
 export async function sendPushToRequesters(

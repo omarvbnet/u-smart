@@ -21,6 +21,15 @@ export async function POST(req: NextRequest) {
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { username },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        passwordHash: true,
+        role: true,
+        province: true,
+        provinceFilterActive: true,
+      },
     });
 
     if (!requester) {
