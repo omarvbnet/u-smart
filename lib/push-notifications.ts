@@ -40,15 +40,20 @@ function ensureFirebase(): boolean {
 async function getRequesterTokens(prisma: any, requesterIds: string[]): Promise<string[]> {
   if (!requesterIds.length) return [];
   try {
-    const rows = await prisma.notification.findMany({
+    const rows = (await prisma.notification.findMany({
       where: {
         type: 'push_token',
         forAdmin: false,
         requesterId: { in: requesterIds },
       },
       select: { message: true },
-    });
-    return [...new Set(rows.map((r: { message: string }) => r.message).filter(Boolean))];
+    })) as Array<{ message: unknown }>;
+
+    const tokens = rows
+      .map((r) => r.message)
+      .filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
+
+    return [...new Set(tokens)];
   } catch {
     return [];
   }
@@ -114,11 +119,18 @@ export async function sendPushToRequesters(
 
 export async function sendPushToAllRequesters(prisma: any, payload: PushPayload): Promise<number> {
   if (!ensureFirebase()) return 0;
-  const rows = await prisma.notification.findMany({
+  const rows = (await prisma.notification.findMany({
     where: { type: 'push_token', forAdmin: false },
     select: { message: true },
-  });
-  const tokens = [...new Set(rows.map((r: { message: string }) => r.message).filter(Boolean))];
+  })) as Array<{ message: unknown }>;
+
+  const tokens = [
+    ...new Set(
+      rows
+        .map((r) => r.message)
+        .filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+    ),
+  ];
   if (!tokens.length) return 0;
   const messaging = admin.messaging();
   const results = await Promise.allSettled(

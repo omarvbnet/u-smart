@@ -39,6 +39,14 @@ flutter build ipa
 # Output: build/ios/ipa/usmart_qc.ipa
 ```
 
+> App Store Connect now requires builds produced with **iOS 26 SDK** (Xcode 26+).
+> If you receive an SDK rejection, switch Xcode before building:
+>
+> ```bash
+> sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+> xcodebuild -version
+> ```
+
 ## Step 2: Host the IPA
 
 1. Copy the IPA to your site’s static folder:

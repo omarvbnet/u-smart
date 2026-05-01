@@ -23,6 +23,23 @@ fi
 
 echo ""
 echo "Building iOS release (requires macOS, Xcode, and Apple Developer account)..."
+
+# Force modern Xcode path unless caller already provided DEVELOPER_DIR.
+if [ -z "${DEVELOPER_DIR:-}" ] && [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+  export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+fi
+
+if command -v xcodebuild >/dev/null 2>&1; then
+  XCODE_VERSION_RAW="$(xcodebuild -version | awk 'NR==1{print $2}')"
+  XCODE_MAJOR="${XCODE_VERSION_RAW%%.*}"
+  if [ -z "$XCODE_MAJOR" ] || [ "$XCODE_MAJOR" -lt 26 ]; then
+    echo "ERROR: App Store uploads now require iOS 26 SDK (Xcode 26+)."
+    echo "Current Xcode: ${XCODE_VERSION_RAW:-unknown}. Please switch to Xcode 26 or newer."
+    echo "Example: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+    exit 1
+  fi
+fi
+
 if flutter build ipa 2>/dev/null; then
   IPA_PATH="build/ios/ipa/usmart_qc.ipa"
   if [ -f "$IPA_PATH" ]; then

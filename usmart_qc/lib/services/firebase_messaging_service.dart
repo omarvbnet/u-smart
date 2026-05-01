@@ -21,7 +21,24 @@ class FirebaseMessagingService {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
 
-    final token = await messaging.getToken();
+    if (Platform.isIOS) {
+      try {
+        // Ensures APNS token exists before requesting FCM token on iOS.
+        await messaging.getAPNSToken();
+      } catch (_) {}
+    }
+
+    String? token = await messaging.getToken();
+    if (Platform.isIOS && (token == null || token.isEmpty)) {
+      // iOS can take a moment to finish APNS registration; retry a few times.
+      for (var i = 0; i < 3 && (token == null || token.isEmpty); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        try {
+          await messaging.getAPNSToken();
+        } catch (_) {}
+        token = await messaging.getToken();
+      }
+    }
     if (token != null && token.isNotEmpty) {
       await _registerToken(token);
     }
