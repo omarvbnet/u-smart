@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { registerRequesterPushToken } from '@/lib/push-notifications';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
+    const pushToken = typeof body.pushToken === 'string' ? body.pushToken.trim() : '';
+    const phonePlatform = typeof body.phonePlatform === 'string' ? body.phonePlatform.trim().toLowerCase() : '';
 
     if (!username || !password) {
       return NextResponse.json(
@@ -33,6 +36,19 @@ export async function POST(req: NextRequest) {
         { success: false, message: 'Invalid username or password' },
         { status: 401 }
       );
+    }
+
+    if (pushToken) {
+      try {
+        await registerRequesterPushToken(
+          prisma as any,
+          requester.id,
+          pushToken,
+          (phonePlatform as any) || 'unknown'
+        );
+      } catch (e) {
+        console.error('Failed to save requester push token on login:', e);
+      }
     }
 
     const role = (requester as { role?: string }).role ?? 'COMPANY';

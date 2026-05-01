@@ -40,20 +40,21 @@ function ensureFirebase(): boolean {
 async function getRequesterTokens(prisma: any, requesterIds: string[]): Promise<string[]> {
   if (!requesterIds.length) return [];
   try {
-    const rows = (await prisma.notification.findMany({
+    const rows = (await prisma.ticketRequester.findMany({
       where: {
-        type: 'push_token',
-        forAdmin: false,
-        requesterId: { in: requesterIds },
+        id: { in: requesterIds },
+        phonePushToken: { not: null },
       },
-      select: { message: true },
-    })) as Array<{ message: unknown }>;
+      select: { phonePushToken: true },
+    })) as Array<{ phonePushToken: unknown }>;
 
-    const tokens = rows
-      .map((r) => r.message)
-      .filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
-
-    return [...new Set(tokens)];
+    return [
+      ...new Set(
+        rows
+          .map((r) => r.phonePushToken)
+          .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+      ),
+    ];
   } catch {
     return [];
   }
@@ -67,25 +68,40 @@ export async function registerRequesterPushToken(
 ): Promise<void> {
   const cleaned = token.trim();
   if (!cleaned) return;
-  const existing = await prisma.notification.findFirst({
-    where: {
-      type: 'push_token',
-      requesterId,
-      message: cleaned,
-      forAdmin: false,
-    },
-    select: { id: true },
-  });
-  if (existing?.id) return;
-  await prisma.notification.create({
+  await prisma.ticketRequester.update({
+    where: { id: requesterId },
     data: {
-      type: 'push_token',
-      title: platform,
-      message: cleaned,
-      requesterId,
-      forAdmin: false,
-      read: true,
+      phonePushToken: cleaned,
+      phonePlatform: platform,
     },
+  });
+}
+
+export async function clearRequesterPushToken(prisma: any, requesterId: string): Promise<void> {
+  await prisma.ticketRequester.update({
+    where: { id: requesterId },
+    data: { phonePushToken: null, phonePlatform: null },
+  });
+}
+
+export async function registerUserPushToken(
+  prisma: any,
+  userId: string,
+  token: string,
+  platform: 'ios' | 'android' | 'web' | 'unknown'
+): Promise<void> {
+  const cleaned = token.trim();
+  if (!cleaned) return;
+  await prisma.user.update({
+    where: { id: userId },
+    data: { phonePushToken: cleaned, phonePlatform: platform },
+  });
+}
+
+export async function clearUserPushToken(prisma: any, userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { phonePushToken: null, phonePlatform: null },
   });
 }
 
@@ -119,16 +135,16 @@ export async function sendPushToRequesters(
 
 export async function sendPushToAllRequesters(prisma: any, payload: PushPayload): Promise<number> {
   if (!ensureFirebase()) return 0;
-  const rows = (await prisma.notification.findMany({
-    where: { type: 'push_token', forAdmin: false },
-    select: { message: true },
-  })) as Array<{ message: unknown }>;
+  const rows = (await prisma.ticketRequester.findMany({
+    where: { phonePushToken: { not: null } },
+    select: { phonePushToken: true },
+  })) as Array<{ phonePushToken: unknown }>;
 
   const tokens = [
     ...new Set(
       rows
-        .map((r) => r.message)
-        .filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+        .map((r) => r.phonePushToken)
+        .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
     ),
   ];
   if (!tokens.length) return 0;

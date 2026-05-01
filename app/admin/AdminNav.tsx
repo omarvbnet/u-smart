@@ -47,6 +47,7 @@ const links = [
   { href: '/admin/registration-requests', label: 'Registration Req.', icon: UserCircle },
   { href: '/admin/companies', label: 'Companies', icon: Building },
   { href: '/admin/requesters', label: 'Requesters', icon: TicketCheck },
+  { href: '/admin/push-notifications', label: 'Push notifications', icon: TicketCheck },
   { href: '/admin/users', label: 'Users', icon: UserCircle },
 ];
 

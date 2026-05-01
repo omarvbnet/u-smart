@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { registerRequesterPushToken } from '@/lib/push-notifications';
+import { registerRequesterPushToken, clearRequesterPushToken } from '@/lib/push-notifications';
 
 export async function POST(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -20,5 +20,19 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('POST /api/auth/requester-push-token:', err);
     return NextResponse.json({ success: false, message: 'Failed to register push token' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
+    return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+  }
+  try {
+    await clearRequesterPushToken(prisma as any, auth.payload.requesterId);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /api/auth/requester-push-token:', err);
+    return NextResponse.json({ success: false, message: 'Failed to clear push token' }, { status: 500 });
   }
 }
