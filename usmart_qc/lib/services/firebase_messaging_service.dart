@@ -13,32 +13,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 class FirebaseMessagingService {
   final ApiService _api;
   final NotificationService _localNotifications;
+  bool _initialized = false;
   FirebaseMessagingService(this._api, this._localNotifications);
 
   Future<void> init() async {
+    if (_initialized) return;
+
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
 
-    if (Platform.isIOS) {
-      try {
-        // Ensures APNS token exists before requesting FCM token on iOS.
-        await messaging.getAPNSToken();
-      } catch (_) {}
-    }
-
-    String? token = await messaging.getToken();
-    if (Platform.isIOS && (token == null || token.isEmpty)) {
-      // iOS can take a moment to finish APNS registration; retry a few times.
-      for (var i = 0; i < 3 && (token == null || token.isEmpty); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-        try {
-          await messaging.getAPNSToken();
-        } catch (_) {}
-        token = await messaging.getToken();
-      }
-    }
+    final token = await _getSafeToken(messaging);
     if (token != null && token.isNotEmpty) {
       await _registerToken(token);
     }
@@ -54,6 +40,35 @@ class FirebaseMessagingService {
         body: body,
       );
     });
+
+    _initialized = true;
+  }
+
+  Future<String?> _getSafeToken(FirebaseMessaging messaging) async {
+    if (!Platform.isIOS) {
+      try {
+        return await messaging.getToken();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // On iOS, APNS token can appear slightly later than app startup.
+    for (var i = 0; i < 10; i++) {
+      try {
+        final apns = await messaging.getAPNSToken();
+        if (apns != null && apns.isNotEmpty) {
+          return await messaging.getToken();
+        }
+      } on FirebaseException catch (e) {
+        if (e.code != 'apns-token-not-set') return null;
+      } catch (_) {
+        return null;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+
+    return null;
   }
 
   Future<void> _registerToken(String token) async {
