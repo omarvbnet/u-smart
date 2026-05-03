@@ -160,13 +160,16 @@ export async function PATCH(
         });
       }
 
-      // Keep legacy requester/company records for compatibility with old admin pages.
+      // Legacy ticket_requester row: same username + password as coordinator so web
+      // and Provisor app accept the credentials emailed to the POC.
+      const pocEmailNorm =
+        pocEmail && typeof pocEmail === 'string' ? pocEmail.trim().toLowerCase() : null;
       const requester = await prisma.ticketRequester.create({
         data: {
-          username: `${username}_legacy`,
+          username,
           passwordHash,
           name: companyRequest.pocName,
-          email: null,
+          email: pocEmailNorm,
           phone: `99${Date.now().toString().slice(-9)}`,
           company: companyRequest.companyName,
           companyCertificationUrl: companyRequest.certificateUrl ?? undefined,

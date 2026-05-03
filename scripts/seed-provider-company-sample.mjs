@@ -28,48 +28,42 @@ const SAMPLE = {
 
 async function upsertCoordinatorUser(companyId, role, profile) {
   const passwordHash = await bcrypt.hash(profile.password, 10);
+  let mappedRole = role;
+  if (role === 'COMPANY_OWNER' || role === 'QUALITY_ENGINEER' || role === 'SUPERVISION_ENGINEER') {
+    mappedRole = 'COORDINATOR';
+  }
+  const baseData = {
+    email: profile.email,
+    name: profile.name,
+    passwordHash,
+    role: mappedRole,
+    companyId,
+  };
   try {
     await prisma.coordinatorUser.upsert({
-      where: { username: profile.username },
-      update: {
-        email: profile.email,
-        name: profile.name,
-        passwordHash,
-        role,
-        status: 'ACTIVE',
-        mustChangePassword: false,
-        companyId,
-      },
-      create: {
-        username: profile.username,
-        email: profile.email,
-        name: profile.name,
-        passwordHash,
-        role,
-        status: 'ACTIVE',
-        mustChangePassword: false,
-        companyId,
-      },
+      where: { companyId_email: { companyId, email: profile.email } },
+      update: { ...baseData, status: 'ACTIVE', mustChangePassword: false, username: profile.username },
+      create: { ...baseData, status: 'ACTIVE', mustChangePassword: false, username: profile.username },
     });
   } catch {
-    await prisma.coordinatorUser.upsert({
-      where: { username: profile.username },
-      update: {
-        email: profile.email,
-        name: profile.name,
-        passwordHash,
-        role: 'COORDINATOR',
-        companyId,
-      },
-      create: {
-        username: profile.username,
-        email: profile.email,
-        name: profile.name,
-        passwordHash,
-        role: 'COORDINATOR',
-        companyId,
-      },
-    });
+    try {
+      const existing = await prisma.coordinatorUser.findFirst({
+        where: { companyId, email: profile.email },
+        select: { id: true },
+      });
+      if (existing) {
+        await prisma.coordinatorUser.update({
+          where: { id: existing.id },
+          data: baseData,
+        });
+      } else {
+        await prisma.coordinatorUser.create({
+          data: baseData,
+        });
+      }
+    } catch (error) {
+      console.warn(`Skipped coordinator user seed for ${profile.email}:`, String(error));
+    }
   }
 }
 
@@ -105,6 +99,53 @@ async function main() {
   await upsertCoordinatorUser(company.id, 'COMPANY_OWNER', SAMPLE.owner);
   await upsertCoordinatorUser(company.id, 'COORDINATOR', SAMPLE.coordinator);
   await upsertCoordinatorUser(company.id, 'QUALITY_ENGINEER', SAMPLE.quality);
+
+  const legacyPassword = 'Company@12345';
+  const legacyPasswordHash = await bcrypt.hash(legacyPassword, 10);
+  const legacyRequester = await prisma.ticketRequester.upsert({
+    where: { username: SAMPLE.owner.username },
+    update: {
+      passwordHash: legacyPasswordHash,
+      name: SAMPLE.owner.name,
+      email: SAMPLE.owner.email,
+      phone: '+9647700001234',
+      company: SAMPLE.companyName,
+      role: 'COMPANY',
+      serviceSlug: 'quality-control-supervision',
+      status: 'ACTIVE',
+    },
+    create: {
+      username: SAMPLE.owner.username,
+      passwordHash: legacyPasswordHash,
+      name: SAMPLE.owner.name,
+      email: SAMPLE.owner.email,
+      phone: '+9647700001234',
+      company: SAMPLE.companyName,
+      role: 'COMPANY',
+      serviceSlug: 'quality-control-supervision',
+      status: 'ACTIVE',
+    },
+  });
+  try {
+    await prisma.company.upsert({
+      where: { requesterId: legacyRequester.id },
+      update: {
+        companyName: SAMPLE.companyName,
+        pocName: SAMPLE.owner.name,
+        pocPhone: '+9647700001234',
+        serviceSlug: 'quality-control-supervision',
+      },
+      create: {
+        companyName: SAMPLE.companyName,
+        pocName: SAMPLE.owner.name,
+        pocPhone: '+9647700001234',
+        serviceSlug: 'quality-control-supervision',
+        requesterId: legacyRequester.id,
+      },
+    });
+  } catch (error) {
+    console.warn('Skipped legacy company profile upsert:', String(error));
+  }
 
   try {
     await prisma.inspectionChecklist.upsert({
@@ -180,7 +221,8 @@ async function main() {
   });
 
   console.log('Sample provider seed completed.');
-  console.log(`Company owner: ${SAMPLE.owner.username} / ${SAMPLE.owner.password}`);
+  console.log(`Company owner (legacy login): ${SAMPLE.owner.username} / ${legacyPassword}`);
+  console.log(`Company owner (coordinator): ${SAMPLE.owner.username} / ${SAMPLE.owner.password}`);
   console.log(`Coordinator: ${SAMPLE.coordinator.username} / ${SAMPLE.coordinator.password}`);
   console.log(`Quality engineer: ${SAMPLE.quality.username} / ${SAMPLE.quality.password}`);
 }

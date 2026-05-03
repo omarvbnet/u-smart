@@ -28,11 +28,16 @@ export async function GET(req: NextRequest) {
       });
       if (!user) return NextResponse.json({ success: false, user: null });
 
+      const username =
+        (typeof user.username === 'string' && user.username.trim()) ||
+        (typeof user.email === 'string' && user.email.includes('@') ? user.email.split('@')[0] : '') ||
+        `coord_${user.id.slice(-6)}`;
+
       return NextResponse.json({
         success: true,
         user: {
           id: user.id,
-          username: user.username,
+          username,
           name: user.name,
           phone: null,
           company: user.company?.name ?? null,

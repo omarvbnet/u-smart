@@ -114,7 +114,5 @@ export async function POST(req: NextRequest) {
       { success: false, message: 'Failed to reset password' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

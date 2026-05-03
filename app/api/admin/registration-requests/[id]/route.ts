@@ -208,6 +208,75 @@ export async function PATCH(
         },
       });
 
+      // Mirror coordinator company + user so the same username/password work for
+      // coordinator-aware APIs (web + Provisor) as for legacy ticket_requester.
+      const rrRoleUpper = String(rr.role).toUpperCase();
+      if (rrRoleUpper === 'PERSONAL' || rrRoleUpper === 'COMPANY') {
+        try {
+          const emailNorm = rr.email.trim().toLowerCase();
+          const slugBase = (rr.legalName || emailNorm.split('@')[0] || 'account')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 40) || `acct-${crypto.randomBytes(3).toString('hex')}`;
+          let coordinatorSlug = slugBase;
+          for (let i = 0; i < 8; i++) {
+            const existing = await (prisma as any).coordinatorCompany.findUnique({
+              where: { slug: coordinatorSlug },
+              select: { id: true },
+            });
+            if (!existing) break;
+            coordinatorSlug = `${slugBase}-${crypto.randomBytes(2).toString('hex')}`;
+          }
+          let coordinatorCompany: { id: string };
+          try {
+            coordinatorCompany = await (prisma as any).coordinatorCompany.create({
+              data: {
+                name: rr.legalName,
+                slug: coordinatorSlug,
+                freeTicketsLimit: 50,
+                freeTicketsUsed: 0,
+              },
+            });
+          } catch {
+            coordinatorCompany = await (prisma as any).coordinatorCompany.create({
+              data: { name: rr.legalName, slug: coordinatorSlug },
+            });
+          }
+          const coordRole = rrRoleUpper === 'COMPANY' ? 'COMPANY_OWNER' : 'CLIENT';
+          try {
+            await (prisma as any).coordinatorUser.create({
+              data: {
+                username,
+                email: emailNorm,
+                name: rr.legalName,
+                passwordHash,
+                role: coordRole,
+                status: 'ACTIVE',
+                mustChangePassword: false,
+                companyId: coordinatorCompany.id,
+              },
+            });
+          } catch {
+            await (prisma as any).coordinatorUser.create({
+              data: {
+                username,
+                email: emailNorm,
+                name: rr.legalName,
+                passwordHash,
+                role: 'COORDINATOR',
+                companyId: coordinatorCompany.id,
+              },
+            });
+          }
+        } catch (mirrorErr) {
+          console.error(
+            'Registration approve: coordinator mirror failed (legacy login still works):',
+            mirrorErr
+          );
+        }
+      }
+
       await delegate.update({
         where: { id },
         data: { status: 'APPROVED' },
