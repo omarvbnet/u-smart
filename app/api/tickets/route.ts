@@ -7,6 +7,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTicket } from '@/lib/email';
 import { sendPushToRequesters } from '@/lib/push-notifications';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,6 +18,17 @@ const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'building', 'hs
 // Maintenance ticket types (technician only): stored as technique
 const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES, ...MAINTENANCE_TECHNIQUES];
+const TASK_CATEGORY_VALUES = ['MAINTENANCE', 'QUALITY', 'SUPERVISION'];
+const PLAN_RATE_USD: Record<string, number> = {
+  WEEKLY: 0.7,
+  MONTHLY: 0.6,
+  YEARLY: 0.5,
+};
+const ROLE_SCOPE_BY_TASK_CATEGORY: Record<string, string> = {
+  QUALITY: 'QUALITY_ENGINEER',
+  SUPERVISION: 'SUPERVISION_ENGINEER',
+  MAINTENANCE: 'TECHNICIAN',
+};
 
 async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
   try {
@@ -88,9 +100,10 @@ export async function POST(req: NextRequest) {
 
     const auth = getRequesterFromRequest(req);
     const payload = auth?.payload ?? null;
+    const coordinatorContext = payload ? await getCoordinatorContext(req) : null;
     let requester: { email?: string | null } | null = null;
 
-    if (payload) {
+    if (payload && !coordinatorContext) {
       const reqData = await prisma.ticketRequester.findUnique({
         where: { id: payload.requesterId },
         select: { id: true, phone: true, name: true, company: true, serviceSlug: true, status: true, email: true },
@@ -110,7 +123,7 @@ export async function POST(req: NextRequest) {
       if (!province) province = 'N/A';
       if (!name && reqData.name) name = reqData.name ?? '';
       if (!company && reqData.company) company = reqData.company ?? '';
-    } else {
+    } else if (!payload) {
       if (!phone || !province) {
         return NextResponse.json(
           { success: false, message: 'Phone and province are required when not logged in' },
@@ -126,6 +139,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (coordinatorContext) {
+      if (coordinatorContext.status !== 'ACTIVE') {
+        return NextResponse.json(
+          { success: false, message: 'Your account is blocked or suspended. Please contact support.' },
+          { status: 403 }
+        );
+      }
+      phone = phone || 'N/A';
+      province = province || 'N/A';
+      name = name || coordinatorContext.name || coordinatorContext.username;
+      company = company || coordinatorContext.companyId;
+    }
+
     if (!ALL_TECHNIQUES.includes(technique)) {
       return NextResponse.json(
         { success: false, message: 'Invalid technique' },
@@ -134,7 +160,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Worker cannot create any tickets – view-only, admin-assigned
-    if (payload) {
+    if (payload && !coordinatorContext) {
       const requesterRole = (await prisma.ticketRequester.findUnique({
         where: { id: payload.requesterId },
         select: { role: true },
@@ -148,7 +174,7 @@ export async function POST(req: NextRequest) {
     }
 
     const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
-    if (isMaintenanceTicket && payload) {
+    if (isMaintenanceTicket && payload && !coordinatorContext) {
       const requesterRole = (await prisma.ticketRequester.findUnique({
         where: { id: payload.requesterId },
         select: { role: true },
@@ -169,6 +195,113 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let coordinatorTaskCategory: string | null = null;
+    let coordinatorRoleScope: string | null = null;
+    let checklistTemplateId: string | null = null;
+    let assigneeCoordinatorUserId: string | null = null;
+    let assignmentScope: string | null = null;
+    let resubmitToRequester = false;
+
+    if (coordinatorContext) {
+      const allowedCreatorRoles = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
+      if (!allowedCreatorRoles.has(coordinatorContext.role)) {
+        return NextResponse.json(
+          { success: false, message: 'Only company owner/coordinator can create tasks.' },
+          { status: 403 }
+        );
+      }
+
+      const taskCategoryRaw = typeof body.taskCategory === 'string' ? body.taskCategory.trim().toUpperCase() : '';
+      if (!TASK_CATEGORY_VALUES.includes(taskCategoryRaw)) {
+        return NextResponse.json(
+          { success: false, message: 'taskCategory is required and must be MAINTENANCE, QUALITY, or SUPERVISION.' },
+          { status: 400 }
+        );
+      }
+      coordinatorTaskCategory = taskCategoryRaw;
+      coordinatorRoleScope = ROLE_SCOPE_BY_TASK_CATEGORY[taskCategoryRaw] ?? 'ANY';
+      checklistTemplateId = typeof body.checklistTemplateId === 'string' ? body.checklistTemplateId.trim() : '';
+      if (!checklistTemplateId) {
+        return NextResponse.json(
+          { success: false, message: 'A checklist template is required for coordinator-created tasks.' },
+          { status: 400 }
+        );
+      }
+      const checklist = await (prisma as any).inspectionChecklist.findFirst({
+        where: {
+          id: checklistTemplateId,
+          OR: [{ companyId: coordinatorContext.companyId }, { companyId: null }],
+        },
+        select: { id: true, taskCategory: true, techniqueTypes: true },
+      });
+      if (!checklist) {
+        return NextResponse.json(
+          { success: false, message: 'Checklist not found for your company.' },
+          { status: 404 }
+        );
+      }
+      if (checklist.taskCategory && checklist.taskCategory !== taskCategoryRaw) {
+        return NextResponse.json(
+          { success: false, message: 'Checklist task category is not compatible with this task.' },
+          { status: 400 }
+        );
+      }
+      if (Array.isArray(checklist.techniqueTypes) && checklist.techniqueTypes.length > 0 && !checklist.techniqueTypes.includes(technique)) {
+        return NextResponse.json(
+          { success: false, message: 'Checklist is not compatible with this technique type.' },
+          { status: 400 }
+        );
+      }
+
+      const assigneeIdRaw = typeof body.assigneeCoordinatorUserId === 'string' ? body.assigneeCoordinatorUserId.trim() : '';
+      if (assigneeIdRaw) {
+        const assignee = await (prisma as any).coordinatorUser.findFirst({
+          where: { id: assigneeIdRaw, companyId: coordinatorContext.companyId, status: 'ACTIVE' },
+          select: { id: true, role: true },
+        });
+        if (!assignee) {
+          return NextResponse.json({ success: false, message: 'Assigned user not found in your company.' }, { status: 404 });
+        }
+        const requiredRole = ROLE_SCOPE_BY_TASK_CATEGORY[taskCategoryRaw];
+        if (requiredRole && assignee.role !== requiredRole) {
+          return NextResponse.json(
+            { success: false, message: `Assigned user must have role ${requiredRole} for this task type.` },
+            { status: 400 }
+          );
+        }
+        assigneeCoordinatorUserId = assignee.id;
+      }
+
+      assignmentScope = typeof body.assignmentScope === 'string'
+        ? body.assignmentScope.trim().toUpperCase()
+        : 'COMPANY_STAFF';
+      if (assignmentScope !== 'COMPANY_STAFF' && assignmentScope !== 'USMART_STAFF') {
+        assignmentScope = 'COMPANY_STAFF';
+      }
+      resubmitToRequester = body.resubmitToRequester === true;
+
+      const companyRow = await (prisma as any).coordinatorCompany.findUnique({
+        where: { id: coordinatorContext.companyId },
+        select: {
+          id: true,
+          freeTicketsUsed: true,
+          freeTicketsLimit: true,
+          activeTicketPlan: true,
+        },
+      });
+      if (!companyRow) {
+        return NextResponse.json({ success: false, message: 'Company not found.' }, { status: 404 });
+      }
+      const freeLimit = companyRow.freeTicketsLimit ?? 50;
+      const freeUsed = companyRow.freeTicketsUsed ?? 0;
+      if (freeUsed >= freeLimit && !companyRow.activeTicketPlan) {
+        return NextResponse.json(
+          { success: false, message: 'Free quota reached (50 tickets). Activate a billing plan to create new tickets.' },
+          { status: 402 }
+        );
+      }
+    }
+
     const designSpecifications = typeof body.designSpecifications === 'string' ? body.designSpecifications.trim() : '';
     const attachmentUrls = Array.isArray(body.attachmentUrls) ? body.attachmentUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
     const maintenanceReason = typeof body.maintenanceReason === 'string' ? body.maintenanceReason.trim() : '';
@@ -183,6 +316,19 @@ export async function POST(req: NextRequest) {
       designSpecifications: designSpecifications || null,
       attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : null,
     };
+    if (coordinatorContext) {
+      companyPayloadObj.taskCategory = coordinatorTaskCategory;
+      companyPayloadObj.roleScope = coordinatorRoleScope;
+      companyPayloadObj.assignmentScope = assignmentScope;
+      companyPayloadObj.checklistTemplateId = checklistTemplateId;
+      companyPayloadObj.workflowState = 'OPEN';
+      if (assigneeCoordinatorUserId) {
+        companyPayloadObj.assigneeCoordinatorUserId = assigneeCoordinatorUserId;
+      }
+      if (resubmitToRequester) {
+        companyPayloadObj.resubmitToRequester = true;
+      }
+    }
     if (isMaintenanceTicket && maintenanceReason) {
       companyPayloadObj.maintenanceReason = maintenanceReason;
     }
@@ -205,6 +351,14 @@ export async function POST(req: NextRequest) {
       siteName?: string;
       requesterId?: string;
       beforeImageUrls?: string[];
+      taskCategory?: string;
+      roleScope?: string;
+      workflowState?: string;
+      assignmentScope?: string;
+      checklistTemplateId?: string;
+      coordinatorCompanyId?: string;
+      createdByCoordinatorUserId?: string;
+      assigneeCoordinatorUserId?: string;
     } = {
       buildingType: 'n/a',
       phone,
@@ -217,15 +371,61 @@ export async function POST(req: NextRequest) {
     };
 
     if (payload) {
-      ticketData.requesterId = payload.requesterId;
+      if (coordinatorContext) {
+        ticketData.coordinatorCompanyId = coordinatorContext.companyId;
+        ticketData.createdByCoordinatorUserId = coordinatorContext.userId;
+      } else {
+        ticketData.requesterId = payload.requesterId;
+      }
     }
     if (isMaintenanceTicket && beforeImageUrls.length > 0) {
       ticketData.beforeImageUrls = beforeImageUrls;
+    }
+    if (coordinatorContext) {
+      if (coordinatorTaskCategory) ticketData.taskCategory = coordinatorTaskCategory;
+      if (coordinatorRoleScope) ticketData.roleScope = coordinatorRoleScope;
+      ticketData.workflowState = 'OPEN';
+      if (assignmentScope) ticketData.assignmentScope = assignmentScope;
+      if (checklistTemplateId) ticketData.checklistTemplateId = checklistTemplateId;
+      if (assigneeCoordinatorUserId) ticketData.assigneeCoordinatorUserId = assigneeCoordinatorUserId;
     }
 
     const ticket = await prisma.visitorRequest.create({
       data: ticketData,
     });
+
+    if (coordinatorContext) {
+      const companyRow = await (prisma as any).coordinatorCompany.findUnique({
+        where: { id: coordinatorContext.companyId },
+        select: {
+          id: true,
+          freeTicketsUsed: true,
+          freeTicketsLimit: true,
+          activeTicketPlan: true,
+        },
+      });
+      if (companyRow) {
+        const freeUsed = companyRow.freeTicketsUsed ?? 0;
+        const freeLimit = companyRow.freeTicketsLimit ?? 50;
+        if (freeUsed < freeLimit) {
+          await (prisma as any).coordinatorCompany.update({
+            where: { id: companyRow.id },
+            data: { freeTicketsUsed: freeUsed + 1 },
+          });
+        } else if (companyRow.activeTicketPlan && PLAN_RATE_USD[companyRow.activeTicketPlan]) {
+          const rateUsd = PLAN_RATE_USD[companyRow.activeTicketPlan];
+          await (prisma as any).coordinatorTicketCharge.create({
+            data: {
+              companyId: companyRow.id,
+              ticketId: ticket.id,
+              plan: companyRow.activeTicketPlan,
+              rateUsd,
+              amountUsd: rateUsd,
+            },
+          });
+        }
+      }
+    }
 
     try {
       const db = prisma as { ticketStatusLog?: { create: (args: { data: { visitorRequestId: string; status: string } }) => Promise<unknown> } };
@@ -390,6 +590,98 @@ export async function GET(req: NextRequest) {
       );
     }
     const payload = auth.payload;
+    const coordinatorContext = await getCoordinatorContext(req);
+
+    if (coordinatorContext) {
+      const { searchParams } = new URL(req.url);
+      const from = searchParams.get('from');
+      const to = searchParams.get('to');
+      const siteNameParam = searchParams.get('siteName')?.trim() || undefined;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const where: any = { coordinatorCompanyId: coordinatorContext.companyId };
+      if (from) {
+        const d = new Date(from);
+        d.setHours(0, 0, 0, 0);
+        where.createdAt = { ...(where.createdAt ?? {}), gte: d };
+      }
+      if (to) {
+        const d = new Date(to);
+        d.setHours(23, 59, 59, 999);
+        where.createdAt = { ...(where.createdAt ?? {}), lte: d };
+      }
+      if (siteNameParam) {
+        where.company = { contains: siteNameParam };
+      }
+
+      if (coordinatorContext.role === 'QUALITY_ENGINEER') {
+        where.taskCategory = 'QUALITY';
+      } else if (coordinatorContext.role === 'SUPERVISION_ENGINEER') {
+        where.taskCategory = 'SUPERVISION';
+      } else if (coordinatorContext.role === 'TECHNICIAN') {
+        where.taskCategory = 'MAINTENANCE';
+      }
+
+      const rows = await prisma.visitorRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          technique: true,
+          company: true,
+          status: true,
+          createdAt: true,
+          requesterId: true,
+          taskCategory: true,
+          roleScope: true,
+          workflowState: true,
+          assignmentScope: true,
+          checklistTemplateId: true,
+          assigneeCoordinatorUserId: true,
+          coordinatorCompanyId: true,
+          resubmitReason: true,
+          resubmittedAt: true,
+        },
+      });
+
+      const tickets = rows.map((r: any) => {
+        let siteName: string | null = null;
+        let siteCoordinator: string | null = null;
+        let slaHours: number | null = null;
+        let status = r.status ?? 'PENDING';
+        try {
+          const parsed = typeof r.company === 'string' ? JSON.parse(r.company) : {};
+          if (parsed._ticket) {
+            siteName = parsed.siteName ?? null;
+            siteCoordinator = parsed.siteCoordinator ?? null;
+            slaHours = parsed.slaHours ?? null;
+            if (parsed.status) status = String(parsed.status);
+          }
+        } catch {
+          /* ignore */
+        }
+        return {
+          id: r.id,
+          siteName,
+          siteCoordinator,
+          slaHours,
+          technique: r.technique,
+          status,
+          createdAt: r.createdAt,
+          taskCategory: r.taskCategory ?? null,
+          roleScope: r.roleScope ?? null,
+          workflowState: r.workflowState ?? 'OPEN',
+          assignmentScope: r.assignmentScope ?? null,
+          checklistTemplateId: r.checklistTemplateId ?? null,
+          assigneeCoordinatorUserId: r.assigneeCoordinatorUserId ?? null,
+          coordinatorCompanyId: r.coordinatorCompanyId ?? null,
+          resubmitReason: r.resubmitReason ?? null,
+          resubmittedAt: r.resubmittedAt ?? null,
+        };
+      });
+
+      return NextResponse.json({ success: true, tickets });
+    }
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
@@ -485,6 +777,7 @@ export async function GET(req: NextRequest) {
         company: true,
         status: true,
         createdAt: true,
+        requesterId: true,
       },
     });
 
@@ -513,6 +806,7 @@ export async function GET(req: NextRequest) {
       company: string | null;
       status: string;
       createdAt: Date;
+      requesterId: string | null;
     };
     const tickets = rows.map((r: Row) => {
       const row = r as { status?: string };
@@ -578,6 +872,7 @@ export async function GET(req: NextRequest) {
         assignedEngineerName,
         assignedAt,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
+        requesterId: r.requesterId ?? null,
       };
     });
 

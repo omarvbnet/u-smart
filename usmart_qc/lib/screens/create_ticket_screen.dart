@@ -6,6 +6,7 @@ import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import '../providers/provisor_techniques_provider.dart';
 import 'attachment_viewer_screen.dart';
 
 const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_building', 'tech_hse', 'tech_investigation', 'tech_tracking'];
@@ -29,6 +30,20 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _uploading = false;
   final List<String> _attachmentUrls = [];
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final tech = context.read<ProvisorTechniquesProvider>();
+      await tech.ensureLoaded();
+      if (!mounted) return;
+      final slugs = tech.inspection.map((e) => e.slug).toList();
+      if (slugs.isNotEmpty && !slugs.contains(_technique)) {
+        setState(() => _technique = slugs.first);
+      }
+    });
+  }
+
   Future<void> _submit() async {
     final siteName = _siteNameCtrl.text.trim();
     final coordinator = _coordinatorCtrl.text.trim();
@@ -49,11 +64,19 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
+    final techProv = context.read<ProvisorTechniquesProvider>();
+    final inspectionOpts = techProv.inspection;
+    final fallbackIds = _qcTechniqueIds;
+    final validIds = inspectionOpts.isEmpty
+        ? fallbackIds
+        : inspectionOpts.map((e) => e.slug).toList();
+    final technique =
+        validIds.contains(_technique) ? _technique : validIds.first;
     final designSpecs = _designSpecsCtrl.text.trim();
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
-      technique: _technique,
+      technique: technique,
       slaHours: sla,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
@@ -175,6 +198,14 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final sites = context.watch<SitesProvider>().sites;
+    final techProv = context.watch<ProvisorTechniquesProvider>();
+    final inspectionOpts = techProv.inspection;
+    final fallbackIds = _qcTechniqueIds;
+    final validIds = inspectionOpts.isEmpty
+        ? fallbackIds
+        : inspectionOpts.map((e) => e.slug).toList();
+    final selectedTechnique =
+        validIds.contains(_technique) ? _technique : (validIds.isNotEmpty ? validIds.first : _technique);
 
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
@@ -276,15 +307,23 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: _technique,
+                value: selectedTechnique,
                 isExpanded: true,
                 dropdownColor: const Color(0xFF12122A),
                 style: const TextStyle(color: Colors.white, fontSize: 15),
                 icon: Icon(Icons.expand_more_rounded,
                     color: Colors.white.withAlpha(80)),
-                items: List.generate(5, (i) => DropdownMenuItem(
-                    value: _qcTechniqueIds[i],
-                    child: Text(l10n.t(_qcTechniqueKeys[i])))),
+                items: inspectionOpts.isEmpty
+                    ? List.generate(fallbackIds.length, (i) => DropdownMenuItem(
+                          value: fallbackIds[i],
+                          child: Text(l10n.t(_qcTechniqueKeys[i])),
+                        ))
+                    : inspectionOpts
+                        .map((e) => DropdownMenuItem(
+                              value: e.slug,
+                              child: Text(e.labelForLocale(l10n.locale.languageCode)),
+                            ))
+                        .toList(),
                 onChanged: (v) {
                   if (v != null) setState(() => _technique = v);
                 },

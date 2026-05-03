@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { sendPushToRequesters } from '@/lib/push-notifications';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 const prisma = _prisma as any;
 
@@ -25,6 +26,7 @@ export async function PATCH(
   }
 
   try {
+    const coordinatorContext = await getCoordinatorContext(req);
     const body = await req.json();
     const newStatus = typeof body.status === 'string' ? body.status.trim().toUpperCase() : '';
 
@@ -33,6 +35,59 @@ export async function PATCH(
         { success: false, message: 'Can only set status to ON_SITE or IN_PROGRESS' },
         { status: 400 }
       );
+    }
+
+    if (coordinatorContext) {
+      const ticket = await prisma.visitorRequest.findFirst({
+        where: { id, coordinatorCompanyId: coordinatorContext.companyId },
+        select: {
+          id: true,
+          status: true,
+          workflowState: true,
+          assigneeCoordinatorUserId: true,
+          company: true,
+        },
+      });
+      if (!ticket) {
+        return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+      }
+      const staffRoles = new Set(['QUALITY_ENGINEER', 'SUPERVISION_ENGINEER', 'TECHNICIAN', 'ENGINEER']);
+      if (staffRoles.has(coordinatorContext.role)) {
+        if (ticket.assigneeCoordinatorUserId && ticket.assigneeCoordinatorUserId !== coordinatorContext.userId) {
+          return NextResponse.json(
+            { success: false, message: 'Only assigned staff can update this ticket status.' },
+            { status: 403 }
+          );
+        }
+      }
+      const updateData: Record<string, unknown> = { status: newStatus };
+      if (newStatus === 'IN_PROGRESS') updateData.workflowState = 'IN_PROGRESS';
+      if (newStatus === 'COMPLETED') updateData.workflowState = 'DONE';
+
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
+      } catch {
+        parsed = {};
+      }
+      parsed.status = newStatus;
+      if (newStatus === 'IN_PROGRESS') parsed.workflowState = 'IN_PROGRESS';
+      if (newStatus === 'COMPLETED') parsed.workflowState = 'DONE';
+      updateData.company = JSON.stringify(parsed);
+
+      await prisma.visitorRequest.update({
+        where: { id },
+        data: updateData,
+      });
+
+      try {
+        await prisma.ticketStatusLog.create({
+          data: { visitorRequestId: id, status: newStatus },
+        });
+      } catch {
+        /* ignore */
+      }
+      return NextResponse.json({ success: true, ticket: { id, status: newStatus } });
     }
 
     let requesterRole = 'COMPANY';

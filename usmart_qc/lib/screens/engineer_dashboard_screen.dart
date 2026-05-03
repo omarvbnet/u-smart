@@ -16,6 +16,7 @@ import 'site_form_screen.dart';
 import 'conflict_detail_screen.dart';
 import 'ticket_type_picker_screen.dart';
 import '../providers/sites_provider.dart';
+import '../providers/provisor_techniques_provider.dart';
 import '../providers/conflicts_provider.dart';
 import '../widgets/stats_card.dart';
 import 'filtered_tickets_screen.dart';
@@ -48,6 +49,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
       tickets.loadProvinceFilter(),
       sites.fetchSites(),
       conflicts.fetchConflicts(),
+      context.read<ProvisorTechniquesProvider>().ensureLoaded(),
     ]);
   }
 
@@ -799,8 +801,89 @@ class _AvailableTicketsTab extends StatelessWidget {
 }
 
 // ─── My Tickets Tab (active + completed) ───
-class _MyTicketsTab extends StatelessWidget {
+class _MyTicketsTab extends StatefulWidget {
   const _MyTicketsTab();
+
+  @override
+  State<_MyTicketsTab> createState() => _MyTicketsTabState();
+}
+
+class _MyTicketsTabState extends State<_MyTicketsTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _statusFilter = 'ALL';
+  String _techniqueFilter = 'ALL';
+  DateTimeRange? _dateRange;
+  bool _showFilters = true;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 3),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: _dateRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF6C63FF),
+              surface: Color(0xFF12122A),
+            ),
+            dialogTheme: const DialogThemeData(
+              backgroundColor: Color(0xFF12122A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() => _dateRange = picked);
+  }
+
+  List<Ticket> _applyFilters(List<Ticket> tickets) {
+    final query = _searchController.text.trim().toLowerCase();
+    return tickets.where((t) {
+      if (_statusFilter != 'ALL' && t.status != _statusFilter) return false;
+      if (_techniqueFilter != 'ALL' && t.technique != _techniqueFilter) return false;
+      if (_dateRange != null) {
+        final start = DateTime(
+          _dateRange!.start.year,
+          _dateRange!.start.month,
+          _dateRange!.start.day,
+        );
+        final end = DateTime(
+          _dateRange!.end.year,
+          _dateRange!.end.month,
+          _dateRange!.end.day,
+          23,
+          59,
+          59,
+        );
+        if (t.createdAt.isBefore(start) || t.createdAt.isAfter(end)) return false;
+      }
+      if (query.isEmpty) return true;
+      final blob = [
+        t.id,
+        t.siteName ?? '',
+        t.siteCoordinator ?? '',
+        t.status,
+        t.technique,
+        t.requesterName ?? '',
+        t.requesterPhone ?? '',
+        t.requesterRole ?? '',
+        t.inspectionResult ?? '',
+        t.assignedEngineerName ?? '',
+      ].join(' ').toLowerCase();
+      return blob.contains(query);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -813,8 +896,30 @@ class _MyTicketsTab extends StatelessWidget {
           );
         }
 
-        final active = provider.myActiveTickets;
-        final completed = provider.myCompletedTickets;
+        final allMyTickets = [...provider.myActiveTickets, ...provider.myCompletedTickets];
+        final statuses = <String>{
+          'ALL',
+          ...allMyTickets.map((t) => t.status),
+        }.toList();
+        final techniques = <String>{
+          'ALL',
+          ...allMyTickets.map((t) => t.technique),
+        }.toList();
+        final effectiveStatus = statuses.contains(_statusFilter) ? _statusFilter : 'ALL';
+        final effectiveTechnique = techniques.contains(_techniqueFilter) ? _techniqueFilter : 'ALL';
+        if (effectiveStatus != _statusFilter || effectiveTechnique != _techniqueFilter) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _statusFilter = effectiveStatus;
+              _techniqueFilter = effectiveTechnique;
+            });
+          });
+        }
+
+        final filtered = _applyFilters(allMyTickets);
+        final active = filtered.where((t) => !t.isCompleted).toList();
+        final completed = filtered.where((t) => t.isCompleted).toList();
 
         final sections = <_Section>[
           if (active.isNotEmpty)
@@ -843,6 +948,14 @@ class _MyTicketsTab extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
+                  IconButton(
+                    onPressed: () => setState(() => _showFilters = !_showFilters),
+                    icon: Icon(
+                      _showFilters ? Icons.tune_rounded : Icons.tune_outlined,
+                      color: const Color(0xFF8B83FF),
+                    ),
+                    tooltip: 'Filters',
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 6),
@@ -862,6 +975,114 @@ class _MyTicketsTab extends StatelessWidget {
                 ],
               ),
             ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: !_showFilters
+                  ? const SizedBox.shrink()
+                  : Container(
+                      key: const ValueKey('my-ticket-filters'),
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF6C63FF).withAlpha(20),
+                            const Color(0xFF00D4AA).withAlpha(8),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.white.withAlpha(12)),
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _searchController,
+                            onChanged: (_) => setState(() {}),
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B83FF)),
+                              hintText: 'Search by site, ticket ID, requester, status, technique...',
+                              hintStyle: TextStyle(color: Colors.white.withAlpha(120), fontSize: 13),
+                              filled: true,
+                              fillColor: Colors.white.withAlpha(8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _FilterDropdown(
+                                  label: 'Status',
+                                  value: effectiveStatus,
+                                  items: statuses,
+                                  onChanged: (v) => setState(() => _statusFilter = v),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _FilterDropdown(
+                                  label: 'Technique',
+                                  value: effectiveTechnique,
+                                  items: techniques,
+                                  onChanged: (v) => setState(() => _techniqueFilter = v),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _pickDateRange,
+                                  icon: const Icon(Icons.date_range_rounded, size: 18),
+                                  label: Text(
+                                    _dateRange == null
+                                        ? 'Date range'
+                                        : '${_dateRange!.start.year}/${_dateRange!.start.month.toString().padLeft(2, '0')}/${_dateRange!.start.day.toString().padLeft(2, '0')} - ${_dateRange!.end.year}/${_dateRange!.end.month.toString().padLeft(2, '0')}/${_dateRange!.end.day.toString().padLeft(2, '0')}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(color: Colors.white.withAlpha(20)),
+                                    backgroundColor: Colors.white.withAlpha(6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _statusFilter = 'ALL';
+                                    _techniqueFilter = 'ALL';
+                                    _dateRange = null;
+                                  });
+                                },
+                                icon: const Icon(Icons.restart_alt_rounded, size: 18, color: Color(0xFFFF6B81)),
+                                label: const Text('Reset', style: TextStyle(color: Color(0xFFFF6B81))),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              _InfoPill(label: 'Matched', value: '${filtered.length}', color: const Color(0xFF00D4AA)),
+                              const SizedBox(width: 8),
+                              _InfoPill(label: 'Active', value: '${active.length}', color: const Color(0xFF6C63FF)),
+                              const SizedBox(width: 8),
+                              _InfoPill(label: 'Completed', value: '${completed.length}', color: const Color(0xFF4ADE80)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
             const SizedBox(height: 12),
             Expanded(
               child: sections.isEmpty
@@ -879,13 +1100,13 @@ class _MyTicketsTab extends StatelessWidget {
                                 size: 48, color: Color(0xFF6C63FF)),
                           ),
                           const SizedBox(height: 20),
-                          Text(l10n.t('no_tickets'),
+                          Text(filtered.isEmpty && allMyTickets.isNotEmpty ? 'No tickets match your filters' : l10n.t('no_tickets'),
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          Text(l10n.t('assign_first_ticket'),
+                          Text(filtered.isEmpty && allMyTickets.isNotEmpty ? 'Try changing date range, status, technique, or search' : l10n.t('assign_first_ticket'),
                               style: TextStyle(
                                   color: Colors.white.withAlpha(100),
                                   fontSize: 14)),
@@ -972,6 +1193,83 @@ class _MyTicketsTab extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FilterDropdown extends StatelessWidget {
+  final String label;
+  final String value;
+  final List<String> items;
+  final ValueChanged<String> onChanged;
+
+  const _FilterDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(14)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: const Color(0xFF12122A),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF8B83FF)),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          items: items
+              .map((item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item == 'ALL' ? '$label: ALL' : item, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _InfoPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withAlpha(30),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withAlpha(70)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+            Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+          ],
+        ),
       ),
     );
   }
@@ -1092,6 +1390,11 @@ class _EngineerSitesTab extends StatelessWidget {
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
+  static String _fmtSiteHours(double h) {
+    if (h <= 0) return '0';
+    return h < 1 ? h.toStringAsFixed(2) : h.toStringAsFixed(1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -1172,6 +1475,29 @@ class _EngineerSitesTab extends StatelessWidget {
                                   style: const TextStyle(
                                       color: Colors.white, fontSize: 18,
                                       fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 24),
+                              ElevatedButton.icon(
+                                onPressed: () => Navigator.of(context)
+                                    .push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const SiteFormScreen(),
+                                      ),
+                                    )
+                                    .then((_) => provider.fetchSites()),
+                                icon: const Icon(Icons.add_rounded, size: 20),
+                                label: Text(l10n.t('site_add')),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6C63FF),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         )
@@ -1233,7 +1559,22 @@ class _EngineerSitesTab extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 6),
                                           Text(
-                                            '${site.qualityControlCount} ${l10n.t('qc_tickets')}',
+                                            l10n.t('site_row_inspection', {
+                                              'n': '${site.inspectionQcCount}',
+                                              'h': _fmtSiteHours(
+                                                  site.inspectionHoursTotal),
+                                            }),
+                                            style: TextStyle(
+                                              color: Colors.white.withAlpha(60),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          Text(
+                                            l10n.t('site_row_maintenance', {
+                                              'n': '${site.maintenanceQcCount}',
+                                              'h': _fmtSiteHours(
+                                                  site.maintenanceHoursTotal),
+                                            }),
                                             style: TextStyle(
                                               color: Colors.white.withAlpha(60),
                                               fontSize: 11,
@@ -1271,6 +1612,21 @@ class _EngineerSitesTab extends StatelessWidget {
                         ),
                 ),
               ],
+            ),
+            Positioned(
+              right: 20,
+              bottom: 24,
+              child: FloatingActionButton(
+                onPressed: () => Navigator.of(context)
+                    .push(
+                      MaterialPageRoute(
+                        builder: (_) => const SiteFormScreen(),
+                      ),
+                    )
+                    .then((_) => provider.fetchSites()),
+                backgroundColor: const Color(0xFF6C63FF),
+                child: const Icon(Icons.add_rounded, color: Colors.white),
+              ),
             ),
           ],
         );

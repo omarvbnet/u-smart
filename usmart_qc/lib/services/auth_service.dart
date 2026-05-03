@@ -10,7 +10,6 @@ class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   static const _tokenKey = 'requester_token';
   static const _savedUsernameKey = 'saved_username';
-  static const _savedPasswordKey = 'saved_password';
 
   AuthService(this._api);
 
@@ -49,7 +48,8 @@ class AuthService {
     } catch (_) {}
 
     final data = await _api.post(ApiConfig.login, body: {
-      'username': username,
+      'usernameOrEmail': username.trim(),
+      'username': username.trim(),
       'password': password,
       if (pushToken != null && pushToken.isNotEmpty) 'pushToken': pushToken,
       if (pushToken != null && pushToken.isNotEmpty) 'phonePlatform': phonePlatform,
@@ -59,7 +59,6 @@ class AuthService {
       final token = data['token'] as String;
       await _saveToken(token);
       await _storage.write(key: _savedUsernameKey, value: username);
-      await _storage.write(key: _savedPasswordKey, value: password);
 
       final userJson = data['user'] as Map<String, dynamic>;
       // If login response doesn't include role, fetch it separately
@@ -108,7 +107,6 @@ class AuthService {
       if (data['success'] == true) {
         await clearToken();
         await _storage.delete(key: _savedUsernameKey);
-        await _storage.delete(key: _savedPasswordKey);
         return true;
       }
       return false;
@@ -120,9 +118,8 @@ class AuthService {
   /// Returns saved username and password for prefilling login form.
   Future<({String username, String password})?> getSavedCredentials() async {
     final username = await _storage.read(key: _savedUsernameKey);
-    final password = await _storage.read(key: _savedPasswordKey);
-    if (username != null && password != null && username.isNotEmpty) {
-      return (username: username, password: password);
+    if (username != null && username.isNotEmpty) {
+      return (username: username, password: '');
     }
     return null;
   }

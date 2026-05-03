@@ -9,7 +9,8 @@ const String _localeKey = 'provisor_locale';
 String? appLanguageCodeOverride;
 
 class LocaleProvider extends ChangeNotifier {
-  Locale _locale = const Locale('en');
+  /// Arabic is the primary default; users can switch and persist in SharedPreferences.
+  Locale _locale = const Locale('ar');
 
   Locale get locale => _locale;
 
@@ -50,7 +51,7 @@ class LocaleProvider extends ChangeNotifier {
   Future<void> setLocaleFromCode(String code) async {
     final locale = AppLocalizations.supportedLocales.firstWhere(
       (l) => l.languageCode == code,
-      orElse: () => const Locale('en'),
+      orElse: () => const Locale('ar'),
     );
     await setLocale(locale);
   }

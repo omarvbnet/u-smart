@@ -71,14 +71,30 @@ class RegistrationRequestProvider extends ChangeNotifier {
     _submitting = true;
     notifyListeners();
     try {
-      final res = await _api.post(ApiConfig.registrationRequests, body: {
-        'legalName': legalName.trim(),
-        'phone': phone.trim(),
-        'email': email.trim(),
-        'province': province.trim(),
-        'evidenceUrl': (evidenceUrl ?? '').trim(),
-        'role': role,
-      });
+      final normalizedRole = role.trim().toUpperCase();
+      late final Map<String, dynamic> res;
+      if (normalizedRole == 'COMPANY') {
+        // Company role must flow into admin "Company Requests" queue.
+        res = await _api.post(ApiConfig.companyRequests, body: {
+          'companyName': legalName.trim(),
+          'pocName': legalName.trim(),
+          'pocEmail': email.trim().toLowerCase(),
+          'pocPhone': phone.trim(),
+          'certificateUrl': (evidenceUrl ?? '').trim(),
+          'serviceSlug': ApiConfig.serviceSlug,
+          // Keep province for compatibility/debug even if API currently ignores it.
+          'province': province.trim(),
+        });
+      } else {
+        res = await _api.post(ApiConfig.registrationRequests, body: {
+          'legalName': legalName.trim(),
+          'phone': phone.trim(),
+          'email': email.trim(),
+          'province': province.trim(),
+          'evidenceUrl': (evidenceUrl ?? '').trim(),
+          'role': normalizedRole,
+        });
+      }
       _submitting = false;
       notifyListeners();
       if (res['success'] == true) return true;

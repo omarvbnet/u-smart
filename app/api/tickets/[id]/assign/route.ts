@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { sendPushToRequesters } from '@/lib/push-notifications';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 const prisma = _prisma as any;
 
@@ -20,6 +21,84 @@ export async function PATCH(
   }
 
   try {
+    const coordinatorContext = await getCoordinatorContext(req);
+    if (coordinatorContext) {
+      const body = await req.json();
+      const assigneeId = typeof body.assigneeCoordinatorUserId === 'string' ? body.assigneeCoordinatorUserId.trim() : '';
+      if (!assigneeId) {
+        return NextResponse.json({ success: false, message: 'assigneeCoordinatorUserId is required.' }, { status: 400 });
+      }
+      const assignerRoles = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
+      if (!assignerRoles.has(coordinatorContext.role)) {
+        return NextResponse.json({ success: false, message: 'Only coordinators can assign tickets.' }, { status: 403 });
+      }
+
+      const ticket = await prisma.visitorRequest.findFirst({
+        where: { id, coordinatorCompanyId: coordinatorContext.companyId },
+        select: { id: true, company: true, taskCategory: true, status: true },
+      });
+      if (!ticket) {
+        return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+      }
+
+      const assignee = await prisma.coordinatorUser.findFirst({
+        where: { id: assigneeId, companyId: coordinatorContext.companyId, status: 'ACTIVE' },
+        select: { id: true, role: true, name: true, username: true },
+      });
+      if (!assignee) {
+        return NextResponse.json({ success: false, message: 'Assignee not found in your company.' }, { status: 404 });
+      }
+      const roleByCategory: Record<string, string> = {
+        QUALITY: 'QUALITY_ENGINEER',
+        SUPERVISION: 'SUPERVISION_ENGINEER',
+        MAINTENANCE: 'TECHNICIAN',
+      };
+      const requiredRole = roleByCategory[ticket.taskCategory ?? ''] ?? null;
+      if (requiredRole && assignee.role !== requiredRole) {
+        return NextResponse.json({ success: false, message: `Assignee role must be ${requiredRole}.` }, { status: 400 });
+      }
+
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
+      } catch {
+        parsed = {};
+      }
+      parsed.assigneeCoordinatorUserId = assignee.id;
+      parsed.assignedEngineerName = assignee.name || assignee.username;
+      parsed.assignedAt = new Date().toISOString();
+      parsed.status = 'ON_SITE';
+      parsed.workflowState = 'IN_PROGRESS';
+      if (!parsed._ticket) parsed._ticket = true;
+
+      await prisma.visitorRequest.update({
+        where: { id },
+        data: {
+          assigneeCoordinatorUserId: assignee.id,
+          status: 'ON_SITE',
+          workflowState: 'IN_PROGRESS',
+          company: JSON.stringify(parsed),
+        },
+      });
+      try {
+        await prisma.ticketStatusLog.create({
+          data: { visitorRequestId: id, status: 'ON_SITE' },
+        });
+      } catch {
+        /* ignore */
+      }
+
+      return NextResponse.json({
+        success: true,
+        ticket: {
+          id,
+          status: 'ON_SITE',
+          assigneeCoordinatorUserId: assignee.id,
+          assignedEngineerName: assignee.name || assignee.username,
+        },
+      });
+    }
+
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: auth.payload.requesterId },
       select: { id: true, name: true, username: true, role: true },

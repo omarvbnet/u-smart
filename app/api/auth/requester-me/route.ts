@@ -10,6 +10,48 @@ export async function GET(req: NextRequest) {
   }
   const payload = auth.payload;
 
+  if (payload.identitySource === 'coordinator_user') {
+    try {
+      const user = await (prisma as any).coordinatorUser.findUnique({
+        where: { id: payload.requesterId },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          mustChangePassword: true,
+          companyId: true,
+          company: { select: { name: true } },
+        },
+      });
+      if (!user) return NextResponse.json({ success: false, user: null });
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          phone: null,
+          company: user.company?.name ?? null,
+          companyCertificationUrl: null,
+          status: user.status ?? 'ACTIVE',
+          hasUpdatedCredentials: user.mustChangePassword !== true,
+          mustChangePassword: user.mustChangePassword === true,
+          serviceSlug: 'quality-control-supervision',
+          role: user.role ?? 'COORDINATOR',
+          province: null,
+          provinceFilterActive: true,
+          companyId: user.companyId ?? null,
+        },
+      });
+    } catch {
+      return NextResponse.json({ success: false, user: null });
+    }
+  }
+
   type RequesterRow = { id: string; username: string; name: string | null; phone: string; company: string | null; serviceSlug: string; role?: string };
   let requester: RequesterRow | null = null;
   try {
@@ -62,6 +104,8 @@ export async function GET(req: NextRequest) {
       role,
       province,
       provinceFilterActive,
+      companyId: null,
+      mustChangePassword: false,
     },
   });
 }
@@ -70,6 +114,13 @@ export async function DELETE(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+  }
+
+  if (auth.payload.identitySource === 'coordinator_user') {
+    return NextResponse.json(
+      { success: false, message: 'Coordinator users are managed by your company owner.' },
+      { status: 403 }
+    );
   }
 
   try {

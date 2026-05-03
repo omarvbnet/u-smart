@@ -14,6 +14,15 @@ function generatePassword(): string {
   return crypto.randomBytes(8).toString('hex');
 }
 
+function slugifyCompanyName(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return base || `company-${crypto.randomBytes(3).toString('hex')}`;
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -94,16 +103,75 @@ export async function PATCH(
         ? 'quality-control-supervision'
         : 'enterprise-networking';
 
+      // New identity source: CoordinatorCompany + CoordinatorUser (COMPANY_OWNER).
+      const coordinatorSlugBase = slugifyCompanyName(companyRequest.companyName);
+      let coordinatorSlug = coordinatorSlugBase;
+      let slugAttempt = 0;
+      while (slugAttempt < 5) {
+        const existing = await (prisma as any).coordinatorCompany.findUnique({
+          where: { slug: coordinatorSlug },
+          select: { id: true },
+        });
+        if (!existing) break;
+        slugAttempt += 1;
+        coordinatorSlug = `${coordinatorSlugBase}-${crypto.randomBytes(2).toString('hex')}`;
+      }
+      let coordinatorCompany: { id: string };
+      try {
+        coordinatorCompany = await (prisma as any).coordinatorCompany.create({
+          data: {
+            name: companyRequest.companyName,
+            slug: coordinatorSlug,
+            freeTicketsLimit: 50,
+            freeTicketsUsed: 0,
+          },
+        });
+      } catch {
+        coordinatorCompany = await (prisma as any).coordinatorCompany.create({
+          data: {
+            name: companyRequest.companyName,
+            slug: coordinatorSlug,
+          },
+        });
+      }
+      try {
+        await (prisma as any).coordinatorUser.create({
+          data: {
+            username,
+            email: pocEmail && typeof pocEmail === 'string' ? pocEmail.trim().toLowerCase() : `${username}@example.local`,
+            name: companyRequest.pocName,
+            passwordHash,
+            role: 'COMPANY_OWNER',
+            status: 'ACTIVE',
+            mustChangePassword: true,
+            companyId: coordinatorCompany.id,
+          },
+        });
+      } catch {
+        await (prisma as any).coordinatorUser.create({
+          data: {
+            username,
+            email: pocEmail && typeof pocEmail === 'string' ? pocEmail.trim().toLowerCase() : `${username}@example.local`,
+            name: companyRequest.pocName,
+            passwordHash,
+            role: 'COORDINATOR',
+            companyId: coordinatorCompany.id,
+          },
+        });
+      }
+
+      // Keep legacy requester/company records for compatibility with old admin pages.
       const requester = await prisma.ticketRequester.create({
         data: {
-          username,
+          username: `${username}_legacy`,
           passwordHash,
           name: companyRequest.pocName,
-          email: pocEmail && typeof pocEmail === 'string' ? pocEmail.trim() : undefined,
-          phone: companyRequest.pocPhone,
+          email: null,
+          phone: `99${Date.now().toString().slice(-9)}`,
           company: companyRequest.companyName,
           companyCertificationUrl: companyRequest.certificateUrl ?? undefined,
           serviceSlug,
+          role: 'COMPANY',
         },
       });
       await companyDelegate.create({

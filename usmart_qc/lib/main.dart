@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
 import 'services/api_service.dart';
@@ -15,9 +16,11 @@ import 'providers/notifications_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/conflicts_provider.dart';
 import 'providers/registration_request_provider.dart';
+import 'providers/provisor_techniques_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   await Firebase.initializeApp();
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -37,27 +40,18 @@ void main() async {
   final ticketsProvider = TicketsProvider(apiService, notifications);
   final sitesProvider = SitesProvider(apiService);
   final notificationsProvider = NotificationsProvider(apiService, notifications);
+  final techniquesProvider = ProvisorTechniquesProvider(apiService);
 
   geofenceService.onTicketStatusChanged = () {
     ticketsProvider.fetchTickets();
   };
 
-  await authProvider.tryAutoLogin();
-  if (authProvider.isLoggedIn) {
-    await firebaseMessaging.init();
-    ticketsProvider.setCurrentUserId(authProvider.user?.id);
-    await ticketsProvider.fetchTickets();
-    await sitesProvider.fetchSites();
-    geofenceService.updateData(sitesProvider.sites, ticketsProvider.tickets);
-    geofenceService.start();
-    ticketsProvider.startPolling();
-    notificationsProvider.startPolling();
-  }
-
   authProvider.addListener(() {
     if (authProvider.isLoggedIn) {
+      notificationsProvider.resetSession();
       firebaseMessaging.init();
       ticketsProvider.setCurrentUserId(authProvider.user?.id);
+      techniquesProvider.fetch();
       geofenceService.updateData(
           sitesProvider.sites, ticketsProvider.tickets);
       geofenceService.start();
@@ -68,6 +62,7 @@ void main() async {
       geofenceService.stop();
       ticketsProvider.stopPolling();
       notificationsProvider.stopPolling();
+      notificationsProvider.resetSession();
     }
   });
 
@@ -93,8 +88,45 @@ void main() async {
         ChangeNotifierProvider.value(value: localeProvider),
         ChangeNotifierProvider.value(value: conflictsProvider),
         ChangeNotifierProvider.value(value: registrationRequestProvider),
+        ChangeNotifierProvider.value(value: techniquesProvider),
       ],
       child: const ProvisrApp(),
     ),
   );
+
+  _bootstrapAfterLaunch(
+    authProvider: authProvider,
+    ticketsProvider: ticketsProvider,
+    sitesProvider: sitesProvider,
+    notificationsProvider: notificationsProvider,
+    firebaseMessaging: firebaseMessaging,
+    geofenceService: geofenceService,
+    techniquesProvider: techniquesProvider,
+  );
+}
+
+/// Runs after [runApp] so [SplashScreen] can show during cold start instead of
+/// only the native splash while auth and session restore complete.
+Future<void> _bootstrapAfterLaunch({
+  required AuthProvider authProvider,
+  required TicketsProvider ticketsProvider,
+  required SitesProvider sitesProvider,
+  required NotificationsProvider notificationsProvider,
+  required FirebaseMessagingService firebaseMessaging,
+  required GeofenceService geofenceService,
+  required ProvisorTechniquesProvider techniquesProvider,
+}) async {
+  await authProvider.tryAutoLogin();
+  if (authProvider.isLoggedIn) {
+    notificationsProvider.resetSession();
+    await firebaseMessaging.init();
+    ticketsProvider.setCurrentUserId(authProvider.user?.id);
+    await ticketsProvider.fetchTickets();
+    await sitesProvider.fetchSites();
+    await techniquesProvider.fetch();
+    geofenceService.updateData(sitesProvider.sites, ticketsProvider.tickets);
+    geofenceService.start();
+    ticketsProvider.startPolling();
+    notificationsProvider.startPolling();
+  }
 }

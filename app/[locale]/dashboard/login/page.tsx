@@ -52,7 +52,7 @@ export default function RequesterLoginPage() {
       const res = await fetch('/api/auth/requester-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ usernameOrEmail: username.trim(), username: username.trim(), password }),
       });
       const data = await res.json();
       if (data.success) {
@@ -108,7 +108,7 @@ export default function RequesterLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 outline-none"
-                placeholder="req_xxxx"
+                placeholder={t('ticketForm.usernamePlaceholder')}
                 required
                 autoComplete="username"
               />

@@ -1,9 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { DEFAULT_MAINTENANCE_SLUGS } from '@/lib/provisor-technique-defaults';
 
 function getSiteDelegate() {
   return (prisma as any).site;
+}
+
+async function getMaintenanceSlugs(): Promise<string[]> {
+  try {
+    const rows = await (prisma as any).provisorTechnique.findMany({
+      where: { category: 'MAINTENANCE', active: true },
+      select: { slug: true },
+    });
+    if (rows?.length) return rows.map((r: { slug: string }) => r.slug);
+  } catch {
+    /* table missing pre-migration */
+  }
+  return [...DEFAULT_MAINTENANCE_SLUGS];
+}
+
+async function sumCompletedHours(where: Prisma.VisitorRequestWhereInput): Promise<number> {
+  const rows = await prisma.visitorRequest.findMany({
+    where: {
+      ...where,
+      status: 'COMPLETED',
+      completedAt: { not: null },
+    },
+    select: { createdAt: true, completedAt: true },
+  });
+  let sum = 0;
+  for (const r of rows) {
+    if (r.completedAt) {
+      sum += (r.completedAt.getTime() - r.createdAt.getTime()) / 3600000;
+    }
+  }
+  return Math.round(sum * 10) / 10;
 }
 
 export async function GET(req: NextRequest) {
@@ -54,18 +87,26 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Get ticket counts per service for each site
+    // Ticket counts per site + QC split (inspection vs maintenance techniques)
     type SiteRow = { id: string; siteId: string; location: string; province: string; createdAt: Date; updatedAt: Date };
+    const maintenanceSlugs = await getMaintenanceSlugs();
+
     const sitesWithCounts = await Promise.all(
       (sites as SiteRow[]).map(async (siteRow) => {
-        const [qualityControlCount, enterpriseCount] = await Promise.all([
-          prisma.visitorRequest.count({
-            where: {
-              requesterId: payload.requesterId,
-              siteName: siteRow.siteId,
-              serviceSlug: 'quality-control-supervision',
-            },
-          }),
+        const qcBase = {
+          requesterId: payload.requesterId,
+          siteName: siteRow.siteId,
+          serviceSlug: 'quality-control-supervision',
+        };
+        const [
+          qualityControlCount,
+          enterpriseCount,
+          inspectionQcCount,
+          maintenanceQcCount,
+          inspectionHoursTotal,
+          maintenanceHoursTotal,
+        ] = await Promise.all([
+          prisma.visitorRequest.count({ where: { ...qcBase } }),
           prisma.visitorRequest.count({
             where: {
               requesterId: payload.requesterId,
@@ -73,12 +114,24 @@ export async function GET(req: NextRequest) {
               serviceSlug: 'enterprise-networking',
             },
           }),
+          prisma.visitorRequest.count({
+            where: { ...qcBase, technique: { notIn: maintenanceSlugs } },
+          }),
+          prisma.visitorRequest.count({
+            where: { ...qcBase, technique: { in: maintenanceSlugs } },
+          }),
+          sumCompletedHours({ ...qcBase, technique: { notIn: maintenanceSlugs } }),
+          sumCompletedHours({ ...qcBase, technique: { in: maintenanceSlugs } }),
         ]);
         return {
           ...siteRow,
           ticketCount: qualityControlCount + enterpriseCount,
           qualityControlCount,
           enterpriseCount,
+          inspectionQcCount,
+          maintenanceQcCount,
+          inspectionHoursTotal,
+          maintenanceHoursTotal,
         };
       })
     );
@@ -203,6 +256,10 @@ export async function POST(req: NextRequest) {
         ticketCount: 0,
         qualityControlCount: 0,
         enterpriseCount: 0,
+        inspectionQcCount: 0,
+        maintenanceQcCount: 0,
+        inspectionHoursTotal: 0,
+        maintenanceHoursTotal: 0,
       },
     });
   } catch (err) {

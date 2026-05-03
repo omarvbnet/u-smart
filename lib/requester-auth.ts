@@ -10,6 +10,9 @@ export type RequesterPayload = {
   username: string;
   name: string | null;
   role: string;
+  companyId?: string | null;
+  mustChangePassword?: boolean;
+  identitySource?: 'ticket_requester' | 'coordinator_user';
 };
 
 export function createRequesterToken(payload: RequesterPayload): string {
@@ -27,6 +30,9 @@ export function verifyRequesterToken(token: string): RequesterPayload | null {
       username: decoded.username,
       name: decoded.name ?? null,
       role: decoded.role ?? 'COMPANY',
+      companyId: typeof decoded.companyId === 'string' ? decoded.companyId : null,
+      mustChangePassword: decoded.mustChangePassword === true,
+      identitySource: decoded.identitySource === 'coordinator_user' ? 'coordinator_user' : 'ticket_requester',
     };
   } catch {
     return null;

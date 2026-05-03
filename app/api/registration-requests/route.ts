@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { notifyTicketsRegistrationRequest } from '@/lib/email';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
+import { getVerifiedEmailFromCookie } from '@/lib/otp-auth';
 
 // Only COMPANY and PERSONAL can self-register. ENGINEER and TECHNICIAN are added by admin only.
 const VALID_ROLES = ['COMPANY', 'PERSONAL'] as const;
@@ -71,6 +72,41 @@ export async function POST(req: NextRequest) {
       }
     }
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
+    // Company registrations should be routed to company_requests so they appear
+    // in the admin "Company requests" page.
+    if (role === 'COMPANY') {
+      const verifiedEmail = await getVerifiedEmailFromCookie();
+      if (!verifiedEmail || verifiedEmail !== email.trim().toLowerCase()) {
+        return NextResponse.json(
+          { success: false, message: 'Email verification required. Please verify your email first.' },
+          { status: 400 }
+        );
+      }
+      const companyDelegate = (prisma as { companyRequest?: { create: (args: unknown) => Promise<unknown> } }).companyRequest;
+      if (!companyDelegate?.create) {
+        return NextResponse.json(
+          { success: false, message: 'Company requests not available' },
+          { status: 503 }
+        );
+      }
+      const created = await companyDelegate.create({
+        data: {
+          companyName: legalName,
+          pocName: legalName,
+          pocEmail: email.trim().toLowerCase(),
+          pocPhone: phone,
+          certificateUrl: evidenceUrl,
+          serviceSlug: 'quality-control-supervision',
+        },
+      }) as { id: string };
+
+      return NextResponse.json({
+        success: true,
+        requestId: created.id,
+        message: 'Company registration submitted to admin company requests.',
+      });
+    }
 
     const delegate = (prisma as { registrationRequest?: { create: (args: unknown) => Promise<unknown> } }).registrationRequest;
     if (!delegate?.create) {

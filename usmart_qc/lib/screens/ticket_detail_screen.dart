@@ -502,8 +502,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _shareTicket() async {
     final t = _ticket!;
-    // Use API share endpoint so link works even if locale page routes differ.
-    final url = '${ApiConfig.baseUrl}${ApiConfig.ticketShare(t.id)}';
+    // Share public web page route (not JSON API endpoint).
+    final url = '${ApiConfig.baseUrl}${ApiConfig.publicTicketPage(t.id)}';
     final text = 'Ticket: ${t.siteName ?? t.id}\n$url';
     try {
       final box = context.findRenderObject() as RenderBox?;

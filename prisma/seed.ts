@@ -247,6 +247,293 @@ async function main() {
     console.log(`✅ Service: ${service.title}`);
   }
 
+  console.log('🔧 Provisor QC / maintenance techniques...')
+  const inspectionSeeds = [
+    { slug: 'inspection', labelAr: 'الفحص', labelEn: 'Inspection', sortOrder: 0 },
+    { slug: 'supervision', labelAr: 'الإشراف', labelEn: 'Supervision', sortOrder: 1 },
+    { slug: 'building', labelAr: 'البناء', labelEn: 'Building', sortOrder: 2 },
+    { slug: 'hse', labelAr: 'الصحة والسلامة', labelEn: 'HSE', sortOrder: 3 },
+    { slug: 'investigation', labelAr: 'التحقيق', labelEn: 'Investigation', sortOrder: 4 },
+    { slug: 'tracking', labelAr: 'التتبع', labelEn: 'Tracking', sortOrder: 5 },
+  ]
+  const maintenanceSeeds = [
+    { slug: 'fiber_route', labelAr: 'مسار الألياف', labelEn: 'Fiber route', sortOrder: 0 },
+    { slug: 'fiber_site', labelAr: 'موقع الألياف', labelEn: 'Fiber site', sortOrder: 1 },
+    { slug: 'electrical', labelAr: 'كهرباء', labelEn: 'Electrical', sortOrder: 2 },
+    { slug: 'telecom', labelAr: 'اتصالات', labelEn: 'Telecom', sortOrder: 3 },
+    { slug: 'ftth', labelAr: 'FTTH', labelEn: 'FTTH', sortOrder: 4 },
+  ]
+  for (const row of inspectionSeeds) {
+    await prisma.provisorTechnique.upsert({
+      where: {
+        category_slug: { category: 'INSPECTION_QC', slug: row.slug },
+      },
+      update: { labelAr: row.labelAr, labelEn: row.labelEn, sortOrder: row.sortOrder, active: true },
+      create: {
+        category: 'INSPECTION_QC',
+        slug: row.slug,
+        labelAr: row.labelAr,
+        labelEn: row.labelEn,
+        sortOrder: row.sortOrder,
+        active: true,
+      },
+    })
+  }
+  for (const row of maintenanceSeeds) {
+    await prisma.provisorTechnique.upsert({
+      where: {
+        category_slug: { category: 'MAINTENANCE', slug: row.slug },
+      },
+      update: { labelAr: row.labelAr, labelEn: row.labelEn, sortOrder: row.sortOrder, active: true },
+      create: {
+        category: 'MAINTENANCE',
+        slug: row.slug,
+        labelAr: row.labelAr,
+        labelEn: row.labelEn,
+        sortOrder: row.sortOrder,
+        active: true,
+      },
+    })
+  }
+  console.log('✅ Provisor techniques seeded')
+
+  console.log('🏢 Seeding provider coordinator sample data...')
+  const coordinatorCompanyDelegate = (prisma as any).coordinatorCompany
+  const coordinatorUserDelegate = (prisma as any).coordinatorUser
+  const checklistDelegate = (prisma as any).inspectionChecklist
+  const companyRequestDelegate = (prisma as any).companyRequest
+
+  const sampleCompanySlug = 'sample-provider-company'
+  const sampleCompanyName = 'Sample Provider Company'
+  const sampleOwnerUsername = 'sampleowner'
+  const sampleOwnerEmail = 'owner.sample@usmart.com'
+  const sampleOwnerPassword = 'Owner@12345'
+  const sampleOwnerPasswordHash = await bcrypt.hash(sampleOwnerPassword, 10)
+
+  if (coordinatorCompanyDelegate?.upsert && coordinatorUserDelegate?.upsert) {
+    let sampleCompany
+    try {
+      sampleCompany = await coordinatorCompanyDelegate.upsert({
+        where: { slug: sampleCompanySlug },
+        update: {
+          name: sampleCompanyName,
+          freeTicketsLimit: 50,
+          freeTicketsUsed: 0,
+          activeTicketPlan: null,
+        },
+        create: {
+          slug: sampleCompanySlug,
+          name: sampleCompanyName,
+          freeTicketsLimit: 50,
+          freeTicketsUsed: 0,
+        },
+      })
+    } catch {
+      sampleCompany = await coordinatorCompanyDelegate.upsert({
+        where: { slug: sampleCompanySlug },
+        update: { name: sampleCompanyName },
+        create: {
+          slug: sampleCompanySlug,
+          name: sampleCompanyName,
+        },
+      })
+    }
+
+    try {
+      await coordinatorUserDelegate.upsert({
+        where: { username: sampleOwnerUsername },
+        update: {
+          email: sampleOwnerEmail,
+          name: 'Sample Company Owner',
+          passwordHash: sampleOwnerPasswordHash,
+          role: 'COMPANY_OWNER',
+          status: 'ACTIVE',
+          mustChangePassword: false,
+          companyId: sampleCompany.id,
+        },
+        create: {
+          username: sampleOwnerUsername,
+          email: sampleOwnerEmail,
+          name: 'Sample Company Owner',
+          passwordHash: sampleOwnerPasswordHash,
+          role: 'COMPANY_OWNER',
+          status: 'ACTIVE',
+          mustChangePassword: false,
+          companyId: sampleCompany.id,
+        },
+      })
+    } catch {
+      await coordinatorUserDelegate.upsert({
+        where: { username: sampleOwnerUsername },
+        update: {
+          email: sampleOwnerEmail,
+          name: 'Sample Company Owner',
+          passwordHash: sampleOwnerPasswordHash,
+          role: 'COORDINATOR',
+          companyId: sampleCompany.id,
+        },
+        create: {
+          username: sampleOwnerUsername,
+          email: sampleOwnerEmail,
+          name: 'Sample Company Owner',
+          passwordHash: sampleOwnerPasswordHash,
+          role: 'COORDINATOR',
+          companyId: sampleCompany.id,
+        },
+      })
+    }
+
+    const sampleCoordPasswordHash = await bcrypt.hash('Coord@12345', 10)
+    try {
+      await coordinatorUserDelegate.upsert({
+        where: { username: 'samplecoord' },
+        update: {
+          email: 'coord.sample@usmart.com',
+          name: 'Sample Coordinator',
+          passwordHash: sampleCoordPasswordHash,
+          role: 'COORDINATOR',
+          status: 'ACTIVE',
+          mustChangePassword: false,
+          companyId: sampleCompany.id,
+        },
+        create: {
+          username: 'samplecoord',
+          email: 'coord.sample@usmart.com',
+          name: 'Sample Coordinator',
+          passwordHash: sampleCoordPasswordHash,
+          role: 'COORDINATOR',
+          status: 'ACTIVE',
+          mustChangePassword: false,
+          companyId: sampleCompany.id,
+        },
+      })
+    } catch {
+      await coordinatorUserDelegate.upsert({
+        where: { username: 'samplecoord' },
+        update: {
+          email: 'coord.sample@usmart.com',
+          name: 'Sample Coordinator',
+          passwordHash: sampleCoordPasswordHash,
+          role: 'COORDINATOR',
+          companyId: sampleCompany.id,
+        },
+        create: {
+          username: 'samplecoord',
+          email: 'coord.sample@usmart.com',
+          name: 'Sample Coordinator',
+          passwordHash: sampleCoordPasswordHash,
+          role: 'COORDINATOR',
+          companyId: sampleCompany.id,
+        },
+      })
+    }
+
+    const sampleQualityPasswordHash = await bcrypt.hash('Quality@12345', 10)
+    try {
+      await coordinatorUserDelegate.upsert({
+        where: { username: 'samplequality' },
+        update: {
+          email: 'quality.sample@usmart.com',
+          name: 'Sample Quality Engineer',
+          passwordHash: sampleQualityPasswordHash,
+          role: 'QUALITY_ENGINEER',
+          status: 'ACTIVE',
+          mustChangePassword: false,
+          companyId: sampleCompany.id,
+        },
+        create: {
+          username: 'samplequality',
+          email: 'quality.sample@usmart.com',
+          name: 'Sample Quality Engineer',
+          passwordHash: sampleQualityPasswordHash,
+          role: 'QUALITY_ENGINEER',
+          status: 'ACTIVE',
+          mustChangePassword: false,
+          companyId: sampleCompany.id,
+        },
+      })
+    } catch {
+      await coordinatorUserDelegate.upsert({
+        where: { username: 'samplequality' },
+        update: {
+          email: 'quality.sample@usmart.com',
+          name: 'Sample Quality Engineer',
+          passwordHash: sampleQualityPasswordHash,
+          role: 'COORDINATOR',
+          companyId: sampleCompany.id,
+        },
+        create: {
+          username: 'samplequality',
+          email: 'quality.sample@usmart.com',
+          name: 'Sample Quality Engineer',
+          passwordHash: sampleQualityPasswordHash,
+          role: 'COORDINATOR',
+          companyId: sampleCompany.id,
+        },
+      })
+    }
+
+    if (checklistDelegate?.upsert) {
+      await checklistDelegate.upsert({
+        where: { id: 'sample-qc-checklist' },
+        update: {
+          name: 'Sample QC Checklist',
+          companyId: sampleCompany.id,
+          taskCategory: 'QUALITY',
+          techniqueTypes: ['inspection', 'supervision'],
+          items: [
+            { id: 'item-1', label: 'Check site safety', weight: 'major' },
+            { id: 'item-2', label: 'Validate cable quality', weight: 'major' },
+            { id: 'item-3', label: 'Capture evidence photos', weight: 'minor' },
+          ],
+        },
+        create: {
+          id: 'sample-qc-checklist',
+          name: 'Sample QC Checklist',
+          companyId: sampleCompany.id,
+          taskCategory: 'QUALITY',
+          techniqueTypes: ['inspection', 'supervision'],
+          items: [
+            { id: 'item-1', label: 'Check site safety', weight: 'major' },
+            { id: 'item-2', label: 'Validate cable quality', weight: 'major' },
+            { id: 'item-3', label: 'Capture evidence photos', weight: 'minor' },
+          ],
+        },
+      })
+    }
+
+    console.log('✅ Sample provider company seeded')
+    console.log(`✅ Sample company owner login: ${sampleOwnerUsername} / ${sampleOwnerPassword}`)
+  } else {
+    console.log('⚠️ Coordinator delegates not available in Prisma client; skipped provider sample seed')
+  }
+
+  if (companyRequestDelegate?.upsert) {
+    await companyRequestDelegate.upsert({
+      where: { id: 'sample-company-request-pending' },
+      update: {
+        companyName: 'Pending Demo Telecom',
+        pocName: 'Ali Demo',
+        pocEmail: 'ali.demo@company.com',
+        pocPhone: '+9647711111111',
+        certificateUrl: null,
+        serviceSlug: 'quality-control-supervision',
+        status: 'PENDING',
+      },
+      create: {
+        id: 'sample-company-request-pending',
+        companyName: 'Pending Demo Telecom',
+        pocName: 'Ali Demo',
+        pocEmail: 'ali.demo@company.com',
+        pocPhone: '+9647711111111',
+        certificateUrl: null,
+        serviceSlug: 'quality-control-supervision',
+        status: 'PENDING',
+      },
+    })
+    console.log('✅ Pending company request seeded for admin page testing')
+  }
+
   console.log('🎉 Seeding completed!')
 }
 

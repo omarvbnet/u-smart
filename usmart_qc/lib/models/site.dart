@@ -8,6 +8,14 @@ class Site {
   final int ticketCount;
   final int qualityControlCount;
   final int enterpriseCount;
+  /// QC tickets counted as inspection (non-maintenance techniques).
+  final int inspectionQcCount;
+  /// QC tickets counted as maintenance.
+  final int maintenanceQcCount;
+  /// Sum of (completedAt − createdAt) hours for completed inspection QC tickets.
+  final double inspectionHoursTotal;
+  /// Sum of (completedAt − createdAt) hours for completed maintenance QC tickets.
+  final double maintenanceHoursTotal;
   final DateTime? updatedAt;
 
   Site({
@@ -20,6 +28,10 @@ class Site {
     this.ticketCount = 0,
     this.qualityControlCount = 0,
     this.enterpriseCount = 0,
+    this.inspectionQcCount = 0,
+    this.maintenanceQcCount = 0,
+    this.inspectionHoursTotal = 0,
+    this.maintenanceHoursTotal = 0,
     this.updatedAt,
   });
 
@@ -36,6 +48,12 @@ class Site {
       ticketCount: json['ticketCount'] as int? ?? 0,
       qualityControlCount: json['qualityControlCount'] as int? ?? 0,
       enterpriseCount: json['enterpriseCount'] as int? ?? 0,
+      inspectionQcCount: json['inspectionQcCount'] as int? ?? 0,
+      maintenanceQcCount: json['maintenanceQcCount'] as int? ?? 0,
+      inspectionHoursTotal:
+          (json['inspectionHoursTotal'] as num?)?.toDouble() ?? 0,
+      maintenanceHoursTotal:
+          (json['maintenanceHoursTotal'] as num?)?.toDouble() ?? 0,
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'] as String)
           : null,

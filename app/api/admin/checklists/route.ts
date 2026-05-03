@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const companyId = typeof body.companyId === 'string' ? body.companyId.trim() : null;
+    const taskCategory = typeof body.taskCategory === 'string' ? body.taskCategory.trim().toUpperCase() : null;
+    const techniqueTypes = Array.isArray(body.techniqueTypes)
+      ? body.techniqueTypes.filter((t: unknown) => typeof t === 'string').map((t: string) => t.trim().toLowerCase()).filter(Boolean)
+      : [];
     const itemsRaw = Array.isArray(body.items) ? body.items : [];
     const items = itemsRaw
       .filter((x: unknown) => x && typeof x === 'object' && 'label' in x && typeof (x as { label: unknown }).label === 'string')
@@ -49,7 +54,13 @@ export async function POST(req: NextRequest) {
     }
 
     const checklist = await (prisma as any).inspectionChecklist.create({
-      data: { name, items },
+      data: {
+        name,
+        items,
+        companyId,
+        taskCategory: taskCategory || null,
+        techniqueTypes,
+      },
     });
     return NextResponse.json({ success: true, checklist });
   } catch (err) {

@@ -25,1079 +25,1196 @@ model Statistic {
 
 // نموذج المستخدم
 model User {
-    id            String    @id @default(cuid())
-    email         String    @unique
-    name          String?
-    password      String
-    role          Role      @default(USER)
-    phonePushToken String?
-    phonePlatform  String?
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
-    projects      Project[]
-    services      Service[]
-    testimonials  Testimonial[]
-    products      Product[]
-    @@map("users")
-  }
-  
-  // نموذج المشروع (translations: { "ar": { "title", "description", "content" }, ... })
-  model Project {
-    id           String   @id @default(cuid())
-    title        String
-    slug         String   @unique
-    description  String
-    content      String?
-    translations Json?    // { "ar": { "title", "description", "content" }, "en", "ku", "tr" }
-    category    String
-    tags        String[]
-    technologies String[]
-    client      String?
-    year        Int
-    duration    String?
-    budget      String?
-    featured    Boolean   @default(false)
-    status      ProjectStatus @default(COMPLETED)
-    imageUrl    String?
-    gallery     String[]
-    liveUrl     String?
-    githubUrl   String?
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    userId      String
-    user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-    @@map("projects")
-  }
-  
-  // نموذج الخدمة (translations: { "ar": { "title": "", "description": "" }, "en": { ... }, ... })
-  model Service {
-    id            String    @id @default(cuid())
-    title         String
-    slug          String    @unique
-    description   String
-    content       String?
-    icon          String
-    features      String[]
-    category      String
-    priceRange    String?
-    duration      String?
-    featured      Boolean   @default(false)
-    imageUrl      String?
-    translations  Json?     // { "ar": { "title", "description" }, "en": { ... }, "ku": { ... }, "tr": { ... } }
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
-    userId        String
-    user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    testimonials  Testimonial[]
-
-    @@map("services")
-  }
-  
-  // نموذج العملاء
-  model Client {
-    id          String    @id @default(cuid())
-    name        String
-    logo        String
-    website     String?
-    industry    String?
-    testimonial String?
-    featured    Boolean   @default(false)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-  
-    @@map("clients")
-  }
-  
-  // نموذج الشهادات
-  model Testimonial {
-    id          String    @id @default(cuid())
-    content     String
-    author      String
-    position    String
-    company     String?
-    rating      Int       @default(5)
-    imageUrl    String?
-    featured    Boolean   @default(false)
-    serviceId   String?
-    service     Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-    userId      String
-    user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-  
-    @@map("testimonials")
-  }
-  
-  // نموذج الوظائف (translations: { "ar": { "title", "description" }, "en", "ku", "tr" })
-  model Career {
-    id          String    @id @default(cuid())
-    title       String
-    slug        String    @unique
-    description String
-    translations Json?
-    requirements String[]
-    benefits    String[]
-    department  String
-    location    String
-    jobType     JobType
-    experience  String
-    salaryRange String?
-    remote      Boolean   @default(false)
-    featured    Boolean   @default(false)
-    status      JobStatus @default(OPEN)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    applications Application[]
-  
-    @@map("careers")
-  }
-  
-  // نموذج التقديم على الوظائف
-  model Application {
-    id          String    @id @default(cuid())
-    name        String
-    email       String
-    phone       String
-    coverLetter String?
-    resumeUrl   String
-    status      ApplicationStatus @default(PENDING)
-    careerId    String
-    career      Career    @relation(fields: [careerId], references: [id], onDelete: Cascade)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-  
-    @@map("applications")
-  }
-  
-  // نموذج جهات الاتصال
-  model Contact {
-    id          String    @id @default(cuid())
-    name        String
-    email       String
-    phone       String?
-    subject     String
-    message     String
-    status      ContactStatus @default(NEW)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-  
-    @@map("contacts")
-  }
-  
-  // نموذج الاشتراك في النشرة البريدية
-  model Subscriber {
-    id          String    @id @default(cuid())
-    email       String    @unique
-    name        String?
-    active      Boolean   @default(true)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-
-    @@map("subscribers")
-  }
-
-  // Teams (technical & engineers) for ticket assignment
-  model Team {
-    id          String   @id @default(cuid())
-    name        String
-    leaderId    String
-    leader      Employee @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
-    members     TeamMember[]
-    tickets     VisitorRequest[]
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-    @@map("teams")
-  }
-
-  model TeamMember {
-    id         String   @id @default(cuid())
-    teamId     String
-    team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-    employeeId String
-    employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-    role       String   // TECHNICAL | ENGINEER
-    createdAt  DateTime @default(now())
-    @@unique([teamId, employeeId])
-    @@map("team_members")
-  }
-
-  // طلبات الزوار (Smart Home Automation / Programming)
-  model VisitorRequest {
-    id              String         @id @default(cuid())
-    buildingType    String?        // home, villa, hotel, complex, other (null for programming)
-    phone           String
-    province        String
-    technique       String         // knx, buspro, zigbee | maintenance, fiber, etc.
-    name            String?
-    company         String?
-    email           String?
-    serviceSlug     String         @default("smart-home-automation")
-    // Enterprise networking ticket fields
-    siteName        String?
-    siteCoordinator String?
-    slaHours        Int?
-    currentAmps     Float?         // clean-energy: required current (A)
-    kwh             Float?         // clean-energy: required kWh capacity
-    status          TicketStatus   @default(PENDING)
-    completedAt     DateTime?
-    assignedTeamId String?
-    assignedTeam   Team?          @relation(fields: [assignedTeamId], references: [id], onDelete: SetNull)
-    assignedAt      DateTime?
-    maintenanceDescription String?  // description of maintenance work done (when completed)
-    beforeImageUrls Json?          // before images (when IN_PROGRESS+)
-    finishingImageUrls     Json?   // after / finishing site photos
-    checklistResponse Json?           // { checklistId, checklistName, items: [{id, label, checked, note?}], completedAt }
-    requesterId     String?
-    requester       TicketRequester? @relation(fields: [requesterId], references: [id], onDelete: SetNull)
-    statusLogs      TicketStatusLog[]
-    comments        TicketComment[]
-    evidence        TicketEvidence[]
-    createdAt       DateTime       @default(now())
-    updatedAt       DateTime       @updatedAt
-
-    @@map("visitor_requests")
-  }
-
-  // Timeline of status changes for each ticket (dashboard)
-  model TicketStatusLog {
-    id                String         @id @default(cuid())
-    visitorRequestId  String
-    visitorRequest    VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
-    status            TicketStatus
-    createdAt         DateTime       @default(now())
-
-    @@index([visitorRequestId])
-    @@map("ticket_status_logs")
-  }
-
-  model TicketComment {
-    id                String         @id @default(cuid())
-    visitorRequestId  String
-    visitorRequest    VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
-    authorId          String
-    authorName        String
-    body              String
-    createdAt         DateTime       @default(now())
-
-    @@index([visitorRequestId])
-    @@map("ticket_comments")
-  }
-
-  model TicketEvidence {
-    id                String         @id @default(cuid())
-    visitorRequestId  String
-    visitorRequest    VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
-    uploadedById      String
-    uploadedByName    String
-    fileUrl           String
-    fileType          String         // image | pdf
-    description       String?
-    createdAt         DateTime       @default(now())
-
-    @@index([visitorRequestId])
-    @@map("ticket_evidence")
-  }
-
-  // Ticket requester accounts (each linked to one service: enterprise-networking OR quality-control-supervision)
-  model TicketRequester {
-    id                       String            @id @default(cuid())
-    username                 String            @unique
-    passwordHash             String
-    name                     String?
-    email                    String?
-    phone                    String
-    company                  String?
-    companyCertificationUrl  String?           // uploaded file path/URL
-    serviceSlug              String            @default("enterprise-networking")  // which dashboard: enterprise-networking | quality-control-supervision
-    role                     RequesterRole     @default(COMPANY)
-    province                 String?
-    provinceFilterActive     Boolean           @default(true)
-    status                   RequesterStatus   @default(ACTIVE)
-    hasUpdatedCredentials    Boolean           @default(false)
-    phonePushToken           String?
-    phonePlatform            String?
-    createdAt                DateTime          @default(now())
-    updatedAt                DateTime          @updatedAt
-    tickets                  VisitorRequest[]
-    sites                    Site[]
-    companyProfile           Company?          // when created from company request
-
-    @@map("ticket_requesters")
-  }
-
-  // Company dashboard request (from service page: enterprise-networking OR quality-control-supervision)
-  model CompanyRequest {
-    id             String               @id @default(cuid())
-    companyName    String
-    pocName        String               // Point of Contact name
-    pocEmail       String?              // POC email (verified via 2FA before request)
-    pocPhone       String
-    certificateUrl String?              // optional company certificate/license
-    serviceSlug    String               @default("enterprise-networking")  // which dashboard to create
-    status         CompanyRequestStatus @default(PENDING)
-    createdAt      DateTime             @default(now())
-    updatedAt      DateTime             @updatedAt
-
-    @@map("company_requests")
-  }
-
-  // Email OTP for dashboard registration 2FA (verify real email)
-  model EmailOtp {
-    id        String   @id @default(cuid())
-    email     String
-    code      String
-    expiresAt DateTime
-    createdAt DateTime @default(now())
-
-    @@index([email, expiresAt])
-    @@map("email_otps")
-  }
-
-  enum CompanyRequestStatus {
-    PENDING
-    APPROVED
-    REJECTED
-  }
-
-  // Registration request from login page (company or engineer role)
-  model RegistrationRequest {
-    id          String                    @id @default(cuid())
-    legalName   String
-    phone       String
-    email       String
-    province    String                    // Iraq province
-    evidenceUrl String                    // identification document (ID, passport, etc.)
-    username    String?
-    passwordHash String?
-    role        RequesterRole             // COMPANY, ENGINEER, TECHNICIAN, or PERSONAL
-    status      RegistrationRequestStatus @default(PENDING)
-    createdAt   DateTime                  @default(now())
-    updatedAt   DateTime                  @updatedAt
-
-    @@map("registration_requests")
-  }
-
-  enum RegistrationRequestStatus {
-    PENDING
-    APPROVED
-    REJECTED
-  }
-
-  // Approved company (linked to a dashboard account for one service type)
-  model Company {
-    id              String            @id @default(cuid())
-    companyName     String
-    pocName         String
-    pocPhone        String
-    certificateUrl  String?
-    serviceSlug     String            @default("enterprise-networking")  // enterprise-networking | quality-control-supervision
-    status          CompanyStatus     @default(ACTIVE)
-    requesterId     String            @unique
-    requester       TicketRequester   @relation(fields: [requesterId], references: [id], onDelete: Cascade)
-    createdAt       DateTime          @default(now())
-    updatedAt       DateTime          @updatedAt
-
-    @@map("companies")
-  }
-
-  enum CompanyStatus {
-    ACTIVE
-    SUSPENDED
-    BLOCKED
-  }
-
-  // Sites managed by requesters (for quick ticket creation)
-  model Site {
-    id                String            @id @default(cuid())
-    siteId            String            // user-defined site identifier
-    location          String            // site location/address
-    province          String            // province in Iraq
-    latitude          Float?
-    longitude         Float?
-    requesterId       String
-    requester         TicketRequester   @relation(fields: [requesterId], references: [id], onDelete: Cascade)
-    createdAt         DateTime          @default(now())
-    updatedAt         DateTime          @updatedAt
-
-    @@unique([requesterId, siteId])
-    @@index([requesterId])
-    @@map("sites")
-  }
-
-  enum RequesterStatus {
-    ACTIVE
-    SUSPENDED
-    BLOCKED
-  }
-
-  enum RequesterRole {
-    COMPANY
-    ENGINEER
-    TECHNICIAN
-    PERSONAL
-    WORKER
-  }
-
-  enum TicketStatus {
-    PENDING
-    ON_SITE
-    IN_PROGRESS
-    COMPLETED
-  }
-
-  // Phone OTP for ticket submission (visitors)
-  model PhoneOtp {
-    id        String   @id @default(cuid())
-    phone     String
-    code      String
-    expiresAt DateTime
-    createdAt DateTime @default(now())
-
-    @@index([phone, expiresAt])
-    @@map("phone_otps")
-  }
-
-  // Notifications: new ticket (admin), status changed (requester)
-  model Notification {
-    id          String   @id @default(cuid())
-    type        String   // 'new_ticket' | 'status_changed'
-    title       String
-    message     String
-    ticketId    String?
-    requesterId String?
-    forAdmin    Boolean  @default(false)
-    read        Boolean  @default(false)
-    createdAt   DateTime @default(now())
-
-    @@map("notifications")
-  }
-
-  // Employees (admin-managed: technicians, engineers, etc.)
-  model Employee {
-    id               String              @id @default(cuid())
-    fullName         String
-    phone            String
-    jobTitle         String?
-    department       String              // service title (from services dropdown)
-    grade            EmployeeGrade
-    education        String?
-    specialized      EmployeeSpecialized
-    ledTeams         Team[]              @relation("TeamLeader")
-    teamMemberships  TeamMember[]
-    createdAt        DateTime            @default(now())
-    updatedAt        DateTime            @updatedAt
-
-    @@map("employees")
-  }
-
-  enum EmployeeGrade {
-    TECHNICIAN_C
-    TECHNICIAN_B
-    TECHNICIAN_A
-    ENGINEER
-    SUPERVISOR
-    TEAM_LEADER
-    SECTION_HEAD
-    MANAGER
-  }
-
-  enum EmployeeSpecialized {
-    ELECTRICAL_TECHNICIAN
-    TELECOM_TECHNICIAN
-    FIBER_TECHNICIAN
-    ENGINEER
-  }
-
-  // الأنواع المحددة
-  enum Role {
-    ADMIN
-    EDITOR
-    USER
-    TECHNICAL
-    ENGINEER
-  }
-  
-  enum ProjectStatus {
-    PLANNING
-    IN_PROGRESS
-    COMPLETED
-    ON_HOLD
-  }
-  
-  enum JobType {
-    FULL_TIME
-    PART_TIME
-    CONTRACT
-    INTERNSHIP
-    REMOTE
-  }
-  
-  enum JobStatus {
-    OPEN
-    CLOSED
-    FILLED
-  }
-  
-  enum ApplicationStatus {
-    PENDING
-    REVIEWED
-    INTERVIEW
-    ACCEPTED
-    REJECTED
-  }
-  
-  enum ContactStatus {
-    NEW
-    IN_PROGRESS
-    RESOLVED
-    SPAM
-  }
-
-  // Inspection checklist templates (admin-generated, used in QC tickets)
-  model InspectionChecklist {
-    id        String   @id @default(cuid())
-    name      String   // e.g. "Site Safety Inspection"
-    items     Json     // [{ "id": "uuid", "label": "Item 1" }, ...]
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@map("inspection_checklists")
-  }
-
-  // Training requests (from Explore Training page)
-  model TrainingRequest {
-    id               String                 @id @default(cuid())
-    serviceSlug      String
-    serviceTitle     String
-    serviceDesc      String?                // brief description
-    requesterName    String
-    requesterEmail   String
-    requesterPhone   String
-    company          String?
-    message          String?
-    budget           String?                // optional budget/notes
-    status           TrainingRequestStatus  @default(PENDING)
-    createdAt        DateTime               @default(now())
-    updatedAt        DateTime               @updatedAt
-
-    @@index([status])
-    @@map("training_requests")
-  }
-
-  enum TrainingRequestStatus {
-    PENDING
-    APPROVED
-    REJECTED
-  }
-
-  // CV builder: one row per PDF export (download) for admin count
-  model CvExport {
-    id        String   @id @default(cuid())
-    createdAt DateTime @default(now())
-    @@map("cv_exports")
-  }
-
-  // Products (KNX, Buspro, Zigbee) – posted from admin, no price, order button only
-  model Product {
-    id              String       @id @default(cuid())
-    title           String
-    slug            String       @unique
-    description     String
-    specifications  Json?        // { "key": "value" } or array of specs
-    userManualUrl   String?      // PDF or doc URL
-    imageUrls       String[]     @default([])
-    productType     ProductType  // KNX | Buspro | Zigbee
-    featured        Boolean      @default(false)
-    translations    Json?        // { "ar": { "title", "description", "specifications" }, ... }
-    userId          String
-    user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-    requests        ProductRequest[]
-    createdAt       DateTime     @default(now())
-    updatedAt       DateTime     @updatedAt
-
-    @@index([productType])
-    @@index([featured])
-    @@map("products")
-  }
-
-  enum ProductType {
-    KNX
-    Buspro
-    Zigbee
-  }
-
-  // Product order requests (from Order button on product detail)
-  model ProductRequest {
-    id          String              @id @default(cuid())
-    productId   String
-    product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-    productSlug String
-    productTitle String
-    productType ProductType
-    name        String
-    email       String
-    phone       String
-    message     String?
-    status      ProductRequestStatus @default(PENDING)
-    createdAt   DateTime             @default(now())
-    updatedAt   DateTime             @updatedAt
-
-    @@index([productId])
-    @@index([status])
-    @@map("product_requests")
-  }
-
-  enum ProductRequestStatus {
-    PENDING
-    CONTACTED
-    QUOTED
-    CLOSED
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // U-Smart Digital Project Coordinator Platform (multi-tenant SaaS)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  enum CoordinatorRole {
-    ADMIN
-    COORDINATOR
-    CLIENT
-  }
-
-  enum CoordinatorTaskStatus {
-    PENDING
-    APPROVED
-    IN_PROGRESS
-    UNDER_REVIEW
-    COMPLETED
-    ARCHIVED
-  }
-
-  enum ExternalSystemType {
-    API
-    PLAYWRIGHT
-    OAUTH2
-  }
-
-  enum KPIStatus {
-    ON_TRACK
-    AT_RISK
-    FAILED
-  }
-
-  enum SubscriptionPlanTier {
-    BASIC
-    PROFESSIONAL
-    ENTERPRISE
-  }
-
-  enum SubscriptionStatus {
-    ACTIVE
-    PAST_DUE
-    CANCELED
-    SUSPENDED
-  }
-
-  enum VoiceCallDirection {
-    INCOMING
-    OUTGOING
-  }
-
-  model CoordinatorCompany {
-    id                String    @id @default(cuid())
-    name              String
-    slug              String    @unique
-    stripeCustomerId  String?
-    subscriptionPlanId String?
-    subscriptionPlan  CoordinatorSubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
-    subscriptions     CoordinatorSubscription[]
-    users             CoordinatorUser[]
-    contacts          CoordinatorContact[]
-    tasks             CoordinatorTask[]
-    kpis              CoordinatorKPI[]
-    reports           CoordinatorReport[]
-    externalSystems   CoordinatorExternalSystem[]
-    socialAccounts   CoordinatorSocialAccount[]
-    jobDutyTemplates  CoordinatorJobDutyTemplate[]
-    jobResults       CoordinatorJobResult[]
-    generatedApplications CoordinatorGeneratedApplication[]
-    auditLogs         CoordinatorAuditLog[]
-    voiceCallRecords  CoordinatorVoiceCallRecord[]
-    createdAt         DateTime  @default(now())
-    updatedAt        DateTime  @updatedAt
-
-    @@map("coordinator_companies")
-  }
-
-  model CoordinatorUser {
-    id          String            @id @default(cuid())
-    email       String
-    name        String?
-    passwordHash String
-    role        CoordinatorRole   @default(COORDINATOR)
-    companyId   String
-    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    profile     CoordinatorProfile?
-    tasksCreated CoordinatorTask[] @relation("TaskCreator")
-    auditLogs   CoordinatorAuditLog[]
-    voiceLogs   CoordinatorVoiceLog[]
-    createdAt   DateTime         @default(now())
-    updatedAt   DateTime         @updatedAt
-
-    @@unique([companyId, email])
-    @@index([companyId])
-    @@index([email])
-    @@map("coordinator_users")
-  }
-
-  model CoordinatorContact {
-    id        String   @id @default(cuid())
-    name      String   // e.g. "أحمد" or "Ahmed" for lookup
-    phone     String   // E.164 e.g. +9647712345678
-    companyId String
-    company   CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    notes     String?
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@index([companyId])
-    @@index([companyId, name])
-    @@map("coordinator_contacts")
-  }
-
-  model CoordinatorTask {
-    id                   String               @id @default(cuid())
-    title                String
-    description          String?
-    status               CoordinatorTaskStatus @default(PENDING)
-    companyId            String
-    company              CoordinatorCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    createdById          String
-    createdBy            CoordinatorUser      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
-    dueAt                DateTime?
-    completedAt          DateTime?
-    checklist            Json?                 // [{ "id": "uuid", "label": "...", "checked": bool }]
-    fileUrls             String[]             @default([])
-    source               String?              // voice | email | whatsapp | manual
-    coordinatorFeedback  String?              // coordinator's feedback after action (e.g. "Called Ahmed, he said...")
-    inboundReplyTo       String?              // for inbound tasks: WhatsApp/email to send feedback to (e.g. whatsapp:+964...)
-    awaitingFeedbackFrom String?              // when we messaged a contact for this task: their whatsapp (e.g. whatsapp:+964...) so we link their reply
-    aiProcessedAt        DateTime?            // when AI last processed this task (status + WhatsApp reply)
-    priority             String?             @default("normal") // normal | high | urgent (for escalation)
-    subTasks             CoordinatorSubtask[]
-    comments             CoordinatorComment[]
-    createdAt            DateTime             @default(now())
-    updatedAt            DateTime             @updatedAt
-
-    @@index([companyId])
-    @@index([status])
-    @@index([dueAt])
-    @@index([priority])
-    @@map("coordinator_tasks")
-  }
-
-  model CoordinatorSubtask {
-    id        String          @id @default(cuid())
-    title     String
-    done      Boolean         @default(false)
-    taskId    String
-    task      CoordinatorTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-    createdAt DateTime        @default(now())
-    updatedAt DateTime        @updatedAt
-
-    @@index([taskId])
-    @@map("coordinator_subtasks")
-  }
-
-  model CoordinatorComment {
-    id        String          @id @default(cuid())
-    body      String
-    taskId    String
-    task      CoordinatorTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-    authorId  String          // CoordinatorUser id (optional relation to avoid circular)
-    createdAt DateTime        @default(now())
-
-    @@index([taskId])
-    @@map("coordinator_comments")
-  }
-
-  model CoordinatorKPI {
-    id          String    @id @default(cuid())
-    name        String
-    targetValue Float
-    actualValue Float    @default(0)
-    unit        String?  // e.g. "%", "count"
-    status      KPIStatus @default(ON_TRACK)
-    companyId   String
-    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    reportedAt  DateTime?
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-
-    @@index([companyId])
-    @@map("coordinator_kpis")
-  }
-
-  model CoordinatorReport {
-    id        String             @id @default(cuid())
-    title     String
-    type      String             // daily | weekly | monthly | custom
-    pdfUrl    String?
-    companyId String
-    company   CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    periodFrom DateTime
-    periodTo   DateTime
-    createdAt DateTime           @default(now())
-
-    @@index([companyId])
-    @@map("coordinator_reports")
-  }
-
-  model CoordinatorExternalSystem {
-    id          String              @id @default(cuid())
-    name        String
-    type        ExternalSystemType
-    configEnc   String?             // AES-256 encrypted config (credentials, endpoints)
-    companyId   String
-    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    actionLogs  CoordinatorSystemActionLog[]
-    createdAt   DateTime           @default(now())
-    updatedAt   DateTime           @updatedAt
-
-    @@index([companyId])
-    @@map("coordinator_external_systems")
-  }
-
-  model CoordinatorSystemActionLog {
-    id         String                 @id @default(cuid())
-    systemId   String
-    system     CoordinatorExternalSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
-    action     String
-    status     String                 // success | failure
-    retryCount Int                    @default(0)
-    errorMessage String?
-    payload    Json?
-    createdAt  DateTime               @default(now())
-
-    @@index([systemId])
-    @@map("coordinator_system_action_logs")
-  }
-
-  model CoordinatorSocialAccount {
-    id          String             @id @default(cuid())
-    platform    String             // linkedin | meta | whatsapp
-    accountId   String
-    tokenEnc    String?            // encrypted access token
-    companyId   String
-    company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    messages    CoordinatorOutreachMessage[]
-    createdAt   DateTime          @default(now())
-    updatedAt   DateTime          @updatedAt
-
-    @@index([companyId])
-    @@map("coordinator_social_accounts")
-  }
-
-  model CoordinatorOutreachMessage {
-    id         String                 @id @default(cuid())
-    accountId  String
-    account    CoordinatorSocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-    recipient  String
-    body       String
-    sentAt     DateTime?
-    replyAt    DateTime?
-    taskId     String?
-    createdAt  DateTime               @default(now())
-
-    @@index([accountId])
-    @@map("coordinator_outreach_messages")
-  }
-
-  model CoordinatorConversation {
-    id        String   @id @default(cuid())
-    channel   String   // in_app | email | push
-    threadId  String?
-    createdAt DateTime @default(now())
-
-    @@map("coordinator_conversations")
-  }
-
-  model CoordinatorSubscriptionPlan {
-    id          String                 @id @default(cuid())
-    tier        SubscriptionPlanTier    @unique
-    name        String
-    stripePriceId String?
-    amountCents Int
-    interval    String                 // month | year
-    companies   CoordinatorCompany[]
-    subscriptions CoordinatorSubscription[]
-    createdAt   DateTime               @default(now())
-    updatedAt   DateTime               @updatedAt
-
-    @@map("coordinator_subscription_plans")
-  }
-
-  model CoordinatorSubscription {
-    id             String               @id @default(cuid())
-    companyId      String
-    company        CoordinatorCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    planId         String
-    plan           CoordinatorSubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
-    stripeSubId    String?
-    status         SubscriptionStatus    @default(ACTIVE)
-    currentPeriodEnd DateTime?
-    payments       CoordinatorPayment[]
-    invoices       CoordinatorInvoice[]
-    createdAt      DateTime             @default(now())
-    updatedAt      DateTime             @updatedAt
-
-    @@index([companyId])
-    @@map("coordinator_subscriptions")
-  }
-
-  model CoordinatorPayment {
-    id             String               @id @default(cuid())
-    subscriptionId String
-    subscription   CoordinatorSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-    stripePaymentIntentId String?
-    amountCents    Int
-    status         String
-    createdAt      DateTime             @default(now())
-
-    @@index([subscriptionId])
-    @@map("coordinator_payments")
-  }
-
-  model CoordinatorInvoice {
-    id             String               @id @default(cuid())
-    subscriptionId String
-    subscription   CoordinatorSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-    pdfUrl         String?
-    amountCents    Int
-    periodFrom     DateTime
-    periodTo       DateTime
-    createdAt      DateTime             @default(now())
-
-    @@index([subscriptionId])
-    @@map("coordinator_invoices")
-  }
-
-  model CoordinatorNotification {
-    id        String   @id @default(cuid())
-    userId    String   // CoordinatorUser id
-    title     String
-    body      String?
-    channel   String   // in_app | email | push
-    read      Boolean  @default(false)
-    linkUrl   String?
-    createdAt DateTime @default(now())
-
-    @@index([userId])
-    @@map("coordinator_notifications")
-  }
-
-  model CoordinatorJobDutyTemplate {
-    id       String   @id @default(cuid())
-    name     String
-    cron     String   // e.g. "0 9 * * *" daily 9am
-    frequency String  // daily | weekly | monthly | yearly
-    companyId String
-    company  CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    taskTemplate Json  // { title, description, checklist }
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@index([companyId])
-    @@map("coordinator_job_duty_templates")
-  }
-
-  model CoordinatorJobResult {
-    id             String   @id @default(cuid())
-    companyId      String
-    company        CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    keyword        String
-    source         String?
-    rawResult      Json?
-    extractedSkills String[]  @default([])
-    createdAt      DateTime @default(now())
-
-    @@index([companyId])
-    @@map("coordinator_job_results")
-  }
-
-  model CoordinatorProfile {
-    id          String   @id @default(cuid())
-    userId      String   @unique
-    user        CoordinatorUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-    skills      String[] @default([])
-    cvUrl       String?
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-
-    @@map("coordinator_profiles")
-  }
-
-  model CoordinatorGeneratedApplication {
-    id             String   @id @default(cuid())
-    companyId      String
-    company        CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    userId         String?
-    jobResultId    String?
-    cvUrl          String?
-    coverLetterUrl String?
-    createdAt      DateTime @default(now())
-
-    @@index([companyId])
-    @@map("coordinator_generated_applications")
-  }
-
-  model CoordinatorAuditLog {
-    id         String             @id @default(cuid())
-    companyId  String
-    company    CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    userId     String?
-    user       CoordinatorUser?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-    action     String             // login | task_create | task_update | system_action | payment_update | ...
-    resource   String?            // task | kpi | report | ...
-    resourceId String?
-    payload    Json?
-    ip         String?
-    createdAt  DateTime           @default(now())
-
-    @@index([companyId])
-    @@index([userId])
-    @@index([action])
-    @@index([createdAt])
-    @@map("coordinator_audit_logs")
-  }
-
-  model CoordinatorVoiceLog {
-    id               String   @id @default(cuid())
-    userId           String
-    user             CoordinatorUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-    transcript       String?
-    detectedLanguage String?
-    intent           String?
-    actionTaken      String?
-    audioFileUrl     String?
-    createdAt        DateTime @default(now())
-
-    @@index([userId])
-    @@map("coordinator_voice_logs")
-  }
-
-  model CoordinatorVoiceCallRecord {
-    id          String               @id @default(cuid())
-    direction   VoiceCallDirection
-    duration    Int?                 // seconds
-    transcript  String?
-    taskLinked  String?               // taskId if linked
-    status      String
-    companyId   String
-    company     CoordinatorCompany   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    createdAt   DateTime             @default(now())
-
-    @@index([companyId])
-    @@map("coordinator_voice_call_records")
-  }
+  id             String        @id @default(cuid())
+  email          String        @unique
+  name           String?
+  password       String
+  role           Role          @default(USER)
+  phonePushToken String?
+  phonePlatform  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  projects       Project[]
+  services       Service[]
+  testimonials   Testimonial[]
+  products       Product[]
+
+  @@map("users")
+}
+
+// نموذج المشروع (translations: { "ar": { "title", "description", "content" }, ... })
+model Project {
+  id           String        @id @default(cuid())
+  title        String
+  slug         String        @unique
+  description  String
+  content      String?
+  translations Json? // { "ar": { "title", "description", "content" }, "en", "ku", "tr" }
+  category     String
+  tags         String[]
+  technologies String[]
+  client       String?
+  year         Int
+  duration     String?
+  budget       String?
+  featured     Boolean       @default(false)
+  status       ProjectStatus @default(COMPLETED)
+  imageUrl     String?
+  gallery      String[]
+  liveUrl      String?
+  githubUrl    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}
+
+// نموذج الخدمة (translations: { "ar": { "title": "", "description": "" }, "en": { ... }, ... })
+model Service {
+  id           String        @id @default(cuid())
+  title        String
+  slug         String        @unique
+  description  String
+  content      String?
+  icon         String
+  features     String[]
+  category     String
+  priceRange   String?
+  duration     String?
+  featured     Boolean       @default(false)
+  imageUrl     String?
+  translations Json? // { "ar": { "title", "description" }, "en": { ... }, "ku": { ... }, "tr": { ... } }
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testimonials Testimonial[]
+
+  @@map("services")
+}
+
+// نموذج العملاء
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  logo        String
+  website     String?
+  industry    String?
+  testimonial String?
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("clients")
+}
+
+// نموذج الشهادات
+model Testimonial {
+  id        String   @id @default(cuid())
+  content   String
+  author    String
+  position  String
+  company   String?
+  rating    Int      @default(5)
+  imageUrl  String?
+  featured  Boolean  @default(false)
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("testimonials")
+}
+
+// نموذج الوظائف (translations: { "ar": { "title", "description" }, "en", "ku", "tr" })
+model Career {
+  id           String        @id @default(cuid())
+  title        String
+  slug         String        @unique
+  description  String
+  translations Json?
+  requirements String[]
+  benefits     String[]
+  department   String
+  location     String
+  jobType      JobType
+  experience   String
+  salaryRange  String?
+  remote       Boolean       @default(false)
+  featured     Boolean       @default(false)
+  status       JobStatus     @default(OPEN)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  applications Application[]
+
+  @@map("careers")
+}
+
+// نموذج التقديم على الوظائف
+model Application {
+  id          String            @id @default(cuid())
+  name        String
+  email       String
+  phone       String
+  coverLetter String?
+  resumeUrl   String
+  status      ApplicationStatus @default(PENDING)
+  careerId    String
+  career      Career            @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("applications")
+}
+
+// نموذج جهات الاتصال
+model Contact {
+  id        String        @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  status    ContactStatus @default(NEW)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("contacts")
+}
+
+// نموذج الاشتراك في النشرة البريدية
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscribers")
+}
+
+// Teams (technical & engineers) for ticket assignment
+model Team {
+  id        String           @id @default(cuid())
+  name      String
+  leaderId  String
+  leader    Employee         @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+  tickets   VisitorRequest[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  teamId     String
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role       String // TECHNICAL | ENGINEER
+  createdAt  DateTime @default(now())
+
+  @@unique([teamId, employeeId])
+  @@map("team_members")
+}
+
+// طلبات الزوار (Smart Home Automation / Programming)
+model VisitorRequest {
+  id                             String                   @id @default(cuid())
+  buildingType                   String? // home, villa, hotel, complex, other (null for programming)
+  phone                          String
+  province                       String
+  technique                      String // knx, buspro, zigbee | maintenance, fiber, etc.
+  name                           String?
+  company                        String?
+  email                          String?
+  serviceSlug                    String                   @default("smart-home-automation")
+  // Enterprise networking ticket fields
+  siteName                       String?
+  siteCoordinator                String?
+  slaHours                       Int?
+  currentAmps                    Float? // clean-energy: required current (A)
+  kwh                            Float? // clean-energy: required kWh capacity
+  status                         TicketStatus             @default(PENDING)
+  completedAt                    DateTime?
+  taskCategory                   ProviderTaskCategory?
+  roleScope                      ProviderRoleScope?       @default(ANY)
+  workflowState                  ProviderWorkflowState    @default(OPEN)
+  assignmentScope                ProviderAssignmentScope?
+  checklistTemplateId            String?
+  coordinatorCompanyId           String?
+  coordinatorCompany             CoordinatorCompany?      @relation(fields: [coordinatorCompanyId], references: [id], onDelete: SetNull)
+  createdByCoordinatorUserId     String?
+  createdByCoordinatorUser       CoordinatorUser?         @relation("ProviderTicketCreatedBy", fields: [createdByCoordinatorUserId], references: [id], onDelete: SetNull)
+  assigneeCoordinatorUserId      String?
+  assigneeCoordinatorUser        CoordinatorUser?         @relation("ProviderTicketAssignee", fields: [assigneeCoordinatorUserId], references: [id], onDelete: SetNull)
+  resubmittedByCoordinatorUserId String?
+  resubmittedByCoordinatorUser   CoordinatorUser?         @relation("ProviderTicketResubmittedBy", fields: [resubmittedByCoordinatorUserId], references: [id], onDelete: SetNull)
+  resubmitReason                 String?
+  resubmittedAt                  DateTime?
+  assignedTeamId                 String?
+  assignedTeam                   Team?                    @relation(fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  assignedAt                     DateTime?
+  maintenanceDescription         String? // description of maintenance work done (when completed)
+  beforeImageUrls                Json? // before images (when IN_PROGRESS+)
+  finishingImageUrls             Json? // after / finishing site photos
+  checklistResponse              Json? // { checklistId, checklistName, items: [{id, label, checked, note?}], completedAt }
+  requesterId                    String?
+  requester                      TicketRequester?         @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+  statusLogs                     TicketStatusLog[]
+  comments                       TicketComment[]
+  evidence                       TicketEvidence[]
+  createdAt                      DateTime                 @default(now())
+  updatedAt                      DateTime                 @updatedAt
+  CoordinatorTicketCharge        CoordinatorTicketCharge?
+
+  @@map("visitor_requests")
+}
+
+// Timeline of status changes for each ticket (dashboard)
+model TicketStatusLog {
+  id               String         @id @default(cuid())
+  visitorRequestId String
+  visitorRequest   VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
+  status           TicketStatus
+  createdAt        DateTime       @default(now())
+
+  @@index([visitorRequestId])
+  @@map("ticket_status_logs")
+}
+
+model TicketComment {
+  id               String         @id @default(cuid())
+  visitorRequestId String
+  visitorRequest   VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
+  authorId         String
+  authorName       String
+  body             String
+  createdAt        DateTime       @default(now())
+
+  @@index([visitorRequestId])
+  @@map("ticket_comments")
+}
+
+model TicketEvidence {
+  id               String         @id @default(cuid())
+  visitorRequestId String
+  visitorRequest   VisitorRequest @relation(fields: [visitorRequestId], references: [id], onDelete: Cascade)
+  uploadedById     String
+  uploadedByName   String
+  fileUrl          String
+  fileType         String // image | pdf
+  description      String?
+  createdAt        DateTime       @default(now())
+
+  @@index([visitorRequestId])
+  @@map("ticket_evidence")
+}
+
+// Ticket requester accounts (each linked to one service: enterprise-networking OR quality-control-supervision)
+model TicketRequester {
+  id                      String           @id @default(cuid())
+  username                String           @unique
+  passwordHash            String
+  name                    String?
+  email                   String?
+  phone                   String
+  company                 String?
+  companyCertificationUrl String? // uploaded file path/URL
+  serviceSlug             String           @default("enterprise-networking") // which dashboard: enterprise-networking | quality-control-supervision
+  role                    RequesterRole    @default(COMPANY)
+  province                String?
+  provinceFilterActive    Boolean          @default(true)
+  status                  RequesterStatus  @default(ACTIVE)
+  hasUpdatedCredentials   Boolean          @default(false)
+  phonePushToken          String?
+  phonePlatform           String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  tickets                 VisitorRequest[]
+  sites                   Site[]
+  companyProfile          Company? // when created from company request
+
+  @@map("ticket_requesters")
+}
+
+// Company dashboard request (from service page: enterprise-networking OR quality-control-supervision)
+model CompanyRequest {
+  id             String               @id @default(cuid())
+  companyName    String
+  pocName        String // Point of Contact name
+  pocEmail       String? // POC email (verified via 2FA before request)
+  pocPhone       String
+  certificateUrl String? // optional company certificate/license
+  serviceSlug    String               @default("enterprise-networking") // which dashboard to create
+  status         CompanyRequestStatus @default(PENDING)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@map("company_requests")
+}
+
+// Email OTP for dashboard registration 2FA (verify real email)
+model EmailOtp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, expiresAt])
+  @@map("email_otps")
+}
+
+enum CompanyRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Registration request from login page (company or engineer role)
+model RegistrationRequest {
+  id           String                    @id @default(cuid())
+  legalName    String
+  phone        String
+  email        String
+  province     String // Iraq province
+  evidenceUrl  String // identification document (ID, passport, etc.)
+  username     String?
+  passwordHash String?
+  role         RequesterRole // COMPANY, ENGINEER, TECHNICIAN, or PERSONAL
+  status       RegistrationRequestStatus @default(PENDING)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@map("registration_requests")
+}
+
+enum RegistrationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Approved company (linked to a dashboard account for one service type)
+model Company {
+  id             String          @id @default(cuid())
+  companyName    String
+  pocName        String
+  pocPhone       String
+  certificateUrl String?
+  serviceSlug    String          @default("enterprise-networking") // enterprise-networking | quality-control-supervision
+  status         CompanyStatus   @default(ACTIVE)
+  requesterId    String          @unique
+  requester      TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("companies")
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+// Sites managed by requesters (for quick ticket creation)
+model Site {
+  id          String          @id @default(cuid())
+  siteId      String // user-defined site identifier
+  location    String // site location/address
+  province    String // province in Iraq
+  latitude    Float?
+  longitude   Float?
+  requesterId String
+  requester   TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([requesterId, siteId])
+  @@index([requesterId])
+  @@map("sites")
+}
+
+enum RequesterStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum RequesterRole {
+  COMPANY
+  ENGINEER
+  TECHNICIAN
+  PERSONAL
+  WORKER
+}
+
+enum TicketStatus {
+  PENDING
+  ON_SITE
+  IN_PROGRESS
+  COMPLETED
+}
+
+// Phone OTP for ticket submission (visitors)
+model PhoneOtp {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone, expiresAt])
+  @@map("phone_otps")
+}
+
+// Notifications: new ticket (admin), status changed (requester)
+model Notification {
+  id          String   @id @default(cuid())
+  type        String // 'new_ticket' | 'status_changed'
+  title       String
+  message     String
+  ticketId    String?
+  requesterId String?
+  forAdmin    Boolean  @default(false)
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("notifications")
+}
+
+// Employees (admin-managed: technicians, engineers, etc.)
+model Employee {
+  id              String              @id @default(cuid())
+  fullName        String
+  phone           String
+  jobTitle        String?
+  department      String // service title (from services dropdown)
+  grade           EmployeeGrade
+  education       String?
+  specialized     EmployeeSpecialized
+  ledTeams        Team[]              @relation("TeamLeader")
+  teamMemberships TeamMember[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("employees")
+}
+
+enum EmployeeGrade {
+  TECHNICIAN_C
+  TECHNICIAN_B
+  TECHNICIAN_A
+  ENGINEER
+  SUPERVISOR
+  TEAM_LEADER
+  SECTION_HEAD
+  MANAGER
+}
+
+enum EmployeeSpecialized {
+  ELECTRICAL_TECHNICIAN
+  TELECOM_TECHNICIAN
+  FIBER_TECHNICIAN
+  ENGINEER
+}
+
+// الأنواع المحددة
+enum Role {
+  ADMIN
+  EDITOR
+  USER
+  TECHNICAL
+  ENGINEER
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  REMOTE
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+  FILLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWED
+  INTERVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  SPAM
+}
+
+// Inspection checklist templates (admin-generated, used in QC tickets)
+model InspectionChecklist {
+  id             String                @id @default(cuid())
+  name           String // e.g. "Site Safety Inspection"
+  items          Json // [{ "id": "uuid", "label": "Item 1" }, ...]
+  companyId      String?
+  company        CoordinatorCompany?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskCategory   ProviderTaskCategory?
+  techniqueTypes String[]              @default([])
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@map("inspection_checklists")
+}
+
+model CoordinatorTicketCharge {
+  id        String             @id @default(cuid())
+  companyId String
+  company   CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ticketId  String             @unique
+  ticket    VisitorRequest     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  plan      TicketBillingPlan
+  rateUsd   Float
+  amountUsd Float
+  billedAt  DateTime           @default(now())
+  createdAt DateTime           @default(now())
+
+  @@index([companyId, billedAt])
+  @@map("coordinator_ticket_charges")
+}
+
+// QC / maintenance technique options (admin-managed; slug is stored on VisitorRequest.technique)
+model ProvisorTechnique {
+  id        String   @id @default(cuid())
+  category  String // INSPECTION_QC | MAINTENANCE
+  slug      String
+  labelAr   String
+  labelEn   String?
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, slug])
+  @@map("provisor_techniques")
+}
+
+// Training requests (from Explore Training page)
+model TrainingRequest {
+  id             String                @id @default(cuid())
+  serviceSlug    String
+  serviceTitle   String
+  serviceDesc    String? // brief description
+  requesterName  String
+  requesterEmail String
+  requesterPhone String
+  company        String?
+  message        String?
+  budget         String? // optional budget/notes
+  status         TrainingRequestStatus @default(PENDING)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([status])
+  @@map("training_requests")
+}
+
+enum TrainingRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// CV builder: one row per PDF export (download) for admin count
+model CvExport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  @@map("cv_exports")
+}
+
+// Products (KNX, Buspro, Zigbee) – posted from admin, no price, order button only
+model Product {
+  id             String           @id @default(cuid())
+  title          String
+  slug           String           @unique
+  description    String
+  specifications Json? // { "key": "value" } or array of specs
+  userManualUrl  String? // PDF or doc URL
+  imageUrls      String[]         @default([])
+  productType    ProductType // KNX | Buspro | Zigbee
+  featured       Boolean          @default(false)
+  translations   Json? // { "ar": { "title", "description", "specifications" }, ... }
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requests       ProductRequest[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([productType])
+  @@index([featured])
+  @@map("products")
+}
+
+enum ProductType {
+  KNX
+  Buspro
+  Zigbee
+}
+
+// Product order requests (from Order button on product detail)
+model ProductRequest {
+  id           String               @id @default(cuid())
+  productId    String
+  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productSlug  String
+  productTitle String
+  productType  ProductType
+  name         String
+  email        String
+  phone        String
+  message      String?
+  status       ProductRequestStatus @default(PENDING)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([productId])
+  @@index([status])
+  @@map("product_requests")
+}
+
+enum ProductRequestStatus {
+  PENDING
+  CONTACTED
+  QUOTED
+  CLOSED
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// U-Smart Digital Project Coordinator Platform (multi-tenant SaaS)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum CoordinatorRole {
+  ADMIN
+  COMPANY_OWNER
+  COORDINATOR
+  ENGINEER
+  QUALITY_ENGINEER
+  SUPERVISION_ENGINEER
+  TECHNICIAN
+  CLIENT
+}
+
+enum CoordinatorUserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum ProviderTaskCategory {
+  MAINTENANCE
+  QUALITY
+  SUPERVISION
+}
+
+enum ProviderRoleScope {
+  ANY
+  QUALITY_ENGINEER
+  SUPERVISION_ENGINEER
+  TECHNICIAN
+}
+
+enum ProviderWorkflowState {
+  OPEN
+  IN_PROGRESS
+  NEEDS_EDIT
+  RESUBMITTED
+  DONE
+}
+
+enum ProviderAssignmentScope {
+  COMPANY_STAFF
+  USMART_STAFF
+}
+
+enum TicketBillingPlan {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum CoordinatorTaskStatus {
+  PENDING
+  APPROVED
+  IN_PROGRESS
+  UNDER_REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum ExternalSystemType {
+  API
+  PLAYWRIGHT
+  OAUTH2
+}
+
+enum KPIStatus {
+  ON_TRACK
+  AT_RISK
+  FAILED
+}
+
+enum SubscriptionPlanTier {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+enum VoiceCallDirection {
+  INCOMING
+  OUTGOING
+}
+
+model CoordinatorCompany {
+  id                    String                            @id @default(cuid())
+  name                  String
+  slug                  String                            @unique
+  stripeCustomerId      String?
+  subscriptionPlanId    String?
+  subscriptionPlan      CoordinatorSubscriptionPlan?      @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
+  subscriptions         CoordinatorSubscription[]
+  users                 CoordinatorUser[]
+  contacts              CoordinatorContact[]
+  tasks                 CoordinatorTask[]
+  kpis                  CoordinatorKPI[]
+  reports               CoordinatorReport[]
+  externalSystems       CoordinatorExternalSystem[]
+  socialAccounts        CoordinatorSocialAccount[]
+  jobDutyTemplates      CoordinatorJobDutyTemplate[]
+  jobResults            CoordinatorJobResult[]
+  generatedApplications CoordinatorGeneratedApplication[]
+  auditLogs             CoordinatorAuditLog[]
+  voiceCallRecords      CoordinatorVoiceCallRecord[]
+  providerTickets       VisitorRequest[]
+  inspectionChecklists  InspectionChecklist[]
+  ticketCharges         CoordinatorTicketCharge[]
+  freeTicketsUsed       Int                               @default(0)
+  freeTicketsLimit      Int                               @default(50)
+  activeTicketPlan      TicketBillingPlan?
+  ticketPlanActivatedAt DateTime?
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+
+  @@map("coordinator_companies")
+}
+
+model CoordinatorUser {
+  id                         String                @id @default(cuid())
+  username                   String                @unique
+  email                      String
+  name                       String?
+  passwordHash               String
+  role                       CoordinatorRole       @default(COORDINATOR)
+  status                     CoordinatorUserStatus @default(ACTIVE)
+  mustChangePassword         Boolean               @default(false)
+  phonePushToken             String?
+  phonePlatform              String?
+  companyId                  String
+  company                    CoordinatorCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  managedByUserId            String?
+  managedByUser              CoordinatorUser?      @relation("CoordinatorManager", fields: [managedByUserId], references: [id], onDelete: SetNull)
+  managedUsers               CoordinatorUser[]     @relation("CoordinatorManager")
+  profile                    CoordinatorProfile?
+  tasksCreated               CoordinatorTask[]     @relation("TaskCreator")
+  providerTicketsCreated     VisitorRequest[]      @relation("ProviderTicketCreatedBy")
+  providerTicketsAssigned    VisitorRequest[]      @relation("ProviderTicketAssignee")
+  providerTicketsResubmitted VisitorRequest[]      @relation("ProviderTicketResubmittedBy")
+  auditLogs                  CoordinatorAuditLog[]
+  voiceLogs                  CoordinatorVoiceLog[]
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([email])
+  @@map("coordinator_users")
+}
+
+model CoordinatorContact {
+  id        String             @id @default(cuid())
+  name      String // e.g. "أحمد" or "Ahmed" for lookup
+  phone     String // E.164 e.g. +9647712345678
+  companyId String
+  company   CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  notes     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, name])
+  @@map("coordinator_contacts")
+}
+
+model CoordinatorTask {
+  id                   String                @id @default(cuid())
+  title                String
+  description          String?
+  status               CoordinatorTaskStatus @default(PENDING)
+  companyId            String
+  company              CoordinatorCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById          String
+  createdBy            CoordinatorUser       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  dueAt                DateTime?
+  completedAt          DateTime?
+  checklist            Json? // [{ "id": "uuid", "label": "...", "checked": bool }]
+  fileUrls             String[]              @default([])
+  source               String? // voice | email | whatsapp | manual
+  coordinatorFeedback  String? // coordinator's feedback after action (e.g. "Called Ahmed, he said...")
+  inboundReplyTo       String? // for inbound tasks: WhatsApp/email to send feedback to (e.g. whatsapp:+964...)
+  awaitingFeedbackFrom String? // when we messaged a contact for this task: their whatsapp (e.g. whatsapp:+964...) so we link their reply
+  aiProcessedAt        DateTime? // when AI last processed this task (status + WhatsApp reply)
+  priority             String?               @default("normal") // normal | high | urgent (for escalation)
+  subTasks             CoordinatorSubtask[]
+  comments             CoordinatorComment[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([priority])
+  @@map("coordinator_tasks")
+}
+
+model CoordinatorSubtask {
+  id        String          @id @default(cuid())
+  title     String
+  done      Boolean         @default(false)
+  taskId    String
+  task      CoordinatorTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([taskId])
+  @@map("coordinator_subtasks")
+}
+
+model CoordinatorComment {
+  id        String          @id @default(cuid())
+  body      String
+  taskId    String
+  task      CoordinatorTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String // CoordinatorUser id (optional relation to avoid circular)
+  createdAt DateTime        @default(now())
+
+  @@index([taskId])
+  @@map("coordinator_comments")
+}
+
+model CoordinatorKPI {
+  id          String             @id @default(cuid())
+  name        String
+  targetValue Float
+  actualValue Float              @default(0)
+  unit        String? // e.g. "%", "count"
+  status      KPIStatus          @default(ON_TRACK)
+  companyId   String
+  company     CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportedAt  DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([companyId])
+  @@map("coordinator_kpis")
+}
+
+model CoordinatorReport {
+  id         String             @id @default(cuid())
+  title      String
+  type       String // daily | weekly | monthly | custom
+  pdfUrl     String?
+  companyId  String
+  company    CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  periodFrom DateTime
+  periodTo   DateTime
+  createdAt  DateTime           @default(now())
+
+  @@index([companyId])
+  @@map("coordinator_reports")
+}
+
+model CoordinatorExternalSystem {
+  id         String                       @id @default(cuid())
+  name       String
+  type       ExternalSystemType
+  configEnc  String? // AES-256 encrypted config (credentials, endpoints)
+  companyId  String
+  company    CoordinatorCompany           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actionLogs CoordinatorSystemActionLog[]
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
+
+  @@index([companyId])
+  @@map("coordinator_external_systems")
+}
+
+model CoordinatorSystemActionLog {
+  id           String                    @id @default(cuid())
+  systemId     String
+  system       CoordinatorExternalSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  action       String
+  status       String // success | failure
+  retryCount   Int                       @default(0)
+  errorMessage String?
+  payload      Json?
+  createdAt    DateTime                  @default(now())
+
+  @@index([systemId])
+  @@map("coordinator_system_action_logs")
+}
+
+model CoordinatorSocialAccount {
+  id        String                       @id @default(cuid())
+  platform  String // linkedin | meta | whatsapp
+  accountId String
+  tokenEnc  String? // encrypted access token
+  companyId String
+  company   CoordinatorCompany           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages  CoordinatorOutreachMessage[]
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  @@index([companyId])
+  @@map("coordinator_social_accounts")
+}
+
+model CoordinatorOutreachMessage {
+  id        String                   @id @default(cuid())
+  accountId String
+  account   CoordinatorSocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  recipient String
+  body      String
+  sentAt    DateTime?
+  replyAt   DateTime?
+  taskId    String?
+  createdAt DateTime                 @default(now())
+
+  @@index([accountId])
+  @@map("coordinator_outreach_messages")
+}
+
+model CoordinatorConversation {
+  id        String   @id @default(cuid())
+  channel   String // in_app | email | push
+  threadId  String?
+  createdAt DateTime @default(now())
+
+  @@map("coordinator_conversations")
+}
+
+model CoordinatorSubscriptionPlan {
+  id            String                    @id @default(cuid())
+  tier          SubscriptionPlanTier      @unique
+  name          String
+  stripePriceId String?
+  amountCents   Int
+  interval      String // week | month | year
+  companies     CoordinatorCompany[]
+  subscriptions CoordinatorSubscription[]
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@map("coordinator_subscription_plans")
+}
+
+model CoordinatorSubscription {
+  id               String                      @id @default(cuid())
+  companyId        String
+  company          CoordinatorCompany          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId           String
+  plan             CoordinatorSubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  stripeSubId      String?
+  status           SubscriptionStatus          @default(ACTIVE)
+  currentPeriodEnd DateTime?
+  payments         CoordinatorPayment[]
+  invoices         CoordinatorInvoice[]
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  @@index([companyId])
+  @@map("coordinator_subscriptions")
+}
+
+model CoordinatorPayment {
+  id                    String                  @id @default(cuid())
+  subscriptionId        String
+  subscription          CoordinatorSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  stripePaymentIntentId String?
+  amountCents           Int
+  status                String
+  createdAt             DateTime                @default(now())
+
+  @@index([subscriptionId])
+  @@map("coordinator_payments")
+}
+
+model CoordinatorInvoice {
+  id             String                  @id @default(cuid())
+  subscriptionId String
+  subscription   CoordinatorSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  pdfUrl         String?
+  amountCents    Int
+  periodFrom     DateTime
+  periodTo       DateTime
+  createdAt      DateTime                @default(now())
+
+  @@index([subscriptionId])
+  @@map("coordinator_invoices")
+}
+
+model CoordinatorNotification {
+  id        String   @id @default(cuid())
+  userId    String // CoordinatorUser id
+  title     String
+  body      String?
+  channel   String // in_app | email | push
+  read      Boolean  @default(false)
+  linkUrl   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("coordinator_notifications")
+}
+
+model CoordinatorJobDutyTemplate {
+  id           String             @id @default(cuid())
+  name         String
+  cron         String // e.g. "0 9 * * *" daily 9am
+  frequency    String // daily | weekly | monthly | yearly
+  companyId    String
+  company      CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskTemplate Json // { title, description, checklist }
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([companyId])
+  @@map("coordinator_job_duty_templates")
+}
+
+model CoordinatorJobResult {
+  id              String             @id @default(cuid())
+  companyId       String
+  company         CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  keyword         String
+  source          String?
+  rawResult       Json?
+  extractedSkills String[]           @default([])
+  createdAt       DateTime           @default(now())
+
+  @@index([companyId])
+  @@map("coordinator_job_results")
+}
+
+model CoordinatorProfile {
+  id        String          @id @default(cuid())
+  userId    String          @unique
+  user      CoordinatorUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills    String[]        @default([])
+  cvUrl     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("coordinator_profiles")
+}
+
+model CoordinatorGeneratedApplication {
+  id             String             @id @default(cuid())
+  companyId      String
+  company        CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId         String?
+  jobResultId    String?
+  cvUrl          String?
+  coverLetterUrl String?
+  createdAt      DateTime           @default(now())
+
+  @@index([companyId])
+  @@map("coordinator_generated_applications")
+}
+
+model CoordinatorAuditLog {
+  id         String             @id @default(cuid())
+  companyId  String
+  company    CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       CoordinatorUser?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String // login | task_create | task_update | system_action | payment_update | ...
+  resource   String? // task | kpi | report | ...
+  resourceId String?
+  payload    Json?
+  ip         String?
+  createdAt  DateTime           @default(now())
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("coordinator_audit_logs")
+}
+
+model CoordinatorVoiceLog {
+  id               String          @id @default(cuid())
+  userId           String
+  user             CoordinatorUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transcript       String?
+  detectedLanguage String?
+  intent           String?
+  actionTaken      String?
+  audioFileUrl     String?
+  createdAt        DateTime        @default(now())
+
+  @@index([userId])
+  @@map("coordinator_voice_logs")
+}
+
+model CoordinatorVoiceCallRecord {
+  id         String             @id @default(cuid())
+  direction  VoiceCallDirection
+  duration   Int? // seconds
+  transcript String?
+  taskLinked String? // taskId if linked
+  status     String
+  companyId  String
+  company    CoordinatorCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime           @default(now())
+
+  @@index([companyId])
+  @@map("coordinator_voice_call_records")
+}

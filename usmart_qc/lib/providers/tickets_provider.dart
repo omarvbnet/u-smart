@@ -148,9 +148,16 @@ class TicketsProvider extends ChangeNotifier {
     return sum;
   }
 
-  // Engineer-specific: available tickets (PENDING + not assigned)
-  List<Ticket> get availableTickets =>
-      _tickets.where((t) => t.isPending && !t.isAssigned).toList();
+  // Engineer-specific: available tickets (PENDING + not assigned), excluding own submissions
+  List<Ticket> get availableTickets => _tickets.where((t) {
+        if (!t.isPending || t.isAssigned) return false;
+        if (_currentUserId != null &&
+            t.requesterId != null &&
+            t.requesterId == _currentUserId) {
+          return false;
+        }
+        return true;
+      }).toList();
 
   // Engineer-specific: tickets assigned to me (any status)
   List<Ticket> get myAssignedTickets => _currentUserId == null

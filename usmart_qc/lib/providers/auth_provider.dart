@@ -4,6 +4,9 @@ import '../services/auth_service.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
+  /// Signals invalid credentials — UI should localize with `invalid_login_credentials`.
+  static const String invalidCredentialsMarker = '__INVALID_LOGIN_CREDENTIALS__';
+
   final AuthService _authService;
   final ApiService _apiService;
   User? _user;
@@ -21,6 +24,9 @@ class AuthProvider extends ChangeNotifier {
   bool get isTechnician => _user?.isTechnician ?? false;
   bool get isWorker => _user?.isWorker ?? false;
   bool get isAdmin => _user?.isAdmin ?? false;
+  bool get isCoordinator => _user?.isCoordinator ?? false;
+  bool get isCompanyOwner => _user?.isCompanyOwner ?? false;
+  bool get mustChangePassword => _user?.mustChangePassword ?? false;
 
   Future<void> tryAutoLogin() async {
     _loading = true;
@@ -52,7 +58,7 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       }
-      _error = 'Invalid username or password';
+      _error = invalidCredentialsMarker;
     } catch (e) {
       _error = 'Connection error. Please try again.';
     }

@@ -11,6 +11,8 @@ class User {
   final String role;
   final String? province;
   final bool provinceFilterActive;
+  final String? companyId;
+  final bool mustChangePassword;
 
   User({
     required this.id,
@@ -25,13 +27,22 @@ class User {
     this.role = 'COMPANY',
     this.province,
     this.provinceFilterActive = true,
+    this.companyId,
+    this.mustChangePassword = false,
   });
 
-  bool get isEngineer => role == 'ENGINEER';
-  bool get isCompany => role == 'COMPANY';
+  bool get isEngineer =>
+      role == 'ENGINEER' ||
+      role == 'QUALITY_ENGINEER' ||
+      role == 'SUPERVISION_ENGINEER';
+  bool get isQualityEngineer => role == 'QUALITY_ENGINEER';
+  bool get isSupervisionEngineer => role == 'SUPERVISION_ENGINEER';
+  bool get isCoordinator => role == 'COORDINATOR';
+  bool get isCompany => role == 'COMPANY' || role == 'COMPANY_OWNER';
   bool get isAdmin => role == 'ADMIN';
   bool get isTechnician => role == 'TECHNICIAN';
   bool get isWorker => role == 'WORKER';
+  bool get isCompanyOwner => role == 'COMPANY_OWNER';
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -47,6 +58,8 @@ class User {
       role: json['role'] as String? ?? 'COMPANY',
       province: json['province'] as String?,
       provinceFilterActive: json['provinceFilterActive'] as bool? ?? true,
+      companyId: json['companyId'] as String?,
+      mustChangePassword: json['mustChangePassword'] == true,
     );
   }
 }

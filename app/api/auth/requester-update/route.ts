@@ -12,6 +12,68 @@ export async function PATCH(req: NextRequest) {
     }
     const payload = auth.payload;
 
+    if (payload.identitySource === 'coordinator_user') {
+      const body = await req.json();
+      const newUsername = typeof body.username === 'string' ? body.username.trim() : '';
+      const newPassword = typeof body.password === 'string' ? body.password : '';
+      const name = typeof body.name === 'string' ? body.name.trim() : undefined;
+
+      const user = await (prisma as any).coordinatorUser.findUnique({
+        where: { id: payload.requesterId },
+        select: { id: true, companyId: true, status: true },
+      });
+      if (!user) {
+        return NextResponse.json({ success: false, message: 'Account not found' }, { status: 404 });
+      }
+      if (user.status === 'BLOCKED') {
+        return NextResponse.json({ success: false, message: 'Account is blocked' }, { status: 403 });
+      }
+
+      const data: Record<string, unknown> = {};
+      if (newUsername.length >= 3) {
+        const existing = await (prisma as any).coordinatorUser.findFirst({
+          where: { username: { equals: newUsername, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (existing && existing.id !== payload.requesterId) {
+          return NextResponse.json(
+            { success: false, message: 'Username already taken' },
+            { status: 400 }
+          );
+        }
+        data.username = newUsername;
+      }
+      if (newPassword.length >= 6) {
+        data.passwordHash = await bcrypt.hash(newPassword, 10);
+      }
+      if (name !== undefined) data.name = name || null;
+      data.mustChangePassword = false;
+
+      const hasChange = newUsername.length >= 3 || newPassword.length >= 6 || name !== undefined;
+      if (!hasChange) {
+        return NextResponse.json(
+          { success: false, message: 'Provide at least: new username, new password, or name' },
+          { status: 400 }
+        );
+      }
+
+      const updated = await (prisma as any).coordinatorUser.update({
+        where: { id: payload.requesterId },
+        data,
+        select: { id: true, username: true, name: true, role: true, companyId: true },
+      });
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: updated.id,
+          username: updated.username,
+          name: updated.name,
+          role: updated.role,
+          companyId: updated.companyId,
+        },
+      });
+    }
+
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
       select: { status: true },

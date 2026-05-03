@@ -13,17 +13,25 @@ void showRegistrationRequestModal(BuildContext context) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (_, scrollController) => const _RegistrationRequestContent(),
+    builder: (ctx) => AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) =>
+            _RegistrationRequestContent(scrollController: scrollController),
+      ),
     ),
   );
 }
 
 class _RegistrationRequestContent extends StatefulWidget {
-  const _RegistrationRequestContent();
+  final ScrollController scrollController;
+
+  const _RegistrationRequestContent({required this.scrollController});
 
   @override
   State<_RegistrationRequestContent> createState() =>
@@ -209,7 +217,15 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              controller: widget.scrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: const ClampingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                16 + MediaQuery.of(context).padding.bottom,
+              ),
               child: _success ? _buildSuccess(l10n) : _buildForm(l10n),
             ),
           ),
@@ -724,6 +740,7 @@ class _TextField extends StatelessWidget {
           controller: controller,
           keyboardType: keyboardType,
           onChanged: onChanged,
+          scrollPadding: const EdgeInsets.only(bottom: 40),
           style: const TextStyle(color: Colors.white, fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,

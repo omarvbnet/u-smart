@@ -90,6 +90,8 @@ class Ticket {
   final List<Map<String, dynamic>>? inspectionChecklist;
   /// Previous inspection records (e.g. before NCR-approved re-inspection)
   final List<ChecklistHistoryEntry> checklistHistory;
+  /// Account id of the dashboard user who owns this ticket (TicketRequester id).
+  final String? requesterId;
   /// Requester (POC) who submitted the ticket
   final String? requesterName;
   final String? requesterRole;
@@ -130,6 +132,7 @@ class Ticket {
     this.assignedAt,
     this.inspectionChecklist,
     this.checklistHistory = const [],
+    this.requesterId,
     this.requesterName,
     this.requesterRole,
     this.requesterPhone,
@@ -227,6 +230,7 @@ class Ticket {
               ?.map((e) => ChecklistHistoryEntry.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      requesterId: json['requesterId'] as String?,
       requesterName: json['requesterName'] as String?,
       requesterRole: json['requesterRole'] as String?,
       requesterPhone: json['requesterPhone'] as String?,
@@ -252,5 +256,9 @@ class Ticket {
     'fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth',
   ];
 
-  bool get isMaintenance => maintenanceTechniques.contains(technique.toLowerCase());
+  /// Updated when admin/requester loads `/api/provisor-techniques` (maintenance slugs).
+  static List<String> maintenanceSlugs = List<String>.from(maintenanceTechniques);
+
+  bool get isMaintenance =>
+      maintenanceSlugs.any((s) => s.toLowerCase() == technique.toLowerCase());
 }

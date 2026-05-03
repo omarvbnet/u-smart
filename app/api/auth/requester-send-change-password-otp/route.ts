@@ -25,6 +25,56 @@ export async function POST(req: NextRequest) {
     }
     const payload = auth.payload;
 
+    if (payload.identitySource === 'coordinator_user') {
+      const coordinatorUser = await (prisma as any).coordinatorUser.findUnique({
+        where: { id: payload.requesterId },
+        select: { email: true, status: true },
+      });
+      if (!coordinatorUser) {
+        return NextResponse.json({ success: false, message: 'Account not found' }, { status: 404 });
+      }
+      if (coordinatorUser.status === 'BLOCKED') {
+        return NextResponse.json({ success: false, message: 'Account is blocked' }, { status: 403 });
+      }
+      const email = coordinatorUser.email as string | null;
+      if (!email) {
+        return NextResponse.json(
+          { success: false, message: 'No email on file for this account. Contact support.' },
+          { status: 400 }
+        );
+      }
+
+      const code = generateCode();
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+      const emailNorm = email.toLowerCase();
+
+      try {
+        const db = prisma as unknown as { emailOtp?: { create: (args: { data: { email: string; code: string; expiresAt: Date } }) => Promise<unknown> } };
+        if (db.emailOtp?.create) {
+          await db.emailOtp.create({
+            data: { email: emailNorm, code, expiresAt },
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+      setEmailOtp(emailNorm, code);
+      const sent = await sendForgotPasswordOtp(emailNorm, code);
+      const isDev = process.env.NODE_ENV !== 'production';
+      if (!sent && !isDev) {
+        return NextResponse.json(
+          { success: false, message: 'Failed to send verification email. Please try again.' },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        message: 'Verification code sent to your email',
+        emailHint: emailNorm.replace(/(.{2})(.*)(@.*)/, (_, a: string, b: string, c: string) => a + '***' + c),
+        ...(isDev && { devCode: code }),
+      });
+    }
+
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
       select: { email: true, status: true },

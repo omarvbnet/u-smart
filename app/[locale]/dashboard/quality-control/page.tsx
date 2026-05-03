@@ -34,6 +34,10 @@ type Site = {
   ticketCount?: number;
   qualityControlCount?: number;
   enterpriseCount?: number;
+  inspectionQcCount?: number;
+  maintenanceQcCount?: number;
+  inspectionHoursTotal?: number;
+  maintenanceHoursTotal?: number;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -84,6 +88,7 @@ export default function QualityControlDashboardPage() {
   const [importingSites, setImportingSites] = useState(false);
   const [exportingData, setExportingData] = useState(false);
   const siteFileInputRef = useRef<HTMLInputElement>(null);
+  const [qcTechniques, setQcTechniques] = useState<{ slug: string; labelAr: string; labelEn: string | null }[]>([]);
 
   const loadData = async () => {
     const params = new URLSearchParams();
@@ -92,10 +97,11 @@ export default function QualityControlDashboardPage() {
     if (appliedDashboardFilters.to) params.set('to', appliedDashboardFilters.to);
     if (appliedDashboardFilters.siteName) params.set('siteName', appliedDashboardFilters.siteName);
     const qs = `?${params.toString()}`;
-    const [meRes, ticketsRes, statsRes] = await Promise.all([
+    const [meRes, ticketsRes, statsRes, techRes] = await Promise.all([
       fetch('/api/auth/requester-me', { credentials: 'include' }).then((r) => r.json()),
       fetch(`/api/tickets${qs}`, { credentials: 'include' }).then((r) => r.json()),
       fetch(`/api/tickets/stats${qs}`, { credentials: 'include' }).then((r) => r.json()),
+      fetch('/api/provisor-techniques', { credentials: 'include' }).then((r) => r.json()),
     ]);
     if (!meRes.success || !meRes.user) {
       router.replace(`/${locale}/dashboard/login`);
@@ -104,6 +110,7 @@ export default function QualityControlDashboardPage() {
     setUser(meRes.user);
     if (ticketsRes.success && ticketsRes.tickets) setTickets(ticketsRes.tickets);
     if (statsRes.success && statsRes.stats) setSlaStats(statsRes.stats);
+    if (techRes.success && Array.isArray(techRes.inspection)) setQcTechniques(techRes.inspection);
   };
 
   useEffect(() => {
@@ -117,6 +124,7 @@ export default function QualityControlDashboardPage() {
   }, [appliedDashboardFilters.from, appliedDashboardFilters.to, appliedDashboardFilters.siteName]);
 
   const isCompany = user?.role === 'COMPANY';
+  const canManageSites = user?.role === 'COMPANY' || user?.role === 'ENGINEER';
 
   const loadSites = async () => {
     setSitesLoading(true);
@@ -392,12 +400,22 @@ export default function QualityControlDashboardPage() {
   };
 
   const getTechniqueLabel = (tech: string) => {
+    const row = qcTechniques.find((x) => x.slug === tech);
+    if (row) {
+      return locale === 'ar' || locale === 'ku' ? row.labelAr : (row.labelEn || row.labelAr);
+    }
     if (QUALITY_CONTROL_TECH_KEYS.includes(tech as typeof QUALITY_CONTROL_TECH_KEYS[number])) {
       const key = `visitorRequestForm.qualityControlTechniques.${tech}`;
       const translated = t(key);
       return translated !== key ? translated : tech;
     }
     return tech;
+  };
+
+  const fmtSiteHours = (h: number | undefined) => {
+    const v = typeof h === 'number' && !Number.isNaN(h) ? h : 0;
+    if (v <= 0) return '0';
+    return v < 1 ? v.toFixed(2) : v.toFixed(1);
   };
 
   const getStatusLabel = (status: string) => {
@@ -712,7 +730,7 @@ export default function QualityControlDashboardPage() {
                 <Map className="w-5 h-5 text-amber-400" />
                 {t('ticketForm.navSites')}
               </h3>
-              {isCompany && (
+              {canManageSites && (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -805,6 +823,12 @@ export default function QualityControlDashboardPage() {
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded text-xs font-semibold">
                           <ClipboardList className="w-3 h-3" /> QC: {site.qualityControlCount ?? 0}
                         </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded text-xs font-semibold">
+                          <ClipboardList className="w-3 h-3" /> {locale === 'ar' ? 'فحص' : 'Insp.'}: {site.inspectionQcCount ?? 0} · {fmtSiteHours(site.inspectionHoursTotal)}h
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-xs font-semibold">
+                          <ClipboardList className="w-3 h-3" /> {locale === 'ar' ? 'صيانة' : 'Maint.'}: {site.maintenanceQcCount ?? 0} · {fmtSiteHours(site.maintenanceHoursTotal)}h
+                        </span>
                       </div>
                     </button>
                     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
@@ -824,7 +848,7 @@ export default function QualityControlDashboardPage() {
                         <PlusCircle className="w-3.5 h-3.5" />
                         {t('ticketForm.openTicket')}
                       </button>
-                      {isCompany && (
+                      {canManageSites && (
                         <>
                           <button
                             type="button"
@@ -1147,16 +1171,28 @@ export default function QualityControlDashboardPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.techniqueLabel')}</label>
                 <select
-                  value={ticketForm.technique}
+                  value={
+                    qcTechniques.length > 0
+                      ? (qcTechniques.some((x) => x.slug === ticketForm.technique)
+                          ? ticketForm.technique
+                          : (qcTechniques[0]?.slug ?? 'inspection'))
+                      : ticketForm.technique
+                  }
                   onChange={(e) => setTicketForm((f) => ({ ...f, technique: e.target.value }))}
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 outline-none"
                   required
                 >
-                  {QUALITY_CONTROL_TECH_KEYS.map((key) => (
-                    <option key={key} value={key} className="bg-[#0f1419]">
-                      {t(`visitorRequestForm.qualityControlTechniques.${key}`)}
-                    </option>
-                  ))}
+                  {qcTechniques.length > 0
+                    ? qcTechniques.map((row) => (
+                        <option key={row.slug} value={row.slug} className="bg-[#0f1419]">
+                          {locale === 'ar' || locale === 'ku' ? row.labelAr : (row.labelEn || row.labelAr)}
+                        </option>
+                      ))
+                    : QUALITY_CONTROL_TECH_KEYS.map((key) => (
+                        <option key={key} value={key} className="bg-[#0f1419]">
+                          {t(`visitorRequestForm.qualityControlTechniques.${key}`)}
+                        </option>
+                      ))}
                 </select>
               </div>
               <div>

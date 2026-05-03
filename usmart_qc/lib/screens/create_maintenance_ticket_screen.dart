@@ -6,6 +6,7 @@ import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import '../providers/provisor_techniques_provider.dart';
 import 'attachment_viewer_screen.dart';
 
 /// Maintenance types. Values must match backend MAINTENANCE_TECHNIQUES.
@@ -39,6 +40,20 @@ class _CreateMaintenanceTicketScreenState
   bool _uploading = false;
   final List<String> _beforePhotoUrls = [];
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final tech = context.read<ProvisorTechniquesProvider>();
+      await tech.ensureLoaded();
+      if (!mounted) return;
+      final slugs = tech.maintenance.map((e) => e.slug).toList();
+      if (slugs.isNotEmpty && !slugs.contains(_maintenanceType)) {
+        setState(() => _maintenanceType = slugs.first);
+      }
+    });
+  }
+
   Future<void> _submit() async {
     final siteName = _siteNameCtrl.text.trim();
     final coordinator = _coordinatorCtrl.text.trim();
@@ -71,11 +86,20 @@ class _CreateMaintenanceTicketScreenState
 
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
+    final techProv = context.read<ProvisorTechniquesProvider>();
+    final maintOpts = techProv.maintenance;
+    final fallbackIds = _maintenanceTypeIds;
+    final validIds = maintOpts.isEmpty
+        ? fallbackIds
+        : maintOpts.map((e) => e.slug).toList();
+    final technique = validIds.contains(_maintenanceType)
+        ? _maintenanceType
+        : validIds.first;
     final designSpecs = _designSpecsCtrl.text.trim();
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
-      technique: _maintenanceType,
+      technique: technique,
       slaHours: sla,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       maintenanceReason: reason,
@@ -199,6 +223,15 @@ class _CreateMaintenanceTicketScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final sites = context.watch<SitesProvider>().sites;
+    final techProv = context.watch<ProvisorTechniquesProvider>();
+    final maintOpts = techProv.maintenance;
+    final fallbackIds = _maintenanceTypeIds;
+    final validIds = maintOpts.isEmpty
+        ? fallbackIds
+        : maintOpts.map((e) => e.slug).toList();
+    final selectedType = validIds.contains(_maintenanceType)
+        ? _maintenanceType
+        : (validIds.isNotEmpty ? validIds.first : _maintenanceType);
 
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
@@ -300,19 +333,27 @@ class _CreateMaintenanceTicketScreenState
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: _maintenanceType,
+                value: selectedType,
                 isExpanded: true,
                 dropdownColor: const Color(0xFF12122A),
                 style: const TextStyle(color: Colors.white, fontSize: 15),
                 icon: Icon(Icons.expand_more_rounded,
                     color: Colors.white.withAlpha(80)),
-                items: List.generate(
-                  5,
-                  (i) => DropdownMenuItem(
-                    value: _maintenanceTypeIds[i],
-                    child: Text(l10n.t(_maintenanceTypeKeys[i])),
-                  ),
-                ),
+                items: maintOpts.isEmpty
+                    ? List.generate(
+                        fallbackIds.length,
+                        (i) => DropdownMenuItem(
+                          value: fallbackIds[i],
+                          child: Text(l10n.t(_maintenanceTypeKeys[i])),
+                        ),
+                      )
+                    : maintOpts
+                        .map((e) => DropdownMenuItem(
+                              value: e.slug,
+                              child: Text(
+                                  e.labelForLocale(l10n.locale.languageCode)),
+                            ))
+                        .toList(),
                 onChanged: (v) {
                   if (v != null) setState(() => _maintenanceType = v);
                 },

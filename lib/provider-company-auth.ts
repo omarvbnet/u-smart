@@ -1,0 +1,37 @@
+import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
+
+export type CoordinatorContext = {
+  userId: string;
+  companyId: string;
+  role: string;
+  status: string;
+  username: string;
+  name: string | null;
+};
+
+export async function getCoordinatorContext(req: NextRequest): Promise<CoordinatorContext | null> {
+  const auth = getRequesterFromRequest(req);
+  if (!auth || auth.payload.identitySource !== 'coordinator_user') return null;
+  const user = await (prisma as any).coordinatorUser.findUnique({
+    where: { id: auth.payload.requesterId },
+    select: {
+      id: true,
+      companyId: true,
+      role: true,
+      status: true,
+      username: true,
+      name: true,
+    },
+  });
+  if (!user || !user.companyId) return null;
+  return {
+    userId: user.id,
+    companyId: user.companyId,
+    role: user.role ?? 'COORDINATOR',
+    status: user.status ?? 'ACTIVE',
+    username: user.username,
+    name: user.name ?? null,
+  };
+}

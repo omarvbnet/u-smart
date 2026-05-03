@@ -26,7 +26,13 @@ export async function POST(req: NextRequest) {
     }
 
     const isEmail = usernameOrEmail.includes('@');
-    const requester = await prisma.ticketRequester.findFirst({
+    const coordinatorUser = await (prisma as any).coordinatorUser.findFirst({
+      where: isEmail
+        ? { email: usernameOrEmail.toLowerCase() }
+        : { username: { equals: usernameOrEmail, mode: 'insensitive' } },
+      select: { id: true, email: true },
+    });
+    const requester = coordinatorUser ?? await prisma.ticketRequester.findFirst({
       where: isEmail
         ? { email: usernameOrEmail.toLowerCase() }
         : { username: usernameOrEmail },
@@ -86,10 +92,17 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.ticketRequester.update({
-      where: { id: requester.id },
-      data: { passwordHash, hasUpdatedCredentials: true },
-    });
+    if ('companyId' in (requester as Record<string, unknown>)) {
+      await (prisma as any).coordinatorUser.update({
+        where: { id: requester.id },
+        data: { passwordHash, mustChangePassword: false },
+      });
+    } else {
+      await prisma.ticketRequester.update({
+        where: { id: requester.id },
+        data: { passwordHash, hasUpdatedCredentials: true },
+      });
+    }
 
     return NextResponse.json({
       success: true,

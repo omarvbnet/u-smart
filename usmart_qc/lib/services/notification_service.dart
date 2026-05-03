@@ -1,39 +1,28 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+/// Local notifications (tickets, geofence, notification polling).
+/// Android channel `provisor_channel` matches AndroidManifest.xml.
 class NotificationService {
-  static final NotificationService _instance = NotificationService._();
-  factory NotificationService() => _instance;
-  NotificationService._();
-
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+    const initSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
     );
-    await _plugin.initialize(
-      settings: const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
+    await _plugin.initialize(settings: initSettings);
+
+    const channel = AndroidNotificationChannel(
+      'provisor_channel',
+      'Provisor',
+      description: 'Ticket updates and site alerts',
+      importance: Importance.high,
     );
-    // Ensure iOS foreground notifications are shown.
     await _plugin
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-    // Android 13+ runtime notification permission.
-    await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
   }
 
   Future<void> show({
@@ -41,21 +30,24 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
+    const android = AndroidNotificationDetails(
       'provisor_channel',
-      'Provisor Notifications',
-      channelDescription: 'Quality control ticket and status updates',
+      'Provisor',
+      channelDescription: 'Ticket updates and site alerts',
       importance: Importance.high,
       priority: Priority.high,
     );
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
+    const ios = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
     );
-    await _plugin.show(id: id, title: title, body: body, notificationDetails: details);
+    const details = NotificationDetails(android: android, iOS: ios);
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: details,
+    );
   }
 }

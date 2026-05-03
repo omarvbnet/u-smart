@@ -9,6 +9,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    if (auth.payload.identitySource === 'coordinator_user') {
+      const rows = await (prisma as any).$queryRawUnsafe(
+        `SELECT role FROM coordinator_users WHERE id = $1 LIMIT 1`,
+        auth.payload.requesterId,
+      );
+      const role = Array.isArray(rows) && rows.length > 0 ? String(rows[0].role) : 'COORDINATOR';
+      return NextResponse.json({ success: true, role });
+    }
     const rows = await (prisma as any).$queryRawUnsafe(
       `SELECT role FROM ticket_requesters WHERE id = $1 LIMIT 1`,
       auth.payload.requesterId,

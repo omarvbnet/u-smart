@@ -45,9 +45,26 @@ class NotificationsProvider extends ChangeNotifier {
   int _unreadCount = 0;
   Timer? _pollTimer;
   final Set<String> _shownIds = {};
-  bool _initialized = false;
+  /// After the first successful fetch, new unread rows trigger local toasts.
+  bool _baselineSynced = false;
 
   NotificationsProvider(this._api, this._localNotifications);
+
+  /// Call on login and logout so polling dedupe matches the current session.
+  void resetSession() {
+    _shownIds.clear();
+    _baselineSynced = false;
+    _notifications = [];
+    _unreadCount = 0;
+    notifyListeners();
+  }
+
+  static int stableNotificationId(String id) {
+    var h = id.hashCode;
+    if (h == 0) h = 1;
+    final u = h & 0x7fffffff;
+    return u == 0 ? 1 : u;
+  }
 
   List<AppNotification> get notifications => _notifications;
   int get unreadCount => _unreadCount;
@@ -66,6 +83,31 @@ class NotificationsProvider extends ChangeNotifier {
     _pollTimer = null;
   }
 
+  void _applySuccessfulFetch(List<AppNotification> list, int unreadCount) {
+    _unreadCount = unreadCount;
+
+    if (!_baselineSynced) {
+      for (final n in list) {
+        _shownIds.add(n.id);
+      }
+      _baselineSynced = true;
+    } else {
+      for (final n in list) {
+        if (!n.read && !_shownIds.contains(n.id)) {
+          _shownIds.add(n.id);
+          _localNotifications.show(
+            id: stableNotificationId(n.id),
+            title: n.title,
+            body: n.message,
+          );
+        }
+      }
+    }
+
+    _notifications = list;
+    notifyListeners();
+  }
+
   Future<void> _fetchNotifications() async {
     try {
       final data = await _api.get(
@@ -78,30 +120,9 @@ class NotificationsProvider extends ChangeNotifier {
           .map((e) =>
               AppNotification.fromJson(e as Map<String, dynamic>))
           .toList();
-      _unreadCount = (data['unreadCount'] as int?) ?? 0;
-
-      for (final n in list) {
-        if (!n.read && !_shownIds.contains(n.id) && _initialized) {
-          _shownIds.add(n.id);
-          _localNotifications.show(
-            id: n.id.hashCode,
-            title: n.title,
-            body: n.message,
-          );
-        }
-      }
-
-      if (!_initialized) {
-        for (final n in list) {
-          _shownIds.add(n.id);
-        }
-        _initialized = true;
-      }
-
-      _notifications = list;
-      notifyListeners();
+      final unreadCount = (data['unreadCount'] as int?) ?? 0;
+      _applySuccessfulFetch(list, unreadCount);
     } catch (_) {
-      // If JSON parse / transport fails, try safe mode once.
       try {
         final data = await _api.getSafe(
           ApiConfig.notifications,
@@ -112,9 +133,8 @@ class NotificationsProvider extends ChangeNotifier {
             .map((e) =>
                 AppNotification.fromJson(e as Map<String, dynamic>))
             .toList();
-        _unreadCount = (data['unreadCount'] as int?) ?? 0;
-        _notifications = list;
-        notifyListeners();
+        final unreadCount = (data['unreadCount'] as int?) ?? 0;
+        _applySuccessfulFetch(list, unreadCount);
       } catch (_) {}
     }
   }

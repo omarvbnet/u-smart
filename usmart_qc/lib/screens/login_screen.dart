@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,6 +27,34 @@ class _LoginScreenState extends State<LoginScreen>
   String _forgotPassword = '';
   bool _forgotSending = false;
   bool _forgotVerifying = false;
+  /// Shown inside the forgot sheet so SnackBars are not hidden behind the modal.
+  String? _forgotInlineMsg;
+  bool _forgotInlineIsErr = false;
+  int _forgotResendCooldown = 0;
+  Timer? _forgotCooldownTimer;
+  VoidCallback? _forgotSheetRedraw;
+
+  void _notifyForgotSheet() {
+    if (mounted) setState(() {});
+    _forgotSheetRedraw?.call();
+  }
+
+  void _startForgotResendCooldown() {
+    _forgotCooldownTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _forgotResendCooldown = 60);
+    _forgotCooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_forgotResendCooldown <= 1) {
+        _forgotCooldownTimer?.cancel();
+        setState(() => _forgotResendCooldown = 0);
+      } else {
+        setState(() => _forgotResendCooldown--);
+      }
+      _forgotSheetRedraw?.call();
+    });
+    _notifyForgotSheet();
+  }
   bool _agreedToTerms = false;
   late AnimationController _animCtrl;
   late Animation<double> _fadeIn;
@@ -93,45 +122,70 @@ class _LoginScreenState extends State<LoginScreen>
     final success = await auth.login(username, password);
     if (!success && mounted) {
       final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(auth.error ?? l10n.t('login_failed')),
-          backgroundColor: const Color(0xFFFF4757),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      final err = auth.error;
+      final message = err == AuthProvider.invalidCredentialsMarker
+          ? l10n.t('invalid_login_credentials')
+          : (err ?? l10n.t('login_failed'));
+      _showSnack(message, isError: true);
     }
     if (mounted) setState(() => _submitting = false);
   }
 
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? const Color(0xFFFF4757) : const Color(0xFF00D4AA),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   Future<void> _requestForgotCode() async {
     final u = _forgotUsername.trim();
-    if (u.isEmpty) return;
-    setState(() => _forgotSending = true);
+    if (u.isEmpty || _forgotResendCooldown > 0) return;
+    setState(() {
+      _forgotSending = true;
+      _forgotInlineMsg = null;
+      _forgotInlineIsErr = false;
+    });
+    _notifyForgotSheet();
     try {
       final api = context.read<ApiService>();
       final res = await api.post(ApiConfig.forgotPassword, body: {'usernameOrEmail': u});
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         if (res['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context).t('code_sent')), behavior: SnackBarBehavior.floating),
-          );
+          setState(() {
+            _forgotInlineMsg = l10n.t('code_sent');
+            _forgotInlineIsErr = false;
+          });
+          _startForgotResendCooldown();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(res['message'] ?? 'Failed'), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
-          );
+          setState(() {
+            _forgotInlineMsg = (res['message'] ?? 'Failed').toString();
+            _forgotInlineIsErr = true;
+          });
+          _notifyForgotSheet();
         }
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Network error'), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
-        );
+        setState(() {
+          _forgotInlineMsg = 'Network error';
+          _forgotInlineIsErr = true;
+        });
+        _notifyForgotSheet();
       }
     }
-    if (mounted) setState(() => _forgotSending = false);
+    if (mounted) {
+      setState(() => _forgotSending = false);
+      _notifyForgotSheet();
+    }
   }
 
   void _showForgotFlow(BuildContext context, AppLocalizations l10n) {
@@ -139,102 +193,181 @@ class _LoginScreenState extends State<LoginScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (_, sc) => Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0A0A1F),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: Colors.white.withAlpha(15)),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: ListView(
-            controller: sc,
-            children: [
-              Text(l10n.t('forgot_password'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(l10n.t('forgot_password_hint'), style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13)),
-              const SizedBox(height: 20),
-              TextField(
-                onChanged: (v) => setState(() => _forgotUsername = v),
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: '${l10n.t('login_username')} / Email',
-                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
-                  filled: true,
-                  fillColor: const Color(0xFF12122A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+      builder: (sheetCtx) => AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+        child: StatefulBuilder(
+          builder: (_, setModalState) {
+          _forgotSheetRedraw = () => setModalState(() {});
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.55,
+            minChildSize: 0.35,
+            maxChildSize: 0.92,
+            builder: (_, sc) => Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0A1F),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border.all(color: Colors.white.withAlpha(15)),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                onChanged: (v) => setState(() => _forgotCode = v),
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: l10n.t('reg_code_placeholder'),
-                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
-                  filled: true,
-                  fillColor: const Color(0xFF12122A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                onChanged: (v) => setState(() => _forgotPassword = v),
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: l10n.t('new_password'),
-                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
-                  filled: true,
-                  fillColor: const Color(0xFF12122A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
+              padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 16),
+              child: ListView(
+                controller: sc,
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _forgotSending ? null : _requestForgotCode,
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
-                      child: _forgotSending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('send_code')),
+                  Text(l10n.t('forgot_password'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(l10n.t('forgot_password_hint'), style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    onChanged: (v) {
+                      setState(() {
+                        _forgotUsername = v;
+                        _forgotInlineMsg = null;
+                      });
+                      setModalState(() {});
+                    },
+                    scrollPadding: const EdgeInsets.only(bottom: 32),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: '${l10n.t('login_username')} / Email',
+                      hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                      filled: true,
+                      fillColor: const Color(0xFF12122A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _forgotVerifying || _forgotCode.length < 4 || _forgotPassword.length < 6
-                          ? null
-                          : _resetPassword,
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00D4AA)),
-                      child: _forgotVerifying ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('reset_password')),
+                  const SizedBox(height: 10),
+                  TextField(
+                    onChanged: (v) {
+                      setState(() {
+                        _forgotCode = v;
+                        _forgotInlineMsg = null;
+                      });
+                      setModalState(() {});
+                    },
+                    scrollPadding: const EdgeInsets.only(bottom: 32),
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: l10n.t('reg_code_placeholder'),
+                      hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                      filled: true,
+                      fillColor: const Color(0xFF12122A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    onChanged: (v) {
+                      setState(() {
+                        _forgotPassword = v;
+                        _forgotInlineMsg = null;
+                      });
+                      setModalState(() {});
+                    },
+                    scrollPadding: const EdgeInsets.only(bottom: 32),
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: l10n.t('new_password'),
+                      hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                      filled: true,
+                      fillColor: const Color(0xFF12122A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  if (_forgotInlineMsg != null) ...[
+                    const SizedBox(height: 16),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: (_forgotInlineIsErr ? const Color(0xFFFF4757) : const Color(0xFF00D4AA)).withAlpha(35),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: (_forgotInlineIsErr ? const Color(0xFFFF4757) : const Color(0xFF00D4AA)).withAlpha(120),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Text(
+                          _forgotInlineMsg!,
+                          style: TextStyle(
+                            color: _forgotInlineIsErr ? const Color(0xFFFF9494) : const Color(0xFF92F5DC),
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: (_forgotSending || _forgotResendCooldown > 0) ? null : _requestForgotCode,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C63FF),
+                            foregroundColor: Colors.white,
+                            disabledForegroundColor: Colors.white.withAlpha(160),
+                          ),
+                          child: _forgotSending
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : Text(
+                                  _forgotResendCooldown > 0 ? '${l10n.t('send_code')} (${_forgotResendCooldown}s)' : l10n.t('send_code'),
+                                  textAlign: TextAlign.center,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _forgotVerifying || _forgotCode.replaceAll(RegExp(r'\D'), '').length != 6 || _forgotPassword.length < 6
+                              ? null
+                              : () => _resetPassword(sheetCtx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00D4AA),
+                            foregroundColor: Colors.white,
+                            disabledForegroundColor: Colors.white.withAlpha(160),
+                          ),
+                          child: _forgotVerifying ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.t('reset_password')),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetCtx).pop(),
+                    child: Text('← ${l10n.t('cancel')}', style: TextStyle(color: Colors.white.withAlpha(150))),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text('← ${l10n.t('cancel')}', style: TextStyle(color: Colors.white.withAlpha(150))),
-              ),
-            ],
-          ),
+            ),
+          );
+          },
         ),
       ),
-    );
+    ).whenComplete(() {
+      _forgotSheetRedraw = null;
+      if (mounted) {
+        setState(() {
+          _forgotInlineMsg = null;
+          _forgotInlineIsErr = false;
+        });
+      }
+    });
   }
 
-  Future<void> _resetPassword() async {
+  Future<void> _resetPassword(BuildContext sheetCtx) async {
     final u = _forgotUsername.trim();
     final c = _forgotCode.replaceAll(RegExp(r'\D'), '');
     final p = _forgotPassword;
-    if (u.isEmpty || c.length < 4 || p.length < 6) return;
+    if (u.isEmpty || c.length != 6 || p.length < 6) return;
+    final l10n = AppLocalizations.of(context);
     setState(() => _forgotVerifying = true);
+    _notifyForgotSheet();
     try {
       final api = context.read<ApiService>();
       final res = await api.post(ApiConfig.resetPassword, body: {
@@ -242,31 +375,35 @@ class _LoginScreenState extends State<LoginScreen>
         'code': c,
         'newPassword': p,
       });
-      if (mounted) {
-        if (res['success'] == true) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${AppLocalizations.of(context).t('reset_password')} – Sign in with new password.', maxLines: 2), behavior: SnackBarBehavior.floating),
-          );
-          setState(() {
-            _forgotUsername = '';
-            _forgotCode = '';
-            _forgotPassword = '';
-          });
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(res['message'] ?? AppLocalizations.of(context).t('invalid_code')), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
-          );
-        }
+      if (!mounted || !sheetCtx.mounted) return;
+      if (res['success'] == true) {
+        Navigator.of(sheetCtx).pop();
+        _showSnack('${l10n.t('reset_password')} – Sign in with new password.');
+        setState(() {
+          _forgotUsername = '';
+          _forgotCode = '';
+          _forgotPassword = '';
+        });
+      } else {
+        setState(() {
+          _forgotInlineMsg = (res['message'] ?? l10n.t('invalid_code')).toString();
+          _forgotInlineIsErr = true;
+        });
+        _notifyForgotSheet();
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Network error'), backgroundColor: const Color(0xFFFF4757), behavior: SnackBarBehavior.floating),
-        );
+        setState(() {
+          _forgotInlineMsg = 'Network error';
+          _forgotInlineIsErr = true;
+        });
+        _notifyForgotSheet();
       }
     }
-    if (mounted) setState(() => _forgotVerifying = false);
+    if (mounted) {
+      setState(() => _forgotVerifying = false);
+      _notifyForgotSheet();
+    }
   }
 
   @override
@@ -275,13 +412,17 @@ class _LoginScreenState extends State<LoginScreen>
     _logoCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
+    _forgotCooldownTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final mq = MediaQuery.of(context);
+    final kbOpen = mq.viewInsets.bottom > 0;
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFF05051A),
       body: Stack(
         children: [
@@ -321,13 +462,16 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
           SafeArea(
-            child: Center(
+            child: Align(
+              alignment: Alignment.topCenter,
               child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.only(
-                  left: 28,
-                  right: 28,
-                  top: 16,
-                  bottom: 24 + MediaQuery.of(context).padding.bottom,
+                  left: 24,
+                  right: 24,
+                  top: kbOpen ? 8 : 16,
+                  // Scaffold already shrinks with keyboard; only add safe-area inset (no duplicate viewInsets).
+                  bottom: 12 + mq.padding.bottom,
                 ),
                 child: FadeTransition(
                   opacity: _fadeIn,
@@ -339,14 +483,15 @@ class _LoginScreenState extends State<LoginScreen>
                         AnimatedBuilder(
                           animation: _logoCtrl,
                           builder: (context, child) {
+                            final logoSize = kbOpen ? 72.0 : 98.0;
                             return Transform.rotate(
                               angle: _logoRotate.value,
                               child: Transform.scale(
                                 scale: _logoScale.value,
                                 child: Container(
-                                  width: 98,
-                                  height: 98,
-                                  padding: const EdgeInsets.all(4),
+                                  width: logoSize,
+                                  height: logoSize,
+                                  padding: EdgeInsets.all(kbOpen ? 3 : 4),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(30),
                                     gradient: const LinearGradient(
@@ -389,7 +534,7 @@ class _LoginScreenState extends State<LoginScreen>
                             );
                           },
                         ),
-                        const SizedBox(height: 28),
+                        SizedBox(height: kbOpen ? 12 : 28),
                         ShaderMask(
                           shaderCallback: (bounds) => const LinearGradient(
                             colors: [
@@ -397,17 +542,17 @@ class _LoginScreenState extends State<LoginScreen>
                               Color(0xFF00D4AA),
                             ],
                           ).createShader(bounds),
-                          child: const Text(
+                          child: Text(
                             'PROVISOR',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 30,
+                              fontSize: kbOpen ? 24 : 30,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 4,
+                              letterSpacing: kbOpen ? 3 : 4,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: kbOpen ? 4 : 8),
                         Text(
                           l10n.t('app_subtitle'),
                           style: TextStyle(
@@ -416,7 +561,7 @@ class _LoginScreenState extends State<LoginScreen>
                             letterSpacing: 0.5,
                           ),
                         ),
-                        const SizedBox(height: 48),
+                        SizedBox(height: kbOpen ? 20 : 48),
 
                         // Glass card
                         ClipRRect(
@@ -425,7 +570,7 @@ class _LoginScreenState extends State<LoginScreen>
                             filter:
                                 ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                             child: Container(
-                              padding: const EdgeInsets.all(24),
+                              padding: EdgeInsets.all(kbOpen ? 18 : 24),
                               decoration: BoxDecoration(
                                 color: Colors.white.withAlpha(8),
                                 borderRadius: BorderRadius.circular(24),
@@ -633,6 +778,7 @@ class _LoginScreenState extends State<LoginScreen>
     return TextField(
       controller: controller,
       obscureText: obscure,
+      scrollPadding: const EdgeInsets.only(bottom: 40),
       style: const TextStyle(color: Colors.white, fontSize: 15),
       decoration: InputDecoration(
         hintText: hint,

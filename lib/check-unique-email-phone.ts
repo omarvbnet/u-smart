@@ -54,6 +54,17 @@ export async function checkEmailUnique(
   });
   if (r) return { taken: true, message: 'Email is already registered' };
 
+  // CoordinatorUser (new provider identity)
+  const coordinatorDelegate = (prisma as { coordinatorUser?: { findFirst: (args: unknown) => Promise<unknown> } }).coordinatorUser;
+  if (coordinatorDelegate?.findFirst) {
+    const cu = await coordinatorDelegate.findFirst({
+      where: {
+        email: { equals: norm, mode: 'insensitive' },
+      },
+    }) as { id?: string } | null;
+    if (cu) return { taken: true, message: 'Email is already registered as a coordinator user' };
+  }
+
   // RegistrationRequest (pending)
   const rrDelegate = (prisma as { registrationRequest?: { findFirst: (args: unknown) => Promise<unknown> } }).registrationRequest;
   if (rrDelegate?.findFirst) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { sendPushToRequesters } from '@/lib/push-notifications';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -17,9 +18,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
   try {
+    const coordinatorContext = await getCoordinatorContext(req);
     const ticket = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, status: true, company: true, requesterId: true, technique: true, beforeImageUrls: true, finishingImageUrls: true },
+      select: {
+        id: true,
+        status: true,
+        company: true,
+        requesterId: true,
+        technique: true,
+        beforeImageUrls: true,
+        finishingImageUrls: true,
+        coordinatorCompanyId: true,
+        assigneeCoordinatorUserId: true,
+      },
     });
 
     if (!ticket) {
@@ -32,7 +44,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     } catch { /* ignore */ }
 
     const assignedId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
-    if (assignedId !== auth.payload.requesterId) {
+    const assignedCoordinatorId = ticket.assigneeCoordinatorUserId ?? (typeof parsed.assigneeCoordinatorUserId === 'string' ? parsed.assigneeCoordinatorUserId : null);
+    if (coordinatorContext) {
+      if (ticket.coordinatorCompanyId !== coordinatorContext.companyId) {
+        return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+      }
+      if (assignedCoordinatorId && assignedCoordinatorId !== coordinatorContext.userId) {
+        return NextResponse.json({ success: false, message: 'Only assigned staff can complete this ticket' }, { status: 403 });
+      }
+    } else if (assignedId !== auth.payload.requesterId) {
       return NextResponse.json({ success: false, message: 'Only the assigned technician or engineer can complete this ticket' }, { status: 403 });
     }
 
@@ -72,11 +92,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!isNcr) {
       parsed.status = 'COMPLETED';
       parsed.completedAt = new Date().toISOString();
+      parsed.workflowState = 'DONE';
     } else {
       parsed.inspectionResult = 'ncr';
       parsed.ncrReason = ncrReason || inspectionComments || null;
       parsed.ncrImageUrls = ncrImageUrls.length > 0 ? ncrImageUrls : [];
       parsed.ncrResubmissions = Array.isArray(parsed.ncrResubmissions) ? parsed.ncrResubmissions : [];
+      parsed.workflowState = 'IN_PROGRESS';
     }
     if (checklistResponse) {
       parsed.checklistResponse = checklistResponse;
@@ -100,6 +122,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const updateData: Record<string, unknown> = {
       status: isNcr ? 'IN_PROGRESS' : 'COMPLETED',
+      workflowState: isNcr ? 'IN_PROGRESS' : 'DONE',
       completedAt: isNcr ? null : new Date(),
       company: JSON.stringify(parsed),
       checklistResponse: checklistResponse ? JSON.stringify(checklistResponse) : undefined,

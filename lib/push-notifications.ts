@@ -49,13 +49,22 @@ function isInvalidTokenErrorCode(code: string | undefined): boolean {
 async function getRequesterTokens(prisma: any, requesterIds: string[]): Promise<string[]> {
   if (!requesterIds.length) return [];
   try {
-    const rows = (await prisma.ticketRequester.findMany({
+    const requesterRows = (await prisma.ticketRequester.findMany({
       where: {
         id: { in: requesterIds },
         phonePushToken: { not: null },
       },
       select: { phonePushToken: true },
     })) as Array<{ phonePushToken: unknown }>;
+
+    const coordinatorRows = (await prisma.coordinatorUser.findMany({
+      where: {
+        id: { in: requesterIds },
+        phonePushToken: { not: null },
+      },
+      select: { phonePushToken: true },
+    }).catch(() => [])) as Array<{ phonePushToken: unknown }>;
+    const rows = [...requesterRows, ...coordinatorRows];
 
     return [
       ...new Set(
@@ -122,6 +131,14 @@ async function removeTokenEverywhere(prisma: any, token: string): Promise<void> 
   } catch {
     // Ignore if schema/column is missing in older environments.
   }
+  try {
+    await prisma.coordinatorUser.updateMany({
+      where: { phonePushToken: token },
+      data: { phonePushToken: null, phonePlatform: null },
+    });
+  } catch {
+    // Ignore if schema/column is missing in older environments.
+  }
 
   // Legacy storage.
   try {
@@ -150,7 +167,17 @@ export async function registerRequesterPushToken(
       },
     });
   } catch (err) {
-    if (!isMissingPushColumnsError(err)) throw err;
+    try {
+      await prisma.coordinatorUser.update({
+        where: { id: requesterId },
+        data: {
+          phonePushToken: cleaned,
+          phonePlatform: platform,
+        },
+      });
+    } catch (fallbackErr) {
+      if (!isMissingPushColumnsError(fallbackErr)) throw err;
+    }
   }
 
   // Backward compatibility while environments still use legacy storage.
@@ -177,7 +204,14 @@ export async function clearRequesterPushToken(prisma: any, requesterId: string):
       data: { phonePushToken: null, phonePlatform: null },
     });
   } catch (err) {
-    if (!isMissingPushColumnsError(err)) throw err;
+    try {
+      await prisma.coordinatorUser.update({
+        where: { id: requesterId },
+        data: { phonePushToken: null, phonePlatform: null },
+      });
+    } catch (fallbackErr) {
+      if (!isMissingPushColumnsError(fallbackErr)) throw err;
+    }
   }
 
   try {
@@ -266,10 +300,15 @@ export async function sendPushToAllRequesters(prisma: any, payload: PushPayload)
   if (!ensureFirebase()) return 0;
   let primary: string[] = [];
   try {
-    const rows = (await prisma.ticketRequester.findMany({
+    const requesterRows = (await prisma.ticketRequester.findMany({
       where: { phonePushToken: { not: null } },
       select: { phonePushToken: true },
     })) as Array<{ phonePushToken: unknown }>;
+    const coordinatorRows = (await prisma.coordinatorUser.findMany({
+      where: { phonePushToken: { not: null } },
+      select: { phonePushToken: true },
+    }).catch(() => [])) as Array<{ phonePushToken: unknown }>;
+    const rows = [...requesterRows, ...coordinatorRows];
     primary = [
       ...new Set(
         rows

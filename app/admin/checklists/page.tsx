@@ -8,6 +8,9 @@ type Checklist = {
   id: string;
   name: string;
   items: (ChecklistItem & { weight?: string })[];
+  taskCategory?: 'MAINTENANCE' | 'QUALITY' | 'SUPERVISION' | null;
+  techniqueTypes?: string[];
+  companyId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -22,6 +25,8 @@ export default function AdminChecklistsPage() {
   const [newItemLabel, setNewItemLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [taskCategory, setTaskCategory] = useState<'MAINTENANCE' | 'QUALITY' | 'SUPERVISION'>('QUALITY');
+  const [techniqueTypes, setTechniqueTypes] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -52,6 +57,8 @@ export default function AdminChecklistsPage() {
     setFormName('');
     setFormItems([]);
     setNewItemLabel('');
+    setTaskCategory('QUALITY');
+    setTechniqueTypes('');
     setError('');
     setShowForm(true);
   };
@@ -60,6 +67,8 @@ export default function AdminChecklistsPage() {
     setEditingId(c.id);
     setFormName(c.name);
     setFormItems(Array.isArray(c.items) ? c.items.map((it: { id: string; label: string; weight?: string }) => ({ id: it.id, label: it.label, weight: (it.weight === 'major' ? 'major' : 'minor') as 'minor' | 'major' })) : []);
+    setTaskCategory((c.taskCategory as 'MAINTENANCE' | 'QUALITY' | 'SUPERVISION' | undefined) ?? 'QUALITY');
+    setTechniqueTypes(Array.isArray(c.techniqueTypes) ? c.techniqueTypes.join(', ') : '');
     setNewItemLabel('');
     setError('');
     setShowForm(true);
@@ -93,7 +102,15 @@ export default function AdminChecklistsPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName.trim(), items: formItems }),
+        body: JSON.stringify({
+          name: formName.trim(),
+          items: formItems,
+          taskCategory,
+          techniqueTypes: techniqueTypes
+            .split(',')
+            .map((t) => t.trim().toLowerCase())
+            .filter(Boolean),
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -180,6 +197,30 @@ export default function AdminChecklistsPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="e.g. Site Safety Inspection"
                 />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Task category</label>
+                  <select
+                    value={taskCategory}
+                    onChange={(e) => setTaskCategory(e.target.value as 'MAINTENANCE' | 'QUALITY' | 'SUPERVISION')}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  >
+                    <option value="QUALITY">Quality</option>
+                    <option value="SUPERVISION">Supervision</option>
+                    <option value="MAINTENANCE">Maintenance</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Technique types (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={techniqueTypes}
+                    onChange={(e) => setTechniqueTypes(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="inspection, fiber_route, supervision"
+                  />
+                </div>
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -278,6 +319,7 @@ export default function AdminChecklistsPage() {
                 >
                   <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform ${expandedId === c.id ? 'rotate-180' : ''}`} />
                   <span className="font-medium text-gray-900">{c.name}</span>
+                  <span className="text-xs text-gray-500 uppercase">{c.taskCategory || 'ANY'}</span>
                   <span className="text-sm text-gray-500">({(c.items?.length ?? 0)} items)</span>
                 </button>
                 <div className="flex gap-2 shrink-0">

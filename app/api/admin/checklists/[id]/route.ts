@@ -47,6 +47,11 @@ export async function PATCH(
   try {
     const body = await req.json();
     const name = typeof body.name === 'string' ? body.name.trim() : undefined;
+    const taskCategory = typeof body.taskCategory === 'string' ? body.taskCategory.trim().toUpperCase() : undefined;
+    const companyId = typeof body.companyId === 'string' ? body.companyId.trim() : undefined;
+    const techniqueTypes = Array.isArray(body.techniqueTypes)
+      ? body.techniqueTypes.filter((t: unknown) => typeof t === 'string').map((t: string) => t.trim().toLowerCase()).filter(Boolean)
+      : undefined;
     let items = undefined;
     if (Array.isArray(body.items)) {
       items = body.items
@@ -62,9 +67,12 @@ export async function PATCH(
         .filter((x: { label: string }) => x.label.length > 0);
     }
 
-    const updateData: { name?: string; items?: unknown } = {};
+    const updateData: { name?: string; items?: unknown; taskCategory?: string | null; companyId?: string | null; techniqueTypes?: string[] } = {};
     if (name !== undefined) updateData.name = name;
     if (items !== undefined) updateData.items = items;
+    if (taskCategory !== undefined) updateData.taskCategory = taskCategory || null;
+    if (companyId !== undefined) updateData.companyId = companyId || null;
+    if (techniqueTypes !== undefined) updateData.techniqueTypes = techniqueTypes;
 
     if (Object.keys(updateData).length === 0) {
       const checklist = await (prisma as any).inspectionChecklist.findUnique({ where: { id } });

@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import '../providers/provisor_techniques_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/conflicts_provider.dart';
 import '../widgets/language_selector.dart';
@@ -47,6 +48,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
     ];
     if (!isTechnician && !context.read<AuthProvider>().isWorker) {
       futures.add(context.read<SitesProvider>().fetchSites());
+      futures.add(context.read<ProvisorTechniquesProvider>().ensureLoaded());
     }
     await Future.wait(futures);
   }
@@ -182,8 +184,89 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
 }
 
 // ─── Tickets Tab ───
-class _TicketsTab extends StatelessWidget {
+class _TicketsTab extends StatefulWidget {
   const _TicketsTab();
+
+  @override
+  State<_TicketsTab> createState() => _TicketsTabState();
+}
+
+class _TicketsTabState extends State<_TicketsTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _statusFilter = 'ALL';
+  String _techniqueFilter = 'ALL';
+  DateTimeRange? _dateRange;
+  bool _showFilters = true;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 3),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: _dateRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF6C63FF),
+              surface: Color(0xFF12122A),
+            ),
+            dialogTheme: const DialogThemeData(
+              backgroundColor: Color(0xFF12122A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() => _dateRange = picked);
+  }
+
+  List<Ticket> _applyFilters(List<Ticket> tickets) {
+    final query = _searchController.text.trim().toLowerCase();
+    return tickets.where((t) {
+      if (_statusFilter != 'ALL' && t.status != _statusFilter) return false;
+      if (_techniqueFilter != 'ALL' && t.technique != _techniqueFilter) return false;
+      if (_dateRange != null) {
+        final start = DateTime(
+          _dateRange!.start.year,
+          _dateRange!.start.month,
+          _dateRange!.start.day,
+        );
+        final end = DateTime(
+          _dateRange!.end.year,
+          _dateRange!.end.month,
+          _dateRange!.end.day,
+          23,
+          59,
+          59,
+        );
+        if (t.createdAt.isBefore(start) || t.createdAt.isAfter(end)) return false;
+      }
+      if (query.isEmpty) return true;
+      final blob = [
+        t.id,
+        t.siteName ?? '',
+        t.siteCoordinator ?? '',
+        t.status,
+        t.technique,
+        t.requesterName ?? '',
+        t.requesterPhone ?? '',
+        t.requesterRole ?? '',
+        t.inspectionResult ?? '',
+        t.assignedEngineerName ?? '',
+      ].join(' ').toLowerCase();
+      return blob.contains(query);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,29 +279,50 @@ class _TicketsTab extends StatelessWidget {
           );
         }
 
+        final statuses = <String>{
+          'ALL',
+          ...provider.tickets.map((t) => t.status),
+        }.toList();
+        final techniques = <String>{
+          'ALL',
+          ...provider.tickets.map((t) => t.technique),
+        }.toList();
+        final effectiveStatus = statuses.contains(_statusFilter) ? _statusFilter : 'ALL';
+        final effectiveTechnique = techniques.contains(_techniqueFilter) ? _techniqueFilter : 'ALL';
+        if (effectiveStatus != _statusFilter || effectiveTechnique != _techniqueFilter) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _statusFilter = effectiveStatus;
+              _techniqueFilter = effectiveTechnique;
+            });
+          });
+        }
+        final filtered = _applyFilters(provider.tickets);
+
         final sections = <_TicketSection>[
-          if (provider.pendingTickets.isNotEmpty)
+          if (filtered.where((t) => t.isPending).isNotEmpty)
             _TicketSection(
               l10n.t('section_pending'),
-              provider.pendingTickets,
+              filtered.where((t) => t.isPending).toList(),
               const Color(0xFFFBBF24),
             ),
-          if (provider.onSiteTickets.isNotEmpty)
+          if (filtered.where((t) => t.isOnSite).isNotEmpty)
             _TicketSection(
               l10n.t('section_on_site'),
-              provider.onSiteTickets,
+              filtered.where((t) => t.isOnSite).toList(),
               const Color(0xFF6C63FF),
             ),
-          if (provider.inProgressTickets.isNotEmpty)
+          if (filtered.where((t) => t.isInProgress).isNotEmpty)
             _TicketSection(
               l10n.t('section_in_progress'),
-              provider.inProgressTickets,
+              filtered.where((t) => t.isInProgress).toList(),
               const Color(0xFF00D4AA),
             ),
-          if (provider.completedTickets.isNotEmpty)
+          if (filtered.where((t) => t.isCompleted).isNotEmpty)
             _TicketSection(
               l10n.t('section_completed'),
-              provider.completedTickets,
+              filtered.where((t) => t.isCompleted).toList(),
               const Color(0xFF4ADE80),
             ),
         ];
@@ -244,6 +348,14 @@ class _TicketsTab extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
+                  IconButton(
+                    onPressed: () => setState(() => _showFilters = !_showFilters),
+                    icon: Icon(
+                      _showFilters ? Icons.tune_rounded : Icons.tune_outlined,
+                      color: const Color(0xFF8B83FF),
+                    ),
+                    tooltip: 'Filters',
+                  ),
                   Consumer<NotificationsProvider>(
                     builder: (context, notifProvider, _) {
                       final count = notifProvider.unreadCount;
@@ -306,7 +418,7 @@ class _TicketsTab extends StatelessWidget {
                     ),
                     child: Text(
                       l10n.t('total_count', {
-                        'count': '${provider.tickets.length}',
+                        'count': '${filtered.length}',
                       }),
                       style: const TextStyle(
                         color: Color(0xFF8B83FF),
@@ -318,10 +430,122 @@ class _TicketsTab extends StatelessWidget {
                 ],
               ),
             ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: !_showFilters
+                  ? const SizedBox.shrink()
+                  : Container(
+                      key: const ValueKey('company-ticket-filters'),
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF6C63FF).withAlpha(20),
+                            const Color(0xFF00D4AA).withAlpha(8),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.white.withAlpha(12)),
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _searchController,
+                            onChanged: (_) => setState(() {}),
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B83FF)),
+                              hintText: 'Search by site, ticket ID, requester, status, technique...',
+                              hintStyle: TextStyle(color: Colors.white.withAlpha(120), fontSize: 13),
+                              filled: true,
+                              fillColor: Colors.white.withAlpha(8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _TicketFilterDropdown(
+                                  label: 'Status',
+                                  value: effectiveStatus,
+                                  items: statuses,
+                                  onChanged: (v) => setState(() => _statusFilter = v),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _TicketFilterDropdown(
+                                  label: 'Technique',
+                                  value: effectiveTechnique,
+                                  items: techniques,
+                                  onChanged: (v) => setState(() => _techniqueFilter = v),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _pickDateRange,
+                                  icon: const Icon(Icons.date_range_rounded, size: 18),
+                                  label: Text(
+                                    _dateRange == null
+                                        ? 'Date range'
+                                        : '${_dateRange!.start.year}/${_dateRange!.start.month.toString().padLeft(2, '0')}/${_dateRange!.start.day.toString().padLeft(2, '0')} - ${_dateRange!.end.year}/${_dateRange!.end.month.toString().padLeft(2, '0')}/${_dateRange!.end.day.toString().padLeft(2, '0')}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(color: Colors.white.withAlpha(20)),
+                                    backgroundColor: Colors.white.withAlpha(6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _statusFilter = 'ALL';
+                                    _techniqueFilter = 'ALL';
+                                    _dateRange = null;
+                                  });
+                                },
+                                icon: const Icon(Icons.restart_alt_rounded, size: 18, color: Color(0xFFFF6B81)),
+                                label: const Text('Reset', style: TextStyle(color: Color(0xFFFF6B81))),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              _TicketInfoPill(label: 'Matched', value: '${filtered.length}', color: const Color(0xFF00D4AA)),
+                              const SizedBox(width: 8),
+                              _TicketInfoPill(label: 'Pending', value: '${filtered.where((t) => t.isPending).length}', color: const Color(0xFFFBBF24)),
+                              const SizedBox(width: 8),
+                              _TicketInfoPill(label: 'Completed', value: '${filtered.where((t) => t.isCompleted).length}', color: const Color(0xFF4ADE80)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
             const SizedBox(height: 12),
             Expanded(
               child: sections.isEmpty
-                  ? _emptyState(context, l10n)
+                  ? _emptyState(
+                      context,
+                      l10n,
+                      showFilterMessage: filtered.isEmpty && provider.tickets.isNotEmpty,
+                    )
                   : RefreshIndicator(
                       onRefresh: () => provider.fetchTickets(),
                       color: const Color(0xFF6C63FF),
@@ -409,7 +633,11 @@ class _TicketsTab extends StatelessWidget {
     );
   }
 
-  Widget _emptyState(BuildContext context, AppLocalizations l10n) {
+  Widget _emptyState(
+    BuildContext context,
+    AppLocalizations l10n, {
+    required bool showFilterMessage,
+  }) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -428,7 +656,7 @@ class _TicketsTab extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            l10n.t('no_tickets'),
+            showFilterMessage ? 'No tickets match your filters' : l10n.t('no_tickets'),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -437,10 +665,89 @@ class _TicketsTab extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            l10n.t('create_first_ticket'),
+            showFilterMessage
+                ? 'Try changing date range, status, technique, or search'
+                : l10n.t('create_first_ticket'),
             style: TextStyle(color: Colors.white.withAlpha(100), fontSize: 14),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TicketFilterDropdown extends StatelessWidget {
+  final String label;
+  final String value;
+  final List<String> items;
+  final ValueChanged<String> onChanged;
+
+  const _TicketFilterDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(14)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: const Color(0xFF12122A),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF8B83FF)),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          items: items
+              .map((item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item == 'ALL' ? '$label: ALL' : item, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _TicketInfoPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _TicketInfoPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withAlpha(30),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withAlpha(70)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+            Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+          ],
+        ),
       ),
     );
   }
@@ -456,6 +763,11 @@ class _TicketSection {
 // ─── Sites Tab ───
 class _SitesTab extends StatelessWidget {
   const _SitesTab();
+
+  static String _fmtSiteHours(double h) {
+    if (h <= 0) return '0';
+    return h < 1 ? h.toStringAsFixed(2) : h.toStringAsFixed(1);
+  }
 
   Future<void> _confirmDelete(
     BuildContext context,
@@ -706,7 +1018,22 @@ class _SitesTab extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 6),
                                           Text(
-                                            '${site.qualityControlCount} ${l10n.t('qc_tickets')}',
+                                            l10n.t('site_row_inspection', {
+                                              'n': '${site.inspectionQcCount}',
+                                              'h': _fmtSiteHours(
+                                                  site.inspectionHoursTotal),
+                                            }),
+                                            style: TextStyle(
+                                              color: Colors.white.withAlpha(60),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          Text(
+                                            l10n.t('site_row_maintenance', {
+                                              'n': '${site.maintenanceQcCount}',
+                                              'h': _fmtSiteHours(
+                                                  site.maintenanceHoursTotal),
+                                            }),
                                             style: TextStyle(
                                               color: Colors.white.withAlpha(60),
                                               fontSize: 11,

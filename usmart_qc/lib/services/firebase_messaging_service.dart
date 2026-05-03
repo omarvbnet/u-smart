@@ -1,98 +1,61 @@
 import 'dart:io' show Platform;
-import 'package:firebase_core/firebase_core.dart';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
+
 import '../config/api_config.dart';
 import 'api_service.dart';
 import 'notification_service.dart';
 
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-}
-
+/// Registers FCM token with the backend and shows foreground notifications.
 class FirebaseMessagingService {
+  FirebaseMessagingService(this._api, this._notifications);
+
   final ApiService _api;
-  final NotificationService _localNotifications;
-  bool _initialized = false;
-  FirebaseMessagingService(this._api, this._localNotifications);
+  final NotificationService _notifications;
 
   Future<void> init() async {
-    if (_initialized) return;
-
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     final messaging = FirebaseMessaging.instance;
-    await messaging.setAutoInitEnabled(true);
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     if (Platform.isIOS) {
-      await messaging.setForegroundNotificationPresentationOptions(
+      await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
     }
 
-    await _registerTokenWithRetry(messaging);
-    FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
-      await _registerToken(token);
-    });
-    FirebaseMessaging.onMessage.listen((message) async {
-      final title = message.notification?.title ?? 'Provisor';
-      final body = message.notification?.body ?? 'You have a new notification';
-      await _localNotifications.show(
+    await _registerToken();
+    FirebaseMessaging.instance.onTokenRefresh.listen((_) => _registerToken());
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      final n = message.notification;
+      final title =
+          n?.title ?? message.data['title']?.toString() ?? 'Provisor';
+      final body = n?.body ?? message.data['body']?.toString() ?? '';
+      if (body.isEmpty) return;
+      _notifications.show(
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: title,
         body: body,
       );
     });
-
-    _initialized = true;
   }
 
-  Future<String?> _getSafeToken(FirebaseMessaging messaging) async {
-    if (!Platform.isIOS) {
-      try {
-        return await messaging.getToken();
-      } catch (_) {
-        return null;
-      }
-    }
-
-    // On iOS, APNS token can appear slightly later than app startup.
-    for (var i = 0; i < 10; i++) {
-      try {
-        final apns = await messaging.getAPNSToken();
-        if (apns != null && apns.isNotEmpty) {
-          return await messaging.getToken();
-        }
-      } on FirebaseException catch (e) {
-        if (e.code != 'apns-token-not-set') return null;
-      } catch (_) {
-        return null;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
-
-    return null;
-  }
-
-  Future<void> _registerTokenWithRetry(FirebaseMessaging messaging) async {
-    // iOS can provide APNS/FCM token after startup, so keep retrying for a while.
-    for (var i = 0; i < 24; i++) {
-      final token = await _getSafeToken(messaging);
-      if (token != null && token.isNotEmpty) {
-        await _registerToken(token);
-        return;
-      }
-      await Future<void>.delayed(const Duration(seconds: 5));
-    }
-  }
-
-  Future<void> _registerToken(String token) async {
+  Future<void> _registerToken() async {
     try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null || token.isEmpty) return;
+      final platform = Platform.isIOS
+          ? 'ios'
+          : (Platform.isAndroid ? 'android' : 'unknown');
       await _api.post(ApiConfig.requesterPushToken, body: {
         'token': token,
-        'platform': Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'unknown'),
+        'platform': platform,
       });
     } catch (_) {}
   }

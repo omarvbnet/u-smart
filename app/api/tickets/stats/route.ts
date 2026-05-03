@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,6 +13,64 @@ export async function GET(req: NextRequest) {
       );
     }
     const payload = auth.payload;
+    const coordinatorContext = await getCoordinatorContext(req);
+
+    if (coordinatorContext) {
+      const rows = await (prisma as any).visitorRequest.findMany({
+        where: { coordinatorCompanyId: coordinatorContext.companyId },
+        select: {
+          status: true,
+          taskCategory: true,
+          roleScope: true,
+          assigneeCoordinatorUserId: true,
+          workflowState: true,
+          createdAt: true,
+          completedAt: true,
+          company: true,
+        },
+      });
+      let withinSla = 0;
+      let outOfSla = 0;
+      const now = Date.now();
+      const ticketsByRoleScope: Record<string, number> = {};
+      const ticketsByCategory: Record<string, number> = {};
+      const ticketsByStatus: Record<string, number> = {};
+      for (const r of rows as any[]) {
+        ticketsByRoleScope[r.roleScope ?? 'ANY'] = (ticketsByRoleScope[r.roleScope ?? 'ANY'] ?? 0) + 1;
+        ticketsByCategory[r.taskCategory ?? 'UNSPECIFIED'] = (ticketsByCategory[r.taskCategory ?? 'UNSPECIFIED'] ?? 0) + 1;
+        ticketsByStatus[r.status ?? 'PENDING'] = (ticketsByStatus[r.status ?? 'PENDING'] ?? 0) + 1;
+
+        let slaHours = 24;
+        try {
+          const parsed = typeof r.company === 'string' ? JSON.parse(r.company) : {};
+          if (parsed._ticket && typeof parsed.slaHours === 'number') slaHours = parsed.slaHours;
+        } catch {
+          /* ignore */
+        }
+        const created = new Date(r.createdAt).getTime();
+        const completed = r.completedAt ? new Date(r.completedAt).getTime() : null;
+        if (r.status === 'COMPLETED' && completed != null) {
+          const hoursTaken = (completed - created) / (1000 * 60 * 60);
+          if (hoursTaken <= slaHours) withinSla++;
+          else outOfSla++;
+        } else {
+          const hoursSinceCreation = (now - created) / (1000 * 60 * 60);
+          if (hoursSinceCreation > slaHours) outOfSla++;
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        stats: {
+          withinSla,
+          outOfSla,
+          total: withinSla + outOfSla,
+          ticketsByRoleScope,
+          ticketsByCategory,
+          ticketsByStatus,
+        },
+      });
+    }
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },

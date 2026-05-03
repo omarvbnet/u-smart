@@ -11,6 +11,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    if (auth.payload.identitySource === 'coordinator_user') {
+      return NextResponse.json({
+        success: true,
+        province: null,
+        provinceFilterActive: false,
+      });
+    }
     const row = await prisma.ticketRequester.findUnique({
       where: { id: auth.payload.requesterId },
       select: { province: true, provinceFilterActive: true },
@@ -32,6 +39,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
+    if (auth.payload.identitySource === 'coordinator_user') {
+      return NextResponse.json({ success: true });
+    }
     const body = await req.json();
     const data: Record<string, unknown> = {};
 

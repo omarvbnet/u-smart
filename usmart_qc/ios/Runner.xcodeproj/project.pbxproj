@@ -15,7 +15,6 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
-		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		F38293065F1B28D21C2AB356 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 154BA4CEC0F2DB59E99AEB5A /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
 
@@ -64,7 +63,6 @@
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C146FB1CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B80B89884367D5EFE6B70B68 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		C862E130D6353967153B9A3D /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -158,7 +156,6 @@
 				52BD94EC2FA3F4B200812FAD /* Runner.entitlements */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
-				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
 				52BD94EF2FA4189400812FAD /* GoogleService-Info.plist */,
 				97C147021CF9000F007C117D /* Info.plist */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
@@ -202,6 +199,7 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
+				C4D5812F9342A68123E00AB1 /* Strip Mach-O before Pods embed */,
 				BE41A276B6553924CA1445AC /* [CP] Embed Pods Frameworks */,
 				186152319E17C0104E556DDF /* [CP] Copy Pods Resources */,
 				A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */,
@@ -266,7 +264,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				52BD94F02FA4189400812FAD /* GoogleService-Info.plist in Resources */,
@@ -330,7 +327,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin";
+			shellScript = "export COPYFILE_DISABLE=1\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin\nFL_IOS=\"${PROJECT_DIR}/../build/ios/${CONFIGURATION}-iphoneos\"\n/usr/sbin/dot_clean -m \"${FL_IOS}\" 2>/dev/null || true\nxattr -cr \"${FL_IOS}\" 2>/dev/null || true\nFF=\"${TARGET_BUILD_DIR}/Flutter.framework/Flutter\"\nif [ -f \"$FF\" ]; then FE=$(mktemp /tmp/flutter_fl_bin.XXXXXXXX) && /usr/bin/ditto --norsrc \"$FF\" \"$FE\" && chmod +x \"$FE\" && /bin/mv \"$FE\" \"$FF\"; fi\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nif [ -f \"$FF\" ] && [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${CODE_SIGNING_REQUIRED:-}\" != \"NO\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --preserve-metadata=identifier,entitlements,flags --timestamp=none \"$FF\"; fi\nxattr -cr \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Frameworks\" 2>/dev/null || true\n";
 		};
 		53D7F538BF7A8927F82A2EAA /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -367,7 +364,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export COPYFILE_DISABLE=1\nxattr -cr \"${FLUTTER_APPLICATION_PATH}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/build\" 2>/dev/null || true\nxattr -cr \"${BUILT_PRODUCTS_DIR}\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios\" 2>/dev/null || true\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+			shellScript = "/bin/bash \"${PROJECT_DIR}/flutter_build_runner.sh\"\n";
 		};
 		A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -381,7 +378,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export COPYFILE_DISABLE=1\nxattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework/App\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/${FLUTTER_BUILD_DIR}/ios\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios\" 2>/dev/null || true";
+			shellScript = "export COPYFILE_DISABLE=1\nFL_IOS=\"${PROJECT_DIR}/../build/ios/${CONFIGURATION}-iphoneos\"\nAPPB=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\n/usr/sbin/dot_clean -m \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\n/usr/sbin/dot_clean -m \"${FL_IOS}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${FL_IOS}\" 2>/dev/null || true\nxattr -cr \"${APPB}\" 2>/dev/null || true\nfind \"${TARGET_BUILD_DIR}\" -maxdepth 3 -path '*.framework/*' ! -path '*.framework/*/*/*' -type f -print0 2>/dev/null | while IFS= read -r -d '' EF\ndo\n  /usr/bin/file \"$EF\" 2>/dev/null | /usr/bin/grep -q Mach-O || continue\n  TE=$(mktemp /tmp/flutter_ef_strip.XXXXXXXX)\n  /usr/bin/ditto --norsrc \"$EF\" \"$TE\" && chmod +x \"$TE\" && /bin/mv \"$TE\" \"$EF\"\ndone\nxattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework/App\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nxattr -cr \"${APPB}/Frameworks\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/${FLUTTER_BUILD_DIR}/ios\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios/.symlinks/plugins\" 2>/dev/null || true\nif [ -d \"${APPB}/Frameworks\" ]; then\n  find \"${APPB}/Frameworks\" -type f -print0 2>/dev/null | while IFS= read -r -d '' MF\n  do\n    /usr/bin/file \"$MF\" 2>/dev/null | /usr/bin/grep -q Mach-O || continue\n    T=$(mktemp /tmp/flutter_fw_strip.XXXXXXXX)\n    /usr/bin/ditto --norsrc \"$MF\" \"$T\" && chmod +x \"$T\" && /bin/mv \"$T\" \"$MF\"\n  done\nfi\nif [ -f \"${APPB}/Runner\" ]; then\n  MF=\"${APPB}/Runner\"\n  T=$(mktemp /tmp/flutter_fw_strip.XXXXXXXX)\n  /usr/bin/ditto --norsrc \"$MF\" \"$T\" && chmod +x \"$T\" && /bin/mv \"$T\" \"$MF\"\nfi\nxattr -cr \"${APPB}\" 2>/dev/null || true\n";
 			showEnvVarsInLog = 0;
 		};
 		BE41A276B6553924CA1445AC /* [CP] Embed Pods Frameworks */ = {
@@ -399,6 +396,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		C4D5812F9342A68123E00AB1 /* Strip Mach-O before Pods embed */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Strip Mach-O before Pods embed";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/bash \"${PROJECT_DIR}/strip_ios_build_products.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -438,14 +450,6 @@
 				97C146FB1CF9000F007C117D /* Base */,
 			);
 			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
-		97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				97C147001CF9000F007C117D /* Base */,
-			);
-			name = LaunchScreen.storyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -510,7 +514,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 28YT228VJ4;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -521,6 +525,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.usmart.usmartQc;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -698,7 +703,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 28YT228VJ4;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -709,6 +714,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.usmart.usmartQc;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -725,7 +731,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 28YT228VJ4;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -736,6 +742,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.usmart.usmartQc;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";

@@ -31,7 +31,14 @@ export async function POST(req: NextRequest) {
 
     const isEmail = usernameOrEmail.includes('@');
     const emailLookup = isEmail ? normalizeEmailInput(usernameOrEmail).toLowerCase() : '';
-    const requester = await prisma.ticketRequester.findFirst({
+    const coordinatorUser = await (prisma as any).coordinatorUser.findFirst({
+      where: isEmail
+        ? { email: emailLookup }
+        : { username: { equals: usernameOrEmail, mode: 'insensitive' } },
+      select: { email: true },
+    });
+
+    const requester = coordinatorUser ?? await prisma.ticketRequester.findFirst({
       where: isEmail
         ? { email: emailLookup }
         : { username: usernameOrEmail },

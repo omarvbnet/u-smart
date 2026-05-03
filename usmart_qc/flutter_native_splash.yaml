@@ -1,0 +1,17 @@
+# Native launch screens (iOS + Android) — matches lib/screens/splash_screen.dart base look.
+# Regenerate: dart run flutter_native_splash:create
+#
+# Post-regenerate (this project uses UILaunchScreen in Info.plist, not the storyboard):
+# - Delete ios/Runner/Base.lproj/LaunchScreen.storyboard if the tool recreated it.
+# - Remove UIStatusBarHidden / UIViewControllerBasedStatusBarAppearance from Info.plist if present.
+flutter_native_splash:
+  color: "#05051A"
+  image: assets/provisor_icon.png
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
+  fullscreen: false
+  web: false
+  android_12:
+    color: "#05051A"
+    image: assets/provisor_icon.png
+    icon_background_color: "#05051A"

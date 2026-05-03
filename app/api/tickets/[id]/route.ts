@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 const prisma = _prisma as any;
 
@@ -13,10 +14,93 @@ export async function GET(
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
   const payload = auth.payload;
+  const coordinatorContext = await getCoordinatorContext(req);
 
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ success: false, message: 'Ticket ID required' }, { status: 400 });
+  }
+
+  // Coordinator-role access (new provider account system)
+  if (coordinatorContext) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const whereClause: any = { id, coordinatorCompanyId: coordinatorContext.companyId };
+      if (coordinatorContext.role === 'QUALITY_ENGINEER') whereClause.taskCategory = 'QUALITY';
+      if (coordinatorContext.role === 'SUPERVISION_ENGINEER') whereClause.taskCategory = 'SUPERVISION';
+      if (coordinatorContext.role === 'TECHNICIAN') whereClause.taskCategory = 'MAINTENANCE';
+
+      const row = await prisma.visitorRequest.findFirst({
+        where: whereClause,
+        select: {
+          id: true,
+          technique: true,
+          company: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+          taskCategory: true,
+          roleScope: true,
+          workflowState: true,
+          assignmentScope: true,
+          checklistTemplateId: true,
+          assigneeCoordinatorUserId: true,
+          coordinatorCompanyId: true,
+          resubmitReason: true,
+          resubmittedAt: true,
+          requesterId: true,
+        },
+      });
+      if (!row) {
+        return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
+      }
+
+      let siteName: string | null = null;
+      let siteCoordinator: string | null = null;
+      let slaHours: number | null = null;
+      let status = row.status ?? 'PENDING';
+      try {
+        const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+        if (parsed._ticket) {
+          siteName = parsed.siteName ?? null;
+          siteCoordinator = parsed.siteCoordinator ?? null;
+          slaHours = parsed.slaHours ?? null;
+          if (parsed.status) status = String(parsed.status);
+        }
+      } catch {
+        /* ignore */
+      }
+
+      return NextResponse.json({
+        success: true,
+        ticket: {
+          id: row.id,
+          siteName,
+          siteCoordinator,
+          slaHours,
+          technique: row.technique,
+          status,
+          createdAt: row.createdAt,
+          completedAt: row.completedAt ?? null,
+          taskCategory: row.taskCategory ?? null,
+          roleScope: row.roleScope ?? null,
+          workflowState: row.workflowState ?? 'OPEN',
+          assignmentScope: row.assignmentScope ?? null,
+          checklistTemplateId: row.checklistTemplateId ?? null,
+          assigneeCoordinatorUserId: row.assigneeCoordinatorUserId ?? null,
+          coordinatorCompanyId: row.coordinatorCompanyId ?? null,
+          resubmitReason: row.resubmitReason ?? null,
+          resubmittedAt: row.resubmittedAt ?? null,
+          requesterId: row.requesterId ?? null,
+        },
+      });
+    } catch (err) {
+      console.error('GET /api/tickets/[id] coordinator flow:', err);
+      return NextResponse.json(
+        { success: false, message: 'Failed to load ticket' },
+        { status: 500 }
+      );
+    }
   }
 
   // Determine requester role to decide access rules
@@ -247,6 +331,7 @@ export async function GET(
         assignedEngineerName,
         assignedAt,
         checklistHistory,
+        requesterId: (row as { requesterId?: string | null }).requesterId ?? null,
         requesterName,
         requesterRole: ticketRequesterRole,
         requesterPhone,
