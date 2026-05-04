@@ -28,27 +28,26 @@ export async function POST(req: NextRequest) {
     // ── 1. Create / upsert coordinator company ────────────────────────────
     let company: { id: string };
     try {
+      // Try with optional billing columns first
       const upserted = await prisma.coordinatorCompany.upsert({
         where: { slug: 'sample-provider-company' },
-        update: {
-          name: 'Sample Provider Company',
-          freeTicketsLimit: 50,
-          freeTicketsUsed: 0,
-        },
+        update: { name: 'Sample Provider Company' },
         create: {
           slug: 'sample-provider-company',
           name: 'Sample Provider Company',
-          freeTicketsLimit: 50,
-          freeTicketsUsed: 0,
         },
       });
-      if (!upserted) {
-        return NextResponse.json(
-          { success: false, message: 'Company upsert returned null' },
-          { status: 500 },
-        );
-      }
+      if (!upserted) throw new Error('upsert returned null');
       company = upserted as { id: string };
+
+      // Try to set billing columns (may not exist on older DB schema — ignore errors)
+      try {
+        await prisma.coordinatorCompany.update({
+          where: { id: company.id },
+          data: { freeTicketsLimit: 50, freeTicketsUsed: 0 },
+        });
+      } catch { /* billing columns may not exist yet — safe to skip */ }
+
       results.push(`company: ${company.id}`);
     } catch (err) {
       return NextResponse.json(
@@ -98,28 +97,51 @@ export async function POST(req: NextRequest) {
 
     for (const acc of accounts) {
       const hash = await bcrypt.hash(acc.password, 10);
-      await prisma.coordinatorUser.upsert({
-        where: { username: acc.username },
-        update: {
-          email: acc.email,
-          name: acc.name,
-          passwordHash: hash,
-          role: acc.role,
-          status: 'ACTIVE',
-          mustChangePassword: false,
-          companyId: company.id,
-        },
-        create: {
-          username: acc.username,
-          email: acc.email,
-          name: acc.name,
-          passwordHash: hash,
-          role: acc.role,
-          status: 'ACTIVE',
-          mustChangePassword: false,
-          companyId: company.id,
-        },
-      });
+      try {
+        // Try full upsert first (modern schema)
+        await prisma.coordinatorUser.upsert({
+          where: { username: acc.username },
+          update: {
+            email: acc.email,
+            name: acc.name,
+            passwordHash: hash,
+            role: acc.role,
+            status: 'ACTIVE',
+            mustChangePassword: false,
+            companyId: company.id,
+          },
+          create: {
+            username: acc.username,
+            email: acc.email,
+            name: acc.name,
+            passwordHash: hash,
+            role: acc.role,
+            status: 'ACTIVE',
+            mustChangePassword: false,
+            companyId: company.id,
+          },
+        });
+      } catch {
+        // Fallback: minimal fields for older schema
+        await prisma.coordinatorUser.upsert({
+          where: { username: acc.username },
+          update: {
+            email: acc.email,
+            name: acc.name,
+            passwordHash: hash,
+            role: acc.role,
+            companyId: company.id,
+          },
+          create: {
+            username: acc.username,
+            email: acc.email,
+            name: acc.name,
+            passwordHash: hash,
+            role: acc.role,
+            companyId: company.id,
+          },
+        });
+      }
       results.push(`${acc.role}: ${acc.username} / ${acc.password}`);
     }
 
