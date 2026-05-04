@@ -55,6 +55,24 @@ type SlaStats = {
 };
 type InspectionCounts = { total: number; accepted: number; accepted_with_comments: number; not_accepted: number; ncr: number; in_progress: number };
 
+type CompanyDashboardPayload = {
+  totalStaff: number;
+  totalTickets: number;
+  staffByRole?: Record<string, number>;
+  ticketsByRoleScope?: Record<string, number>;
+  ticketsByCategory?: Record<string, number>;
+  ticketsByStatus?: Record<string, number>;
+  staffPerformance?: Array<{
+    userId: string;
+    role: string;
+    status: string;
+    assigned: number;
+    completed: number;
+    needsEdit: number;
+    resubmitted: number;
+  }>;
+};
+
 export default function QualityControlDashboardPage() {
   const router = useRouter();
   const params = useParams();
@@ -119,6 +137,7 @@ export default function QualityControlDashboardPage() {
   const [exportingData, setExportingData] = useState(false);
   const siteFileInputRef = useRef<HTMLInputElement>(null);
   const [qcTechniques, setQcTechniques] = useState<{ slug: string; labelAr: string; labelEn: string | null }[]>([]);
+  const [companyDashboard, setCompanyDashboard] = useState<CompanyDashboardPayload | null>(null);
 
   const loadData = async () => {
     const params = new URLSearchParams();
@@ -141,6 +160,23 @@ export default function QualityControlDashboardPage() {
     if (ticketsRes.success && ticketsRes.tickets) setTickets(ticketsRes.tickets);
     if (statsRes.success && statsRes.stats) setSlaStats(statsRes.stats);
     if (techRes.success && Array.isArray(techRes.inspection)) setQcTechniques(techRes.inspection);
+
+    if (meRes.user?.companyId) {
+      try {
+        const dashRes = await fetch('/api/company/dashboard', { credentials: 'include' }).then((r) =>
+          r.json(),
+        );
+        if (dashRes.success && dashRes.dashboard) {
+          setCompanyDashboard(dashRes.dashboard as CompanyDashboardPayload);
+        } else {
+          setCompanyDashboard(null);
+        }
+      } catch {
+        setCompanyDashboard(null);
+      }
+    } else {
+      setCompanyDashboard(null);
+    }
   };
 
   useEffect(() => {
@@ -164,7 +200,8 @@ export default function QualityControlDashboardPage() {
     user?.role === 'ENGINEER';
   const canUseProvisorHub =
     user?.serviceSlug === 'quality-control-supervision' &&
-    (user?.role === 'COMPANY_OWNER' ||
+    (Boolean(user?.companyId) ||
+      user?.role === 'COMPANY_OWNER' ||
       user?.role === 'COORDINATOR' ||
       user?.role === 'COMPANY' ||
       user?.role === 'ADMIN');
@@ -825,7 +862,10 @@ export default function QualityControlDashboardPage() {
           </div>
         )}
 
-        {(slaStats?.ticketsByCategory || slaStats?.usersByRole) && (
+        {(slaStats?.ticketsByCategory ||
+          slaStats?.usersByRole ||
+          (slaStats?.ticketsByRoleScope && Object.keys(slaStats.ticketsByRoleScope).length > 0) ||
+          (slaStats?.ticketsByStatus && Object.keys(slaStats.ticketsByStatus).length > 0)) && (
           <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
             <h3 className="text-sm font-semibold text-cyan-300 mb-3 flex items-center gap-2">
               <Activity className="w-4 h-4" />
@@ -844,7 +884,7 @@ export default function QualityControlDashboardPage() {
               </div>
             )}
             {slaStats?.usersByRole && Object.keys(slaStats.usersByRole).length > 0 && (
-              <div>
+              <div className="mb-4">
                 <p className="text-xs text-gray-500 mb-2">Staff accounts by role</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(slaStats.usersByRole).map(([k, v]) => (
@@ -853,6 +893,89 @@ export default function QualityControlDashboardPage() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+            {slaStats?.ticketsByRoleScope && Object.keys(slaStats.ticketsByRoleScope).length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2">Tickets by assignment scope</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(slaStats.ticketsByRoleScope).map(([k, v]) => (
+                    <span key={k} className="px-2 py-1 rounded-lg bg-white/10 text-xs text-white">
+                      {k}: <strong>{v}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {slaStats?.ticketsByStatus && Object.keys(slaStats.ticketsByStatus).length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Tickets by status</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(slaStats.ticketsByStatus).map(([k, v]) => (
+                    <span key={k} className="px-2 py-1 rounded-lg bg-white/10 text-xs text-white">
+                      {k}: <strong>{v}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {companyDashboard && (
+          <div className="mb-6 rounded-xl border border-violet-500/25 bg-violet-500/5 p-4 overflow-x-auto">
+            <h3 className="text-sm font-semibold text-violet-300 mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Live company dashboard
+            </h3>
+            <div className="flex flex-wrap gap-4 mb-4 text-sm">
+              <span className="text-gray-400">
+                Team members: <strong className="text-white">{companyDashboard.totalStaff}</strong>
+              </span>
+              <span className="text-gray-400">
+                Company tickets: <strong className="text-white">{companyDashboard.totalTickets}</strong>
+              </span>
+            </div>
+            {companyDashboard.staffByRole && Object.keys(companyDashboard.staffByRole).length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2">Staff roles (directory)</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(companyDashboard.staffByRole).map(([k, v]) => (
+                    <span key={k} className="px-2 py-1 rounded-lg bg-white/10 text-xs text-white">
+                      {k}: <strong>{v}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {companyDashboard.staffPerformance && companyDashboard.staffPerformance.length > 0 && (
+              <div className="rounded-lg border border-white/10 overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-black/30 text-violet-300">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Member</th>
+                      <th className="px-3 py-2 font-medium">Role</th>
+                      <th className="px-3 py-2 font-medium text-right">Assigned</th>
+                      <th className="px-3 py-2 font-medium text-right">Done</th>
+                      <th className="px-3 py-2 font-medium text-right">Needs edit</th>
+                      <th className="px-3 py-2 font-medium text-right">Resubmit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-200">
+                    {companyDashboard.staffPerformance.map((row) => (
+                      <tr key={row.userId} className="border-t border-white/10">
+                        <td className="px-3 py-2 font-mono text-[11px]">
+                          …{row.userId.slice(-8)}
+                        </td>
+                        <td className="px-3 py-2">{row.role}</td>
+                        <td className="px-3 py-2 text-right">{row.assigned}</td>
+                        <td className="px-3 py-2 text-right text-emerald-400">{row.completed}</td>
+                        <td className="px-3 py-2 text-right text-amber-300">{row.needsEdit}</td>
+                        <td className="px-3 py-2 text-right text-violet-300">{row.resubmitted}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
