@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
     const results: string[] = [];
 
     // ── 1. Create / upsert coordinator company ────────────────────────────
-    let company: { id: string } | null = null;
+    let company: { id: string };
     try {
-      company = await prisma.coordinatorCompany.upsert({
+      const upserted = await prisma.coordinatorCompany.upsert({
         where: { slug: 'sample-provider-company' },
         update: {
           name: 'Sample Provider Company',
@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
           freeTicketsUsed: 0,
         },
       });
+      if (!upserted) {
+        return NextResponse.json(
+          { success: false, message: 'Company upsert returned null' },
+          { status: 500 },
+        );
+      }
+      company = upserted as { id: string };
       results.push(`company: ${company.id}`);
     } catch (err) {
       return NextResponse.json(
