@@ -228,13 +228,12 @@ export default function QualityControlDashboardPage() {
     user?.role === 'COMPANY_OWNER' ||
     user?.role === 'COORDINATOR' ||
     user?.role === 'ENGINEER';
+  // Company hub APIs require coordinator JWT (identitySource=coordinator_user + companyId).
+  // Legacy COMPANY requesters don't have companyId so hub will always fail for them.
   const canUseProvisorHub =
     user?.serviceSlug === 'quality-control-supervision' &&
-    (Boolean(user?.companyId) ||
-      user?.role === 'COMPANY_OWNER' ||
-      user?.role === 'COORDINATOR' ||
-      user?.role === 'COMPANY' ||
-      user?.role === 'ADMIN');
+    Boolean(user?.companyId) &&
+    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN'].includes(String(user?.role ?? ''));
 
   /** API requires taskCategory + checklist for coordinator JWT (owner / coordinator / platform admin). */
   const canCreateCoordinatorTasks =
@@ -1131,6 +1130,15 @@ export default function QualityControlDashboardPage() {
               <Building2 className="w-5 h-5 text-amber-400" />
               {t('ticketForm.navCompanyInfo')}
             </h3>
+            {!user?.companyId && (
+              <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+                <p className="text-sm font-semibold text-amber-300 mb-1">Sign in with your coordinator account to manage staff</p>
+                <p className="text-xs text-amber-200/70 leading-relaxed">
+                  You are logged in as a <strong>legacy requester</strong>. Staff creation, checklists, and billing require a <strong>Company Owner or Coordinator</strong> account.<br />
+                  Log out and log in with your coordinator credentials — or ask your admin to create one for you.
+                </p>
+              </div>
+            )}
             <dl className="space-y-3 text-sm">
               <div>
                 <dt className="text-gray-500">{t('visitorRequestForm.nameLabel')}</dt>

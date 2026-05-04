@@ -34,8 +34,15 @@ class AuthProvider extends ChangeNotifier {
     return id != null && id.isNotEmpty;
   }
 
-  /// Company hub (staff, billing): owners, coordinators, and platform admins — not field technician/worker roles.
-  bool get canAccessCompanyHub =>
+  /// Company hub (staff, billing): owners, coordinators, and platform admins.
+  bool get canAccessCompanyHub {
+    final role = _user?.role ?? '';
+    final hub = role == 'COMPANY_OWNER' || role == 'COORDINATOR' || role == 'ADMIN';
+    return hasCoordinatorCompany && hub;
+  }
+
+  /// Coordinator-platform tasks (QC/maintenance/supervision) require checklist + category — owner/coordinator/admin only.
+  bool get canCreateCoordinatorTasks =>
       hasCoordinatorCompany &&
       (isCompanyOwner ||
           isCoordinator ||

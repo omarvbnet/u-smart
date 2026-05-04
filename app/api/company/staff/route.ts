@@ -11,6 +11,7 @@ const ALLOWED_STAFF_ROLES = new Set([
   'QUALITY_ENGINEER',
   'SUPERVISION_ENGINEER',
   'TECHNICIAN',
+  'CLIENT',
 ]);
 
 function buildUsernameBase(firstName: string): string {
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     select: { role: true, companyId: true },
   });
   if (!me || !ALLOWED_CREATOR_ROLES.has(String(me.role))) {
-    return NextResponse.json({ success: false, message: 'Only company owner can manage staff accounts.' }, { status: 403 });
+    return NextResponse.json({ success: false, message: 'Only company owners, coordinators, or admins can manage staff.' }, { status: 403 });
   }
   const users = await (prisma as any).coordinatorUser.findMany({
     where: { companyId: me.companyId },
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
     select: { role: true, companyId: true, status: true },
   });
   if (!me || !ALLOWED_CREATOR_ROLES.has(String(me.role))) {
-    return NextResponse.json({ success: false, message: 'Only company owner can manage staff accounts.' }, { status: 403 });
+    return NextResponse.json({ success: false, message: 'Only company owners, coordinators, or admins can create staff.' }, { status: 403 });
   }
   if (me.status !== 'ACTIVE') {
     return NextResponse.json({ success: false, message: 'Your account is not active.' }, { status: 403 });

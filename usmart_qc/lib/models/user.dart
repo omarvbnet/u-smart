@@ -12,6 +12,7 @@ class User {
   final String? province;
   final bool provinceFilterActive;
   final String? companyId;
+  final String? linkedCoordinatorCompanyId;
   final bool mustChangePassword;
 
   User({
@@ -28,6 +29,7 @@ class User {
     this.province,
     this.provinceFilterActive = true,
     this.companyId,
+    this.linkedCoordinatorCompanyId,
     this.mustChangePassword = false,
   });
 
@@ -63,7 +65,10 @@ class User {
       role: _normalizeRole(json['role']),
       province: json['province'] as String?,
       provinceFilterActive: json['provinceFilterActive'] as bool? ?? true,
-      companyId: json['companyId'] as String?,
+      companyId: (json['companyId'] as String?)?.isNotEmpty == true
+          ? json['companyId'] as String?
+          : (json['linkedCoordinatorCompanyId'] as String?),
+      linkedCoordinatorCompanyId: json['linkedCoordinatorCompanyId'] as String?,
       mustChangePassword: json['mustChangePassword'] == true,
     );
   }
