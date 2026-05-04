@@ -4,9 +4,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
+import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
+import '../models/inspection_checklist.dart';
 import 'attachment_viewer_screen.dart';
 
 const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_building', 'tech_hse', 'tech_investigation', 'tech_tracking'];
@@ -30,6 +32,15 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _uploading = false;
   final List<String> _attachmentUrls = [];
 
+  String _taskCategory = 'QUALITY';
+  String _checklistTemplateId = '';
+  String _assignmentScope = 'COMPANY_STAFF';
+  String _assigneeCoordinatorUserId = '';
+  bool _resubmitToRequester = false;
+  List<InspectionChecklist> _coordChecklists = [];
+  List<Map<String, dynamic>> _coordStaff = [];
+  bool _coordResourcesLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +52,47 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       if (slugs.isNotEmpty && !slugs.contains(_technique)) {
         setState(() => _technique = slugs.first);
       }
+
+      final auth = context.read<AuthProvider>();
+      if (!auth.canCreateCoordinatorTasks || !mounted) return;
+      setState(() => _coordResourcesLoading = true);
+      final ticketsProv = context.read<TicketsProvider>();
+      final lists = await Future.wait([
+        ticketsProv.fetchChecklists(),
+        ticketsProv.fetchCompanyStaffRows(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _coordChecklists = lists[0] as List<InspectionChecklist>;
+        _coordStaff = lists[1] as List<Map<String, dynamic>>;
+        _coordResourcesLoading = false;
+      });
     });
+  }
+
+  List<InspectionChecklist> get _checklistsForCategory {
+    return _coordChecklists.where((c) {
+      final tc = c.taskCategory;
+      if (tc == null || tc.isEmpty) return true;
+      return tc.toUpperCase() == _taskCategory.toUpperCase();
+    }).toList();
+  }
+
+  String _requiredStaffRoleForCategory(String cat) {
+    switch (cat.toUpperCase()) {
+      case 'SUPERVISION':
+        return 'SUPERVISION_ENGINEER';
+      case 'MAINTENANCE':
+        return 'TECHNICIAN';
+      case 'QUALITY':
+      default:
+        return 'QUALITY_ENGINEER';
+    }
+  }
+
+  List<Map<String, dynamic>> get _assigneeOptions {
+    final want = _requiredStaffRoleForCategory(_taskCategory);
+    return _coordStaff.where((u) => u['role'] == want).toList();
   }
 
   Future<void> _submit() async {
@@ -62,6 +113,22 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
 
+    final auth = context.read<AuthProvider>();
+    if (auth.canCreateCoordinatorTasks) {
+      if (_checklistTemplateId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).t('coordinator_checklist_required'),
+            ),
+            backgroundColor: const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
     final techProv = context.read<ProvisorTechniquesProvider>();
@@ -80,6 +147,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       slaHours: sla,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
+      taskCategory: auth.canCreateCoordinatorTasks ? _taskCategory : null,
+      checklistTemplateId:
+          auth.canCreateCoordinatorTasks ? _checklistTemplateId : null,
+      assignmentScope:
+          auth.canCreateCoordinatorTasks ? _assignmentScope : null,
+      assigneeCoordinatorUserId: auth.canCreateCoordinatorTasks &&
+              _assigneeCoordinatorUserId.isNotEmpty
+          ? _assigneeCoordinatorUserId
+          : null,
+      resubmitToRequester:
+          auth.canCreateCoordinatorTasks ? _resubmitToRequester : false,
     );
 
     if (mounted) {
@@ -95,9 +173,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         );
         Navigator.of(context).pop();
       } else {
+        final err = provider.lastTicketCreateMessage;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.t('ticket_failed')),
+            content: Text(
+              (err != null && err.isNotEmpty) ? err : l10n.t('ticket_failed'),
+            ),
             backgroundColor: const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

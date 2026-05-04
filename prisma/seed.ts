@@ -297,6 +297,41 @@ async function main() {
   }
   console.log('✅ Provisor techniques seeded')
 
+  // Backward-compat for older databases that have coordinator_users table
+  // without the username column required by current Prisma schema.
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = 'coordinator_users'
+        ) THEN
+          ALTER TABLE "public"."coordinator_users"
+          ADD COLUMN IF NOT EXISTS "username" TEXT;
+
+          UPDATE "public"."coordinator_users"
+          SET "username" = lower(split_part(coalesce("email", ''), '@', 1))
+          WHERE ("username" IS NULL OR trim("username") = '')
+            AND coalesce("email", '') <> '';
+
+          UPDATE "public"."coordinator_users"
+          SET "username" = concat('coord_', right("id", 8))
+          WHERE "username" IS NULL OR trim("username") = '';
+
+          CREATE UNIQUE INDEX IF NOT EXISTS "coordinator_users_username_key"
+          ON "public"."coordinator_users" ("username");
+        END IF;
+      END
+      $$;
+    `)
+    console.log('✅ coordinator_users.username compatibility ensured')
+  } catch (e) {
+    console.warn('⚠️ Could not auto-fix coordinator_users.username:', e)
+  }
+
   console.log('🏢 Seeding provider coordinator sample data...')
   const coordinatorCompanyDelegate = (prisma as any).coordinatorCompany
   const coordinatorUserDelegate = (prisma as any).coordinatorUser

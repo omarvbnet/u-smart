@@ -87,7 +87,8 @@ export async function GET(req: NextRequest) {
       fromDefaults: false,
     });
   } catch (e) {
-    console.error('GET /api/provisor-techniques:', e);
-    return NextResponse.json({ success: false, message: 'Failed to load techniques' }, { status: 500 });
+    // Table may not exist yet — serve hard-coded defaults so the app stays functional
+    console.warn('GET /api/provisor-techniques: table unavailable, serving defaults.', (e as Error)?.message);
+    return NextResponse.json({ success: true, ...defaultPayload() });
   }
 }

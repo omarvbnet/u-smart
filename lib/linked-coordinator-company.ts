@@ -60,7 +60,39 @@ export async function tryCompanyOwnerCoordinatorInsteadOfLegacy(
     const valid = await bcrypt.compare(password, owner.passwordHash);
     return valid ? owner : null;
   } catch {
-    return null;
+    // Backward-compat for older DBs missing coordinator_users.username:
+    // fall back to matching by email or local-part(email)=requester.username.
+    try {
+      const em = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
+      const local = requester.username.trim().toLowerCase();
+      const owner = await (prisma as any).coordinatorUser.findFirst({
+        where: {
+          role: 'COMPANY_OWNER',
+          OR: em
+            ? [
+                { email: { equals: em, mode: 'insensitive' } },
+                { email: { startsWith: `${local}@`, mode: 'insensitive' } },
+              ]
+            : [{ email: { startsWith: `${local}@`, mode: 'insensitive' } }],
+        },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          email: true,
+          passwordHash: true,
+          role: true,
+          status: true,
+          mustChangePassword: true,
+          companyId: true,
+        },
+      });
+      if (!owner) return null;
+      const valid = await bcrypt.compare(password, owner.passwordHash);
+      return valid ? owner : null;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -94,7 +126,26 @@ export async function getLinkedCoordinatorCompanyId(
     });
     return owner?.companyId ?? null;
   } catch {
-    return null;
+    // Backward-compat: username column may be absent; use email matching.
+    try {
+      const local = requester.username.trim().toLowerCase();
+      const em = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
+      const owner = await (prisma as any).coordinatorUser.findFirst({
+        where: {
+          role: 'COMPANY_OWNER',
+          OR: em
+            ? [
+                { email: { equals: em, mode: 'insensitive' } },
+                { email: { startsWith: `${local}@`, mode: 'insensitive' } },
+              ]
+            : [{ email: { startsWith: `${local}@`, mode: 'insensitive' } }],
+        },
+        select: { companyId: true },
+      });
+      return owner?.companyId ?? null;
+    } catch {
+      return null;
+    }
   }
 }
 

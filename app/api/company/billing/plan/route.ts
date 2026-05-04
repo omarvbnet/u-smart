@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
 
 const PLAN_RATE_USD: Record<string, number> = {
   WEEKLY: 0.7,
@@ -8,10 +10,33 @@ const PLAN_RATE_USD: Record<string, number> = {
   YEARLY: 0.5,
 };
 
-const OWNER_ROLES = new Set(['COMPANY_OWNER', 'ADMIN']);
+const OWNER_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY']);
+
+async function resolveBillingContext(req: NextRequest): Promise<{ companyId: string; role: string } | null> {
+  const ctx = await getCoordinatorContext(req);
+  if (ctx) return { companyId: ctx.companyId, role: ctx.role };
+
+  const auth = getRequesterFromRequest(req);
+  if (!auth || auth.payload.identitySource !== 'ticket_requester') return null;
+  const tr = await (prisma as any).ticketRequester.findUnique({
+    where: { id: auth.payload.requesterId },
+    select: { role: true, username: true, email: true, status: true },
+  });
+  const role = String((tr as { role?: string })?.role ?? '').toUpperCase();
+  const status = String((tr as { status?: string })?.status ?? 'ACTIVE').toUpperCase();
+  if (role !== 'COMPANY' || status === 'BLOCKED' || status === 'SUSPENDED') return null;
+  const companyId = await getLinkedCoordinatorCompanyId(prisma as any, {
+    id: auth.payload.requesterId as string,
+    username: (tr as { username?: string }).username ?? '',
+    email: (tr as { email?: string | null }).email ?? null,
+    role,
+  });
+  if (!companyId) return null;
+  return { companyId, role };
+}
 
 export async function GET(req: NextRequest) {
-  const ctx = await getCoordinatorContext(req);
+  const ctx = await resolveBillingContext(req);
   if (!ctx) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
@@ -43,7 +68,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const ctx = await getCoordinatorContext(req);
+  const ctx = await resolveBillingContext(req);
   if (!ctx) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }

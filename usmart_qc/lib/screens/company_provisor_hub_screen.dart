@@ -6,7 +6,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 
 /// Full company management hub — staff, KPIs, checklists, billing.
-/// Accessible by COMPANY_OWNER, COORDINATOR, ADMIN (hasCoordinatorCompany).
+/// Accessible by COMPANY_OWNER, COMPANY, COORDINATOR, ADMIN (hasCoordinatorCompany).
 /// [embedded] = true renders without its own Scaffold/AppBar (used as a tab).
 class CompanyProvisorHubScreen extends StatefulWidget {
   const CompanyProvisorHubScreen({super.key, this.embedded = false});
@@ -44,6 +44,8 @@ class _CompanyProvisorHubScreenState extends State<CompanyProvisorHubScreen>
 
   static const _roleLabels = <String, String>{
     'COORDINATOR': 'Coordinator',
+    'QC': 'QC',
+    'SUPERVISOR': 'Supervisor',
     'ENGINEER': 'Engineer',
     'QUALITY_ENGINEER': 'Quality Engineer',
     'SUPERVISION_ENGINEER': 'Supervision Engineer',
@@ -54,6 +56,8 @@ class _CompanyProvisorHubScreenState extends State<CompanyProvisorHubScreen>
   static const _roleColors = <String, Color>{
     'COMPANY_OWNER': Color(0xFFFBBF24),
     'COORDINATOR': Color(0xFF6C63FF),
+    'QC': Color(0xFF4ADE80),
+    'SUPERVISOR': Color(0xFF38BDF8),
     'ENGINEER': Color(0xFF00D4AA),
     'QUALITY_ENGINEER': Color(0xFF4ADE80),
     'SUPERVISION_ENGINEER': Color(0xFF38BDF8),
@@ -1417,6 +1421,8 @@ String _roleLabel(String role) {
   const labels = {
     'COMPANY_OWNER': 'Company Owner',
     'COORDINATOR': 'Coordinator',
+    'QC': 'QC',
+    'SUPERVISOR': 'Supervisor',
     'ENGINEER': 'Engineer',
     'QUALITY_ENGINEER': 'Quality Engineer',
     'SUPERVISION_ENGINEER': 'Supervision Eng.',

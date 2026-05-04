@@ -34,10 +34,10 @@ class AuthProvider extends ChangeNotifier {
     return id != null && id.isNotEmpty;
   }
 
-  /// Company hub (staff, billing): owners, coordinators, and platform admins.
+  /// Company hub (staff, billing): owners, company accounts, coordinators, and platform admins.
   bool get canAccessCompanyHub {
     final role = _user?.role ?? '';
-    final hub = role == 'COMPANY_OWNER' || role == 'COORDINATOR' || role == 'ADMIN';
+    final hub = role == 'COMPANY_OWNER' || role == 'COMPANY' || role == 'COORDINATOR' || role == 'ADMIN';
     return hasCoordinatorCompany && hub;
   }
 

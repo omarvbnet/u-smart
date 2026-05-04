@@ -88,6 +88,7 @@ export default function QualityControlDashboardPage() {
     serviceSlug?: string;
     role?: string;
     companyId?: string | null;
+    linkedCoordinatorCompanyId?: string | null;
   } | null>(null);
   const [provisorStaff, setProvisorStaff] = useState<Array<{ id: string; username: string; email: string; role: string; name?: string | null }>>([]);
   const [provisorChecklists, setProvisorChecklists] = useState<Array<{ id: string; name: string; taskCategory?: string | null }>>([]);
@@ -163,9 +164,10 @@ export default function QualityControlDashboardPage() {
     }
     setUser(meRes.user);
 
-    const coordRoles = ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN'];
+    const resolvedCompanyId = meRes.user?.companyId ?? meRes.user?.linkedCoordinatorCompanyId;
+    const coordRoles = ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY'];
     if (
-      meRes.user?.companyId &&
+      resolvedCompanyId &&
       coordRoles.includes(String(meRes.user.role ?? ''))
     ) {
       try {
@@ -228,17 +230,17 @@ export default function QualityControlDashboardPage() {
     user?.role === 'COMPANY_OWNER' ||
     user?.role === 'COORDINATOR' ||
     user?.role === 'ENGINEER';
-  // Company hub APIs require coordinator JWT (identitySource=coordinator_user + companyId).
-  // Legacy COMPANY requesters don't have companyId so hub will always fail for them.
+  const effectiveCompanyId = user?.companyId ?? user?.linkedCoordinatorCompanyId;
+  // Company hub APIs support coordinator users and linked legacy COMPANY users.
   const canUseProvisorHub =
     user?.serviceSlug === 'quality-control-supervision' &&
-    Boolean(user?.companyId) &&
-    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN'].includes(String(user?.role ?? ''));
+    Boolean(effectiveCompanyId) &&
+    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
 
   /** API requires taskCategory + checklist for coordinator JWT (owner / coordinator / platform admin). */
   const canCreateCoordinatorTasks =
-    Boolean(user?.companyId) &&
-    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN'].includes(String(user?.role ?? ''));
+    Boolean(effectiveCompanyId) &&
+    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
   /** Legacy requester (no companyId) can post simple tickets; coordinator staff cannot create. */
   const canOpenTicketForm = !user?.companyId || canCreateCoordinatorTasks;
 
@@ -1221,7 +1223,7 @@ export default function QualityControlDashboardPage() {
                     ))}
                     {provisorStaff.length === 0 && !provisorLoading && <li className="text-gray-500">No staff loaded.</li>}
                   </ul>
-                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'ADMIN') && (
+                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'ADMIN' || user?.role === 'COMPANY') && (
                     <form onSubmit={submitStaffInvite} className="grid sm:grid-cols-2 gap-3 text-sm">
                       <input
                         className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
@@ -1248,8 +1250,10 @@ export default function QualityControlDashboardPage() {
                         onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}
                       >
                         <option value="COORDINATOR">Coordinator</option>
-                        <option value="QUALITY_ENGINEER">Quality engineer</option>
-                        <option value="SUPERVISION_ENGINEER">Supervision engineer</option>
+                        <option value="QC">QC</option>
+                        <option value="SUPERVISOR">Supervisor</option>
+                        <option value="QUALITY_ENGINEER">Quality engineer (legacy)</option>
+                        <option value="SUPERVISION_ENGINEER">Supervision engineer (legacy)</option>
                         <option value="TECHNICIAN">Technician</option>
                         <option value="ENGINEER">Engineer (general)</option>
                       </select>

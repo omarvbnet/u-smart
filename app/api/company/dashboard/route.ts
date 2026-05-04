@@ -1,20 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
+
+async function resolveDashboardCompanyId(req: NextRequest): Promise<string | null> {
+  const ctx = await getCoordinatorContext(req);
+  if (ctx) return ctx.companyId;
+
+  const auth = getRequesterFromRequest(req);
+  if (!auth || auth.payload.identitySource !== 'ticket_requester') return null;
+  const tr = await (prisma as any).ticketRequester.findUnique({
+    where: { id: auth.payload.requesterId },
+    select: { role: true, username: true, email: true, status: true },
+  });
+  const role = String((tr as { role?: string })?.role ?? '').toUpperCase();
+  const status = String((tr as { status?: string })?.status ?? 'ACTIVE').toUpperCase();
+  if (role !== 'COMPANY' || status === 'BLOCKED' || status === 'SUSPENDED') return null;
+  const linked = await getLinkedCoordinatorCompanyId(prisma as any, {
+    id: auth.payload.requesterId as string,
+    username: (tr as { username?: string }).username ?? '',
+    email: (tr as { email?: string | null }).email ?? null,
+    role,
+  });
+  return linked ?? null;
+}
 
 export async function GET(req: NextRequest) {
-  const ctx = await getCoordinatorContext(req);
-  if (!ctx) {
+  const companyId = await resolveDashboardCompanyId(req);
+  if (!companyId) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
   const [users, tickets] = await Promise.all([
     (prisma as any).coordinatorUser.findMany({
-      where: { companyId: ctx.companyId },
+      where: { companyId },
       select: { id: true, role: true, status: true },
     }),
     (prisma as any).visitorRequest.findMany({
-      where: { coordinatorCompanyId: ctx.companyId },
+      where: { coordinatorCompanyId: companyId },
       select: {
         id: true,
         status: true,

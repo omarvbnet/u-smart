@@ -3,8 +3,9 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
 
-const ALLOWED_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
+const ALLOWED_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY']);
 const ALLOWED_STAFF_ROLES = new Set([
   'COORDINATOR',
   'ENGINEER',
@@ -13,6 +14,16 @@ const ALLOWED_STAFF_ROLES = new Set([
   'TECHNICIAN',
   'CLIENT',
 ]);
+const STAFF_ROLE_ALIASES: Record<string, string> = {
+  QC: 'QUALITY_ENGINEER',
+  SUPERVISOR: 'SUPERVISION_ENGINEER',
+};
+
+type StaffCreatorContext = {
+  companyId: string;
+  creatorUserId: string | null;
+  status: string;
+};
 
 function buildUsernameBase(firstName: string): string {
   const cleaned = firstName
@@ -39,20 +50,66 @@ function generateTemporaryPassword(): string {
   return crypto.randomBytes(6).toString('base64url');
 }
 
-export async function GET(req: NextRequest) {
+function normalizeStaffRole(raw: string): string {
+  const normalized = raw.trim().toUpperCase();
+  return STAFF_ROLE_ALIASES[normalized] ?? normalized;
+}
+
+async function getStaffCreatorContext(req: NextRequest): Promise<StaffCreatorContext | null> {
   const auth = getRequesterFromRequest(req);
-  if (!auth || auth.payload.identitySource !== 'coordinator_user' || !auth.payload.companyId) {
+  if (!auth) return null;
+
+  if (auth.payload.identitySource === 'coordinator_user') {
+    const me = await (prisma as any).coordinatorUser.findUnique({
+      where: { id: auth.payload.requesterId },
+      select: { id: true, role: true, companyId: true, status: true },
+    });
+    if (!me || !me.companyId || !ALLOWED_CREATOR_ROLES.has(String(me.role))) {
+      return null;
+    }
+    return {
+      companyId: me.companyId,
+      creatorUserId: me.id,
+      status: String(me.status ?? 'ACTIVE'),
+    };
+  }
+
+  const requester = await (prisma as any).ticketRequester.findUnique({
+    where: { id: auth.payload.requesterId },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      status: true,
+    },
+  });
+  if (!requester || String(requester.role ?? '').toUpperCase() !== 'COMPANY') {
+    return null;
+  }
+
+  const linkedCompanyId = await getLinkedCoordinatorCompanyId(prisma, {
+    id: requester.id,
+    username: requester.username,
+    email: requester.email ?? null,
+    role: requester.role ?? null,
+  });
+  if (!linkedCompanyId) return null;
+
+  return {
+    companyId: linkedCompanyId,
+    creatorUserId: null,
+    status: String(requester.status ?? 'ACTIVE'),
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const context = await getStaffCreatorContext(req);
+  if (!context) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-  const me = await (prisma as any).coordinatorUser.findUnique({
-    where: { id: auth.payload.requesterId },
-    select: { role: true, companyId: true },
-  });
-  if (!me || !ALLOWED_CREATOR_ROLES.has(String(me.role))) {
-    return NextResponse.json({ success: false, message: 'Only company owners, coordinators, or admins can manage staff.' }, { status: 403 });
-  }
   const users = await (prisma as any).coordinatorUser.findMany({
-    where: { companyId: me.companyId },
+    where: { companyId: context.companyId },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -69,19 +126,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = getRequesterFromRequest(req);
-  if (!auth || auth.payload.identitySource !== 'coordinator_user' || !auth.payload.companyId) {
+  const context = await getStaffCreatorContext(req);
+  if (!context) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
-
-  const me = await (prisma as any).coordinatorUser.findUnique({
-    where: { id: auth.payload.requesterId },
-    select: { role: true, companyId: true, status: true },
-  });
-  if (!me || !ALLOWED_CREATOR_ROLES.has(String(me.role))) {
-    return NextResponse.json({ success: false, message: 'Only company owners, coordinators, or admins can create staff.' }, { status: 403 });
-  }
-  if (me.status !== 'ACTIVE') {
+  if (context.status !== 'ACTIVE') {
     return NextResponse.json({ success: false, message: 'Your account is not active.' }, { status: 403 });
   }
 
@@ -89,7 +138,7 @@ export async function POST(req: NextRequest) {
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
   const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const role = typeof body.role === 'string' ? body.role.trim().toUpperCase() : '';
+  const role = typeof body.role === 'string' ? normalizeStaffRole(body.role) : '';
 
   if (!firstName || !email || !role) {
     return NextResponse.json(
@@ -110,7 +159,7 @@ export async function POST(req: NextRequest) {
   const fullName = [firstName, lastName].filter(Boolean).join(' ');
 
   const existingEmail = await (prisma as any).coordinatorUser.findFirst({
-    where: { companyId: me.companyId, email: { equals: email, mode: 'insensitive' } },
+    where: { companyId: context.companyId, email: { equals: email, mode: 'insensitive' } },
     select: { id: true },
   });
   if (existingEmail) {
@@ -129,8 +178,8 @@ export async function POST(req: NextRequest) {
       role,
       status: 'ACTIVE',
       mustChangePassword: true,
-      companyId: me.companyId,
-      managedByUserId: auth.payload.requesterId,
+      companyId: context.companyId,
+      managedByUserId: context.creatorUserId ?? undefined,
     },
     select: {
       id: true,

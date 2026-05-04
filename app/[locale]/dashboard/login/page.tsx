@@ -8,6 +8,22 @@ import { Link } from '@/i18n/routing';
 import { X, Building2, User, Upload, Loader2 } from 'lucide-react';
 import { normalizeEmailInput } from '@/lib/email-input';
 
+const COMPANY_HUB_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
+
+function resolvePostLoginTarget(locale: string, user: { role?: string; serviceSlug?: string; companyId?: string | null } | null): string {
+  if (!user) return `/${locale}/dashboard`;
+  const role = (user.role ?? '').toUpperCase();
+  // coordinator-platform users → company hub
+  if (COMPANY_HUB_ROLES.has(role) || user.companyId) {
+    return `/${locale}/dashboard/company-hub`;
+  }
+  // quality-control requesters → QC dashboard
+  if (user.serviceSlug === 'quality-control-supervision') {
+    return `/${locale}/dashboard/quality-control`;
+  }
+  return `/${locale}/dashboard`;
+}
+
 export default function RequesterLoginPage() {
   const router = useRouter();
   const params = useParams();
@@ -33,9 +49,7 @@ export default function RequesterLoginPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.user) {
-          const target = data.user.serviceSlug === 'quality-control-supervision'
-            ? `/${locale}/dashboard/quality-control`
-            : `/${locale}/dashboard`;
+          const target = resolvePostLoginTarget(locale, data.user);
           router.replace(target);
           return;
         }
@@ -60,9 +74,7 @@ export default function RequesterLoginPage() {
         const meRes = await fetch('/api/auth/requester-me', { credentials: 'include' }).then((r) =>
           r.json(),
         );
-        const target = meRes.success && meRes.user?.serviceSlug === 'quality-control-supervision'
-          ? `/${locale}/dashboard/quality-control`
-          : `/${locale}/dashboard`;
+        const target = meRes.success ? resolvePostLoginTarget(locale, meRes.user) : `/${locale}/dashboard`;
         router.replace(target);
         router.refresh();
       } else {

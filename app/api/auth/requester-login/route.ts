@@ -191,14 +191,21 @@ export async function POST(req: NextRequest) {
       });
     } catch (coordinatorQueryErr) {
       try {
+        const lookup = usernameOrEmail.toLowerCase();
+        const emailWhere = usernameOrEmail.includes('@')
+          ? { equals: lookup, mode: 'insensitive' as const }
+          : { startsWith: `${lookup}@`, mode: 'insensitive' as const };
         coordinatorUser = await (prisma as any).coordinatorUser.findFirst({
-          where: { email: { equals: usernameOrEmail, mode: 'insensitive' } },
+          where: { email: emailWhere },
           select: {
             id: true,
+            username: true,
             name: true,
             email: true,
             passwordHash: true,
             role: true,
+            status: true,
+            mustChangePassword: true,
             companyId: true,
           },
         });
