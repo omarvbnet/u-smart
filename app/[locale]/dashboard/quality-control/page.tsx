@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { ClipboardList, LogOut, Loader2, Bell, UserCog, PlusCircle, X, Clock, CheckCircle, BarChart3, Building2, MapPin, Activity, Map, Edit2, Trash2, Filter, ShieldCheck, FileText, Paperclip, TrendingUp, TrendingDown, Minus, Download, Upload } from 'lucide-react';
+import { ClipboardList, LogOut, Loader2, PlusCircle, X, BarChart3, Building2, MapPin, Activity, Map, Edit2, Trash2, Filter, ShieldCheck, FileText, Paperclip, TrendingUp, TrendingDown, Minus, Download, Upload } from 'lucide-react';
 
 const QUALITY_CONTROL_TECH_KEYS = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'] as const;
 
@@ -110,6 +110,11 @@ export default function QualityControlDashboardPage() {
     phone: '',
     province: '',
     designSpecifications: '',
+    taskCategory: 'QUALITY' as 'MAINTENANCE' | 'QUALITY' | 'SUPERVISION',
+    checklistTemplateId: '',
+    assignmentScope: 'COMPANY_STAFF' as 'COMPANY_STAFF' | 'USMART_STAFF',
+    assigneeCoordinatorUserId: '',
+    resubmitToRequester: false,
   });
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
@@ -128,7 +133,7 @@ export default function QualityControlDashboardPage() {
   const [siteFilter, setSiteFilter] = useState('');
   const [selectedSiteForTickets, setSelectedSiteForTickets] = useState<Site | null>(null);
   const [siteTicketsFilter, setSiteTicketsFilter] = useState({ status: '', from: '', to: '' });
-  const [selectedSiteId, setSelectedSiteId] = useState<string>('');
+  const [selectedSiteId, _setSelectedSiteId] = useState<string>('');
   const [ticketListFilter, setTicketListFilter] = useState({ result: '', siteName: '', ticketId: '' });
   const [dashboardFilters, setDashboardFilters] = useState({ from: '', to: '', siteName: '', ticketId: '' });
   const [appliedDashboardFilters, setAppliedDashboardFilters] = useState({ from: '', to: '', siteName: '', ticketId: '' });
@@ -157,6 +162,28 @@ export default function QualityControlDashboardPage() {
       return;
     }
     setUser(meRes.user);
+
+    const coordRoles = ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN'];
+    if (
+      meRes.user?.companyId &&
+      coordRoles.includes(String(meRes.user.role ?? ''))
+    ) {
+      try {
+        const [clRes, stRes] = await Promise.all([
+          fetch('/api/inspection-checklists', { credentials: 'include' }).then((r) => r.json()),
+          fetch('/api/company/staff', { credentials: 'include' }).then((r) => r.json()),
+        ]);
+        if (clRes.success && Array.isArray(clRes.checklists)) {
+          setProvisorChecklists(clRes.checklists);
+        }
+        if (stRes.success && Array.isArray(stRes.users)) {
+          setProvisorStaff(stRes.users);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     if (ticketsRes.success && ticketsRes.tickets) setTickets(ticketsRes.tickets);
     if (statsRes.success && statsRes.stats) setSlaStats(statsRes.stats);
     if (techRes.success && Array.isArray(techRes.inspection)) setQcTechniques(techRes.inspection);
@@ -179,20 +206,23 @@ export default function QualityControlDashboardPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setLoading(true);
     loadData().then(() => setLoading(false)).catch(() => router.replace(`/${locale}/dashboard/login`));
   }, [router, locale, appliedDashboardFilters.from, appliedDashboardFilters.to, appliedDashboardFilters.siteName]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = setInterval(loadData, 15000);
     return () => clearInterval(id);
   }, [appliedDashboardFilters.from, appliedDashboardFilters.to, appliedDashboardFilters.siteName]);
 
-  const isCompany =
+  const isCompany = Boolean(
     user?.role === 'COMPANY' ||
     user?.role === 'COMPANY_OWNER' ||
-    user?.role === 'COORDINATOR';
+    user?.role === 'COORDINATOR',
+  );
   const canManageSites =
     user?.role === 'COMPANY' ||
     user?.role === 'COMPANY_OWNER' ||
@@ -205,6 +235,13 @@ export default function QualityControlDashboardPage() {
       user?.role === 'COORDINATOR' ||
       user?.role === 'COMPANY' ||
       user?.role === 'ADMIN');
+
+  /** API requires taskCategory + checklist for coordinator JWT (owner / coordinator / platform admin). */
+  const canCreateCoordinatorTasks =
+    Boolean(user?.companyId) &&
+    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN'].includes(String(user?.role ?? ''));
+  /** Legacy requester (no companyId) can post simple tickets; coordinator staff cannot create. */
+  const canOpenTicketForm = !user?.companyId || canCreateCoordinatorTasks;
 
   const loadSites = async () => {
     setSitesLoading(true);
@@ -223,9 +260,10 @@ export default function QualityControlDashboardPage() {
     if (dashboardSection === 'sites') loadSites();
   }, [dashboardSection]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (ticketFormOpen && sites.length === 0 && !sitesLoading) loadSites();
-  }, [ticketFormOpen]);
+  }, [ticketFormOpen, sites.length, sitesLoading]);
 
   const [staffForm, setStaffForm] = useState({ firstName: '', lastName: '', email: '', role: 'TECHNICIAN' });
   const [checklistForm, setChecklistForm] = useState({ name: '', taskCategory: 'QUALITY', techniqueTypes: 'inspection' });
@@ -553,24 +591,44 @@ export default function QualityControlDashboardPage() {
       setTicketMessage({ type: 'error', text: 'Site name, site locations and technique are required.' });
       return;
     }
+    if (canCreateCoordinatorTasks) {
+      if (!ticketForm.checklistTemplateId.trim()) {
+        setTicketMessage({
+          type: 'error',
+          text: 'Choose a checklist template (create one under Company → Provider hub if none appear).',
+        });
+        return;
+      }
+    }
+
     setTicketSubmitting(true);
     try {
+      const payload: Record<string, unknown> = {
+        siteName,
+        siteCoordinator: siteLocations,
+        slaHours: Number(ticketForm.slaHours) || 24,
+        technique,
+        name: (user?.name ?? '').trim() || undefined,
+        phone: (ticketForm.phone ?? '').trim() || undefined,
+        province: (ticketForm.province ?? '').trim() || undefined,
+        company: (user?.company ?? '').trim() || undefined,
+        designSpecifications: (ticketForm.designSpecifications ?? '').trim() || undefined,
+        attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : undefined,
+      };
+      if (canCreateCoordinatorTasks) {
+        payload.taskCategory = ticketForm.taskCategory;
+        payload.checklistTemplateId = ticketForm.checklistTemplateId.trim();
+        payload.assignmentScope = ticketForm.assignmentScope;
+        if (ticketForm.assigneeCoordinatorUserId.trim()) {
+          payload.assigneeCoordinatorUserId = ticketForm.assigneeCoordinatorUserId.trim();
+        }
+        payload.resubmitToRequester = ticketForm.resubmitToRequester;
+      }
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          siteName,
-          siteCoordinator: siteLocations,
-          slaHours: Number(ticketForm.slaHours) || 24,
-          technique,
-          name: (user?.name ?? '').trim() || undefined,
-          phone: (ticketForm.phone ?? '').trim() || undefined,
-          province: (ticketForm.province ?? '').trim() || undefined,
-          company: (user?.company ?? '').trim() || undefined,
-          designSpecifications: (ticketForm.designSpecifications ?? '').trim() || undefined,
-          attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       let data: { success?: boolean; message?: string };
       try {
@@ -584,7 +642,20 @@ export default function QualityControlDashboardPage() {
       }
       if (data.success) {
         setTicketMessage({ type: 'success', text: t('ticketForm.successMessage') });
-        setTicketForm({ siteName: '', siteLocations: '', slaHours: 24, technique: 'inspection', phone: '', province: '', designSpecifications: '' });
+        setTicketForm({
+          siteName: '',
+          siteLocations: '',
+          slaHours: 24,
+          technique: 'inspection',
+          phone: '',
+          province: '',
+          designSpecifications: '',
+          taskCategory: 'QUALITY',
+          checklistTemplateId: '',
+          assignmentScope: 'COMPANY_STAFF',
+          assigneeCoordinatorUserId: '',
+          resubmitToRequester: false,
+        });
         setAttachmentUrls([]);
         setSelectedSiteId('');
         loadData();
@@ -650,6 +721,20 @@ export default function QualityControlDashboardPage() {
       ? tickets.filter((tk) => (tk.inspectionResult || '').toLowerCase() === 'ncr' || (tk.ncrResubmissions?.length ?? 0) > 0)
       : tickets.filter((tk) => tk.status === 'COMPLETED');
 
+  const roleForTaskCategory: Record<
+    string,
+    'QUALITY_ENGINEER' | 'SUPERVISION_ENGINEER' | 'TECHNICIAN'
+  > = {
+    QUALITY: 'QUALITY_ENGINEER',
+    SUPERVISION: 'SUPERVISION_ENGINEER',
+    MAINTENANCE: 'TECHNICIAN',
+  };
+  const assigneeRoleFilter = roleForTaskCategory[ticketForm.taskCategory];
+  const assigneeOptions = provisorStaff.filter((u) => u.role === assigneeRoleFilter);
+  const checklistOptions = provisorChecklists.filter(
+    (c) => !c.taskCategory || c.taskCategory === ticketForm.taskCategory,
+  );
+
   const filteredTickets = baseFilteredTickets.filter((tk) => {
     if (appliedDashboardFilters.ticketId.trim()) {
       const q = appliedDashboardFilters.ticketId.trim().toLowerCase();
@@ -700,11 +785,18 @@ export default function QualityControlDashboardPage() {
                 <span title={t('visitorRequestForm.companyLabel')} className="text-amber-400/90">{user.company || '—'}</span>
               </div>
             )}
+            {canCreateCoordinatorTasks && provisorChecklists.length === 0 && (
+              <div className="mt-4 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                <strong className="text-amber-300">Coordinator tasks need a checklist.</strong>{' '}
+                Open <span className="text-white font-medium">Company</span>, create at least one checklist under Provider hub, then add a ticket and pick task type (Quality / Supervision / Maintenance).
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={async () => {
+                if (!canOpenTicketForm) return;
                 const res = await fetch('/api/auth/requester-me', { credentials: 'include' });
                 const data = await res.json();
                 if (data.success && data.user) {
@@ -715,7 +807,13 @@ export default function QualityControlDashboardPage() {
                 setTicketForm((f) => ({ ...f, designSpecifications: '' }));
                 setTicketFormOpen(true);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-white font-medium transition-colors"
+              disabled={!canOpenTicketForm}
+              title={
+                canOpenTicketForm
+                  ? undefined
+                  : 'Only company owner or coordinator can create tasks for this company account.'
+              }
+              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <PlusCircle className="w-5 h-5" />
               {t('ticketForm.addTicket')}
@@ -1495,6 +1593,7 @@ export default function QualityControlDashboardPage() {
               <button
                 type="button"
                 onClick={async () => {
+                  if (!canOpenTicketForm) return;
                   const res = await fetch('/api/auth/requester-me', { credentials: 'include' });
                   const data = await res.json();
                   if (data.success && data.user) {
@@ -1505,7 +1604,13 @@ export default function QualityControlDashboardPage() {
                   setTicketForm((f) => ({ ...f, designSpecifications: '' }));
                   setTicketFormOpen(true);
                 }}
-                className="inline-flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-medium text-white"
+                disabled={!canOpenTicketForm}
+                title={
+                  canOpenTicketForm
+                    ? undefined
+                    : 'Only company owner or coordinator can create tasks for this company account.'
+                }
+                className="inline-flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <PlusCircle className="w-5 h-5" />
                 {t('ticketForm.addTicket')}
@@ -1674,6 +1779,115 @@ export default function QualityControlDashboardPage() {
                       ))}
                 </select>
               </div>
+              {canCreateCoordinatorTasks && (
+                <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3 space-y-3">
+                  <p className="text-xs text-cyan-200/90 font-medium">Coordinator task (required for company login)</p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Task type</label>
+                    <select
+                      value={ticketForm.taskCategory}
+                      onChange={(e) =>
+                        setTicketForm((f) => ({
+                          ...f,
+                          taskCategory: e.target.value as typeof f.taskCategory,
+                          checklistTemplateId: '',
+                          assigneeCoordinatorUserId: '',
+                        }))
+                      }
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:border-cyan-500 outline-none"
+                    >
+                      <option value="QUALITY" className="bg-[#0f1419]">
+                        Quality (assigned to quality engineers)
+                      </option>
+                      <option value="SUPERVISION" className="bg-[#0f1419]">
+                        Supervision (assigned to supervision engineers)
+                      </option>
+                      <option value="MAINTENANCE" className="bg-[#0f1419]">
+                        Maintenance (assigned to technicians)
+                      </option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Checklist template</label>
+                    <select
+                      value={ticketForm.checklistTemplateId}
+                      onChange={(e) =>
+                        setTicketForm((f) => ({ ...f, checklistTemplateId: e.target.value }))
+                      }
+                      required
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:border-cyan-500 outline-none"
+                    >
+                      <option value="">— Select checklist —</option>
+                      {checklistOptions.map((c) => (
+                        <option key={c.id} value={c.id} className="bg-[#0f1419]">
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {checklistOptions.length === 0 && (
+                      <p className="text-[11px] text-amber-300/90 mt-1">
+                        No checklist for this task type — create one under Company → Provider hub.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Assignment pool</label>
+                    <select
+                      value={ticketForm.assignmentScope}
+                      onChange={(e) =>
+                        setTicketForm((f) => ({
+                          ...f,
+                          assignmentScope: e.target.value as typeof f.assignmentScope,
+                        }))
+                      }
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:border-cyan-500 outline-none"
+                    >
+                      <option value="COMPANY_STAFF" className="bg-[#0f1419]">
+                        Your company staff
+                      </option>
+                      <option value="USMART_STAFF" className="bg-[#0f1419]">
+                        U-Smart staff
+                      </option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Assign to staff (optional — filters by role for this task type)
+                    </label>
+                    <select
+                      value={ticketForm.assigneeCoordinatorUserId}
+                      onChange={(e) =>
+                        setTicketForm((f) => ({
+                          ...f,
+                          assigneeCoordinatorUserId: e.target.value,
+                        }))
+                      }
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:border-cyan-500 outline-none"
+                    >
+                      <option value="">— Unassigned (visible by role) —</option>
+                      {assigneeOptions.map((u) => (
+                        <option key={u.id} value={u.id} className="bg-[#0f1419]">
+                          {u.username} ({u.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ticketForm.resubmitToRequester}
+                      onChange={(e) =>
+                        setTicketForm((f) => ({
+                          ...f,
+                          resubmitToRequester: e.target.checked,
+                        }))
+                      }
+                      className="rounded border-white/20 bg-white/5"
+                    />
+                    Allow staff to request edits from coordinator / requester when needed
+                  </label>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.slaHours')}</label>
                 <input
