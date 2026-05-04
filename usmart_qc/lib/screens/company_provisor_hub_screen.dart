@@ -7,8 +7,11 @@ import '../services/api_service.dart';
 
 /// Full company management hub — staff, KPIs, checklists, billing.
 /// Accessible by COMPANY_OWNER, COORDINATOR, ADMIN (hasCoordinatorCompany).
+/// [embedded] = true renders without its own Scaffold/AppBar (used as a tab).
 class CompanyProvisorHubScreen extends StatefulWidget {
-  const CompanyProvisorHubScreen({super.key});
+  const CompanyProvisorHubScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<CompanyProvisorHubScreen> createState() =>
@@ -239,8 +242,35 @@ class _CompanyProvisorHubScreenState extends State<CompanyProvisorHubScreen>
 
   // ─── Build ────────────────────────────────────────────────────────────────
 
+  Widget _buildTabBar() {
+    return TabBar(
+      controller: _tabs,
+      indicatorColor: const Color(0xFF6C63FF),
+      labelColor: const Color(0xFF6C63FF),
+      unselectedLabelColor: Colors.white54,
+      tabs: const [
+        Tab(icon: Icon(Icons.dashboard_rounded, size: 20), text: 'Overview'),
+        Tab(icon: Icon(Icons.people_rounded, size: 20), text: 'Staff'),
+        Tab(icon: Icon(Icons.checklist_rounded, size: 20), text: 'Checklists'),
+        Tab(icon: Icon(Icons.credit_card_rounded, size: 20), text: 'Billing'),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      // Used as a bottom-nav tab — no Scaffold/AppBar, just content
+      return Column(
+        children: [
+          Container(
+            color: const Color(0xFF0A0A1F),
+            child: _buildTabBar(),
+          ),
+          Expanded(child: _buildBody()),
+        ],
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       appBar: AppBar(
@@ -271,21 +301,18 @@ class _CompanyProvisorHubScreenState extends State<CompanyProvisorHubScreen>
               tooltip: 'Refresh',
             ),
         ],
-        bottom: TabBar(
-          controller: _tabs,
-          indicatorColor: const Color(0xFF6C63FF),
-          labelColor: const Color(0xFF6C63FF),
-          unselectedLabelColor: Colors.white54,
-          tabs: const [
-            Tab(icon: Icon(Icons.dashboard_rounded, size: 20), text: 'Overview'),
-            Tab(icon: Icon(Icons.people_rounded, size: 20), text: 'Staff'),
-            Tab(icon: Icon(Icons.checklist_rounded, size: 20), text: 'Checklists'),
-            Tab(icon: Icon(Icons.credit_card_rounded, size: 20), text: 'Billing'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: _buildTabBar(),
         ),
       ),
-      body: Column(
-        children: [
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    return Column(
+      children: [
           if (_message != null)
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
@@ -381,8 +408,7 @@ class _CompanyProvisorHubScreenState extends State<CompanyProvisorHubScreen>
               ],
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }

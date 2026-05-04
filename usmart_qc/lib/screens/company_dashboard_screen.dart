@@ -73,12 +73,20 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isTechnician = context.read<AuthProvider>().isTechnician;
-    final isWorker = context.read<AuthProvider>().isWorker;
+    final auth = context.read<AuthProvider>();
+    final isTechnician = auth.isTechnician;
+    final isWorker = auth.isWorker;
+    final showCompanyTab = auth.canAccessCompanyHub;
     final readOnlyRole = isTechnician || isWorker; // no create ticket, no sites
+
+    // Tab order depends on role
     final tabChildren = readOnlyRole
         ? const [_TicketsTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()]
-        : const [_TicketsTab(), _SitesTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()];
+        : showCompanyTab
+            ? const [_TicketsTab(), _SitesTab(), _StatsTab(), _CompanyTab(), _ConflictsTab(), _ProfileTab()]
+            : const [_TicketsTab(), _SitesTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()];
+    final tabCount = tabChildren.length;
+
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       body: Stack(
@@ -103,7 +111,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
           ),
           SafeArea(
             child: IndexedStack(
-              index: _currentTab.clamp(0, tabChildren.length - 1),
+              index: _currentTab.clamp(0, tabCount - 1),
               children: tabChildren,
             ),
           ),
@@ -120,7 +128,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               ),
             ),
             child: BottomNavigationBar(
-              currentIndex: _currentTab.clamp(0, (readOnlyRole ? 3 : 4)),
+              currentIndex: _currentTab.clamp(0, tabCount - 1),
               onTap: (i) => setState(() => _currentTab = i),
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.transparent,
@@ -136,13 +144,22 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                       _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
                       _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                     ]
-                  : [
-                      _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
-                      _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
-                      _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
-                      _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
-                      _navItem(Icons.person_rounded, l10n.t('nav_profile')),
-                    ],
+                  : showCompanyTab
+                      ? [
+                          _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                          _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                          _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                          _navItem(Icons.business_center_rounded, l10n.t('nav_company')),
+                          _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                          _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                        ]
+                      : [
+                          _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                          _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                          _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                          _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                          _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                        ],
             ),
           ),
         ),
@@ -2188,6 +2205,16 @@ class _TechnicianStatsContent extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+// ─── Company Tab (owner / coordinator / admin) ───
+class _CompanyTab extends StatelessWidget {
+  const _CompanyTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const CompanyProvisorHubScreen(embedded: true);
   }
 }
 
