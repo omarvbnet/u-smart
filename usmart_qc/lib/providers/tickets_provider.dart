@@ -309,6 +309,36 @@ class TicketsProvider extends ChangeNotifier {
     }
   }
 
+  /// Engineer/Technician resubmits a coordinator ticket asking coordinator to edit it.
+  Future<bool> resubmitTicketForEdit(String ticketId, {required String reason}) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketResubmit(ticketId),
+        body: {'reason': reason, 'target': 'COORDINATOR'},
+      );
+      if (data['success'] == true) {
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Coordinator marks a ticket as NEEDS_EDIT so assigned staff can see it.
+  Future<bool> requestTicketEdit(String ticketId, {required String reason}) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketRequestEdit(ticketId),
+        body: {'reason': reason},
+      );
+      if (data['success'] == true) {
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   Future<Ticket?> fetchTicketDetail(String id) async {
     try {
       final data = await _api.get(ApiConfig.ticketDetail(id));
@@ -318,6 +348,8 @@ class TicketsProvider extends ChangeNotifier {
     } catch (_) {}
     return null;
   }
+
+  String? lastTicketCreateMessage;
 
   Future<bool> createTicket({
     required String siteName,
@@ -329,7 +361,14 @@ class TicketsProvider extends ChangeNotifier {
     List<String>? attachmentUrls,
     String? maintenanceReason,
     List<String>? beforeImageUrls,
+    /// Required when logged in as coordinator company owner / coordinator / admin (API enforces checklist + category).
+    String? taskCategory,
+    String? checklistTemplateId,
+    String? assignmentScope,
+    String? assigneeCoordinatorUserId,
+    bool resubmitToRequester = false,
   }) async {
+    lastTicketCreateMessage = null;
     try {
       final body = <String, dynamic>{
         'siteName': siteName,
@@ -350,10 +389,26 @@ class TicketsProvider extends ChangeNotifier {
       if (beforeImageUrls != null && beforeImageUrls.isNotEmpty) {
         body['beforeImageUrls'] = beforeImageUrls;
       }
+      if (taskCategory != null && taskCategory.trim().isNotEmpty) {
+        body['taskCategory'] = taskCategory.trim().toUpperCase();
+        if (checklistTemplateId != null && checklistTemplateId.trim().isNotEmpty) {
+          body['checklistTemplateId'] = checklistTemplateId.trim();
+        }
+        body['assignmentScope'] = (assignmentScope ?? 'COMPANY_STAFF').toUpperCase();
+        if (assigneeCoordinatorUserId != null &&
+            assigneeCoordinatorUserId.trim().isNotEmpty) {
+          body['assigneeCoordinatorUserId'] = assigneeCoordinatorUserId.trim();
+        }
+        body['resubmitToRequester'] = resubmitToRequester;
+      }
       final data = await _api.post(ApiConfig.tickets, body: body);
       if (data['success'] == true) {
         await fetchTickets();
         return true;
+      }
+      final msg = data['message'];
+      if (msg is String && msg.isNotEmpty) {
+        lastTicketCreateMessage = msg;
       }
     } catch (_) {}
     return false;
@@ -498,6 +553,20 @@ class TicketsProvider extends ChangeNotifier {
       }
     } catch (_) {}
     return null;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchCompanyStaffRows() async {
+    try {
+      final data = await _api.getSafe(ApiConfig.companyStaff);
+      if (data != null &&
+          data['success'] == true &&
+          data['users'] is List) {
+        return (data['users'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   // ─── Checklists ───

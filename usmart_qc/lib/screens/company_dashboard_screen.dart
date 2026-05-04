@@ -39,7 +39,16 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+      _checkMustChangePassword();
+    });
+  }
+
+  void _checkMustChangePassword() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.mustChangePassword) return;
+    showUpdatePasswordSheet(context);
   }
 
   Future<void> _loadData() async {

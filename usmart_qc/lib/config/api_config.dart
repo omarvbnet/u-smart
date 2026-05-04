@@ -47,6 +47,8 @@ class ApiConfig {
       '/api/tickets/$ticketId/report-conflict';
   static String ticketResubmit(String ticketId) =>
       '/api/tickets/$ticketId/resubmit';
+  static String ticketRequestEdit(String ticketId) =>
+      '/api/tickets/$ticketId/request-edit';
 
   static const String inspectionChecklists = '/api/inspection-checklists';
   static const String uploadTicketAttachment = '/api/upload/ticket-attachment';

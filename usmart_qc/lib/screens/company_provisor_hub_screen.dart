@@ -226,6 +226,7 @@ class _CompanyProvisorHubScreenState extends State<CompanyProvisorHubScreen> {
                     dropdownColor: const Color(0xFF12122A),
                     items: const [
                       DropdownMenuItem(value: 'COORDINATOR', child: Text('Coordinator', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'ENGINEER', child: Text('Engineer (general)', style: TextStyle(color: Colors.white))),
                       DropdownMenuItem(value: 'QUALITY_ENGINEER', child: Text('Quality engineer', style: TextStyle(color: Colors.white))),
                       DropdownMenuItem(value: 'SUPERVISION_ENGINEER', child: Text('Supervision engineer', style: TextStyle(color: Colors.white))),
                       DropdownMenuItem(value: 'TECHNICIAN', child: Text('Technician', style: TextStyle(color: Colors.white))),

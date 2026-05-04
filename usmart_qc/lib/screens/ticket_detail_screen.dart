@@ -703,10 +703,46 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         context.read<AuthProvider>().user?.id;
     final siteUpdated = _siteLastUpdated;
 
+    final auth = context.read<AuthProvider>();
+    final isCoordinatorUser = auth.hasCoordinatorCompany &&
+        (auth.isCompanyOwner || auth.isCoordinator || auth.user?.role == 'ADMIN');
+
     return [
       // ─── Engineer/Technician action buttons ───
       if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
       if (_isTechnician && t.isMaintenance) ..._buildTechnicianActions(t, isMyTicket, l10n),
+
+      // ─── Resubmit for edit: field staff sends ticket back to coordinator ───
+      if ((isEngineer || _isTechnician) &&
+          isMyTicket &&
+          t.workflowState != 'RESUBMITTED' &&
+          !t.isCompleted) ...[
+        const SizedBox(height: 12),
+        _resubmitForEditButton(t, l10n),
+      ],
+
+      // ─── NEEDS_EDIT banner: notify field staff coordinator wants edits ───
+      if ((isEngineer || _isTechnician) &&
+          isMyTicket &&
+          t.workflowState == 'NEEDS_EDIT') ...[
+        const SizedBox(height: 12),
+        _needsEditBanner(t, l10n),
+      ],
+
+      // ─── Request-edit: coordinator asks assigned staff to edit ───
+      if (isCoordinatorUser &&
+          t.assignedEngineerId != null &&
+          t.workflowState != 'NEEDS_EDIT' &&
+          !t.isCompleted) ...[
+        const SizedBox(height: 12),
+        _requestEditButton(t, l10n),
+      ],
+
+      // ─── RESUBMITTED banner: coordinator sees staff's resubmit reason ───
+      if (isCoordinatorUser && t.workflowState == 'RESUBMITTED') ...[
+        const SizedBox(height: 12),
+        _resubmittedByStaffBanner(t, l10n),
+      ],
 
       // Details
       _glassSection(l10n.t('details'), [
@@ -2653,6 +2689,58 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
+  /// Generic text-prompt dialog — returns the entered string or null if cancelled.
+  Future<String?> _promptReason(
+    BuildContext ctx,
+    String title,
+    String hint,
+    AppLocalizations l10n,
+  ) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 3,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.white.withAlpha(80)),
+            border: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white24),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogCtx, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C63FF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(l10n.t('submit')),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return result;
+  }
+
   Future<String?> _showNcrReworkDialog(AppLocalizations l10n) async {
     final ctrl = TextEditingController();
     final result = await showDialog<String>(
@@ -2864,4 +2952,198 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   String _techniqueLabel(String t, AppLocalizations l10n) =>
       l10n.t(_techniqueKey(t));
+
+  // ─── Workflow state helpers ───────────────────────────────────────────────
+
+  Widget _resubmitForEditButton(Ticket t, AppLocalizations l10n) {
+    return _WorkflowActionButton(
+      label: l10n.t('resubmit_for_edit'),
+      icon: Icons.reply_rounded,
+      color: const Color(0xFFFBBF24),
+      onTap: () async {
+        final reason = await _promptReason(
+          context,
+          l10n.t('resubmit_for_edit'),
+          l10n.t('resubmit_reason_hint'),
+          l10n,
+        );
+        if (reason == null || reason.isEmpty) return;
+        final ok = await context
+            .read<TicketsProvider>()
+            .resubmitTicketForEdit(t.id, reason: reason);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ok
+              ? l10n.t('resubmit_sent_to_coordinator')
+              : l10n.t('action_failed')),
+          backgroundColor:
+              ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ));
+        setState(() => _ticket = null);
+        _load();
+      },
+    );
+  }
+
+  Widget _needsEditBanner(Ticket t, AppLocalizations l10n) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBBF24).withAlpha(20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFBBF24).withAlpha(120)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.edit_note_rounded,
+              color: Color(0xFFFBBF24), size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.t('needs_edit_title'),
+                    style: const TextStyle(
+                        color: Color(0xFFFBBF24),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                if (t.resubmitReason != null &&
+                    t.resubmitReason!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(t.resubmitReason!,
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(200), fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _requestEditButton(Ticket t, AppLocalizations l10n) {
+    return _WorkflowActionButton(
+      label: l10n.t('request_edit'),
+      icon: Icons.rate_review_rounded,
+      color: const Color(0xFF8B83FF),
+      onTap: () async {
+        final reason = await _promptReason(
+          context,
+          l10n.t('request_edit'),
+          l10n.t('request_edit_hint'),
+          l10n,
+        );
+        if (reason == null || reason.isEmpty) return;
+        final ok = await context
+            .read<TicketsProvider>()
+            .requestTicketEdit(t.id, reason: reason);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ok
+              ? l10n.t('edit_request_sent')
+              : l10n.t('action_failed')),
+          backgroundColor:
+              ok ? const Color(0xFF6C63FF) : const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ));
+        setState(() => _ticket = null);
+        _load();
+      },
+    );
+  }
+
+  Widget _resubmittedByStaffBanner(Ticket t, AppLocalizations l10n) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF8B83FF).withAlpha(18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF8B83FF).withAlpha(100)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.assignment_return_rounded,
+              color: Color(0xFF8B83FF), size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.t('resubmitted_by_staff'),
+                    style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                if (t.resubmitReason != null &&
+                    t.resubmitReason!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(t.resubmitReason!,
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(200), fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+// ─── Stateful button with loading spinner (avoids StatefulBuilder reset) ────
+class _WorkflowActionButton extends StatefulWidget {
+  const _WorkflowActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Future<void> Function() onTap;
+
+  @override
+  State<_WorkflowActionButton> createState() => _WorkflowActionButtonState();
+}
+
+class _WorkflowActionButtonState extends State<_WorkflowActionButton> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: OutlinedButton.icon(
+        onPressed: _busy
+            ? null
+            : () async {
+                setState(() => _busy = true);
+                await widget.onTap();
+                if (mounted) setState(() => _busy = false);
+              },
+        icon: _busy
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: widget.color),
+              )
+            : Icon(widget.icon, color: widget.color),
+        label: Text(widget.label,
+            style: TextStyle(color: widget.color)),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: widget.color, width: 1.2),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          minimumSize: const Size.fromHeight(46),
+        ),
+      ),
+    );
+  }
+}
+

@@ -109,6 +109,12 @@ class Ticket {
   final List<String> beforeImageUrls;
   /// Maintenance: after photos (from VisitorRequest.finishingImageUrls)
   final List<String> finishingImageUrls;
+  /// Coordinator workflow state: OPEN | IN_PROGRESS | NEEDS_EDIT | RESUBMITTED | DONE
+  final String? workflowState;
+  /// Reason set by engineer/technician when resubmitting for coordinator edit
+  final String? resubmitReason;
+  /// category of the coordinator task (MAINTENANCE | QUALITY | SUPERVISION)
+  final String? taskCategory;
 
   Ticket({
     required this.id,
@@ -145,6 +151,9 @@ class Ticket {
     this.maintenanceReason,
     this.beforeImageUrls = const [],
     this.finishingImageUrls = const [],
+    this.workflowState,
+    this.resubmitReason,
+    this.taskCategory,
   });
 
   bool get isPending => status == 'PENDING';
@@ -249,6 +258,9 @@ class Ticket {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      workflowState: json['workflowState'] as String?,
+      resubmitReason: json['resubmitReason'] as String?,
+      taskCategory: json['taskCategory'] as String?,
     );
   }
 
