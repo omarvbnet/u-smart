@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 
-const ALLOWED_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'ADMIN']);
+const ALLOWED_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
 const ALLOWED_STAFF_ROLES = new Set([
   'COORDINATOR',
   'ENGINEER',

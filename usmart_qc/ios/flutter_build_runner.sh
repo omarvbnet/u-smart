@@ -2,6 +2,11 @@
 # Workaround Desktop/iCloud: Mach-O binaries can carry resource forks that pass
 # `xattr -cr` but still break codesign — `ditto --norsrc` clears them reliably.
 export COPYFILE_DISABLE=1
+export TMPDIR="${TMPDIR:-/tmp}"
+
+if [[ -n "${PROJECT_DIR:-}" ]]; then
+  /bin/sh "${PROJECT_DIR}/ensure_local_build_volume.sh" || true
+fi
 
 strip_flutter_engine() {
   local xc="${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios/Flutter.xcframework"

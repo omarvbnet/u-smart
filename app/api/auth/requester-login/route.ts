@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { registerRequesterPushToken } from '@/lib/push-notifications';
+import { tryCompanyOwnerCoordinatorInsteadOfLegacy } from '@/lib/linked-coordinator-company';
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
         id: true,
         username: true,
         name: true,
+        email: true,
         passwordHash: true,
         role: true,
         province: true,
@@ -53,6 +55,64 @@ export async function POST(req: NextRequest) {
     });
 
     if (requester && (await bcrypt.compare(password, requester.passwordHash))) {
+      const ownerCoord = await tryCompanyOwnerCoordinatorInsteadOfLegacy(prisma, {
+        id: requester.id,
+        username: requester.username,
+        email: (requester as { email?: string | null }).email ?? null,
+        role: (requester as { role?: string }).role ?? null,
+      }, password);
+      if (ownerCoord) {
+        if (ownerCoord.status === 'BLOCKED' || ownerCoord.status === 'SUSPENDED') {
+          return NextResponse.json(
+            { success: false, message: 'Your account is blocked or suspended. Please contact support.' },
+            { status: 403 }
+          );
+        }
+        if (pushToken) {
+          try {
+            await registerRequesterPushToken(
+              prisma as any,
+              ownerCoord.id,
+              pushToken,
+              (phonePlatform as any) || 'unknown'
+            );
+          } catch (e) {
+            console.error('Failed to save coordinator push token on login:', e);
+          }
+        }
+        const username =
+          (typeof ownerCoord.username === 'string' && ownerCoord.username.trim()) ||
+          (typeof ownerCoord.email === 'string' ? ownerCoord.email.split('@')[0] : '') ||
+          `coord_${ownerCoord.id.slice(-6)}`;
+        const token = createRequesterToken({
+          requesterId: ownerCoord.id,
+          username,
+          name: ownerCoord.name ?? null,
+          role: ownerCoord.role ?? 'COMPANY_OWNER',
+          companyId: ownerCoord.companyId ?? null,
+          mustChangePassword: ownerCoord.mustChangePassword === true,
+          identitySource: 'coordinator_user',
+        });
+        const res = NextResponse.json({
+          success: true,
+          token,
+          user: {
+            id: ownerCoord.id,
+            username,
+            name: ownerCoord.name ?? null,
+            email: ownerCoord.email ?? null,
+            role: ownerCoord.role ?? 'COMPANY_OWNER',
+            companyId: ownerCoord.companyId ?? null,
+            mustChangePassword: ownerCoord.mustChangePassword === true,
+            status: ownerCoord.status ?? 'ACTIVE',
+            province: null,
+            provinceFilterActive: true,
+          },
+        });
+        res.cookies.set(REQUESTER_COOKIE_NAME, token, getRequesterCookieOptions());
+        return res;
+      }
+
       if (pushToken) {
         try {
           await registerRequesterPushToken(

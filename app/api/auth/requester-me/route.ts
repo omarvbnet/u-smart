@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
+import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
 
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -62,7 +63,16 @@ export async function GET(req: NextRequest) {
   try {
     const row = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { id: true, username: true, name: true, phone: true, company: true, serviceSlug: true, role: true },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        email: true,
+        phone: true,
+        company: true,
+        serviceSlug: true,
+        role: true,
+      },
     });
     requester = row as RequesterRow | null;
   } catch {
@@ -94,6 +104,15 @@ export async function GET(req: NextRequest) {
   }
   const serviceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
   const role = requester.role ?? 'COMPANY';
+  let linkedCoordinatorCompanyId: string | null = null;
+  if (String(role).toUpperCase() === 'COMPANY') {
+    linkedCoordinatorCompanyId = await getLinkedCoordinatorCompanyId(prisma, {
+      id: requester.id,
+      username: requester.username,
+      email: (requester as { email?: string | null }).email ?? null,
+      role,
+    });
+  }
   return NextResponse.json({
     success: true,
     user: {
@@ -111,6 +130,7 @@ export async function GET(req: NextRequest) {
       provinceFilterActive,
       companyId: null,
       mustChangePassword: false,
+      ...(linkedCoordinatorCompanyId ? { linkedCoordinatorCompanyId } : {}),
     },
   });
 }

@@ -8,6 +8,7 @@ import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTicket } from '@/lib/email';
 import { sendPushToRequesters } from '@/lib/push-notifications';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -599,7 +600,10 @@ export async function GET(req: NextRequest) {
       const siteNameParam = searchParams.get('siteName')?.trim() || undefined;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const where: any = { coordinatorCompanyId: coordinatorContext.companyId };
+      const where: any = coordinatorRoleTicketWhere(
+        coordinatorContext.companyId,
+        coordinatorContext.role
+      );
       if (from) {
         const d = new Date(from);
         d.setHours(0, 0, 0, 0);
@@ -612,14 +616,6 @@ export async function GET(req: NextRequest) {
       }
       if (siteNameParam) {
         where.company = { contains: siteNameParam };
-      }
-
-      if (coordinatorContext.role === 'QUALITY_ENGINEER') {
-        where.taskCategory = 'QUALITY';
-      } else if (coordinatorContext.role === 'SUPERVISION_ENGINEER') {
-        where.taskCategory = 'SUPERVISION';
-      } else if (coordinatorContext.role === 'TECHNICIAN') {
-        where.taskCategory = 'MAINTENANCE';
       }
 
       const rows = await prisma.visitorRequest.findMany({
@@ -685,7 +681,15 @@ export async function GET(req: NextRequest) {
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { serviceSlug: true, role: true, name: true, province: true, provinceFilterActive: true },
+      select: {
+        serviceSlug: true,
+        role: true,
+        name: true,
+        username: true,
+        email: true,
+        province: true,
+        provinceFilterActive: true,
+      },
     });
     if (!requester) {
       return NextResponse.json(
@@ -740,11 +744,27 @@ export async function GET(req: NextRequest) {
         company: { contains: payload.requesterId },
       };
     } else {
-      // COMPANY: only their tickets (including maintenance they created)
-      where = {
-        requesterId: payload.requesterId,
-        serviceSlug: filterServiceSlug,
-      };
+      // COMPANY: own requester tickets plus coordinator-company tickets when linked (same owner)
+      const linkedCompanyId =
+        requesterRole === 'COMPANY'
+          ? await getLinkedCoordinatorCompanyId(prisma, {
+              id: payload.requesterId,
+              username: (requester as { username?: string }).username ?? '',
+              email: (requester as { email?: string | null }).email ?? null,
+              role: requesterRole,
+            })
+          : null;
+      if (linkedCompanyId) {
+        where = {
+          serviceSlug: filterServiceSlug,
+          OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }],
+        };
+      } else {
+        where = {
+          requesterId: payload.requesterId,
+          serviceSlug: filterServiceSlug,
+        };
+      }
     }
 
     if (!doExport) {

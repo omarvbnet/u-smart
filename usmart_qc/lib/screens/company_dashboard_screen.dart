@@ -11,6 +11,8 @@ import '../providers/notifications_provider.dart';
 import '../providers/conflicts_provider.dart';
 import '../widgets/language_selector.dart';
 import '../models/ticket.dart';
+import '../models/stats.dart';
+import '../models/company_dashboard_summary.dart';
 import '../widgets/ticket_card.dart';
 import '../widgets/stats_card.dart';
 import 'notifications_screen.dart';
@@ -19,6 +21,7 @@ import 'ticket_type_picker_screen.dart';
 import 'conflicts_screen.dart';
 import 'site_form_screen.dart';
 import 'filtered_tickets_screen.dart';
+import 'company_provisor_hub_screen.dart';
 import '../widgets/update_password_sheet.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -40,13 +43,17 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   Future<void> _loadData() async {
     final tickets = context.read<TicketsProvider>();
     final conflicts = context.read<ConflictsProvider>();
-    final isTechnician = context.read<AuthProvider>().isTechnician;
-    final futures = [
+    final auth = context.read<AuthProvider>();
+    final isTechnician = auth.isTechnician;
+    final futures = <Future<void>>[
       tickets.fetchTickets(),
       tickets.fetchStats(),
       conflicts.fetchConflicts(),
     ];
-    if (!isTechnician && !context.read<AuthProvider>().isWorker) {
+    if (auth.isCompanyOwner || auth.isCoordinator) {
+      futures.add(tickets.fetchCompanyDashboard());
+    }
+    if (!isTechnician && !auth.isWorker) {
       futures.add(context.read<SitesProvider>().fetchSites());
       futures.add(context.read<ProvisorTechniquesProvider>().ensureLoaded());
     }
@@ -355,6 +362,22 @@ class _TicketsTabState extends State<_TicketsTab> {
                       color: const Color(0xFF8B83FF),
                     ),
                     tooltip: 'Filters',
+                  ),
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, _) {
+                      if (!auth.isCompanyOwner && !auth.isCoordinator) {
+                        return const SizedBox.shrink();
+                      }
+                      return IconButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const CompanyProvisorHubScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.business_center_outlined, color: Color(0xFF8B83FF)),
+                        tooltip: 'Company hub',
+                      );
+                    },
                   ),
                   Consumer<NotificationsProvider>(
                     builder: (context, notifProvider, _) {
@@ -1149,6 +1172,332 @@ class _SitesTab extends StatelessWidget {
   }
 }
 
+/// Backend coordinator/company-owner metrics from `/api/tickets/stats`.
+class _CompanyInsightsBlock extends StatelessWidget {
+  const _CompanyInsightsBlock({required this.l10n, required this.stats});
+
+  final AppLocalizations l10n;
+  final TicketStats stats;
+
+  Widget _kvRow(String k, int v) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              k,
+              style: TextStyle(
+                color: Colors.white.withAlpha(180),
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            '$v',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String title, Map<String, int> m) {
+    if (m.isEmpty) return const SizedBox.shrink();
+    final entries = m.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withAlpha(200),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ...entries.map((e) => _kvRow(e.key, e.value)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12122A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF00D4AA).withAlpha(45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.apartment_rounded,
+                  color: Color(0xFF00D4AA), size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.t('company_insights'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _section(l10n.t('insight_staff_by_role'), stats.usersByRole),
+          _section(l10n.t('insight_tickets_by_category'), stats.ticketsByCategory),
+          _section(l10n.t('insight_tickets_by_status'), stats.ticketsByStatus),
+          _section(l10n.t('insight_tickets_by_scope'), stats.ticketsByRoleScope),
+        ],
+      ),
+    );
+  }
+}
+
+/// From `GET /api/company/dashboard` (staff performance + totals).
+class _CompanyDashboardApiBlock extends StatelessWidget {
+  const _CompanyDashboardApiBlock({
+    required this.l10n,
+    required this.summary,
+  });
+
+  final AppLocalizations l10n;
+  final CompanyDashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = List<StaffPerformanceRow>.from(summary.staffPerformance)
+      ..sort((a, b) => b.assigned.compareTo(a.assigned));
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12122A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF6C63FF).withAlpha(50)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.dashboard_customize_outlined,
+                  color: Color(0xFF6C63FF), size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.t('dashboard_live_title'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _miniMetric(
+                  l10n.t('dashboard_total_staff'),
+                  '${summary.totalStaff}',
+                  const Color(0xFF6C63FF),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _miniMetric(
+                  l10n.t('dashboard_total_company_tickets'),
+                  '${summary.totalTickets}',
+                  const Color(0xFF00D4AA),
+                ),
+              ),
+            ],
+          ),
+          if (rows.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              l10n.t('dashboard_staff_performance'),
+              style: TextStyle(
+                color: Colors.white.withAlpha(200),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(
+                  const Color(0xFF1a1a35),
+                ),
+                dataRowMinHeight: 40,
+                dataRowMaxHeight: 48,
+                columnSpacing: 16,
+                columns: [
+                  DataColumn(
+                    label: Text(
+                      l10n.t('dashboard_col_member'),
+                      style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      l10n.t('dashboard_col_role'),
+                      style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Text(
+                      l10n.t('dashboard_col_assigned'),
+                      style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Text(
+                      l10n.t('dashboard_col_done'),
+                      style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Text(
+                      l10n.t('dashboard_col_needs_edit'),
+                      style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Text(
+                      l10n.t('dashboard_col_resubmit'),
+                      style: const TextStyle(
+                        color: Color(0xFF8B83FF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+                rows: rows
+                    .map(
+                      (r) => DataRow(
+                        cells: [
+                          DataCell(Text(
+                            r.shortUserLabel,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          )),
+                          DataCell(Text(
+                            r.role,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          )),
+                          DataCell(Text(
+                            '${r.assigned}',
+                            style: const TextStyle(color: Colors.white),
+                          )),
+                          DataCell(Text(
+                            '${r.completed}',
+                            style: const TextStyle(color: Color(0xFF4ADE80)),
+                          )),
+                          DataCell(Text(
+                            '${r.needsEdit}',
+                            style: const TextStyle(color: Color(0xFFFFB347)),
+                          )),
+                          DataCell(Text(
+                            '${r.resubmitted}',
+                            style: const TextStyle(color: Color(0xFF8B83FF)),
+                          )),
+                        ],
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _miniMetric(String label, String value, Color accent) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(18),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withAlpha(55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withAlpha(170),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: accent,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Stats Tab ───
 class _StatsTab extends StatelessWidget {
   const _StatsTab();
@@ -1176,8 +1525,12 @@ class _StatsTab extends StatelessWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
+            final auth = context.read<AuthProvider>();
             await provider.fetchStats();
             await provider.fetchTickets();
+            if (auth.isCompanyOwner || auth.isCoordinator) {
+              await provider.fetchCompanyDashboard();
+            }
           },
           color: const Color(0xFF6C63FF),
           child: ListView(
@@ -1461,6 +1814,24 @@ class _StatsTab extends StatelessWidget {
                     ],
                   ),
                 ),
+              if (stats != null && stats.hasCompanyInsights) ...[
+                const SizedBox(height: 16),
+                _CompanyInsightsBlock(l10n: l10n, stats: stats),
+              ],
+              Builder(
+                builder: (context) {
+                  final dash = provider.companyDashboard;
+                  if (dash == null || !dash.hasAnyMetrics) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      _CompanyDashboardApiBlock(l10n: l10n, summary: dash),
+                    ],
+                  );
+                },
+              ),
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,

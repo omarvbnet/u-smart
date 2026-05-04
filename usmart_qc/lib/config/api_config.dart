@@ -67,5 +67,9 @@ class ApiConfig {
 
   static const String provisorTechniques = '/api/provisor-techniques';
 
+  static const String companyStaff = '/api/company/staff';
+  static const String companyBillingPlan = '/api/company/billing/plan';
+  static const String companyDashboard = '/api/company/dashboard';
+
   static String publicTicketPage(String id) => '/en/ticket/$id';
 }

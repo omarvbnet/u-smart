@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../models/ticket.dart';
 import '../models/stats.dart';
+import '../models/company_dashboard_summary.dart';
 import '../models/comment.dart';
 import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
@@ -17,6 +18,7 @@ class TicketsProvider extends ChangeNotifier {
   final NotificationService _notifications;
   List<Ticket> _tickets = [];
   TicketStats? _stats;
+  CompanyDashboardSummary? _companyDashboard;
   bool _loading = false;
   String? _error;
   Timer? _pollTimer;
@@ -197,6 +199,7 @@ class TicketsProvider extends ChangeNotifier {
           .toList();
 
   TicketStats? get stats => _stats;
+  CompanyDashboardSummary? get companyDashboard => _companyDashboard;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -273,6 +276,25 @@ class TicketsProvider extends ChangeNotifier {
         notifyListeners();
       }
     } catch (_) {}
+  }
+
+  /// Coordinator / company-owner JWT only; others receive 401 — state cleared.
+  Future<void> fetchCompanyDashboard() async {
+    try {
+      final data = await _api.get(ApiConfig.companyDashboard);
+      if (data['success'] == true && data['dashboard'] is Map<String, dynamic>) {
+        _companyDashboard = CompanyDashboardSummary.fromJson(
+          data['dashboard'] as Map<String, dynamic>,
+        );
+        notifyListeners();
+      } else {
+        _companyDashboard = null;
+        notifyListeners();
+      }
+    } catch (_) {
+      _companyDashboard = null;
+      notifyListeners();
+    }
   }
 
   Future<Ticket?> fetchTicketDetail(String id) async {

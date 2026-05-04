@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     if (coordinatorContext) {
       const rows = await (prisma as any).visitorRequest.findMany({
-        where: { coordinatorCompanyId: coordinatorContext.companyId },
+        where: coordinatorRoleTicketWhere(coordinatorContext.companyId, coordinatorContext.role),
         select: {
           status: true,
           taskCategory: true,
@@ -59,6 +60,20 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      let usersByRole: Record<string, number> = {};
+      try {
+        const staff = await (prisma as any).coordinatorUser.findMany({
+          where: { companyId: coordinatorContext.companyId },
+          select: { role: true },
+        });
+        for (const u of staff as { role?: string }[]) {
+          const k = String(u.role ?? 'UNKNOWN');
+          usersByRole[k] = (usersByRole[k] ?? 0) + 1;
+        }
+      } catch {
+        usersByRole = {};
+      }
+
       return NextResponse.json({
         success: true,
         stats: {
@@ -68,13 +83,14 @@ export async function GET(req: NextRequest) {
           ticketsByRoleScope,
           ticketsByCategory,
           ticketsByStatus,
+          usersByRole,
         },
       });
     }
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { serviceSlug: true },
+      select: { serviceSlug: true, role: true, username: true, email: true },
     });
     if (!requester) {
       return NextResponse.json(
@@ -83,6 +99,16 @@ export async function GET(req: NextRequest) {
       );
     }
     const requesterServiceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
+    const requesterRole = (requester as { role?: string }).role ?? 'COMPANY';
+    const linkedCompanyId =
+      requesterRole === 'COMPANY'
+        ? await getLinkedCoordinatorCompanyId(prisma, {
+            id: payload.requesterId,
+            username: (requester as { username?: string }).username ?? '',
+            email: (requester as { email?: string | null }).email ?? null,
+            role: requesterRole,
+          })
+        : null;
 
     const { searchParams } = new URL(req.url);
     const from = searchParams.get('from');
@@ -94,10 +120,16 @@ export async function GET(req: NextRequest) {
       ? dashboardSlug
       : requesterServiceSlug;
 
-    const where: { requesterId: string; serviceSlug?: string; createdAt?: { gte?: Date; lte?: Date }; OR?: Array<{ siteName?: { contains: string; mode: 'insensitive' }; company?: { contains: string } }> } = {
-      requesterId: payload.requesterId,
-      serviceSlug: filterServiceSlug,
-    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let where: any = linkedCompanyId
+      ? {
+          serviceSlug: filterServiceSlug,
+          OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }],
+        }
+      : {
+          requesterId: payload.requesterId,
+          serviceSlug: filterServiceSlug,
+        };
     if (from) {
       const d = new Date(from);
       d.setHours(0, 0, 0, 0);
@@ -109,7 +141,12 @@ export async function GET(req: NextRequest) {
       where.createdAt = { ...(where.createdAt as object), lte: d };
     }
     if (siteNameParam) {
-      where.OR = [{ company: { contains: siteNameParam } }];
+      const siteClause = { OR: [{ company: { contains: siteNameParam } }] };
+      if (where.AND && Array.isArray(where.AND)) {
+        where.AND.push(siteClause);
+      } else {
+        where.AND = [siteClause];
+      }
     }
 
     const rows = await prisma.visitorRequest.findMany({
@@ -145,11 +182,18 @@ export async function GET(req: NextRequest) {
     let inspectionTrend: InspectionCounts | undefined;
 
     if (filterServiceSlug === 'quality-control-supervision') {
-      const baseWhere: { requesterId: string; serviceSlug: string; OR?: Array<{ company?: { contains: string } }> } = {
-        requesterId: payload.requesterId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const baseWhere: any = {
         serviceSlug: 'quality-control-supervision',
+        AND: [
+          linkedCompanyId
+            ? { OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }] }
+            : { requesterId: payload.requesterId },
+        ],
       };
-      if (siteNameParam) baseWhere.OR = [{ company: { contains: siteNameParam } }];
+      if (siteNameParam) {
+        baseWhere.AND.push({ OR: [{ company: { contains: siteNameParam } }] });
+      }
 
       const currentFrom = from ? new Date(from) : new Date(now - 30 * 24 * 60 * 60 * 1000);
       const currentTo = to ? new Date(to) : new Date(now);

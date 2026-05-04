@@ -42,7 +42,17 @@ type Site = {
   updatedAt?: string;
 };
 
-type SlaStats = { withinSla: number; outOfSla: number; total: number; inspectionStats?: InspectionCounts; inspectionTrend?: InspectionCounts };
+type SlaStats = {
+  withinSla: number;
+  outOfSla: number;
+  total: number;
+  inspectionStats?: InspectionCounts;
+  inspectionTrend?: InspectionCounts;
+  ticketsByCategory?: Record<string, number>;
+  ticketsByRoleScope?: Record<string, number>;
+  ticketsByStatus?: Record<string, number>;
+  usersByRole?: Record<string, number>;
+};
 type InspectionCounts = { total: number; accepted: number; accepted_with_comments: number; not_accepted: number; ncr: number; in_progress: number };
 
 export default function QualityControlDashboardPage() {
@@ -50,7 +60,27 @@ export default function QualityControlDashboardPage() {
   const params = useParams();
   const t = useTranslations('Index');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
-  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; serviceSlug?: string; role?: string } | null>(null);
+  const [user, setUser] = useState<{
+    id: string;
+    username: string;
+    name: string | null;
+    phone?: string;
+    company?: string | null;
+    companyCertificationUrl?: string | null;
+    serviceSlug?: string;
+    role?: string;
+    companyId?: string | null;
+  } | null>(null);
+  const [provisorStaff, setProvisorStaff] = useState<Array<{ id: string; username: string; email: string; role: string; name?: string | null }>>([]);
+  const [provisorChecklists, setProvisorChecklists] = useState<Array<{ id: string; name: string; taskCategory?: string | null }>>([]);
+  const [provisorBilling, setProvisorBilling] = useState<{
+    freeTicketsUsed: number;
+    freeTicketsLimit: number;
+    activeTicketPlan: string | null;
+    activeRateUsd: number | null;
+  } | null>(null);
+  const [provisorLoading, setProvisorLoading] = useState(false);
+  const [provisorMsg, setProvisorMsg] = useState<string | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticketFormOpen, setTicketFormOpen] = useState(false);
@@ -123,8 +153,21 @@ export default function QualityControlDashboardPage() {
     return () => clearInterval(id);
   }, [appliedDashboardFilters.from, appliedDashboardFilters.to, appliedDashboardFilters.siteName]);
 
-  const isCompany = user?.role === 'COMPANY';
-  const canManageSites = user?.role === 'COMPANY' || user?.role === 'ENGINEER';
+  const isCompany =
+    user?.role === 'COMPANY' ||
+    user?.role === 'COMPANY_OWNER' ||
+    user?.role === 'COORDINATOR';
+  const canManageSites =
+    user?.role === 'COMPANY' ||
+    user?.role === 'COMPANY_OWNER' ||
+    user?.role === 'COORDINATOR' ||
+    user?.role === 'ENGINEER';
+  const canUseProvisorHub =
+    user?.serviceSlug === 'quality-control-supervision' &&
+    (user?.role === 'COMPANY_OWNER' ||
+      user?.role === 'COORDINATOR' ||
+      user?.role === 'COMPANY' ||
+      user?.role === 'ADMIN');
 
   const loadSites = async () => {
     setSitesLoading(true);
@@ -146,6 +189,146 @@ export default function QualityControlDashboardPage() {
   useEffect(() => {
     if (ticketFormOpen && sites.length === 0 && !sitesLoading) loadSites();
   }, [ticketFormOpen]);
+
+  const [staffForm, setStaffForm] = useState({ firstName: '', lastName: '', email: '', role: 'TECHNICIAN' });
+  const [checklistForm, setChecklistForm] = useState({ name: '', taskCategory: 'QUALITY', techniqueTypes: 'inspection' });
+
+  useEffect(() => {
+    if (dashboardSection !== 'company' || !canUseProvisorHub) return;
+    let cancelled = false;
+    (async () => {
+      setProvisorLoading(true);
+      setProvisorMsg(null);
+      try {
+        const [s, c, b] = await Promise.all([
+          fetch('/api/company/staff', { credentials: 'include' }).then((r) => r.json()),
+          fetch('/api/inspection-checklists', { credentials: 'include' }).then((r) => r.json()),
+          fetch('/api/company/billing/plan', { credentials: 'include' }).then((r) => r.json()),
+        ]);
+        if (cancelled) return;
+        if (s.success && Array.isArray(s.users)) setProvisorStaff(s.users);
+        else setProvisorStaff([]);
+        if (c.success && Array.isArray(c.checklists)) setProvisorChecklists(c.checklists);
+        else setProvisorChecklists([]);
+        if (b.success && b.billing) setProvisorBilling(b.billing);
+        else setProvisorBilling(null);
+        if (!s.success && !c.success && !b.success) {
+          setProvisorMsg(
+            'Could not load staff, checklists, or billing. Company owners should sign in with the same username and password as the web dashboard so your session includes the provider company.'
+          );
+        }
+      } catch {
+        if (!cancelled) setProvisorMsg('Could not load provider tools.');
+      } finally {
+        if (!cancelled) setProvisorLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardSection, canUseProvisorHub, user?.id]);
+
+  const submitStaffInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProvisorMsg(null);
+    if (!staffForm.firstName.trim() || !staffForm.email.trim()) {
+      setProvisorMsg('First name and email are required.');
+      return;
+    }
+    setProvisorLoading(true);
+    try {
+      const res = await fetch('/api/company/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          firstName: staffForm.firstName.trim(),
+          lastName: staffForm.lastName.trim(),
+          email: staffForm.email.trim(),
+          role: staffForm.role,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setProvisorMsg(data.message || 'Failed to create staff');
+        return;
+      }
+      setStaffForm({ firstName: '', lastName: '', email: '', role: 'TECHNICIAN' });
+      const list = await fetch('/api/company/staff', { credentials: 'include' }).then((r) => r.json());
+      if (list.success && Array.isArray(list.users)) setProvisorStaff(list.users);
+      setProvisorMsg(
+        `User created. Username: ${data.credentials?.username ?? data.user?.username ?? '—'} · Temporary password: ${data.credentials?.temporaryPassword ?? '—'} (share securely; they must change it on first login.)`
+      );
+    } catch {
+      setProvisorMsg('Failed to create staff');
+    } finally {
+      setProvisorLoading(false);
+    }
+  };
+
+  const submitChecklist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProvisorMsg(null);
+    if (!checklistForm.name.trim()) {
+      setProvisorMsg('Checklist name is required.');
+      return;
+    }
+    setProvisorLoading(true);
+    try {
+      const techniqueTypes = checklistForm.techniqueTypes
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const res = await fetch('/api/inspection-checklists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: checklistForm.name.trim(),
+          taskCategory: checklistForm.taskCategory,
+          techniqueTypes,
+          items: [{ label: 'Item 1 — replace with your checklist steps', weight: 'minor' }],
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setProvisorMsg(data.message || 'Failed to create checklist');
+        return;
+      }
+      setChecklistForm({ name: '', taskCategory: 'QUALITY', techniqueTypes: 'inspection' });
+      const list = await fetch('/api/inspection-checklists', { credentials: 'include' }).then((r) => r.json());
+      if (list.success && Array.isArray(list.checklists)) setProvisorChecklists(list.checklists);
+      setProvisorMsg('Checklist saved. Edit items from admin or recreate with full item list via API.');
+    } catch {
+      setProvisorMsg('Failed to create checklist');
+    } finally {
+      setProvisorLoading(false);
+    }
+  };
+
+  const activateBillingPlan = async (plan: 'WEEKLY' | 'MONTHLY' | 'YEARLY') => {
+    setProvisorMsg(null);
+    setProvisorLoading(true);
+    try {
+      const res = await fetch('/api/company/billing/plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setProvisorMsg(data.message || 'Could not activate plan');
+        return;
+      }
+      if (data.billing) setProvisorBilling(data.billing);
+      setProvisorMsg(`Billing plan set to ${plan}. Per-ticket rate applies after free quota.`);
+    } catch {
+      setProvisorMsg('Could not activate plan');
+    } finally {
+      setProvisorLoading(false);
+    }
+  };
 
   const handleSiteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -642,6 +825,39 @@ export default function QualityControlDashboardPage() {
           </div>
         )}
 
+        {(slaStats?.ticketsByCategory || slaStats?.usersByRole) && (
+          <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+            <h3 className="text-sm font-semibold text-cyan-300 mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Company performance snapshot
+            </h3>
+            {slaStats?.ticketsByCategory && Object.keys(slaStats.ticketsByCategory).length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2">Tickets by category</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(slaStats.ticketsByCategory).map(([k, v]) => (
+                    <span key={k} className="px-2 py-1 rounded-lg bg-white/10 text-xs text-white">
+                      {k}: <strong>{v}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {slaStats?.usersByRole && Object.keys(slaStats.usersByRole).length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Staff accounts by role</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(slaStats.usersByRole).map(([k, v]) => (
+                    <span key={k} className="px-2 py-1 rounded-lg bg-white/10 text-xs text-white">
+                      {k}: <strong>{v}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 mb-6">
           <button
             type="button"
@@ -720,6 +936,146 @@ export default function QualityControlDashboardPage() {
                 </dd>
               </div>
             </dl>
+
+            {canUseProvisorHub && (
+              <div className="mt-8 pt-8 border-t border-white/10 space-y-8">
+                <h4 className="text-base font-semibold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-cyan-400" />
+                  Provider hub (staff, checklists, billing)
+                </h4>
+                {provisorMsg && (
+                  <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">{provisorMsg}</p>
+                )}
+                {provisorLoading && <p className="text-sm text-gray-400">Loading…</p>}
+
+                {provisorBilling && (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <h5 className="text-sm font-medium text-cyan-300 mb-2">Tickets & billing</h5>
+                    <p className="text-sm text-gray-300">
+                      Free quota: {provisorBilling.freeTicketsUsed} / {provisorBilling.freeTicketsLimit} used.
+                      {provisorBilling.activeTicketPlan
+                        ? ` Active plan: ${provisorBilling.activeTicketPlan} ($${provisorBilling.activeRateUsd ?? '—'} per ticket).`
+                        : ' After the free quota, choose a plan to keep creating coordinator tasks.'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {(['WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          disabled={provisorLoading || user?.role !== 'COMPANY_OWNER'}
+                          onClick={() => activateBillingPlan(p)}
+                          className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-cyan-600/30 text-xs font-medium text-white disabled:opacity-40"
+                        >
+                          {p} ($
+                          {p === 'WEEKLY' ? '0.7' : p === 'MONTHLY' ? '0.6' : '0.5'}/ticket)
+                        </button>
+                      ))}
+                    </div>
+                    {user?.role !== 'COMPANY_OWNER' && (
+                      <p className="text-xs text-gray-500 mt-2">Only the company owner can change billing.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                  <h5 className="text-sm font-medium text-cyan-300 mb-3">Staff (username from first name + temporary password)</h5>
+                  <ul className="text-sm text-gray-300 space-y-1 mb-4 max-h-40 overflow-y-auto">
+                    {provisorStaff.map((u) => (
+                      <li key={u.id}>
+                        <span className="text-white font-medium">{u.username}</span> — {u.role} — {u.email}
+                      </li>
+                    ))}
+                    {provisorStaff.length === 0 && !provisorLoading && <li className="text-gray-500">No staff loaded.</li>}
+                  </ul>
+                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'ADMIN') && (
+                    <form onSubmit={submitStaffInvite} className="grid sm:grid-cols-2 gap-3 text-sm">
+                      <input
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        placeholder="First name"
+                        value={staffForm.firstName}
+                        onChange={(e) => setStaffForm((f) => ({ ...f, firstName: e.target.value }))}
+                      />
+                      <input
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        placeholder="Last name"
+                        value={staffForm.lastName}
+                        onChange={(e) => setStaffForm((f) => ({ ...f, lastName: e.target.value }))}
+                      />
+                      <input
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white sm:col-span-2"
+                        placeholder="Email"
+                        type="email"
+                        value={staffForm.email}
+                        onChange={(e) => setStaffForm((f) => ({ ...f, email: e.target.value }))}
+                      />
+                      <select
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white sm:col-span-2"
+                        value={staffForm.role}
+                        onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}
+                      >
+                        <option value="COORDINATOR">Coordinator</option>
+                        <option value="QUALITY_ENGINEER">Quality engineer</option>
+                        <option value="SUPERVISION_ENGINEER">Supervision engineer</option>
+                        <option value="TECHNICIAN">Technician</option>
+                        <option value="ENGINEER">Engineer (general)</option>
+                      </select>
+                      <button
+                        type="submit"
+                        disabled={provisorLoading}
+                        className="sm:col-span-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        Create staff account
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                  <h5 className="text-sm font-medium text-cyan-300 mb-3">Checklists (maintenance / quality / supervision)</h5>
+                  <ul className="text-sm text-gray-300 space-y-1 mb-4 max-h-36 overflow-y-auto">
+                    {provisorChecklists.map((c) => (
+                      <li key={c.id}>
+                        {c.name}{' '}
+                        <span className="text-gray-500">({c.taskCategory ?? 'any'})</span>
+                      </li>
+                    ))}
+                    {provisorChecklists.length === 0 && !provisorLoading && <li className="text-gray-500">No checklists yet.</li>}
+                  </ul>
+                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'ADMIN' || user?.role === 'COMPANY') && (
+                    <form onSubmit={submitChecklist} className="space-y-3 text-sm">
+                      <input
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        placeholder="Checklist name"
+                        value={checklistForm.name}
+                        onChange={(e) => setChecklistForm((f) => ({ ...f, name: e.target.value }))}
+                      />
+                      <select
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        value={checklistForm.taskCategory}
+                        onChange={(e) => setChecklistForm((f) => ({ ...f, taskCategory: e.target.value }))}
+                      >
+                        <option value="MAINTENANCE">Maintenance</option>
+                        <option value="QUALITY">Quality</option>
+                        <option value="SUPERVISION">Supervision</option>
+                      </select>
+                      <input
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        placeholder="Technique slugs, comma-separated (e.g. inspection,supervision)"
+                        value={checklistForm.techniqueTypes}
+                        onChange={(e) => setChecklistForm((f) => ({ ...f, techniqueTypes: e.target.value }))}
+                      />
+                      <button
+                        type="submit"
+                        disabled={provisorLoading}
+                        className="w-full px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        Save checklist template
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
