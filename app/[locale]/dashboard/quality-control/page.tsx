@@ -133,7 +133,7 @@ export default function QualityControlDashboardPage() {
   const [siteFilter, setSiteFilter] = useState('');
   const [selectedSiteForTickets, setSelectedSiteForTickets] = useState<Site | null>(null);
   const [siteTicketsFilter, setSiteTicketsFilter] = useState({ status: '', from: '', to: '' });
-  const [selectedSiteId, _setSelectedSiteId] = useState<string>('');
+  const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [ticketListFilter, setTicketListFilter] = useState({ result: '', siteName: '', ticketId: '' });
   const [dashboardFilters, setDashboardFilters] = useState({ from: '', to: '', siteName: '', ticketId: '' });
   const [appliedDashboardFilters, setAppliedDashboardFilters] = useState({ from: '', to: '', siteName: '', ticketId: '' });
