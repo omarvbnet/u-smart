@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -23,6 +24,7 @@ import 'site_form_screen.dart';
 import 'filtered_tickets_screen.dart';
 import 'company_provisor_hub_screen.dart';
 import '../widgets/update_password_sheet.dart';
+import '../config/api_config.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
   const CompanyDashboardScreen({super.key});
@@ -47,12 +49,11 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
     final isTechnician = auth.isTechnician;
     final futures = <Future<void>>[
       tickets.fetchTickets(),
-      tickets.fetchStats(),
+      tickets.refreshAnalyticsForSession(
+        hasCoordinatorCompany: auth.hasCoordinatorCompany,
+      ),
       conflicts.fetchConflicts(),
     ];
-    if (auth.isCompanyOwner || auth.isCoordinator) {
-      futures.add(tickets.fetchCompanyDashboard());
-    }
     if (!isTechnician && !auth.isWorker) {
       futures.add(context.read<SitesProvider>().fetchSites());
       futures.add(context.read<ProvisorTechniquesProvider>().ensureLoaded());
@@ -365,7 +366,7 @@ class _TicketsTabState extends State<_TicketsTab> {
                   ),
                   Consumer<AuthProvider>(
                     builder: (context, auth, _) {
-                      if (!auth.isCompanyOwner && !auth.isCoordinator) {
+                      if (!auth.canAccessCompanyHub) {
                         return const SizedBox.shrink();
                       }
                       return IconButton(
@@ -1174,10 +1175,15 @@ class _SitesTab extends StatelessWidget {
 
 /// Backend coordinator/company-owner metrics from `/api/tickets/stats`.
 class _CompanyInsightsBlock extends StatelessWidget {
-  const _CompanyInsightsBlock({required this.l10n, required this.stats});
+  const _CompanyInsightsBlock({
+    required this.l10n,
+    required this.stats,
+    this.coordinatorSession = false,
+  });
 
   final AppLocalizations l10n;
   final TicketStats stats;
+  final bool coordinatorSession;
 
   Widget _kvRow(String k, int v) {
     return Padding(
@@ -1264,6 +1270,18 @@ class _CompanyInsightsBlock extends StatelessWidget {
           _section(l10n.t('insight_tickets_by_category'), stats.ticketsByCategory),
           _section(l10n.t('insight_tickets_by_status'), stats.ticketsByStatus),
           _section(l10n.t('insight_tickets_by_scope'), stats.ticketsByRoleScope),
+          if (coordinatorSession && !stats.hasCompanyInsights)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                l10n.t('coordinator_insights_empty'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(140),
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1519,18 +1537,18 @@ class _StatsTab extends StatelessWidget {
     }
     return Consumer<TicketsProvider>(
       builder: (context, provider, _) {
+        final auth = context.read<AuthProvider>();
         final stats = provider.stats;
         final inspection = stats?.inspectionStats;
         final hasFilter = provider.dateFrom != null || provider.dateTo != null;
 
         return RefreshIndicator(
           onRefresh: () async {
-            final auth = context.read<AuthProvider>();
-            await provider.fetchStats();
+            final authRefresh = context.read<AuthProvider>();
+            await provider.refreshAnalyticsForSession(
+              hasCoordinatorCompany: authRefresh.hasCoordinatorCompany,
+            );
             await provider.fetchTickets();
-            if (auth.isCompanyOwner || auth.isCoordinator) {
-              await provider.fetchCompanyDashboard();
-            }
           },
           color: const Color(0xFF6C63FF),
           child: ListView(
@@ -1553,6 +1571,21 @@ class _StatsTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              if (kDebugMode)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Debug: role=${auth.user?.role ?? "?"} · companyId=${auth.user?.companyId ?? "none"} · API ${ApiConfig.baseUrl}',
+                      style: TextStyle(
+                        color: Colors.amber.withAlpha(204),
+                        fontSize: 10,
+                        height: 1.25,
+                      ),
+                    ),
+                  ),
+                ),
               // Date range filter
               Container(
                 padding: const EdgeInsets.all(14),
@@ -1814,14 +1847,19 @@ class _StatsTab extends StatelessWidget {
                     ],
                   ),
                 ),
-              if (stats != null && stats.hasCompanyInsights) ...[
+              if (stats != null &&
+                  (stats.hasCompanyInsights || auth.hasCoordinatorCompany)) ...[
                 const SizedBox(height: 16),
-                _CompanyInsightsBlock(l10n: l10n, stats: stats),
+                _CompanyInsightsBlock(
+                  l10n: l10n,
+                  stats: stats,
+                  coordinatorSession: auth.hasCoordinatorCompany,
+                ),
               ],
               Builder(
                 builder: (context) {
                   final dash = provider.companyDashboard;
-                  if (dash == null || !dash.hasAnyMetrics) {
+                  if (dash == null) {
                     return const SizedBox.shrink();
                   }
                   return Column(

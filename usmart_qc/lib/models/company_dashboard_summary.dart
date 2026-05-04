@@ -45,8 +45,6 @@ class CompanyDashboardSummary {
   final int totalTickets;
   final List<StaffPerformanceRow> staffPerformance;
 
-  bool get hasAnyMetrics => totalStaff > 0 || totalTickets > 0 || staffPerformance.isNotEmpty;
-
   factory CompanyDashboardSummary.fromJson(Map<String, dynamic> json) {
     final perfRaw = json['staffPerformance'];
     final perf = perfRaw is List

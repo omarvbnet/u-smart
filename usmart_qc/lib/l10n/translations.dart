@@ -68,6 +68,8 @@ const Map<String, String> _en = {
   'site_row_maintenance': 'Maintenance: {{n}} · {{h}} h',
   'sla_compliance': 'SLA Compliance',
   'company_insights': 'Company workspace',
+  'coordinator_insights_empty':
+      'No breakdown rows yet (staff/tickets). Pull to refresh after tickets exist, or confirm the backend matches this app version.',
   'insight_staff_by_role': 'Staff by role',
   'insight_tickets_by_category': 'Tickets by category',
   'insight_tickets_by_status': 'Tickets by status',
@@ -451,6 +453,8 @@ const Map<String, String> _ar = {
   'site_row_maintenance': 'الصيانة: {{n}} · {{h}} س',
   'sla_compliance': 'الامتثال لـ SLA',
   'company_insights': 'مساحة عمل الشركة',
+  'coordinator_insights_empty':
+      'لا توجد صفوف تفصيل بعد. اسحب للتحديث بعد وجود تذاكر، أو تأكد أن الخادم يطابق إصدار التطبيق.',
   'insight_staff_by_role': 'الموظفون حسب الدور',
   'insight_tickets_by_category': 'التذاكر حسب الفئة',
   'insight_tickets_by_status': 'التذاكر حسب الحالة',
@@ -825,6 +829,8 @@ const Map<String, String> _ku = {
   'site_row_maintenance': 'پاراستن: {{n}} · {{h}} ک',
   'sla_compliance': 'گوێرانی SLA',
   'company_insights': 'شوێنی کارکردنی کۆمپانیا',
+  'coordinator_insights_empty':
+      'هێشتا هیچ پێکهاتەیەک نییە. دوای دروستکردنی تێکتەکان نوێ بکەرەوە، یان دڵنیابە لە هاوتا بوونی سێرڤەر و ئەپ.',
   'insight_staff_by_role': 'کارمەندان بەپێی ڕۆڵ',
   'insight_tickets_by_category': 'تیکێتەکان بەپێی پۆل',
   'insight_tickets_by_status': 'تیکێتەکان بەپێی دۆخ',
@@ -1201,6 +1207,8 @@ const Map<String, String> _tr = {
   'site_row_maintenance': 'Bakım: {{n}} · {{h}} s',
   'sla_compliance': 'SLA Uyumu',
   'company_insights': 'Şirket çalışma alanı',
+  'coordinator_insights_empty':
+      'Henüz ayrıntı satırı yok. Biletler oluşunca yenileyin veya sunucunun uygulama sürümüyle uyumlu olduğundan emin olun.',
   'insight_staff_by_role': 'Role göre personel',
   'insight_tickets_by_category': 'Kategoriye göre biletler',
   'insight_tickets_by_status': 'Duruma göre biletler',

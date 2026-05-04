@@ -28,6 +28,19 @@ class AuthProvider extends ChangeNotifier {
   bool get isCompanyOwner => _user?.isCompanyOwner ?? false;
   bool get mustChangePassword => _user?.mustChangePassword ?? false;
 
+  /// JWT + `/me` include `companyId` for coordinator-platform users (owner, coordinator, admin, technician, …).
+  bool get hasCoordinatorCompany {
+    final id = _user?.companyId;
+    return id != null && id.isNotEmpty;
+  }
+
+  /// Company hub (staff, billing): owners, coordinators, and platform admins — not field technician/worker roles.
+  bool get canAccessCompanyHub =>
+      hasCoordinatorCompany &&
+      (isCompanyOwner ||
+          isCoordinator ||
+          (_user?.role == 'ADMIN'));
+
   Future<void> tryAutoLogin() async {
     _loading = true;
     notifyListeners();

@@ -269,20 +269,32 @@ class TicketsProvider extends ChangeNotifier {
       final query = <String, String>{'serviceSlug': ApiConfig.serviceSlug};
       if (_dateFrom != null) query['from'] = _formatDate(_dateFrom!);
       if (_dateTo != null) query['to'] = _formatDate(_dateTo!);
-      final data = await _api.get(ApiConfig.ticketStats, query: query);
-      if (data['success'] == true && data['stats'] != null) {
-        _stats =
-            TicketStats.fromJson(data['stats'] as Map<String, dynamic>);
+      final data = await _api.getSafe(ApiConfig.ticketStats, query: query);
+      if (data != null &&
+          data['success'] == true &&
+          data['stats'] is Map<String, dynamic>) {
+        _stats = TicketStats.fromJson(
+            data['stats'] as Map<String, dynamic>);
         notifyListeners();
       }
     } catch (_) {}
   }
 
-  /// Coordinator / company-owner JWT only; others receive 401 — state cleared.
+  /// Call after login / cold start so Analytics has data without relying on tab `initState` (hot reload does not re-run it).
+  Future<void> refreshAnalyticsForSession({required bool hasCoordinatorCompany}) async {
+    await fetchStats();
+    if (hasCoordinatorCompany) {
+      await fetchCompanyDashboard();
+    }
+  }
+
+  /// Coordinator JWT (`companyId` on `/me`); legacy requesters get 401 — state cleared.
   Future<void> fetchCompanyDashboard() async {
     try {
-      final data = await _api.get(ApiConfig.companyDashboard);
-      if (data['success'] == true && data['dashboard'] is Map<String, dynamic>) {
+      final data = await _api.getSafe(ApiConfig.companyDashboard);
+      if (data != null &&
+          data['success'] == true &&
+          data['dashboard'] is Map<String, dynamic>) {
         _companyDashboard = CompanyDashboardSummary.fromJson(
           data['dashboard'] as Map<String, dynamic>,
         );

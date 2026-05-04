@@ -44,6 +44,11 @@ class User {
   bool get isWorker => role == 'WORKER';
   bool get isCompanyOwner => role == 'COMPANY_OWNER';
 
+  static String _normalizeRole(dynamic raw) {
+    if (raw is! String || raw.trim().isEmpty) return 'COMPANY';
+    return raw.trim().toUpperCase();
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] as String,
@@ -55,7 +60,7 @@ class User {
       status: json['status'] as String? ?? 'ACTIVE',
       hasUpdatedCredentials: json['hasUpdatedCredentials'] == true,
       serviceSlug: json['serviceSlug'] as String? ?? 'quality-control-supervision',
-      role: json['role'] as String? ?? 'COMPANY',
+      role: _normalizeRole(json['role']),
       province: json['province'] as String?,
       provinceFilterActive: json['provinceFilterActive'] as bool? ?? true,
       companyId: json['companyId'] as String?,

@@ -55,6 +55,11 @@ void main() async {
       geofenceService.start();
       ticketsProvider.startPolling();
       notificationsProvider.startPolling();
+      Future.microtask(() async {
+        await ticketsProvider.refreshAnalyticsForSession(
+          hasCoordinatorCompany: authProvider.hasCoordinatorCompany,
+        );
+      });
     } else {
       ticketsProvider.setCurrentUserId(null);
       geofenceService.stop();
