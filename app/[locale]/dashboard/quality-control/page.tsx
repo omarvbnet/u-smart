@@ -452,6 +452,11 @@ export default function QualityControlDashboardPage() {
       phone: user?.phone || '',
       province: site.province,
       designSpecifications: '',
+      taskCategory: 'QUALITY',
+      checklistTemplateId: '',
+      assignmentScope: 'COMPANY_STAFF',
+      assigneeCoordinatorUserId: '',
+      resubmitToRequester: false,
     });
     setSelectedSiteId(site.siteId);
     setTicketFormOpen(true);
