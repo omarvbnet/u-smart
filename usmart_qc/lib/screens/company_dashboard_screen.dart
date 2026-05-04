@@ -164,6 +164,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                 ],
               ),
               child: FloatingActionButton(
+                heroTag: 'fab_new_ticket',
                 onPressed: () {
                   showNewTicketTypePicker(context);
                 },
@@ -1162,6 +1163,7 @@ class _SitesTab extends StatelessWidget {
               right: 20,
               bottom: 24,
               child: FloatingActionButton(
+                heroTag: 'fab_new_site',
                 onPressed: () => Navigator.of(context)
                     .push(
                       MaterialPageRoute(builder: (_) => const SiteFormScreen()),
