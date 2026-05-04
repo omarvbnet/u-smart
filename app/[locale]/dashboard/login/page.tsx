@@ -29,7 +29,7 @@ export default function RequesterLoginPage() {
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
 
   useEffect(() => {
-    fetch('/api/auth/requester-me')
+    fetch('/api/auth/requester-me', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.user) {
@@ -52,11 +52,14 @@ export default function RequesterLoginPage() {
       const res = await fetch('/api/auth/requester-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ usernameOrEmail: username.trim(), username: username.trim(), password }),
       });
       const data = await res.json();
       if (data.success) {
-        const meRes = await fetch('/api/auth/requester-me').then((r) => r.json());
+        const meRes = await fetch('/api/auth/requester-me', { credentials: 'include' }).then((r) =>
+          r.json(),
+        );
         const target = meRes.success && meRes.user?.serviceSlug === 'quality-control-supervision'
           ? `/${locale}/dashboard/quality-control`
           : `/${locale}/dashboard`;
