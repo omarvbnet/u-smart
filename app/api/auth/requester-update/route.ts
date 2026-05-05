@@ -109,7 +109,15 @@ export async function PATCH(req: NextRequest) {
     const company = typeof body.company === 'string' ? body.company.trim() : undefined;
     const companyCertificationUrl = typeof body.companyCertificationUrl === 'string' ? body.companyCertificationUrl.trim() || null : undefined;
 
-    const data: { username?: string; passwordHash?: string; name?: string; phone?: string; company?: string; companyCertificationUrl?: string | null; hasUpdatedCredentials?: boolean } = {};
+    const data: {
+      username?: string;
+      passwordHash?: string;
+      name?: string | null;
+      phone?: string;
+      company?: string | null;
+      companyCertificationUrl?: string | null;
+      hasUpdatedCredentials?: boolean;
+    } = {};
     if (newUsername.length >= 3) {
       const existing = await prisma.ticketRequester.findUnique({
         where: { username: newUsername },
