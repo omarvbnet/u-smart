@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
+import { getSharedSiteTicketOrClauses } from '@/lib/site-share-access';
 
 export async function GET(req: NextRequest) {
   try {
@@ -104,6 +105,7 @@ export async function GET(req: NextRequest) {
     }
     const requesterServiceSlug = (requester as { serviceSlug?: string }).serviceSlug ?? 'enterprise-networking';
     const requesterRole = (requester as { role?: string }).role ?? 'COMPANY';
+    const canReceiveSharedSites = requesterRole === 'COMPANY' || requesterRole === 'PERSONAL';
     const linkedCompanyId =
       requesterRole === 'COMPANY'
         ? await getLinkedCoordinatorCompanyId(prisma, {
@@ -124,6 +126,10 @@ export async function GET(req: NextRequest) {
       ? dashboardSlug
       : requesterServiceSlug;
 
+    const sharedClausesMain = canReceiveSharedSites
+      ? await getSharedSiteTicketOrClauses(prisma, payload.requesterId, filterServiceSlug)
+      : [];
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let where: any = linkedCompanyId
       ? {
@@ -134,6 +140,17 @@ export async function GET(req: NextRequest) {
           requesterId: payload.requesterId,
           serviceSlug: filterServiceSlug,
         };
+
+    if (sharedClausesMain.length > 0) {
+      if (where.OR && Array.isArray(where.OR)) {
+        where.OR = [...where.OR, ...sharedClausesMain];
+      } else if (where.requesterId && where.serviceSlug) {
+        const rid = where.requesterId;
+        const slug = where.serviceSlug;
+        delete where.requesterId;
+        where.OR = [{ requesterId: rid, serviceSlug: slug }, ...sharedClausesMain];
+      }
+    }
     if (from) {
       const d = new Date(from);
       d.setHours(0, 0, 0, 0);
@@ -186,14 +203,16 @@ export async function GET(req: NextRequest) {
     let inspectionTrend: InspectionCounts | undefined;
 
     if (filterServiceSlug === 'quality-control-supervision') {
+      const sharedQc = canReceiveSharedSites
+        ? await getSharedSiteTicketOrClauses(prisma, payload.requesterId, 'quality-control-supervision')
+        : [];
+      const qcVisibilityOr = linkedCompanyId
+        ? [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }, ...sharedQc]
+        : [{ requesterId: payload.requesterId }, ...sharedQc];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const baseWhere: any = {
         serviceSlug: 'quality-control-supervision',
-        AND: [
-          linkedCompanyId
-            ? { OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }] }
-            : { requesterId: payload.requesterId },
-        ],
+        AND: [{ OR: qcVisibilityOr }],
       };
       if (siteNameParam) {
         baseWhere.AND.push({ OR: [{ company: { contains: siteNameParam } }] });

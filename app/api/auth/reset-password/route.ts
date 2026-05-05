@@ -3,23 +3,25 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { checkEmailOtp } from '@/lib/email-otp-store';
 import { normalizeEmailInput } from '@/lib/email-input';
+import { sendRecoveryCredentialsEmail } from '@/lib/email';
+import { generateTemporaryPassword } from '@/lib/temporary-password';
 
-/** Admin reset password: verify OTP and set new password. */
+/** Admin reset password: verify OTP then email temporary password + require change on login. Legacy: optional newPassword sets password directly. */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const email = typeof body.email === 'string' ? normalizeEmailInput(body.email).toLowerCase() : '';
     const code = typeof body.code === 'string' ? body.code.trim() : '';
-    const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+    const newPassword = typeof body.newPassword === 'string' ? body.newPassword.trim() : '';
 
-    if (!email || !code || !newPassword) {
+    if (!email || !code) {
       return NextResponse.json(
-        { success: false, message: 'Email, verification code, and new password are required' },
+        { success: false, message: 'Email and verification code are required' },
         { status: 400 }
       );
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword && newPassword.length < 6) {
       return NextResponse.json(
         { success: false, message: 'Password must be at least 6 characters' },
         { status: 400 }
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!user) {
@@ -75,15 +77,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    if (newPassword) {
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { password: passwordHash, mustChangePassword: false },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Password has been reset successfully. You can now sign in.',
+      });
+    }
+
+    const plain = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(plain, 10);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: passwordHash },
+      data: { password: passwordHash, mustChangePassword: true },
     });
+
+    const sent = await sendRecoveryCredentialsEmail(email, email, plain);
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (!sent && !isDev) {
+      return NextResponse.json(
+        { success: false, message: 'Verified, but failed to send email. Contact support.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Password has been reset successfully. You can now sign in.',
+      message: 'Verification successful. Sign-in details were sent to your email. You must set a new password after logging in.',
+      ...(isDev && { devTemporaryPassword: plain }),
     });
   } catch (e) {
     console.error('POST /api/auth/reset-password:', e);

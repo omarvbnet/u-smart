@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 
 const prisma = _prisma as any;
 
@@ -122,19 +123,19 @@ export async function POST(
       });
     } catch { /* ignore */ }
 
-    if (row.requesterId && typeof prisma.notification?.create === 'function') {
+    if (row.requesterId) {
       try {
-        await prisma.notification.create({
-          data: {
-            type: 'status_changed',
-            title: 'NCR approved — re-inspection',
-            message: 'Your NCR resubmission was approved. The engineer will re-inspect.',
-            ticketId: id,
-            requesterId: row.requesterId,
-            forAdmin: false,
-          },
+        await notifyRequesterI18n({
+          prisma,
+          type: 'status_changed',
+          ticketId: id,
+          requesterId: row.requesterId,
+          payload: { key: 'ncr_approved_reinspect' },
+          data: { ticketId: id, type: 'status_changed' },
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     return NextResponse.json({ success: true, message: 'Approved — re-inspection opened' });
@@ -146,21 +147,19 @@ export async function POST(
     data: { company: JSON.stringify(parsed) },
   });
 
-  if (row.requesterId && typeof prisma.notification?.create === 'function') {
+  if (row.requesterId) {
     try {
-      await prisma.notification.create({
-        data: {
-          type: 'status_changed',
-          title: 'NCR rework requested',
-          message: comment
-            ? `Engineer requested rework: ${comment}`
-            : 'Engineer requested rework. Please fix and resubmit.',
-          ticketId: id,
-          requesterId: row.requesterId,
-          forAdmin: false,
-        },
+      await notifyRequesterI18n({
+        prisma,
+        type: 'status_changed',
+        ticketId: id,
+        requesterId: row.requesterId,
+        payload: { key: 'ncr_rework', vars: { comment: typeof comment === 'string' ? comment : '' } },
+        data: { ticketId: id, type: 'status_changed' },
       });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return NextResponse.json({ success: true, message: 'Rework sent to requester' });

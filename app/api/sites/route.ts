@@ -39,6 +39,64 @@ async function sumCompletedHours(where: Prisma.VisitorRequestWhereInput): Promis
   return Math.round(sum * 10) / 10;
 }
 
+type SiteRow = {
+  id: string;
+  siteId: string;
+  location: string;
+  province: string;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+async function siteWithTicketCounts(
+  siteRow: SiteRow,
+  ticketOwnerRequesterId: string,
+  maintenanceSlugs: string[]
+) {
+  const qcBase = {
+    requesterId: ticketOwnerRequesterId,
+    siteName: siteRow.siteId,
+    serviceSlug: 'quality-control-supervision',
+  };
+  const [
+    qualityControlCount,
+    enterpriseCount,
+    inspectionQcCount,
+    maintenanceQcCount,
+    inspectionHoursTotal,
+    maintenanceHoursTotal,
+  ] = await Promise.all([
+    prisma.visitorRequest.count({ where: { ...qcBase } }),
+    prisma.visitorRequest.count({
+      where: {
+        requesterId: ticketOwnerRequesterId,
+        siteName: siteRow.siteId,
+        serviceSlug: 'enterprise-networking',
+      },
+    }),
+    prisma.visitorRequest.count({
+      where: { ...qcBase, technique: { notIn: maintenanceSlugs } },
+    }),
+    prisma.visitorRequest.count({
+      where: { ...qcBase, technique: { in: maintenanceSlugs } },
+    }),
+    sumCompletedHours({ ...qcBase, technique: { notIn: maintenanceSlugs } }),
+    sumCompletedHours({ ...qcBase, technique: { in: maintenanceSlugs } }),
+  ]);
+  return {
+    ...siteRow,
+    ticketCount: qualityControlCount + enterpriseCount,
+    qualityControlCount,
+    enterpriseCount,
+    inspectionQcCount,
+    maintenanceQcCount,
+    inspectionHoursTotal,
+    maintenanceHoursTotal,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
@@ -60,6 +118,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const me = await prisma.ticketRequester.findUnique({
+      where: { id: payload.requesterId },
+      select: { role: true },
+    });
+    const myRole = me?.role ?? 'COMPANY';
+    const canReceiveSharedSites = myRole === 'COMPANY' || myRole === 'PERSONAL';
+
     const sites = await site.findMany({
       where: { requesterId: payload.requesterId },
       orderBy: { createdAt: 'desc' },
@@ -87,56 +152,80 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Ticket counts per site + QC split (inspection vs maintenance techniques)
-    type SiteRow = { id: string; siteId: string; location: string; province: string; createdAt: Date; updatedAt: Date };
     const maintenanceSlugs = await getMaintenanceSlugs();
 
-    const sitesWithCounts = await Promise.all(
+    const ownedWithMeta = await Promise.all(
       (sites as SiteRow[]).map(async (siteRow) => {
-        const qcBase = {
-          requesterId: payload.requesterId,
-          siteName: siteRow.siteId,
-          serviceSlug: 'quality-control-supervision',
-        };
-        const [
-          qualityControlCount,
-          enterpriseCount,
-          inspectionQcCount,
-          maintenanceQcCount,
-          inspectionHoursTotal,
-          maintenanceHoursTotal,
-        ] = await Promise.all([
-          prisma.visitorRequest.count({ where: { ...qcBase } }),
-          prisma.visitorRequest.count({
-            where: {
-              requesterId: payload.requesterId,
-              siteName: siteRow.siteId,
-              serviceSlug: 'enterprise-networking',
-            },
-          }),
-          prisma.visitorRequest.count({
-            where: { ...qcBase, technique: { notIn: maintenanceSlugs } },
-          }),
-          prisma.visitorRequest.count({
-            where: { ...qcBase, technique: { in: maintenanceSlugs } },
-          }),
-          sumCompletedHours({ ...qcBase, technique: { notIn: maintenanceSlugs } }),
-          sumCompletedHours({ ...qcBase, technique: { in: maintenanceSlugs } }),
-        ]);
+        const row = await siteWithTicketCounts(siteRow, payload.requesterId, maintenanceSlugs);
         return {
-          ...siteRow,
-          ticketCount: qualityControlCount + enterpriseCount,
-          qualityControlCount,
-          enterpriseCount,
-          inspectionQcCount,
-          maintenanceQcCount,
-          inspectionHoursTotal,
-          maintenanceHoursTotal,
+          ...row,
+          sharedWithMe: false,
+          canEdit: true,
+          ownerRequesterId: payload.requesterId,
         };
       })
     );
 
-    return NextResponse.json({ success: true, sites: sitesWithCounts });
+    let sharedWithMeta: typeof ownedWithMeta = [];
+    if (canReceiveSharedSites) {
+      try {
+        const shares = await (prisma as any).siteShare.findMany({
+          where: { sharedWithRequesterId: payload.requesterId },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            createdAt: true,
+            site: {
+              select: {
+                id: true,
+                siteId: true,
+                location: true,
+                province: true,
+                latitude: true,
+                longitude: true,
+                createdAt: true,
+                updatedAt: true,
+                requesterId: true,
+                requester: { select: { username: true, name: true } },
+              },
+            },
+          },
+        });
+        sharedWithMeta = await Promise.all(
+          shares.map(
+            async (sh: {
+              id: string;
+              site: SiteRow & { requesterId: string; requester: { username: string; name: string | null } };
+            }) => {
+              const siteRow: SiteRow = {
+                id: sh.site.id,
+                siteId: sh.site.siteId,
+                location: sh.site.location,
+                province: sh.site.province,
+                latitude: sh.site.latitude ?? null,
+                longitude: sh.site.longitude ?? null,
+                createdAt: sh.site.createdAt,
+                updatedAt: sh.site.updatedAt,
+              };
+              const row = await siteWithTicketCounts(siteRow, sh.site.requesterId, maintenanceSlugs);
+              const ownerLabel = sh.site.requester?.name?.trim() || sh.site.requester?.username || '';
+              return {
+                ...row,
+                sharedWithMe: true,
+                canEdit: false,
+                shareId: sh.id,
+                ownerRequesterId: sh.site.requesterId,
+                ownerUsername: ownerLabel,
+              };
+            }
+          )
+        );
+      } catch {
+        sharedWithMeta = [];
+      }
+    }
+
+    return NextResponse.json({ success: true, sites: [...ownedWithMeta, ...sharedWithMeta] });
   } catch (err) {
     console.error('GET /api/sites:', err);
     return NextResponse.json({ success: false, message: 'Failed to fetch sites' }, { status: 500 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, sendCleanEnergyRequestStatusEmail } from '@/lib/email';
-import { sendPushToRequesters } from '@/lib/push-notifications';
+import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 
 const TICKET_STATUSES = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'] as const;
 
@@ -331,31 +331,14 @@ export async function PATCH(
     // Notify requester when status changes or admin resubmits for edit (in-app + email)
     try {
       if (updated.requesterId && updated.requester) {
-        const statusLabels: Record<string, string> = {
-          PENDING: 'Pending',
-          ON_SITE: 'We are on site',
-          IN_PROGRESS: 'In progress',
-          COMPLETED: 'Completed',
-        };
-        const notifMessage = adminResubmitForEditReason
-          ? `Admin sent your request back for edit. Reason: ${adminResubmitForEditReason}`
-          : `Your ticket status is now: ${statusLabels[statusToApply] || statusToApply}`;
-        const notifTitle = adminResubmitForEditReason
-          ? 'Resubmit for edit'
-          : 'Ticket status updated';
-        await prisma.notification.create({
-          data: {
-            type: 'status_changed',
-            title: notifTitle,
-            message: notifMessage,
-            ticketId: id,
-            requesterId: updated.requesterId,
-            forAdmin: false,
-          },
-        });
-        await sendPushToRequesters(prisma as any, [updated.requesterId], {
-          title: notifTitle,
-          body: notifMessage,
+        await notifyRequesterI18n({
+          prisma: prisma as any,
+          type: 'status_changed',
+          ticketId: id,
+          requesterId: updated.requesterId,
+          payload: adminResubmitForEditReason
+            ? { key: 'visitor_resubmit', vars: { reason: adminResubmitForEditReason } }
+            : { key: 'visitor_status', vars: { statusKey: String(statusToApply) } },
           data: { ticketId: id, type: 'status_changed' },
         });
         const requesterEmail = (updated.requester as { email?: string | null })?.email;

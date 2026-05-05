@@ -9,6 +9,11 @@ const String _localeKey = 'provisor_locale';
 String? appLanguageCodeOverride;
 
 class LocaleProvider extends ChangeNotifier {
+  Future<void> Function()? _localeCommit;
+
+  /// Optional: persist UI language to API (set from main.dart).
+  void setLocaleCommitHandler(Future<void> Function()? handler) => _localeCommit = handler;
+
   /// Arabic is the primary default; users can switch and persist in SharedPreferences.
   Locale _locale = const Locale('ar');
 
@@ -45,6 +50,9 @@ class LocaleProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_localeKey, locale.languageCode);
+    } catch (_) {}
+    try {
+      await _localeCommit?.call();
     } catch (_) {}
   }
 

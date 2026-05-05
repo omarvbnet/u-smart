@@ -25,6 +25,7 @@ class ApiConfig {
   static const String changePassword = '/api/auth/requester-change-password';
   static const String provinceFilter = '/api/auth/requester-province-filter';
   static const String requesterPushToken = '/api/auth/requester-push-token';
+  static const String requesterUpdate = '/api/auth/requester-update';
 
   static const String notifications = '/api/notifications';
   static String notificationMarkRead(String id) => '/api/notifications/$id';
@@ -58,6 +59,7 @@ class ApiConfig {
 
   static const String sites = '/api/sites';
   static String siteDetail(String id) => '/api/sites/$id';
+  static String siteShare(String siteDbId) => '/api/sites/$siteDbId/share';
 
   static const String registrationRequests = '/api/registration-requests';
   static const String companyRequests = '/api/company-requests';

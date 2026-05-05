@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyRequesterToken, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import type { AppNotificationLocale } from '@/lib/notification-i18n';
+import { formatNotificationCopy, normalizeAppLocale, parseNotificationPayload } from '@/lib/notification-i18n';
+import { fetchPreferredLocales } from '@/lib/requester-locale';
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,7 +49,25 @@ export async function GET(req: NextRequest) {
       const unreadCount = await notification.count({
         where: { requesterId: payload.requesterId, forAdmin: false, read: false, type: { not: 'push_token' } },
       });
-      return NextResponse.json({ success: true, notifications: list, unreadCount });
+
+      const q = req.nextUrl.searchParams.get('locale');
+      const h = req.headers.get('x-provisor-locale');
+      let locale: AppNotificationLocale = 'en';
+      if (q) locale = normalizeAppLocale(q);
+      else if (h) locale = normalizeAppLocale(h);
+      else {
+        const pref = await fetchPreferredLocales(prisma as any, [payload.requesterId]);
+        locale = pref.get(payload.requesterId) ?? 'en';
+      }
+
+      const mapped = (list as Record<string, unknown>[]).map((n) => {
+        const parsed = parseNotificationPayload(n.payload);
+        if (!parsed) return n;
+        const copy = formatNotificationCopy(locale, parsed);
+        return { ...n, title: copy.title, message: copy.body };
+      });
+
+      return NextResponse.json({ success: true, notifications: mapped, unreadCount });
     }
   } catch (error) {
     const err = error as Error;

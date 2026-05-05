@@ -98,6 +98,15 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Apply JWT from POST /api/auth/requester-change-password then reload profile.
+  Future<void> applyPasswordChangeResponse(Map<String, dynamic> res) async {
+    final t = res['token'];
+    if (t is String && t.isNotEmpty) {
+      await _authService.persistSessionToken(t);
+    }
+    await refreshUser();
+  }
+
   Future<void> logout() async {
     await _authService.logout();
     _user = null;

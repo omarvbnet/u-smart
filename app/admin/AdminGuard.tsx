@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AdminNav from './AdminNav';
 
-type User = { id: string; email: string; name: string | null; role: string };
+type User = { id: string; email: string; name: string | null; role: string; mustChangePassword?: boolean };
 
 export default function AdminGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -18,6 +18,10 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   const [changePwdNew, setChangePwdNew] = useState('');
   const [changePwdLoading, setChangePwdLoading] = useState(false);
   const [changePwdError, setChangePwdError] = useState('');
+  const [forcedCurrentPwd, setForcedCurrentPwd] = useState('');
+  const [forcedNewPwd, setForcedNewPwd] = useState('');
+  const [forcedLoading, setForcedLoading] = useState(false);
+  const [forcedError, setForcedError] = useState('');
   const isLoginPage = pathname === '/admin/login';
 
   useEffect(() => {
@@ -29,7 +33,10 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.user) {
-          setUser(data.user);
+          setUser({
+            ...data.user,
+            mustChangePassword: data.user.mustChangePassword === true,
+          });
         } else {
           router.replace('/admin/login');
         }
@@ -119,6 +126,34 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
     return null;
   }
 
+  const handleForcedPasswordChange = async () => {
+    if (forcedNewPwd.length < 6 || !forcedCurrentPwd) {
+      setForcedError('Enter your temporary password and a new password (min 6 characters).');
+      return;
+    }
+    setForcedLoading(true);
+    setForcedError('');
+    try {
+      const res = await fetch('/api/auth/admin-force-change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: forcedCurrentPwd, newPassword: forcedNewPwd }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUser({ ...user, mustChangePassword: false });
+        setForcedCurrentPwd('');
+        setForcedNewPwd('');
+      } else {
+        setForcedError(data.message || 'Failed to update password');
+      }
+    } catch {
+      setForcedError('Network error');
+    } finally {
+      setForcedLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <aside className="fixed top-0 left-0 z-40 w-64 h-screen flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-white/5 shadow-2xl shadow-black/20">
@@ -172,8 +207,54 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
         {children}
       </main>
 
+      {user.mustChangePassword && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-900">Set a new password</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              You signed in with a temporary password sent to your email. Enter it below, then choose a new password to continue.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Temporary password</label>
+                <input
+                  type="password"
+                  value={forcedCurrentPwd}
+                  onChange={(e) => setForcedCurrentPwd(e.target.value)}
+                  autoComplete="current-password"
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600">New password</label>
+                <input
+                  type="password"
+                  value={forcedNewPwd}
+                  onChange={(e) => setForcedNewPwd(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={6}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              {forcedError && <p className="text-sm text-red-600">{forcedError}</p>}
+              <button
+                type="button"
+                onClick={handleForcedPasswordChange}
+                disabled={forcedLoading}
+                className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {forcedLoading ? 'Updating…' : 'Update and continue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {changePwdOpen && user && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setChangePwdOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => !user.mustChangePassword && setChangePwdOpen(false)}
+        >
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-900">Update password</h3>
             <p className="mt-1 text-sm text-slate-500">We will send a verification code to your email.</p>

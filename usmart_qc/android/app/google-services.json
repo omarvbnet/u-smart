@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "731896129854",
+    "project_id": "proviser-da3a7",
+    "storage_bucket": "proviser-da3a7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:731896129854:android:17671f22bfcf7edf5ca46f",
+        "android_client_info": {
+          "package_name": "com.usmart.usmart_qc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDJYLfjIPquoFNNZ7vaD4U3aNqbGvMG4w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

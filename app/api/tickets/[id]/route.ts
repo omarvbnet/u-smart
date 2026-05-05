@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { viewerHasSharedSiteTicketRead, visitorRequestSiteLogicalId } from '@/lib/site-share-access';
 
 const prisma = _prisma as any;
 
@@ -168,6 +169,68 @@ export async function GET(
           completedAt: true,
         },
       });
+    }
+
+    if (
+      !row &&
+      (requesterRole === 'COMPANY' || requesterRole === 'PERSONAL')
+    ) {
+      const candidate = await prisma.visitorRequest.findFirst({
+        where: { id },
+        select: { requesterId: true, siteName: true, company: true },
+      });
+      const siteLogical = visitorRequestSiteLogicalId(
+        candidate ?? { siteName: null, company: null }
+      );
+      const sharedOk =
+        candidate?.requesterId &&
+        siteLogical &&
+        (await viewerHasSharedSiteTicketRead(prisma, payload.requesterId, {
+          requesterId: candidate.requesterId,
+          siteName: siteLogical,
+        }));
+      if (sharedOk) {
+        try {
+          row = await prisma.visitorRequest.findFirst({
+            where: { id },
+            select: {
+              id: true,
+              technique: true,
+              company: true,
+              status: true,
+              createdAt: true,
+              completedAt: true,
+              requesterId: true,
+              requester: {
+                select: { name: true, phone: true, role: true, username: true },
+              },
+              maintenanceDescription: true,
+              beforeImageUrls: true,
+              finishingImageUrls: true,
+              assignedTeamId: true,
+              assignedTeam: {
+                select: {
+                  id: true,
+                  name: true,
+                  leader: { select: { id: true, fullName: true, phone: true } },
+                },
+              },
+            },
+          });
+        } catch {
+          row = await prisma.visitorRequest.findFirst({
+            where: { id },
+            select: {
+              id: true,
+              technique: true,
+              company: true,
+              status: true,
+              createdAt: true,
+              completedAt: true,
+            },
+          });
+        }
+      }
     }
 
     if (!row) {

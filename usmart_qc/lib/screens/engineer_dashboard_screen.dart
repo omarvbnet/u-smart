@@ -37,7 +37,13 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadData();
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      if (!auth.mustChangePassword) return;
+      showUpdatePasswordSheet(context, mandatoryRecovery: true);
+    });
   }
 
   Future<void> _loadData() async {

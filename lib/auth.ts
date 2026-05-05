@@ -10,6 +10,7 @@ export type AuthPayload = {
   email: string;
   name: string | null;
   role: string;
+  mustChangePassword?: boolean;
 };
 
 export function createToken(payload: AuthPayload): string {
@@ -27,6 +28,7 @@ export function verifyToken(token: string): AuthPayload | null {
       email: decoded.email,
       name: decoded.name ?? null,
       role: decoded.role,
+      mustChangePassword: decoded.mustChangePassword === true,
     };
   } catch {
     return null;

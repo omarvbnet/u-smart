@@ -17,6 +17,11 @@ class Site {
   /// Sum of (completedAt − createdAt) hours for completed maintenance QC tickets.
   final double maintenanceHoursTotal;
   final DateTime? updatedAt;
+  final bool sharedWithMe;
+  final bool canEdit;
+  final String? shareId;
+  final String? ownerUsername;
+  final String? ownerRequesterId;
 
   Site({
     required this.id,
@@ -33,11 +38,21 @@ class Site {
     this.inspectionHoursTotal = 0,
     this.maintenanceHoursTotal = 0,
     this.updatedAt,
+    this.sharedWithMe = false,
+    this.canEdit = true,
+    this.shareId,
+    this.ownerUsername,
+    this.ownerRequesterId,
   });
 
   bool get hasCoordinates => latitude != null && longitude != null;
 
   factory Site.fromJson(Map<String, dynamic> json) {
+    final canEditRaw = json['canEdit'];
+    final sharedRaw = json['sharedWithMe'];
+    final canEdit = canEditRaw is bool ? canEditRaw : true;
+    final sharedWithMe = sharedRaw is bool ? sharedRaw : false;
+
     return Site(
       id: json['id'] as String,
       siteId: json['siteId'] as String,
@@ -57,6 +72,11 @@ class Site {
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'] as String)
           : null,
+      sharedWithMe: sharedWithMe,
+      canEdit: canEdit,
+      shareId: json['shareId'] as String?,
+      ownerUsername: json['ownerUsername'] as String?,
+      ownerRequesterId: json['ownerRequesterId'] as String?,
     );
   }
 }

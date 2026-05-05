@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { sendPushToRequesters } from '@/lib/push-notifications';
+import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,35 +144,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       } catch { /* ignore */ }
     }
 
-    // Notify company: completed (non-NCR) or NCR raised
-    if (ticket.requesterId && typeof prisma.notification?.create === 'function') {
+    if (ticket.requesterId) {
       try {
-        const resultLabel: Record<string, string> = {
-          accepted: 'Accepted',
-          accepted_with_comments: 'Accepted with Comments',
-          not_accepted: 'Not Accepted',
-          ncr: 'NCR',
-        };
-        const resultText = inspectionResult ? (resultLabel[inspectionResult] ?? inspectionResult) : '';
-        const message = isNcr
-          ? 'An NCR has been raised on your ticket. Please resubmit with corrective action.'
-          : `Your ticket has been completed${resultText ? ` — Result: ${resultText}` : ''}`;
-        await prisma.notification.create({
-          data: {
+        if (isNcr) {
+          await notifyRequesterI18n({
+            prisma,
             type: 'status_changed',
-            title: isNcr ? 'NCR raised' : 'Ticket completed',
-            message,
             ticketId: id,
             requesterId: ticket.requesterId,
-            forAdmin: false,
-          },
-        });
-        await sendPushToRequesters(prisma, [ticket.requesterId], {
-          title: isNcr ? 'NCR raised' : 'Ticket completed',
-          body: message,
-          data: { ticketId: id, type: 'status_changed' },
-        });
-      } catch { /* ignore */ }
+            payload: { key: 'ticket_ncr_raised' },
+            data: { ticketId: id, type: 'status_changed' },
+          });
+        } else {
+          await notifyRequesterI18n({
+            prisma,
+            type: 'status_changed',
+            ticketId: id,
+            requesterId: ticket.requesterId,
+            payload: {
+              key: 'ticket_completed',
+              vars: { resultKey: typeof inspectionResult === 'string' ? inspectionResult : '' },
+            },
+            data: { ticketId: id, type: 'status_changed' },
+          });
+        }
+      } catch {
+        /* ignore */
+      }
     }
 
     return NextResponse.json({ success: true, message: 'Ticket completed' });

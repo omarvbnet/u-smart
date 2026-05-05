@@ -127,6 +127,31 @@ export async function sendForgotPasswordOtp(to: string, code: string): Promise<b
   });
 }
 
+/** After email OTP verification: deliver generated login username + temporary password. */
+export async function sendRecoveryCredentialsEmail(
+  to: string,
+  loginUsername: string,
+  temporaryPassword: string
+): Promise<boolean> {
+  const safeUser = escapeHtml(loginUsername);
+  const safePw = escapeHtml(temporaryPassword);
+  const html = `
+    <p style="margin:0 0 16px; color:#475569; font-size:16px;">تم التحقق من بريدك. استخدم البيانات التالية لتسجيل الدخول، ثم سيتم طلب تغيير كلمة المرور فوراً لأسباب أمنية.</p>
+    <p style="margin:0 0 8px; color:#64748b; font-size:14px;">اسم المستخدم / معرّف الدخول:</p>
+    <p style="margin:0 0 20px; font-size:18px; font-weight:700; color:#0f172a; word-break:break-all;">${safeUser}</p>
+    <p style="margin:0 0 8px; color:#64748b; font-size:14px;">كلمة المرور المؤقتة:</p>
+    <p style="margin:0 0 24px; font-size:18px; font-weight:700; letter-spacing:2px; color:#0f172a; word-break:break-all;">${safePw}</p>
+    <p style="margin:0; color:#94a3b8; font-size:12px;">فريق U-SMART</p>
+  `.trim();
+  const text = `اسم المستخدم: ${loginUsername}\nكلمة المرور المؤقتة: ${temporaryPassword}\nسُيُطلب منك تغيير كلمة المرور بعد تسجيل الدخول.\nفريق U-SMART`;
+  return sendEmail({
+    to,
+    subject: 'بيانات الدخول المؤقتة - U-SMART',
+    html,
+    text,
+  });
+}
+
 /** Ticket data for completed email (full details). */
 export type TicketCompletedData = {
   ticketId: string;

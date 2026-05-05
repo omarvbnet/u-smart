@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { sendPushToRequesters } from '@/lib/push-notifications';
+import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 
 const prisma = _prisma as any;
@@ -167,32 +167,22 @@ export async function PATCH(
       });
     } catch { /* ignore */ }
 
-    const statusLabels: Record<string, string> = {
-      ON_SITE: 'On Site',
-      IN_PROGRESS: 'In Progress',
-      COMPLETED: 'Completed',
-    };
-
-    // Notify company about status change
-    if (row.requesterId && typeof prisma.notification?.create === 'function') {
+    if (row.requesterId) {
       try {
-        const message = `Your ticket status is now: ${statusLabels[newStatus] || newStatus}`;
-        await prisma.notification.create({
-          data: {
-            type: 'status_changed',
-            title: 'Ticket status updated',
-            message,
-            ticketId: id,
-            requesterId: row.requesterId,
-            forAdmin: false,
+        await notifyRequesterI18n({
+          prisma,
+          type: 'status_changed',
+          ticketId: id,
+          requesterId: row.requesterId,
+          payload: {
+            key: 'ticket_status_updated',
+            vars: { statusKey: newStatus },
           },
-        });
-        await sendPushToRequesters(prisma, [row.requesterId], {
-          title: 'Ticket status updated',
-          body: message,
           data: { ticketId: id, type: 'status_changed' },
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     return NextResponse.json({

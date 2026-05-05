@@ -32,8 +32,9 @@ const List<String> _iraqProvinces = [
 /// Screen for adding a new site or editing an existing one.
 class SiteFormScreen extends StatefulWidget {
   final Site? site;
+  final bool readOnly;
 
-  const SiteFormScreen({super.key, this.site});
+  const SiteFormScreen({super.key, this.site, this.readOnly = false});
 
   bool get isEditing => site != null;
 
@@ -84,6 +85,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   }
 
   Future<void> _openMapPicker() async {
+    if (widget.readOnly) return;
     final result = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
         builder: (context) => SiteMapPickerScreen(
@@ -98,6 +100,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   }
 
   Future<void> _submit() async {
+    if (widget.readOnly) return;
     final siteId = _siteIdCtrl.text.trim();
     final location = _locationCtrl.text.trim();
     final province = _selectedProvince ?? '';
@@ -177,7 +180,9 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          widget.isEditing ? l10n.t('site_edit') : l10n.t('site_add'),
+          widget.readOnly
+              ? l10n.t('site_view_shared')
+              : (widget.isEditing ? l10n.t('site_edit') : l10n.t('site_add')),
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
@@ -189,7 +194,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
             label: l10n.t('site_id'),
             hint: l10n.t('site_id_hint'),
             icon: Icons.tag_rounded,
-            enabled: !widget.isEditing, // Keep siteId immutable when editing (tickets may reference it)
+            enabled: !widget.readOnly && !widget.isEditing, // Keep siteId immutable when editing (tickets may reference it)
           ),
           const SizedBox(height: 16),
           _TextField(
@@ -197,6 +202,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
             label: l10n.t('site_location'),
             hint: l10n.t('site_location_hint'),
             icon: Icons.location_on_outlined,
+            enabled: !widget.readOnly,
           ),
           const SizedBox(height: 16),
           _ProvinceDropdown(
@@ -210,51 +216,61 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
                   !_iraqProvinces.contains(widget.site!.province))
                 widget.site!.province,
             ],
-            onChanged: (v) => setState(() => _selectedProvince = v),
+            onChanged: widget.readOnly ? null : (v) => setState(() => _selectedProvince = v),
           ),
           const SizedBox(height: 16),
-          _CoordinateSearchField(
-            controller: _coordinatesCtrl,
-            label: l10n.t('site_search_by_coords'),
-            hint: l10n.t('site_coordinates_hint'),
-            onApply: (lat, lng) {
-              _applyCoordinates(lat, lng);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${l10n.t('site_coordinates')}: ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'),
-                    backgroundColor: const Color(0xFF00D4AA),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-            onParseError: () {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.t('site_coords_invalid')),
-                    backgroundColor: const Color(0xFFFF4757),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _openMapPicker,
-              icon: const Icon(Icons.map, size: 20),
-              label: Text(l10n.t('site_select_on_map')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withAlpha(100)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+          if (widget.readOnly)
+            _TextField(
+              controller: _coordinatesCtrl,
+              label: l10n.t('site_coordinates'),
+              hint: l10n.t('site_coordinates_hint'),
+              icon: Icons.gps_fixed,
+              enabled: false,
+            )
+          else ...[
+            _CoordinateSearchField(
+              controller: _coordinatesCtrl,
+              label: l10n.t('site_search_by_coords'),
+              hint: l10n.t('site_coordinates_hint'),
+              onApply: (lat, lng) {
+                _applyCoordinates(lat, lng);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${l10n.t('site_coordinates')}: ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'),
+                      backgroundColor: const Color(0xFF00D4AA),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              onParseError: () {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.t('site_coords_invalid')),
+                      backgroundColor: const Color(0xFFFF4757),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openMapPicker,
+                icon: const Icon(Icons.map, size: 20),
+                label: Text(l10n.t('site_select_on_map')),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withAlpha(100)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
             ),
-          ),
+          ],
           if (_latitude != null && _longitude != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -266,28 +282,30 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
                 ),
               ),
             ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _submitting ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+          if (!widget.readOnly) ...[
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _submitting ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C63FF),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: _submitting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(l10n.t('site_save')),
               ),
-              child: _submitting
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(l10n.t('site_save')),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -299,7 +317,7 @@ class _ProvinceDropdown extends StatelessWidget {
   final String hint;
   final String? value;
   final List<String> items;
-  final void Function(String?) onChanged;
+  final void Function(String?)? onChanged;
 
   const _ProvinceDropdown({
     required this.label,

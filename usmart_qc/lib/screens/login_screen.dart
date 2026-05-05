@@ -24,7 +24,6 @@ class _LoginScreenState extends State<LoginScreen>
   bool _submitting = false;
   String _forgotUsername = '';
   String _forgotCode = '';
-  String _forgotPassword = '';
   bool _forgotSending = false;
   bool _forgotVerifying = false;
   /// Shown inside the forgot sheet so SnackBars are not hidden behind the modal.
@@ -259,26 +258,6 @@ class _LoginScreenState extends State<LoginScreen>
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    onChanged: (v) {
-                      setState(() {
-                        _forgotPassword = v;
-                        _forgotInlineMsg = null;
-                      });
-                      setModalState(() {});
-                    },
-                    scrollPadding: const EdgeInsets.only(bottom: 32),
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: l10n.t('new_password'),
-                      hintStyle: const TextStyle(color: Color(0xFF4B5563)),
-                      filled: true,
-                      fillColor: const Color(0xFF12122A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
                   if (_forgotInlineMsg != null) ...[
                     const SizedBox(height: 16),
                     DecoratedBox(
@@ -324,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _forgotVerifying || _forgotCode.replaceAll(RegExp(r'\D'), '').length != 6 || _forgotPassword.length < 6
+                          onPressed: _forgotVerifying || _forgotCode.replaceAll(RegExp(r'\D'), '').length != 6
                               ? null
                               : () => _resetPassword(sheetCtx),
                           style: ElevatedButton.styleFrom(
@@ -363,8 +342,7 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _resetPassword(BuildContext sheetCtx) async {
     final u = _forgotUsername.trim();
     final c = _forgotCode.replaceAll(RegExp(r'\D'), '');
-    final p = _forgotPassword;
-    if (u.isEmpty || c.length != 6 || p.length < 6) return;
+    if (u.isEmpty || c.length != 6) return;
     final l10n = AppLocalizations.of(context);
     setState(() => _forgotVerifying = true);
     _notifyForgotSheet();
@@ -373,16 +351,14 @@ class _LoginScreenState extends State<LoginScreen>
       final res = await api.post(ApiConfig.resetPassword, body: {
         'usernameOrEmail': u,
         'code': c,
-        'newPassword': p,
       });
       if (!mounted || !sheetCtx.mounted) return;
       if (res['success'] == true) {
         Navigator.of(sheetCtx).pop();
-        _showSnack('${l10n.t('reset_password')} – Sign in with new password.');
+        _showSnack(l10n.t('password_recovery_email_sent'));
         setState(() {
           _forgotUsername = '';
           _forgotCode = '';
-          _forgotPassword = '';
         });
       } else {
         setState(() {

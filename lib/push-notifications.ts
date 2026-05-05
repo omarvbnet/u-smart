@@ -1,4 +1,7 @@
 import * as admin from 'firebase-admin';
+import type { NotificationCopyPayload } from '@/lib/notification-i18n';
+import { formatNotificationCopy } from '@/lib/notification-i18n';
+import { fetchPreferredLocales } from '@/lib/requester-locale';
 
 type PushPayload = {
   title: string;
@@ -250,6 +253,74 @@ export async function clearUserPushToken(prisma: any, userId: string): Promise<v
   } catch (err) {
     if (!isMissingPushColumnsError(err)) throw err;
   }
+}
+
+async function getTokensForSingleRequester(prisma: any, requesterId: string): Promise<string[]> {
+  const [primary, legacy] = await Promise.all([
+    getRequesterTokens(prisma, [requesterId]),
+    getLegacyRequesterTokens(prisma, [requesterId]),
+  ]);
+  return [...new Set([...primary, ...legacy])];
+}
+
+/** One localized FCM notification per recipient (respects preferredLocale). */
+export async function sendLocalizedPushToRequesters(
+  prisma: any,
+  items: Array<{ requesterId: string; payload: NotificationCopyPayload; data?: Record<string, string> }>
+): Promise<number> {
+  if (!ensureFirebase() || !items.length) return 0;
+  const ids = [...new Set(items.map((i) => i.requesterId))];
+  const localeMap = await fetchPreferredLocales(prisma, ids);
+  const bundles = await Promise.all(
+    items.map(async (item) => {
+      const loc = localeMap.get(item.requesterId) ?? 'en';
+      const { title, body } = formatNotificationCopy(loc, item.payload);
+      const tokens = await getTokensForSingleRequester(prisma, item.requesterId);
+      const strData: Record<string, string> = {};
+      const raw = item.data ?? {};
+      for (const [k, v] of Object.entries(raw)) {
+        strData[k] = String(v);
+      }
+      return { tokens, title, body, data: strData };
+    })
+  );
+
+  type Row = { token: string; title: string; body: string; data: Record<string, string> };
+  const flat: Row[] = [];
+  for (const b of bundles) {
+    for (const token of b.tokens) {
+      flat.push({ token, title: b.title, body: b.body, data: b.data });
+    }
+  }
+  if (!flat.length) return 0;
+
+  const messaging = admin.messaging();
+  const results = await Promise.allSettled(
+    flat.map((row) =>
+      messaging.send({
+        token: row.token,
+        notification: { title: row.title, body: row.body },
+        data: row.data,
+        android: { priority: 'high' },
+        apns: {
+          payload: { aps: { sound: 'default', badge: 1, contentAvailable: true } },
+          headers: { 'apns-priority': '10' },
+        },
+      })
+    )
+  );
+
+  const invalidTokens: string[] = [];
+  results.forEach((r, idx) => {
+    if (r.status !== 'rejected') return;
+    const code = (r.reason as { code?: string } | undefined)?.code;
+    if (isInvalidTokenErrorCode(code)) invalidTokens.push(flat[idx].token);
+  });
+  if (invalidTokens.length) {
+    await Promise.allSettled(invalidTokens.map((token) => removeTokenEverywhere(prisma, token)));
+  }
+
+  return results.filter((r) => r.status === 'fulfilled').length;
 }
 
 export async function sendPushToRequesters(

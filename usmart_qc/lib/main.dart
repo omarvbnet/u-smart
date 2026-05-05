@@ -16,6 +16,7 @@ import 'providers/locale_provider.dart';
 import 'providers/conflicts_provider.dart';
 import 'providers/registration_request_provider.dart';
 import 'providers/provisor_techniques_provider.dart';
+import 'config/api_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +78,19 @@ void main() async {
   });
 
   final localeProvider = LocaleProvider();
+  apiService.setRequestLocale(localeProvider.locale.languageCode);
+  localeProvider.addListener(() {
+    apiService.setRequestLocale(localeProvider.locale.languageCode);
+  });
+  localeProvider.setLocaleCommitHandler(() async {
+    if (!authProvider.isLoggedIn) return;
+    try {
+      await apiService.patch(ApiConfig.requesterUpdate, body: {
+        'preferredLocale': localeProvider.locale.languageCode,
+      });
+    } catch (_) {}
+  });
+
   final conflictsProvider = ConflictsProvider(apiService);
   final registrationRequestProvider = RegistrationRequestProvider(apiService);
 

@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
       email: payload.email,
       name: payload.name,
       role: payload.role,
+      mustChangePassword: payload.mustChangePassword === true,
     },
   });
 }

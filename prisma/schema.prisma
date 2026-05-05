@@ -25,15 +25,16 @@ model Statistic {
 
 // نموذج المستخدم
 model User {
-  id             String        @id @default(cuid())
-  email          String        @unique
-  name           String?
-  password       String
-  role           Role          @default(USER)
-  phonePushToken String?
-  phonePlatform  String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  email                String        @unique
+  name                 String?
+  password             String
+  role                 Role          @default(USER)
+  mustChangePassword   Boolean       @default(false)
+  phonePushToken       String?
+  phonePlatform        String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
   projects       Project[]
   services       Service[]
   testimonials   Testimonial[]
@@ -334,12 +335,15 @@ model TicketRequester {
   provinceFilterActive    Boolean          @default(true)
   status                  RequesterStatus  @default(ACTIVE)
   hasUpdatedCredentials   Boolean          @default(false)
+  mustChangePassword      Boolean          @default(false)
   phonePushToken          String?
   phonePlatform           String?
+  preferredLocale         String? // en | ar | tr | ku (Provisor UI language)
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   tickets                 VisitorRequest[]
   sites                   Site[]
+  siteSharesReceived      SiteShare[]      @relation("SiteShareRecipient")
   companyProfile          Company? // when created from company request
 
   @@map("ticket_requesters")
@@ -436,12 +440,27 @@ model Site {
   longitude   Float?
   requesterId String
   requester   TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  shares      SiteShare[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
   @@unique([requesterId, siteId])
   @@index([requesterId])
   @@map("sites")
+}
+
+/// Another requester granted read access to this site row and related tickets for that owner's site identifier.
+model SiteShare {
+  id                    String          @id @default(cuid())
+  siteId                String
+  site                  Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sharedWithRequesterId String
+  sharedWith            TicketRequester @relation("SiteShareRecipient", fields: [sharedWithRequesterId], references: [id], onDelete: Cascade)
+  createdAt             DateTime        @default(now())
+
+  @@unique([siteId, sharedWithRequesterId])
+  @@index([sharedWithRequesterId])
+  @@map("site_shares")
 }
 
 enum RequesterStatus {
@@ -483,6 +502,7 @@ model Notification {
   type        String // 'new_ticket' | 'status_changed'
   title       String
   message     String
+  payload     Json? // { key, vars } for localized title/message at read time and for FCM
   ticketId    String?
   requesterId String?
   forAdmin    Boolean  @default(false)
@@ -847,6 +867,7 @@ model CoordinatorUser {
   mustChangePassword         Boolean               @default(false)
   phonePushToken             String?
   phonePlatform              String?
+  preferredLocale            String? // en | ar | tr | ku (Provisor UI language)
   companyId                  String
   company                    CoordinatorCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   managedByUserId            String?

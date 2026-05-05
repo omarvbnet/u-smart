@@ -6,10 +6,11 @@ import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME 
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getVerifiedPhoneFromCookie } from '@/lib/otp-auth';
 import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTicket } from '@/lib/email';
-import { sendPushToRequesters } from '@/lib/push-notifications';
+import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 import { hasPrivilege } from '@/lib/coordinator-access';
+import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,10 +39,9 @@ async function notifyRoleNewTicket(
   province: string,
   siteName: string,
   role: 'ENGINEER' | 'TECHNICIAN',
-  roleLabel: string
+  _roleLabel: string
 ) {
   try {
-    if (typeof prisma.notification?.create !== 'function') return;
     const recipients = await prisma.ticketRequester.findMany({
       where: {
         role,
@@ -50,27 +50,26 @@ async function notifyRoleNewTicket(
       },
       select: { id: true, province: true, provinceFilterActive: true },
     });
+    const roleKind = role === 'TECHNICIAN' ? 'maintenance' : 'qc';
     for (const recipient of recipients) {
       const filterActive = recipient.provinceFilterActive ?? true;
       const recipientProvince = recipient.province ?? null;
       if (filterActive && recipientProvince && recipientProvince !== province) continue;
       try {
-        await prisma.notification.create({
-          data: {
-            type: 'new_ticket',
-            title: 'New ticket available',
-            message: `New ${roleLabel} ticket in ${province}: ${siteName}`,
-            ticketId,
-            requesterId: recipient.id,
-            forAdmin: false,
+        await notifyRequesterI18n({
+          prisma,
+          type: 'new_ticket',
+          ticketId,
+          requesterId: recipient.id,
+          payload: {
+            key: 'new_ticket_role',
+            vars: { roleKind, province, siteName },
           },
-        });
-        await sendPushToRequesters(prisma, [recipient.id], {
-          title: 'New ticket available',
-          body: `New ${roleLabel} ticket in ${province}: ${siteName}`,
           data: { ticketId, type: 'new_ticket' },
         });
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
   } catch (e) {
     console.error('notifyRoleNewTicket:', e);
@@ -819,6 +818,9 @@ export async function GET(req: NextRequest) {
           requesterId: payload.requesterId,
           serviceSlug: filterServiceSlug,
         };
+      }
+      if (requesterRole === 'COMPANY' || requesterRole === 'PERSONAL') {
+        await applySharedSiteTicketsToVisitorWhere(prisma, payload.requesterId, filterServiceSlug, where);
       }
     }
 

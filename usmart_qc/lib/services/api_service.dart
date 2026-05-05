@@ -4,14 +4,23 @@ import '../config/api_config.dart';
 
 class ApiService {
   String? _token;
+  String? _requestLocaleCode;
 
   void setToken(String? token) {
     _token = token;
   }
 
+  /// Backend uses this for localized notification copy (en/ar/tr/ku).
+  void setRequestLocale(String? localeCode) {
+    final c = localeCode?.trim().toLowerCase();
+    _requestLocaleCode = (c != null && c.isNotEmpty) ? c : null;
+  }
+
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (_token != null) 'Authorization': 'Bearer $_token',
+        if (_requestLocaleCode != null && _requestLocaleCode!.isNotEmpty)
+          'X-Provisor-Locale': _requestLocaleCode!,
       };
 
   Uri _uri(String path, [Map<String, String>? queryParams]) {
@@ -67,9 +76,10 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> delete(String path) async {
+  Future<Map<String, dynamic>> delete(String path,
+      {Map<String, String>? query}) async {
     final response =
-        await http.delete(_uri(path), headers: _headers);
+        await http.delete(_uri(path, query), headers: _headers);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 

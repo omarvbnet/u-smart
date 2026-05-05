@@ -26,6 +26,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthProvider>();
+      if (!auth.mustChangePassword) return;
+      showUpdatePasswordSheet(context, mandatoryRecovery: true);
+    });
   }
 
   Future<void> _loadData() async {

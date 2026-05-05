@@ -25,6 +25,11 @@ const Map<String, String> _en = {
   'invalid_code': 'Invalid or expired code',
   'update_password': 'Update password',
   'update_password_hint': 'We will send a verification code to your email before updating',
+  'temporary_password_hint': 'Temporary password (from email)',
+  'password_recovery_sheet_hint':
+      'Enter the temporary password we emailed you, then choose a new password.',
+  'password_recovery_email_sent':
+      'Check your email for username and temporary password. After sign-in you must set a new password.',
   'password_updated': 'Password updated successfully',
   'sending': 'Sending...',
   'updating': 'Updating...',
@@ -399,6 +404,18 @@ const Map<String, String> _en = {
   'site_map_use_location': 'Use my location',
   'site_map_confirm': 'Confirm',
   'site_coords_invalid': 'Invalid coordinates. Use format: lat, lng (e.g. 33.3152, 44.3661)',
+  'site_share_title': 'Share site',
+  'site_share_action': 'Share',
+  'site_share_hint': 'Recipient username or email',
+  'site_share_ok': 'Site shared',
+  'site_share_failed': 'Could not complete sharing',
+  'site_view_shared': 'View site',
+  'site_shared_badge': 'Shared · {{owner}}',
+  'site_remove_share': 'Remove from my list',
+  'site_remove_share_title': 'Remove shared site?',
+  'site_remove_share_confirm':
+      'Stop showing "{{name}}" in your shared sites?',
+  'site_remove_share_done': 'Removed from your list',
 };
 
 // ─── Arabic ───
@@ -420,6 +437,11 @@ const Map<String, String> _ar = {
   'invalid_code': 'رمز غير صالح أو منتهي',
   'update_password': 'تحديث كلمة المرور',
   'update_password_hint': 'سنرسل رمز تحقق إلى بريدك قبل التحديث',
+  'temporary_password_hint': 'كلمة المرور المؤقتة (من البريد)',
+  'password_recovery_sheet_hint':
+      'أدخل كلمة المرور المؤقتة التي أرسلناها إلى بريدك، ثم اختر كلمة مرور جديدة.',
+  'password_recovery_email_sent':
+      'تحقق من بريدك لاسم المستخدم وكلمة المرور المؤقتة. بعد تسجيل الدخول يجب تعيين كلمة مرور جديدة.',
   'password_updated': 'تم تحديث كلمة المرور بنجاح',
   'sending': 'جاري الإرسال...',
   'updating': 'جاري التحديث...',
@@ -785,6 +807,17 @@ const Map<String, String> _ar = {
   'site_map_use_location': 'استخدام موقعي',
   'site_map_confirm': 'تأكيد',
   'site_coords_invalid': 'إحداثيات غير صالحة. استخدم التنسيق: lat, lng',
+  'site_share_title': 'مشاركة الموقع',
+  'site_share_action': 'مشاركة',
+  'site_share_hint': 'اسم مستخدم أو بريد المستلم',
+  'site_share_ok': 'تمت مشاركة الموقع',
+  'site_share_failed': 'تعذرت المشاركة',
+  'site_view_shared': 'عرض الموقع',
+  'site_shared_badge': 'مشارك · {{owner}}',
+  'site_remove_share': 'إزالة من قائمتي',
+  'site_remove_share_title': 'إزالة الموقع المشترك؟',
+  'site_remove_share_confirm': 'إيقاف إظهار "{{name}}" ضمن المواقع المشتركة؟',
+  'site_remove_share_done': 'تمت الإزالة من قائمتك',
 };
 
 // ─── Kurdish ───
@@ -806,6 +839,11 @@ const Map<String, String> _ku = {
   'invalid_code': 'کۆد هەڵەیە یان بەسەرچوووە',
   'update_password': 'نوێکردنەوەی وشەی نهێنی',
   'update_password_hint': 'پێش نوێکردنەوە کۆدێکی پشتڕاستکردنەوە دەنێرین بۆ ئیمەیڵەکەت',
+  'temporary_password_hint': 'وشەی نهێنی کاتی (لە ئیمەیڵ)',
+  'password_recovery_sheet_hint':
+      'وشەی نهێنی کاتی بنووسە کەمان بۆ ئیمەیڵەکەت ناردووە، پاشان وشەیەکی نوێ هەڵبژێرە.',
+  'password_recovery_email_sent':
+      'ئیمەیڵەکەت بپشکنە بۆ ناوی بەکارهێنەر و وشەی نهێنی کاتی. دوای چوونەژوورەوە دەبێت وشەی نهێنی نوێ دابنێیت.',
   'password_updated': 'وشەی نهێنی بە سەرکەوتوویی نوێکرایەوە',
   'sending': 'ناردن...',
   'updating': 'نوێکردنەوە...',
@@ -1173,6 +1211,18 @@ const Map<String, String> _ku = {
   'site_map_use_location': 'شوێنی من بەکاربێنە',
   'site_map_confirm': 'دڵنیاکردنەوە',
   'site_coords_invalid': 'کۆردیناتەکان هەڵەیە. فۆڕمات: lat, lng',
+  'site_share_title': 'هاوبەشی کردنی شوێن',
+  'site_share_action': 'هاوبەش بکە',
+  'site_share_hint': 'ناوی بەکارهێنەر یان ئیمەیڵی وەرگر',
+  'site_share_ok': 'شوێنەکە هاوبەش کرا',
+  'site_share_failed': 'هاوبەشکردن شکستی هێنا',
+  'site_view_shared': 'بینینی شوێن',
+  'site_shared_badge': 'هاوبەش · {{owner}}',
+  'site_remove_share': 'لابردن لە لیستەکەم',
+  'site_remove_share_title': 'شوێنی هاوبەش لابدرێت؟',
+  'site_remove_share_confirm':
+      'نیشاندانی "{{name}}" وەک شوێنی هاوبەش ڕابگیرێت؟',
+  'site_remove_share_done': 'لە لیستەکەت لابرا',
 };
 
 // ─── Turkish ───
@@ -1194,6 +1244,11 @@ const Map<String, String> _tr = {
   'invalid_code': 'Geçersiz veya süresi dolmuş kod',
   'update_password': 'Şifreyi güncelle',
   'update_password_hint': 'Güncellemeden önce e-postanıza bir doğrulama kodu göndereceğiz',
+  'temporary_password_hint': 'Geçici şifre (e-postadan)',
+  'password_recovery_sheet_hint':
+      'E-postanıza gönderdiğimiz geçici şifreyi girin, ardından yeni bir şifre seçin.',
+  'password_recovery_email_sent':
+      'Kullanıcı adı ve geçici şifre için e-postanızı kontrol edin. Girişten sonra yeni bir şifre belirlemelisiniz.',
   'password_updated': 'Şifre başarıyla güncellendi',
   'sending': 'Gönderiliyor...',
   'updating': 'Güncelleniyor...',
@@ -1562,4 +1617,16 @@ const Map<String, String> _tr = {
   'site_map_use_location': 'Konumumu kullan',
   'site_map_confirm': 'Onayla',
   'site_coords_invalid': 'Geçersiz koordinatlar. Format: enlem, boylam',
+  'site_share_title': 'Siteyi paylaş',
+  'site_share_action': 'Paylaş',
+  'site_share_hint': 'Alıcı kullanıcı adı veya e-posta',
+  'site_share_ok': 'Site paylaşıldı',
+  'site_share_failed': 'Paylaşım başarısız',
+  'site_view_shared': 'Siteyi görüntüle',
+  'site_shared_badge': 'Paylaşılan · {{owner}}',
+  'site_remove_share': 'Listemden kaldır',
+  'site_remove_share_title': 'Paylaşılan site kaldırılsın mı?',
+  'site_remove_share_confirm':
+      '"{{name}}" paylaşılan sitelerde gösterilmesin mi?',
+  'site_remove_share_done': 'Listenden kaldırıldı',
 };

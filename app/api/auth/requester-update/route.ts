@@ -4,6 +4,19 @@ import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
+const ALLOW_UI_LOCALES = new Set(['en', 'ar', 'tr', 'ku']);
+
+function parsePreferredLocale(body: Record<string, unknown>): string | null {
+  const v =
+    typeof body.preferredLocale === 'string'
+      ? body.preferredLocale.trim().toLowerCase()
+      : typeof body.locale === 'string'
+        ? body.locale.trim().toLowerCase()
+        : '';
+  if (ALLOW_UI_LOCALES.has(v)) return v;
+  return null;
+}
+
 export async function PATCH(req: NextRequest) {
   try {
     const auth = getRequesterFromRequest(req);
@@ -13,7 +26,8 @@ export async function PATCH(req: NextRequest) {
     const payload = auth.payload;
 
     if (payload.identitySource === 'coordinator_user') {
-      const body = await req.json();
+      const body = await req.json() as Record<string, unknown>;
+      const prefLocale = parsePreferredLocale(body);
       const newUsername = typeof body.username === 'string' ? body.username.trim() : '';
       const newPassword = typeof body.password === 'string' ? body.password : '';
       const name = typeof body.name === 'string' ? body.name.trim() : undefined;
@@ -48,11 +62,13 @@ export async function PATCH(req: NextRequest) {
       }
       if (name !== undefined) data.name = name || null;
       data.mustChangePassword = false;
+      if (prefLocale !== null) data.preferredLocale = prefLocale;
 
-      const hasChange = newUsername.length >= 3 || newPassword.length >= 6 || name !== undefined;
+      const hasChange =
+        newUsername.length >= 3 || newPassword.length >= 6 || name !== undefined || prefLocale !== null;
       if (!hasChange) {
         return NextResponse.json(
-          { success: false, message: 'Provide at least: new username, new password, or name' },
+          { success: false, message: 'Provide at least: preferredLocale, new username, new password, or name' },
           { status: 400 }
         );
       }
@@ -60,7 +76,7 @@ export async function PATCH(req: NextRequest) {
       const updated = await (prisma as any).coordinatorUser.update({
         where: { id: payload.requesterId },
         data,
-        select: { id: true, username: true, name: true, role: true, companyId: true },
+        select: { id: true, username: true, name: true, role: true, companyId: true, preferredLocale: true },
       });
       return NextResponse.json({
         success: true,
@@ -70,6 +86,7 @@ export async function PATCH(req: NextRequest) {
           name: updated.name,
           role: updated.role,
           companyId: updated.companyId,
+          preferredLocale: updated.preferredLocale ?? null,
         },
       });
     }
@@ -83,7 +100,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Account is blocked' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await req.json() as Record<string, unknown>;
+    const prefLocale = parsePreferredLocale(body);
     const newUsername = typeof body.username === 'string' ? body.username.trim() : '';
     const newPassword = typeof body.password === 'string' ? body.password : '';
     const name = typeof body.name === 'string' ? body.name.trim() : undefined;
@@ -117,12 +135,25 @@ export async function PATCH(req: NextRequest) {
     }
     if (company !== undefined) data.company = company || null;
     if (companyCertificationUrl !== undefined) data.companyCertificationUrl = companyCertificationUrl;
-    data.hasUpdatedCredentials = true;
 
-    const hasChange = newUsername.length >= 3 || newPassword.length >= 6 || name !== undefined || phone !== undefined || company !== undefined || companyCertificationUrl !== undefined;
+    const credentialOrProfileChange =
+      newUsername.length >= 3 ||
+      newPassword.length >= 6 ||
+      name !== undefined ||
+      phone !== undefined ||
+      company !== undefined ||
+      companyCertificationUrl !== undefined;
+    if (credentialOrProfileChange) data.hasUpdatedCredentials = true;
+    if (prefLocale !== null) (data as Record<string, unknown>).preferredLocale = prefLocale;
+
+    const hasChange = credentialOrProfileChange || prefLocale !== null;
     if (!hasChange) {
-      return NextResponse.json(
-        { success: false, message: 'Provide at least: new username (min 3 chars), new password (min 6 chars), name, phone, company, or certification URL' },
+        return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Provide at least: preferredLocale (en/ar/tr/ku), new username (min 3 chars), new password (min 6 chars), name, phone, company, or certification URL',
+        },
         { status: 400 }
       );
     }
@@ -143,6 +174,7 @@ export async function PATCH(req: NextRequest) {
         if (phone !== undefined) safe.phone = phone || '';
         if (company !== undefined) safe.company = company || null;
         if (companyCertificationUrl !== undefined) safe.companyCertificationUrl = companyCertificationUrl;
+        if (prefLocale !== null) safe.preferredLocale = prefLocale;
         updated = await prisma.ticketRequester.update({
           where: { id: payload.requesterId },
           data: safe as { username?: string; passwordHash?: string; name?: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null },

@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
         name: true,
         password: true,
         role: true,
+        mustChangePassword: true,
       },
     });
 
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
       email: user.email,
       name: user.name,
       role: user.role,
+      mustChangePassword: user.mustChangePassword === true,
     });
 
     const res = NextResponse.json({
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
+        mustChangePassword: user.mustChangePassword === true,
       },
     });
 

@@ -91,4 +91,36 @@ class SitesProvider extends ChangeNotifier {
     } catch (_) {}
     return false;
   }
+
+  /// Shares an owned site with another requester by username or email (server validates).
+  Future<String?> shareSite(String siteDbId, String usernameOrEmail) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.siteShare(siteDbId),
+        body: {'usernameOrEmail': usernameOrEmail.trim()},
+      );
+      if (data['success'] == true) {
+        await fetchSites();
+        return null;
+      }
+      return data['message'] as String? ?? 'Failed';
+    } catch (_) {
+      return 'Failed';
+    }
+  }
+
+  /// Owner revokes a share, or recipient removes the site from their list.
+  Future<bool> revokeSiteShare(String siteDbId, String shareId) async {
+    try {
+      final data = await _api.delete(
+        ApiConfig.siteShare(siteDbId),
+        query: {'shareId': shareId},
+      );
+      if (data['success'] == true) {
+        await fetchSites();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
 }

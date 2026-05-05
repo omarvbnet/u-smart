@@ -27,6 +27,11 @@ class AuthService {
     _api.setToken(null);
   }
 
+  /// After password change API returns a fresh JWT (session cookie not used on mobile).
+  Future<void> persistSessionToken(String token) async {
+    await _saveToken(token);
+  }
+
   Future<String> _fetchRole() async {
     try {
       final data = await _api.get(ApiConfig.requesterRole);

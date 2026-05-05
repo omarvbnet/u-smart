@@ -13,7 +13,6 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -94,13 +93,12 @@ export default function AdminLoginPage() {
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailNorm, code, newPassword }),
+        body: JSON.stringify({ email: emailNorm, code }),
       });
       const data = await res.json();
       if (data.success) {
         setStep('login');
         setCode('');
-        setNewPassword('');
       } else {
         setError(data.message || 'Failed to reset password');
       }
@@ -129,7 +127,7 @@ export default function AdminLoginPage() {
           <p className="text-gray-500 text-sm text-center mb-8">
             {step === 'login' && 'Sign in to access the admin panel'}
             {step === 'forgot-request' && 'Reset your password'}
-            {step === 'forgot-verify' && 'Enter verification code and new password'}
+            {step === 'forgot-verify' && 'Enter the verification code — login details will be emailed to you'}
           </p>
 
           {step === 'login' && (
@@ -257,31 +255,16 @@ export default function AdminLoginPage() {
                   required
                 />
               </div>
-              <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                  New password
-                </label>
-                <input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••"
-                  minLength={6}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
               <button
                 type="submit"
-                disabled={loading || code.replace(/\D/g, '').length < 6 || newPassword.length < 6}
+                disabled={loading || code.replace(/\D/g, '').length < 6}
                 className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {loading ? 'Resetting...' : 'Reset password'}
+                {loading ? 'Verifying...' : 'Verify and email sign-in details'}
               </button>
               <button
                 type="button"
-                onClick={() => { setStep('forgot-request'); setCode(''); setNewPassword(''); setError(''); }}
+                onClick={() => { setStep('forgot-request'); setCode(''); setError(''); }}
                 className="w-full py-2 text-gray-600 hover:text-gray-800 text-sm"
               >
                 ← Back

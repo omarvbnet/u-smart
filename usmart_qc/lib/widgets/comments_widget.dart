@@ -28,6 +28,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
     if (text.isEmpty) return;
     setState(() => _sending = true);
     await widget.onAdd(text);
+    if (!mounted) return;
     _ctrl.clear();
     setState(() => _sending = false);
   }
@@ -61,8 +62,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFF6C63FF).withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
@@ -87,7 +87,9 @@ class _CommentsWidgetState extends State<CommentsWidget> {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Color(0xFF6C63FF)),
+                  strokeWidth: 2,
+                  color: Color(0xFF6C63FF),
+                ),
               ),
             ),
           )
@@ -96,94 +98,112 @@ class _CommentsWidgetState extends State<CommentsWidget> {
             padding: const EdgeInsets.all(16),
             child: Text(
               l10n.t('no_comments'),
-              style:
-                  TextStyle(color: Colors.white.withAlpha(60), fontSize: 13),
+              style: TextStyle(color: Colors.white.withAlpha(60), fontSize: 13),
             ),
           )
         else
-          ...widget.comments.map((c) => Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(5),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6C63FF).withAlpha(30),
-                              borderRadius: BorderRadius.circular(8),
+          ...widget.comments.map(
+            (c) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withAlpha(30),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Text(
+                              c.authorName.isNotEmpty
+                                  ? c.authorName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Color(0xFF8B83FF),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                            child: Center(
-                              child: Text(
-                                c.authorName.isNotEmpty
-                                    ? c.authorName[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  color: Color(0xFF8B83FF),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  c.authorName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            c.authorName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: c.authorRole == 'engineer'
-                                  ? const Color(0xFF0EA5E9).withAlpha(40)
-                                  : const Color(0xFF10B981).withAlpha(40),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              c.authorRole == 'engineer' ? l10n.t('engineer') : l10n.t('requester'),
-                              style: TextStyle(
-                                color: c.authorRole == 'engineer'
-                                    ? const Color(0xFF38BDF8)
-                                    : const Color(0xFF34D399),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: c.authorRole == 'engineer'
+                                      ? const Color(0xFF0EA5E9).withAlpha(40)
+                                      : const Color(0xFF10B981).withAlpha(40),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  c.authorRole == 'engineer'
+                                      ? l10n.t('engineer')
+                                      : l10n.t('requester'),
+                                  style: TextStyle(
+                                    color: c.authorRole == 'engineer'
+                                        ? const Color(0xFF38BDF8)
+                                        : const Color(0xFF34D399),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          const Spacer(),
-                          Text(
-                            fmt.format(c.createdAt),
-                            style: TextStyle(
-                                color: Colors.white.withAlpha(50),
-                                fontSize: 11),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          fmt.format(c.createdAt),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(50),
+                            fontSize: 11,
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      c.body,
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(180),
+                        fontSize: 14,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        c.body,
-                        style: TextStyle(
-                            color: Colors.white.withAlpha(180),
-                            fontSize: 14),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              )),
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -203,7 +223,9 @@ class _CommentsWidgetState extends State<CommentsWidget> {
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                   ),
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _send(),
@@ -227,11 +249,16 @@ class _CommentsWidgetState extends State<CommentsWidget> {
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           ),
                         )
-                      : const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 20),
+                      : const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                 ),
               ),
             ],

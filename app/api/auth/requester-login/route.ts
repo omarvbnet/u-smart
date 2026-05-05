@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
         role: true,
         province: true,
         provinceFilterActive: true,
+        mustChangePassword: true,
       },
     });
 
@@ -137,6 +138,7 @@ export async function POST(req: NextRequest) {
       const role = (requester as { role?: string }).role ?? 'COMPANY';
       const province = (requester as { province?: string | null }).province ?? null;
       const provinceFilterActive = (requester as { provinceFilterActive?: boolean }).provinceFilterActive ?? true;
+      const mustFlag = (requester as { mustChangePassword?: boolean }).mustChangePassword === true;
       const token = createRequesterToken({
         requesterId: requester.id,
         username: requester.username,
@@ -144,7 +146,7 @@ export async function POST(req: NextRequest) {
         role,
         identitySource: 'ticket_requester',
         companyId: null,
-        mustChangePassword: false,
+        mustChangePassword: mustFlag,
       });
 
       const res = NextResponse.json({
@@ -156,7 +158,7 @@ export async function POST(req: NextRequest) {
           name: requester.name,
           role,
           companyId: null,
-          mustChangePassword: false,
+          mustChangePassword: mustFlag,
           province,
           provinceFilterActive,
         },

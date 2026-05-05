@@ -14,6 +14,7 @@ import '../widgets/language_selector.dart';
 import '../models/ticket.dart';
 import '../models/stats.dart';
 import '../models/company_dashboard_summary.dart';
+import '../models/site.dart';
 import '../widgets/ticket_card.dart';
 import '../widgets/stats_card.dart';
 import 'notifications_screen.dart';
@@ -48,7 +49,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   void _checkMustChangePassword() {
     final auth = context.read<AuthProvider>();
     if (!auth.mustChangePassword) return;
-    showUpdatePasswordSheet(context);
+    showUpdatePasswordSheet(context, mandatoryRecovery: true);
   }
 
   Future<void> _loadData() async {
@@ -823,7 +824,7 @@ class _SitesTab extends StatelessWidget {
   Future<void> _confirmDelete(
     BuildContext context,
     SitesProvider provider,
-    site,
+    Site site,
     AppLocalizations l10n,
   ) async {
     final ok = await showDialog<bool>(
@@ -878,6 +879,129 @@ class _SitesTab extends StatelessWidget {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _promptShareSite(
+    BuildContext context,
+    SitesProvider provider,
+    Site site,
+    AppLocalizations l10n,
+  ) async {
+    final ctrl = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          l10n.t('site_share_title'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: l10n.t('site_share_hint'),
+            hintStyle: TextStyle(color: Colors.white.withAlpha(120)),
+            filled: true,
+            fillColor: const Color(0xFF05051A),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+            child: Text(l10n.t('site_share_action')),
+          ),
+        ],
+      ),
+    );
+    final text = ctrl.text.trim();
+    ctrl.dispose();
+    if (submitted != true || text.isEmpty || !context.mounted) return;
+
+    final errMessage = await provider.shareSite(site.id, text);
+    if (!context.mounted) return;
+    if (errMessage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('site_share_ok')),
+          backgroundColor: const Color(0xFF00D4AA),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errMessage.isNotEmpty ? errMessage : l10n.t('site_share_failed')),
+        backgroundColor: const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _confirmRemoveShare(
+    BuildContext context,
+    SitesProvider provider,
+    Site site,
+    AppLocalizations l10n,
+  ) async {
+    final sid = site.shareId;
+    if (sid == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          l10n.t('site_remove_share_title'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          l10n.t('site_remove_share_confirm', {'name': site.siteId}),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4757)),
+            child: Text(l10n.t('site_remove_share')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final success = await provider.revokeSiteShare(site.id, sid);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? l10n.t('site_remove_share_done') : l10n.t('site_share_failed')),
+          backgroundColor:
+              success ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
   }
 
@@ -1057,6 +1181,23 @@ class _SitesTab extends StatelessWidget {
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
+                                          if (site.sharedWithMe &&
+                                              site.ownerUsername != null &&
+                                              site.ownerUsername!.isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              l10n.t(
+                                                'site_shared_badge',
+                                                {'owner': site.ownerUsername!},
+                                              ),
+                                              style: TextStyle(
+                                                color: Colors.amberAccent
+                                                    .withAlpha(230),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(height: 2),
                                           Text(
                                             '${site.location} - ${site.province}',
@@ -1108,40 +1249,97 @@ class _SitesTab extends StatelessWidget {
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        IconButton(
-                                          onPressed: () => Navigator.of(context)
-                                              .push(
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      SiteFormScreen(
-                                                        site: site,
-                                                      ),
+                                        if (site.canEdit) ...[
+                                          IconButton(
+                                            onPressed: () => Navigator.of(
+                                                    context)
+                                                .push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        SiteFormScreen(site: site),
+                                                  ),
+                                                )
+                                                .then(
+                                                  (_) =>
+                                                      provider.fetchSites(),
                                                 ),
-                                              )
-                                              .then(
-                                                (_) => provider.fetchSites(),
-                                              ),
-                                          icon: const Icon(
-                                            Icons.edit_rounded,
-                                            color: Color(0xFF6C63FF),
-                                            size: 20,
+                                            icon: const Icon(
+                                              Icons.edit_rounded,
+                                              color: Color(0xFF6C63FF),
+                                              size: 20,
+                                            ),
+                                            tooltip: l10n.t('site_edit'),
                                           ),
-                                          tooltip: l10n.t('site_edit'),
-                                        ),
-                                        IconButton(
-                                          onPressed: () => _confirmDelete(
-                                            context,
-                                            provider,
-                                            site,
-                                            l10n,
+                                          IconButton(
+                                            onPressed: () => _confirmDelete(
+                                              context,
+                                              provider,
+                                              site,
+                                              l10n,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.delete_outline_rounded,
+                                              color: Color(0xFFFF4757),
+                                              size: 20,
+                                            ),
+                                            tooltip: l10n.t('site_delete'),
                                           ),
-                                          icon: const Icon(
-                                            Icons.delete_outline_rounded,
-                                            color: Color(0xFFFF4757),
-                                            size: 20,
+                                          IconButton(
+                                            onPressed: () => _promptShareSite(
+                                              context,
+                                              provider,
+                                              site,
+                                              l10n,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.person_add_alt_1_rounded,
+                                              color: Color(0xFF00D4AA),
+                                              size: 20,
+                                            ),
+                                            tooltip: l10n.t('site_share_title'),
                                           ),
-                                          tooltip: l10n.t('site_delete'),
-                                        ),
+                                        ] else ...[
+                                          IconButton(
+                                            onPressed: () => Navigator.of(
+                                                    context)
+                                                .push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        SiteFormScreen(
+                                                      site: site,
+                                                      readOnly: true,
+                                                    ),
+                                                  ),
+                                                )
+                                                .then(
+                                                  (_) =>
+                                                      provider.fetchSites(),
+                                                ),
+                                            icon: const Icon(
+                                              Icons.visibility_rounded,
+                                              color: Color(0xFF6C63FF),
+                                              size: 20,
+                                            ),
+                                            tooltip:
+                                                l10n.t('site_view_shared'),
+                                          ),
+                                          IconButton(
+                                            onPressed: () =>
+                                                _confirmRemoveShare(
+                                              context,
+                                              provider,
+                                              site,
+                                              l10n,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.link_off_rounded,
+                                              color: Color(0xFFFFA502),
+                                              size: 20,
+                                            ),
+                                            tooltip:
+                                                l10n.t('site_remove_share'),
+                                          ),
+                                        ],
                                         const SizedBox(width: 4),
                                         Container(
                                           padding: const EdgeInsets.all(8),

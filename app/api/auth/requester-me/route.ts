@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
           role: true,
           status: true,
           mustChangePassword: true,
+          preferredLocale: true,
           companyId: true,
           company: { select: { name: true } },
           profile: {
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
           companyId: user.companyId ?? null,
           departments: access.departments,
           privileges: access.privileges,
+          preferredLocale: user.preferredLocale ?? null,
         },
       });
     } catch {
@@ -97,12 +99,24 @@ export async function GET(req: NextRequest) {
   try {
     const extended = await (prisma.ticketRequester as any).findUnique({
       where: { id: payload.requesterId },
-      select: { companyCertificationUrl: true, status: true, hasUpdatedCredentials: true, province: true, provinceFilterActive: true },
+      select: {
+        companyCertificationUrl: true,
+        status: true,
+        hasUpdatedCredentials: true,
+        mustChangePassword: true,
+        preferredLocale: true,
+        province: true,
+        provinceFilterActive: true,
+      },
     });
+    let mustChangePassword = false;
+    let preferredLocale: string | null = null;
     if (extended) {
       companyCertificationUrl = extended.companyCertificationUrl ?? null;
       status = extended.status ?? 'ACTIVE';
       hasUpdatedCredentials = extended.hasUpdatedCredentials === true;
+      mustChangePassword = extended.mustChangePassword === true;
+      preferredLocale = extended.preferredLocale ?? null;
       province = extended.province ?? null;
       provinceFilterActive = extended.provinceFilterActive ?? true;
     }
@@ -136,7 +150,8 @@ export async function GET(req: NextRequest) {
       province,
       provinceFilterActive,
       companyId: null,
-      mustChangePassword: false,
+      mustChangePassword,
+      preferredLocale,
       ...(linkedCoordinatorCompanyId ? { linkedCoordinatorCompanyId } : {}),
     },
   });
