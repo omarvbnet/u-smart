@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
 
     if (coordinatorContext) {
       const rows = await (prisma as any).visitorRequest.findMany({
-        where: coordinatorRoleTicketWhere(coordinatorContext.companyId, coordinatorContext.role),
+        where: coordinatorRoleTicketWhere(
+          coordinatorContext.companyId,
+          coordinatorContext.role,
+          coordinatorContext.departments
+        ),
         select: {
           status: true,
           taskCategory: true,

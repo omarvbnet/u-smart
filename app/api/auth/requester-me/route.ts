@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
+import { decodeProfileSkills } from '@/lib/coordinator-access';
 
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -25,9 +26,13 @@ export async function GET(req: NextRequest) {
           mustChangePassword: true,
           companyId: true,
           company: { select: { name: true } },
+          profile: {
+            select: { skills: true },
+          },
         },
       });
       if (!user) return NextResponse.json({ success: false, user: null });
+      const access = decodeProfileSkills(user.profile?.skills ?? [], user.role ?? 'COORDINATOR');
 
       const username =
         (typeof user.username === 'string' && user.username.trim()) ||
@@ -51,6 +56,8 @@ export async function GET(req: NextRequest) {
           province: null,
           provinceFilterActive: true,
           companyId: user.companyId ?? null,
+          departments: access.departments,
+          privileges: access.privileges,
         },
       });
     } catch {

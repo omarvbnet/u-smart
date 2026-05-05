@@ -3,6 +3,7 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { sendPushToRequesters } from '@/lib/push-notifications';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { hasPrivilege } from '@/lib/coordinator-access';
 
 const prisma = _prisma as any;
 
@@ -28,8 +29,8 @@ export async function PATCH(
       if (!assigneeId) {
         return NextResponse.json({ success: false, message: 'assigneeCoordinatorUserId is required.' }, { status: 400 });
       }
-      const assignerRoles = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
-      if (!assignerRoles.has(coordinatorContext.role)) {
+      const assignerRoles = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'MANAGER', 'TEAM_LEADER']);
+      if (!assignerRoles.has(coordinatorContext.role) && !hasPrivilege(coordinatorContext.privileges, 'ASSIGN_TASKS')) {
         return NextResponse.json({ success: false, message: 'Only coordinators can assign tickets.' }, { status: 403 });
       }
 
@@ -54,7 +55,15 @@ export async function PATCH(
         MAINTENANCE: 'TECHNICIAN',
       };
       const requiredRole = roleByCategory[ticket.taskCategory ?? ''] ?? null;
-      if (requiredRole && assignee.role !== requiredRole) {
+      const assigneeRole = String(assignee.role ?? '').toUpperCase();
+      const roleMatch =
+        !requiredRole ||
+        assigneeRole === requiredRole ||
+        assigneeRole === 'ENGINEER' ||
+        assigneeRole === 'COORDINATOR' ||
+        assigneeRole === 'TEAM_LEADER' ||
+        assigneeRole === 'MANAGER';
+      if (!roleMatch) {
         return NextResponse.json({ success: false, message: `Assignee role must be ${requiredRole}.` }, { status: 400 });
       }
 

@@ -18,14 +18,11 @@ class InspectionChecklist {
   final String id;
   final String name;
   final List<ChecklistItem> items;
-  /// MAINTENANCE | QUALITY | SUPERVISION when set (matches coordinator task type).
-  final String? taskCategory;
 
   InspectionChecklist({
     required this.id,
     required this.name,
     required this.items,
-    this.taskCategory,
   });
 
   factory InspectionChecklist.fromJson(Map<String, dynamic> json) {
@@ -40,7 +37,6 @@ class InspectionChecklist {
       id: json['id'] as String,
       name: json['name'] as String,
       items: items,
-      taskCategory: json['taskCategory'] as String?,
     );
   }
 }

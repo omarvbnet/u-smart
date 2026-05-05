@@ -62,6 +62,18 @@ type CompanyDashboardPayload = {
   ticketsByRoleScope?: Record<string, number>;
   ticketsByCategory?: Record<string, number>;
   ticketsByStatus?: Record<string, number>;
+  departmentPerformance?: Record<
+    string,
+    {
+      totalTasks: number;
+      inProgress: number;
+      pending: number;
+      withInSla: number;
+      overSla: number;
+      totalDelays: number;
+      inspectionResults: number;
+    }
+  >;
   staffPerformance?: Array<{
     userId: string;
     role: string;
@@ -164,10 +176,10 @@ export default function QualityControlDashboardPage() {
     }
     setUser(meRes.user);
 
-    const resolvedCompanyId = meRes.user?.companyId ?? meRes.user?.linkedCoordinatorCompanyId;
-    const coordRoles = ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY'];
+    const isCompanyRole = ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'].includes(String(meRes.user.role ?? ''));
+    const coordRoles = ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'];
     if (
-      resolvedCompanyId &&
+      isCompanyRole &&
       coordRoles.includes(String(meRes.user.role ?? ''))
     ) {
       try {
@@ -190,9 +202,12 @@ export default function QualityControlDashboardPage() {
     if (statsRes.success && statsRes.stats) setSlaStats(statsRes.stats);
     if (techRes.success && Array.isArray(techRes.inspection)) setQcTechniques(techRes.inspection);
 
-    if (meRes.user?.companyId) {
+    if (isCompanyRole) {
       try {
-        const dashRes = await fetch('/api/company/dashboard', { credentials: 'include' }).then((r) =>
+        const dashParams = new URLSearchParams();
+        if (appliedDashboardFilters.from) dashParams.set('from', appliedDashboardFilters.from);
+        if (appliedDashboardFilters.to) dashParams.set('to', appliedDashboardFilters.to);
+        const dashRes = await fetch(`/api/company/dashboard?${dashParams.toString()}`, { credentials: 'include' }).then((r) =>
           r.json(),
         );
         if (dashRes.success && dashRes.dashboard) {
@@ -223,24 +238,29 @@ export default function QualityControlDashboardPage() {
   const isCompany = Boolean(
     user?.role === 'COMPANY' ||
     user?.role === 'COMPANY_OWNER' ||
-    user?.role === 'COORDINATOR',
+    user?.role === 'COORDINATOR' ||
+    user?.role === 'MANAGER' ||
+    user?.role === 'TEAM_LEADER' ||
+    user?.role === 'ADMIN',
   );
   const canManageSites =
     user?.role === 'COMPANY' ||
     user?.role === 'COMPANY_OWNER' ||
     user?.role === 'COORDINATOR' ||
+    user?.role === 'MANAGER' ||
+    user?.role === 'TEAM_LEADER' ||
+    user?.role === 'ADMIN' ||
     user?.role === 'ENGINEER';
   const effectiveCompanyId = user?.companyId ?? user?.linkedCoordinatorCompanyId;
-  // Company hub APIs support coordinator users and linked legacy COMPANY users.
+  // Company hub is available for all company-type roles.
   const canUseProvisorHub =
     user?.serviceSlug === 'quality-control-supervision' &&
-    Boolean(effectiveCompanyId) &&
-    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
+    ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
 
   /** API requires taskCategory + checklist for coordinator JWT (owner / coordinator / platform admin). */
   const canCreateCoordinatorTasks =
     Boolean(effectiveCompanyId) &&
-    ['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
+    ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
   /** Legacy requester (no companyId) can post simple tickets; coordinator staff cannot create. */
   const canOpenTicketForm = !user?.companyId || canCreateCoordinatorTasks;
 
@@ -266,7 +286,14 @@ export default function QualityControlDashboardPage() {
     if (ticketFormOpen && sites.length === 0 && !sitesLoading) loadSites();
   }, [ticketFormOpen, sites.length, sitesLoading]);
 
-  const [staffForm, setStaffForm] = useState({ firstName: '', lastName: '', email: '', role: 'TECHNICIAN' });
+  const [staffForm, setStaffForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    role: 'TECHNICIAN',
+    departments: '',
+    privileges: '',
+  });
   const [checklistForm, setChecklistForm] = useState({ name: '', taskCategory: 'QUALITY', techniqueTypes: 'inspection' });
 
   useEffect(() => {
@@ -322,6 +349,14 @@ export default function QualityControlDashboardPage() {
           lastName: staffForm.lastName.trim(),
           email: staffForm.email.trim(),
           role: staffForm.role,
+          departments: staffForm.departments
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+          privileges: staffForm.privileges
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
         }),
       });
       const data = await res.json();
@@ -329,7 +364,7 @@ export default function QualityControlDashboardPage() {
         setProvisorMsg(data.message || 'Failed to create staff');
         return;
       }
-      setStaffForm({ firstName: '', lastName: '', email: '', role: 'TECHNICIAN' });
+      setStaffForm({ firstName: '', lastName: '', email: '', role: 'TECHNICIAN', departments: '', privileges: '' });
       const list = await fetch('/api/company/staff', { credentials: 'include' }).then((r) => r.json());
       if (list.success && Array.isArray(list.users)) setProvisorStaff(list.users);
       setProvisorMsg(
@@ -1052,6 +1087,27 @@ export default function QualityControlDashboardPage() {
                 </div>
               </div>
             )}
+            {companyDashboard.departmentPerformance && Object.keys(companyDashboard.departmentPerformance).length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2">Departments performance</p>
+                <div className="grid md:grid-cols-2 gap-2">
+                  {Object.entries(companyDashboard.departmentPerformance).map(([dept, perf]) => (
+                    <div key={dept} className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs">
+                      <p className="text-violet-300 font-semibold mb-1">{dept}</p>
+                      <div className="text-gray-300 grid grid-cols-2 gap-1">
+                        <span>Total tasks: {perf.totalTasks}</span>
+                        <span>Pending: {perf.pending}</span>
+                        <span>In progress: {perf.inProgress}</span>
+                        <span>Inspection: {perf.inspectionResults}</span>
+                        <span>Within SLA: {perf.withInSla}</span>
+                        <span>Over SLA: {perf.overSla}</span>
+                        <span>Total delays: {perf.totalDelays}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {companyDashboard.staffPerformance && companyDashboard.staffPerformance.length > 0 && (
               <div className="rounded-lg border border-white/10 overflow-hidden">
                 <table className="w-full text-xs text-left">
@@ -1137,15 +1193,6 @@ export default function QualityControlDashboardPage() {
               <Building2 className="w-5 h-5 text-amber-400" />
               {t('ticketForm.navCompanyInfo')}
             </h3>
-            {!user?.companyId && (
-              <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-                <p className="text-sm font-semibold text-amber-300 mb-1">Sign in with your coordinator account to manage staff</p>
-                <p className="text-xs text-amber-200/70 leading-relaxed">
-                  You are logged in as a <strong>legacy requester</strong>. Staff creation, checklists, and billing require a <strong>Company Owner or Coordinator</strong> account.<br />
-                  Log out and log in with your coordinator credentials — or ask your admin to create one for you.
-                </p>
-              </div>
-            )}
             <dl className="space-y-3 text-sm">
               <div>
                 <dt className="text-gray-500">{t('visitorRequestForm.nameLabel')}</dt>
@@ -1223,7 +1270,7 @@ export default function QualityControlDashboardPage() {
                     ))}
                     {provisorStaff.length === 0 && !provisorLoading && <li className="text-gray-500">No staff loaded.</li>}
                   </ul>
-                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'ADMIN' || user?.role === 'COMPANY') && (
+                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'MANAGER' || user?.role === 'TEAM_LEADER' || user?.role === 'ADMIN' || user?.role === 'COMPANY') && (
                     <form onSubmit={submitStaffInvite} className="grid sm:grid-cols-2 gap-3 text-sm">
                       <input
                         className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
@@ -1249,6 +1296,8 @@ export default function QualityControlDashboardPage() {
                         value={staffForm.role}
                         onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}
                       >
+                        <option value="MANAGER">Manager</option>
+                        <option value="TEAM_LEADER">Team leader</option>
                         <option value="COORDINATOR">Coordinator</option>
                         <option value="QC">QC</option>
                         <option value="SUPERVISOR">Supervisor</option>
@@ -1257,6 +1306,18 @@ export default function QualityControlDashboardPage() {
                         <option value="TECHNICIAN">Technician</option>
                         <option value="ENGINEER">Engineer (general)</option>
                       </select>
+                      <input
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white sm:col-span-2"
+                        placeholder="Departments (comma-separated): network_maintenance, quality_control, supervision, electrical_deployments, mechanical"
+                        value={staffForm.departments}
+                        onChange={(e) => setStaffForm((f) => ({ ...f, departments: e.target.value }))}
+                      />
+                      <input
+                        className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white sm:col-span-2"
+                        placeholder="Privileges (comma-separated): create_tasks, assign_tasks, manage_sites, manage_checklists, manage_conflicts, manage_staff, export_import"
+                        value={staffForm.privileges}
+                        onChange={(e) => setStaffForm((f) => ({ ...f, privileges: e.target.value }))}
+                      />
                       <button
                         type="submit"
                         disabled={provisorLoading}
@@ -1279,7 +1340,7 @@ export default function QualityControlDashboardPage() {
                     ))}
                     {provisorChecklists.length === 0 && !provisorLoading && <li className="text-gray-500">No checklists yet.</li>}
                   </ul>
-                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'ADMIN' || user?.role === 'COMPANY') && (
+                  {(user?.role === 'COMPANY_OWNER' || user?.role === 'COORDINATOR' || user?.role === 'MANAGER' || user?.role === 'TEAM_LEADER' || user?.role === 'ADMIN' || user?.role === 'COMPANY') && (
                     <form onSubmit={submitChecklist} className="space-y-3 text-sm">
                       <input
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"

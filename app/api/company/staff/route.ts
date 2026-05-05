@@ -4,25 +4,40 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
+import {
+  COMPANY_STAFF_CREATE_ROLES,
+  decodeProfileSkills,
+  encodeProfileSkills,
+  hasPrivilege,
+  normalizeCoordinatorRole,
+  normalizeDepartments,
+  normalizePrivileges,
+} from '@/lib/coordinator-access';
 
-const ALLOWED_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY']);
-const ALLOWED_STAFF_ROLES = new Set([
-  'COORDINATOR',
-  'ENGINEER',
-  'QUALITY_ENGINEER',
-  'SUPERVISION_ENGINEER',
-  'TECHNICIAN',
-  'CLIENT',
-]);
+const ALLOWED_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'COMPANY', 'MANAGER']);
 const STAFF_ROLE_ALIASES: Record<string, string> = {
   QC: 'QUALITY_ENGINEER',
   SUPERVISOR: 'SUPERVISION_ENGINEER',
+  TEAM_LEADER: 'TEAM_LEADER',
+  TEAMLEADER: 'TEAM_LEADER',
+  TEAM_LEAD: 'TEAM_LEADER',
+  MANAGER: 'MANAGER',
 };
 
 type StaffCreatorContext = {
   companyId: string;
   creatorUserId: string | null;
   status: string;
+};
+
+type LegacyCompanyRequester = {
+  id: string;
+  username: string;
+  email: string | null;
+  role: string | null;
+  status: string | null;
+  name: string | null;
+  company: string | null;
 };
 
 function buildUsernameBase(firstName: string): string {
@@ -50,9 +65,80 @@ function generateTemporaryPassword(): string {
   return crypto.randomBytes(6).toString('base64url');
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
 function normalizeStaffRole(raw: string): string {
-  const normalized = raw.trim().toUpperCase();
-  return STAFF_ROLE_ALIASES[normalized] ?? normalized;
+  const normalized = raw.trim().toUpperCase().replace(/\s+/g, '_');
+  const alias = STAFF_ROLE_ALIASES[normalized] ?? normalized;
+  return normalizeCoordinatorRole(alias);
+}
+
+async function ensureCompanyForLegacyRequester(requester: LegacyCompanyRequester): Promise<string> {
+  const linkedCompanyId = await getLinkedCoordinatorCompanyId(prisma, {
+    id: requester.id,
+    username: requester.username,
+    email: requester.email ?? null,
+    role: requester.role ?? null,
+  });
+  if (linkedCompanyId) return linkedCompanyId;
+
+  const companyName =
+    (typeof requester.company === 'string' && requester.company.trim()) ||
+    (typeof requester.name === 'string' && requester.name.trim()) ||
+    requester.username ||
+    `Company ${requester.id.slice(-6)}`;
+  const slugBase = slugify(companyName) || `company-${requester.id.slice(-6).toLowerCase()}`;
+
+  let createdCompanyId: string | null = null;
+  for (let i = 0; i < 10; i++) {
+    const slugCandidate = i === 0 ? slugBase : `${slugBase}-${Math.floor(100 + Math.random() * 900)}`;
+    try {
+      const createdCompany = await (prisma as any).coordinatorCompany.create({
+        data: {
+          name: companyName,
+          slug: slugCandidate,
+        },
+        select: { id: true },
+      });
+      createdCompanyId = createdCompany.id;
+      break;
+    } catch {
+      // Try a different slug on unique collisions.
+    }
+  }
+  if (!createdCompanyId) {
+    throw new Error('Unable to create coordinator company for requester.');
+  }
+
+  const ownerSeed = requester.username || requester.email || `owner${Date.now().toString().slice(-6)}`;
+  const ownerUsername = await generateUniqueUsername(ownerSeed);
+  const ownerEmail =
+    (typeof requester.email === 'string' && requester.email.trim().toLowerCase()) ||
+    `${ownerUsername}@legacy-company.local`;
+  const ownerPasswordHash = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10);
+
+  await (prisma as any).coordinatorUser.create({
+    data: {
+      username: ownerUsername,
+      email: ownerEmail,
+      name: requester.name ?? companyName,
+      passwordHash: ownerPasswordHash,
+      role: 'COMPANY_OWNER',
+      status: 'ACTIVE',
+      mustChangePassword: true,
+      companyId: createdCompanyId,
+      managedByUserId: null,
+    },
+    select: { id: true },
+  });
+
+  return createdCompanyId;
 }
 
 async function getStaffCreatorContext(req: NextRequest): Promise<StaffCreatorContext | null> {
@@ -62,9 +148,19 @@ async function getStaffCreatorContext(req: NextRequest): Promise<StaffCreatorCon
   if (auth.payload.identitySource === 'coordinator_user') {
     const me = await (prisma as any).coordinatorUser.findUnique({
       where: { id: auth.payload.requesterId },
-      select: { id: true, role: true, companyId: true, status: true },
+      select: {
+        id: true,
+        role: true,
+        companyId: true,
+        status: true,
+        profile: {
+          select: { skills: true },
+        },
+      },
     });
-    if (!me || !me.companyId || !ALLOWED_CREATOR_ROLES.has(String(me.role))) {
+    const access = decodeProfileSkills(me?.profile?.skills ?? [], String(me?.role ?? 'COORDINATOR'));
+    const canManageStaff = me && (ALLOWED_CREATOR_ROLES.has(String(me.role)) || hasPrivilege(access.privileges, 'MANAGE_STAFF'));
+    if (!me || !me.companyId || !canManageStaff) {
       return null;
     }
     return {
@@ -74,7 +170,7 @@ async function getStaffCreatorContext(req: NextRequest): Promise<StaffCreatorCon
     };
   }
 
-  const requester = await (prisma as any).ticketRequester.findUnique({
+  const requester = (await (prisma as any).ticketRequester.findUnique({
     where: { id: auth.payload.requesterId },
     select: {
       id: true,
@@ -82,22 +178,18 @@ async function getStaffCreatorContext(req: NextRequest): Promise<StaffCreatorCon
       email: true,
       role: true,
       status: true,
+      name: true,
+      company: true,
     },
-  });
+  })) as LegacyCompanyRequester | null;
   if (!requester || String(requester.role ?? '').toUpperCase() !== 'COMPANY') {
     return null;
   }
 
-  const linkedCompanyId = await getLinkedCoordinatorCompanyId(prisma, {
-    id: requester.id,
-    username: requester.username,
-    email: requester.email ?? null,
-    role: requester.role ?? null,
-  });
-  if (!linkedCompanyId) return null;
+  const companyId = await ensureCompanyForLegacyRequester(requester);
 
   return {
-    companyId: linkedCompanyId,
+    companyId,
     creatorUserId: null,
     status: String(requester.status ?? 'ACTIVE'),
   };
@@ -120,9 +212,25 @@ export async function GET(req: NextRequest) {
       status: true,
       mustChangePassword: true,
       createdAt: true,
+      profile: {
+        select: {
+          skills: true,
+        },
+      },
     },
   });
-  return NextResponse.json({ success: true, users });
+  const usersWithAccess = (users as Array<Record<string, unknown>>).map((u) => {
+    const access = decodeProfileSkills(
+      (u.profile as { skills?: string[] } | undefined)?.skills ?? [],
+      String(u.role ?? 'COORDINATOR')
+    );
+    return {
+      ...u,
+      departments: access.departments,
+      privileges: access.privileges,
+    };
+  });
+  return NextResponse.json({ success: true, users: usersWithAccess });
 }
 
 export async function POST(req: NextRequest) {
@@ -139,6 +247,8 @@ export async function POST(req: NextRequest) {
   const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const role = typeof body.role === 'string' ? normalizeStaffRole(body.role) : '';
+  const departments = normalizeDepartments(body.departments);
+  const privileges = normalizePrivileges(body.privileges);
 
   if (!firstName || !email || !role) {
     return NextResponse.json(
@@ -146,7 +256,7 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!ALLOWED_STAFF_ROLES.has(role)) {
+  if (!COMPANY_STAFF_CREATE_ROLES.has(role)) {
     return NextResponse.json(
       { success: false, message: 'Invalid staff role.' },
       { status: 400 }
@@ -192,9 +302,26 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  await (prisma as any).coordinatorProfile.upsert({
+    where: { userId: created.id },
+    update: {
+      skills: encodeProfileSkills({ departments, privileges }),
+    },
+    create: {
+      userId: created.id,
+      skills: encodeProfileSkills({ departments, privileges }),
+    },
+  });
+
+  const access = decodeProfileSkills(encodeProfileSkills({ departments, privileges }), role);
+
   return NextResponse.json({
     success: true,
-    user: created,
+    user: {
+      ...created,
+      departments: access.departments,
+      privileges: access.privileges,
+    },
     credentials: {
       username: created.username,
       temporaryPassword,

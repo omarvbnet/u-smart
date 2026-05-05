@@ -57,12 +57,20 @@ export async function checkEmailUnique(
   // CoordinatorUser (new provider identity)
   const coordinatorDelegate = (prisma as { coordinatorUser?: { findFirst: (args: unknown) => Promise<unknown> } }).coordinatorUser;
   if (coordinatorDelegate?.findFirst) {
-    const cu = await coordinatorDelegate.findFirst({
-      where: {
-        email: { equals: norm, mode: 'insensitive' },
-      },
-    }) as { id?: string } | null;
-    if (cu) return { taken: true, message: 'Email is already registered as a coordinator user' };
+    try {
+      const cu = await coordinatorDelegate.findFirst({
+        where: {
+          email: { equals: norm, mode: 'insensitive' },
+        },
+        select: { id: true },
+      }) as { id?: string } | null;
+      if (cu) return { taken: true, message: 'Email is already registered as a coordinator user' };
+    } catch (err) {
+      // Backward compatibility for older DB schemas where coordinator_users
+      // may not have all columns expected by the current Prisma model.
+      const code = (err as { code?: string })?.code;
+      if (code !== 'P2022') throw err;
+    }
   }
 
   // RegistrationRequest (pending)

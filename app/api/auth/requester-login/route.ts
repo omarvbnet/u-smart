@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { registerRequesterPushToken } from '@/lib/push-notifications';
 import { tryCompanyOwnerCoordinatorInsteadOfLegacy } from '@/lib/linked-coordinator-company';
+import { decodeProfileSkills } from '@/lib/coordinator-access';
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,6 +85,11 @@ export async function POST(req: NextRequest) {
           (typeof ownerCoord.username === 'string' && ownerCoord.username.trim()) ||
           (typeof ownerCoord.email === 'string' ? ownerCoord.email.split('@')[0] : '') ||
           `coord_${ownerCoord.id.slice(-6)}`;
+        const ownerProfile = await (prisma as any).coordinatorProfile.findUnique({
+          where: { userId: ownerCoord.id },
+          select: { skills: true },
+        });
+        const ownerAccess = decodeProfileSkills(ownerProfile?.skills ?? [], ownerCoord.role ?? 'COMPANY_OWNER');
         const token = createRequesterToken({
           requesterId: ownerCoord.id,
           username,
@@ -107,6 +113,8 @@ export async function POST(req: NextRequest) {
             status: ownerCoord.status ?? 'ACTIVE',
             province: null,
             provinceFilterActive: true,
+            departments: ownerAccess.departments,
+            privileges: ownerAccess.privileges,
           },
         });
         res.cookies.set(REQUESTER_COOKIE_NAME, token, getRequesterCookieOptions());
@@ -191,21 +199,14 @@ export async function POST(req: NextRequest) {
       });
     } catch (coordinatorQueryErr) {
       try {
-        const lookup = usernameOrEmail.toLowerCase();
-        const emailWhere = usernameOrEmail.includes('@')
-          ? { equals: lookup, mode: 'insensitive' as const }
-          : { startsWith: `${lookup}@`, mode: 'insensitive' as const };
         coordinatorUser = await (prisma as any).coordinatorUser.findFirst({
-          where: { email: emailWhere },
+          where: { email: { equals: usernameOrEmail, mode: 'insensitive' } },
           select: {
             id: true,
-            username: true,
             name: true,
             email: true,
             passwordHash: true,
             role: true,
-            status: true,
-            mustChangePassword: true,
             companyId: true,
           },
         });
@@ -244,6 +245,14 @@ export async function POST(req: NextRequest) {
           (typeof coordinatorUser.username === 'string' && coordinatorUser.username.trim()) ||
           (typeof coordinatorUser.email === 'string' ? coordinatorUser.email.split('@')[0] : '') ||
           `coord_${coordinatorUser.id.slice(-6)}`;
+        const coordinatorProfile = await (prisma as any).coordinatorProfile.findUnique({
+          where: { userId: coordinatorUser.id },
+          select: { skills: true },
+        });
+        const coordinatorAccess = decodeProfileSkills(
+          coordinatorProfile?.skills ?? [],
+          coordinatorUser.role ?? 'COORDINATOR'
+        );
         const token = createRequesterToken({
           requesterId: coordinatorUser.id,
           username,
@@ -268,6 +277,8 @@ export async function POST(req: NextRequest) {
             status: coordinatorUser.status ?? 'ACTIVE',
             province: null,
             provinceFilterActive: true,
+            departments: coordinatorAccess.departments,
+            privileges: coordinatorAccess.privileges,
           },
         });
 

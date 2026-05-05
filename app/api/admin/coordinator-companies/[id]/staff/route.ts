@@ -3,17 +3,25 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma as _prisma } from '@/lib/prisma';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
+import {
+  COMPANY_STAFF_CREATE_ROLES,
+  decodeProfileSkills,
+  encodeProfileSkills,
+  normalizeCoordinatorRole,
+  normalizeDepartments,
+  normalizePrivileges,
+} from '@/lib/coordinator-access';
 
 const prisma = _prisma as any;
 
-const STAFF_ROLES = new Set([
-  'COORDINATOR',
-  'ENGINEER',
-  'QUALITY_ENGINEER',
-  'SUPERVISION_ENGINEER',
-  'TECHNICIAN',
-  'CLIENT',
-]);
+const STAFF_ROLE_ALIASES: Record<string, string> = {
+  QC: 'QUALITY_ENGINEER',
+  SUPERVISOR: 'SUPERVISION_ENGINEER',
+  TEAMLEADER: 'TEAM_LEADER',
+  TEAM_LEADER: 'TEAM_LEADER',
+  TEAM_LEAD: 'TEAM_LEADER',
+  MANAGER: 'MANAGER',
+};
 
 function requireAdmin(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -36,14 +44,17 @@ export async function POST(
     const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
     const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    const role = typeof body.role === 'string' ? body.role.trim().toUpperCase() : '';
+    const normalizedRoleRaw = typeof body.role === 'string' ? body.role.trim().toUpperCase().replace(/\s+/g, '_') : '';
+    const role = normalizeCoordinatorRole(STAFF_ROLE_ALIASES[normalizedRoleRaw] ?? normalizedRoleRaw);
+    const departments = normalizeDepartments(body.departments);
+    const privileges = normalizePrivileges(body.privileges);
     const customPassword = typeof body.password === 'string' && body.password.length >= 6
       ? body.password
       : crypto.randomBytes(6).toString('base64url');
 
-    if (!firstName || !email || !STAFF_ROLES.has(role)) {
+    if (!firstName || !email || !COMPANY_STAFF_CREATE_ROLES.has(role)) {
       return NextResponse.json(
-        { success: false, message: `firstName, email required and role must be one of: ${[...STAFF_ROLES].join(', ')}.` },
+        { success: false, message: `firstName, email required and role must be one of: ${[...COMPANY_STAFF_CREATE_ROLES].join(', ')}.` },
         { status: 400 },
       );
     }
@@ -85,9 +96,25 @@ export async function POST(
       select: { id: true, username: true, email: true, name: true, role: true },
     });
 
+    await prisma.coordinatorProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        skills: encodeProfileSkills({ departments, privileges }),
+      },
+      create: {
+        userId: user.id,
+        skills: encodeProfileSkills({ departments, privileges }),
+      },
+    });
+    const access = decodeProfileSkills(encodeProfileSkills({ departments, privileges }), role);
+
     return NextResponse.json({
       success: true,
-      user,
+      user: {
+        ...user,
+        departments: access.departments,
+        privileges: access.privileges,
+      },
       credentials: { username, temporaryPassword: customPassword },
     });
   } catch (err) {

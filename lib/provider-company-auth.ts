@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { decodeProfileSkills } from '@/lib/coordinator-access';
 
 export type CoordinatorContext = {
   userId: string;
@@ -9,6 +10,8 @@ export type CoordinatorContext = {
   status: string;
   username: string;
   name: string | null;
+  departments: string[];
+  privileges: string[];
 };
 
 export async function getCoordinatorContext(req: NextRequest): Promise<CoordinatorContext | null> {
@@ -23,9 +26,13 @@ export async function getCoordinatorContext(req: NextRequest): Promise<Coordinat
       status: true,
       username: true,
       name: true,
+      profile: {
+        select: { skills: true },
+      },
     },
   });
   if (!user || !user.companyId) return null;
+  const access = decodeProfileSkills(user.profile?.skills ?? [], user.role ?? 'COORDINATOR');
   return {
     userId: user.id,
     companyId: user.companyId,
@@ -33,5 +40,7 @@ export async function getCoordinatorContext(req: NextRequest): Promise<Coordinat
     status: user.status ?? 'ACTIVE',
     username: user.username,
     name: user.name ?? null,
+    departments: access.departments,
+    privileges: access.privileges,
   };
 }

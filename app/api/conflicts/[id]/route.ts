@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { hasPrivilege } from '@/lib/coordinator-access';
 
 const prisma = _prisma as any;
 
@@ -56,16 +58,7 @@ export async function GET(
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
-  let requesterRole = 'COMPANY';
-  try {
-    const reqRow = await prisma.ticketRequester.findUnique({
-      where: { id: auth.payload.requesterId },
-      select: { role: true },
-    });
-    requesterRole = reqRow?.role ?? 'COMPANY';
-  } catch {
-    /* ignore */
-  }
+  const coordinatorContext = await getCoordinatorContext(req);
 
   const { id } = await params;
   if (!id) {
@@ -75,7 +68,7 @@ export async function GET(
   try {
     const row = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, company: true, status: true, requesterId: true, technique: true },
+      select: { id: true, company: true, status: true, requesterId: true, technique: true, coordinatorCompanyId: true },
     });
 
     if (!row) {
@@ -91,7 +84,14 @@ export async function GET(
     const assignedEngineerId = parsedCheck.assignedEngineerId as string | undefined;
     const isOwner = row.requesterId === auth.payload.requesterId;
     const isAssigned = assignedEngineerId === auth.payload.requesterId;
-    if (!isOwner && !isAssigned) {
+    const isCoordinatorAllowed =
+      coordinatorContext &&
+      row.coordinatorCompanyId === coordinatorContext.companyId &&
+      (coordinatorContext.role === 'ADMIN' ||
+        coordinatorContext.role === 'COMPANY_OWNER' ||
+        coordinatorContext.role === 'MANAGER' ||
+        hasPrivilege(coordinatorContext.privileges, 'MANAGE_CONFLICTS'));
+    if (!isOwner && !isAssigned && !isCoordinatorAllowed) {
       return NextResponse.json({ success: false, message: 'Conflict not found' }, { status: 404 });
     }
 
@@ -123,19 +123,28 @@ export async function PATCH(
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
+  const coordinatorContext = await getCoordinatorContext(req);
   let requesterRole = 'COMPANY';
-  try {
-    const reqRow = await prisma.ticketRequester.findUnique({
-      where: { id: auth.payload.requesterId },
-      select: { role: true },
-    });
-    requesterRole = reqRow?.role ?? 'COMPANY';
-  } catch {
-    /* ignore */
+  if (!coordinatorContext) {
+    try {
+      const reqRow = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { role: true },
+      });
+      requesterRole = reqRow?.role ?? 'COMPANY';
+    } catch {
+      /* ignore */
+    }
   }
 
-  if (requesterRole !== 'ENGINEER' && requesterRole !== 'ADMIN') {
-    return NextResponse.json({ success: false, message: 'Only engineers or admins can resolve conflicts' }, { status: 403 });
+  const canResolveAsCoordinator =
+    coordinatorContext &&
+    (coordinatorContext.role === 'ADMIN' ||
+      coordinatorContext.role === 'COMPANY_OWNER' ||
+      coordinatorContext.role === 'MANAGER' ||
+      hasPrivilege(coordinatorContext.privileges, 'MANAGE_CONFLICTS'));
+  if (!canResolveAsCoordinator && requesterRole !== 'ENGINEER' && requesterRole !== 'ADMIN') {
+    return NextResponse.json({ success: false, message: 'Only authorized roles can resolve conflicts' }, { status: 403 });
   }
 
   const { id } = await params;
@@ -156,7 +165,9 @@ export async function PATCH(
 
   try {
     const whereClause: any = { id };
-    if (requesterRole !== 'ADMIN') {
+    if (coordinatorContext) {
+      whereClause.coordinatorCompanyId = coordinatorContext.companyId;
+    } else if (requesterRole !== 'ADMIN') {
       whereClause.company = { contains: auth.payload.requesterId };
     }
     const ticket = await prisma.visitorRequest.findFirst({

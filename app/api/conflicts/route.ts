@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 const prisma = _prisma as any;
 
 const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
@@ -52,16 +54,19 @@ export async function GET(req: NextRequest) {
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
+  const coordinatorContext = await getCoordinatorContext(req);
 
   let requesterRole = 'COMPANY';
-  try {
-    const reqRow = await prisma.ticketRequester.findUnique({
-      where: { id: auth.payload.requesterId },
-      select: { role: true, serviceSlug: true },
-    });
-    requesterRole = reqRow?.role ?? 'COMPANY';
-  } catch {
-    /* ignore */
+  if (!coordinatorContext) {
+    try {
+      const reqRow = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { role: true, serviceSlug: true },
+      });
+      requesterRole = reqRow?.role ?? 'COMPANY';
+    } catch {
+      /* ignore */
+    }
   }
 
   const { searchParams } = new URL(req.url);
@@ -69,17 +74,31 @@ export async function GET(req: NextRequest) {
     || 'quality-control-supervision';
 
   try {
-    const isRequester = requesterRole === 'COMPANY' || requesterRole === 'PERSONAL';
-    const where: any = {
-      serviceSlug,
-      status: { in: ['COMPLETED', 'IN_PROGRESS', 'PENDING'] },
-      AND: [
-        { company: { contains: 'conflictReported' } },
-        isRequester
-          ? { requesterId: auth.payload.requesterId }
-          : { company: { contains: auth.payload.requesterId } },
-      ],
-    };
+    let where: any;
+    if (coordinatorContext) {
+      where = {
+        ...coordinatorRoleTicketWhere(
+          coordinatorContext.companyId,
+          coordinatorContext.role,
+          coordinatorContext.departments
+        ),
+        serviceSlug,
+        status: { in: ['COMPLETED', 'IN_PROGRESS', 'PENDING'] },
+        company: { contains: 'conflictReported' },
+      };
+    } else {
+      const isRequester = requesterRole === 'COMPANY' || requesterRole === 'PERSONAL';
+      where = {
+        serviceSlug,
+        status: { in: ['COMPLETED', 'IN_PROGRESS', 'PENDING'] },
+        AND: [
+          { company: { contains: 'conflictReported' } },
+          isRequester
+            ? { requesterId: auth.payload.requesterId }
+            : { company: { contains: auth.payload.requesterId } },
+        ],
+      };
+    }
 
     const rows = await prisma.visitorRequest.findMany({
       where,

@@ -16,8 +16,25 @@ type CoordCompany = {
 
 type Credential = { username: string; password: string; companyName: string };
 type StaffCred = { username: string; temporaryPassword: string };
+type PaymentRow = {
+  id: string;
+  amountCents: number;
+  status: string;
+  createdAt: string;
+  subscription?: { company?: { name?: string | null } | null } | null;
+};
+type InvoiceRow = {
+  id: string;
+  amountCents: number;
+  createdAt: string;
+  periodFrom: string;
+  periodTo: string;
+  subscription?: { company?: { name?: string | null } | null } | null;
+};
 
 const STAFF_ROLES = [
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'TEAM_LEADER', label: 'Team Leader' },
   { value: 'COORDINATOR', label: 'Coordinator' },
   { value: 'ENGINEER', label: 'Engineer (General)' },
   { value: 'QUALITY_ENGINEER', label: 'Quality Engineer' },
@@ -52,15 +69,30 @@ export default function CoordinatorCompaniesPage() {
 
   const [showPwd, setShowPwd] = useState(false);
   const [copied, setCopied] = useState('');
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [paymentTotals, setPaymentTotals] = useState({ paymentsCents: 0, invoicesCents: 0 });
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/admin/coordinator-companies');
-      const data = await res.json();
-      if (data.success) setCompanies(data.companies ?? []);
-      else setError(data.message ?? 'Failed to load');
+      const [companyRes, paymentRes] = await Promise.all([
+        fetch('/api/admin/coordinator-companies'),
+        fetch('/api/admin/company-payments'),
+      ]);
+      const companyData = await companyRes.json();
+      const paymentData = await paymentRes.json();
+      if (companyData.success) setCompanies(companyData.companies ?? []);
+      else setError(companyData.message ?? 'Failed to load companies');
+      if (paymentData.success) {
+        setPayments(paymentData.payments ?? []);
+        setInvoices(paymentData.invoices ?? []);
+        setPaymentTotals({
+          paymentsCents: paymentData.totals?.paymentsCents ?? 0,
+          invoicesCents: paymentData.totals?.invoicesCents ?? 0,
+        });
+      }
     } catch {
       setError('Network error');
     } finally {
@@ -158,6 +190,40 @@ export default function CoordinatorCompaniesPage() {
       {error && (
         <div className="mb-4 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 px-4 py-3 text-sm">{error}</div>
       )}
+
+      <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+        <h2 className="text-sm font-semibold text-emerald-300 mb-3">Company Payments Overview</h2>
+        <div className="grid sm:grid-cols-2 gap-3 text-sm">
+          <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-slate-400 text-xs">Total payments</p>
+            <p className="text-white font-semibold">${(paymentTotals.paymentsCents / 100).toFixed(2)}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-slate-400 text-xs">Total invoices</p>
+            <p className="text-white font-semibold">${(paymentTotals.invoicesCents / 100).toFixed(2)}</p>
+          </div>
+        </div>
+        <div className="mt-3 grid lg:grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3 max-h-44 overflow-auto">
+            <p className="text-slate-300 font-medium mb-2">Recent Payments</p>
+            {payments.slice(0, 8).map((p) => (
+              <p key={p.id} className="text-slate-400 mb-1">
+                {(p.subscription?.company?.name ?? 'Company')} - ${(p.amountCents / 100).toFixed(2)} - {p.status}
+              </p>
+            ))}
+            {payments.length === 0 && <p className="text-slate-500">No payments yet.</p>}
+          </div>
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3 max-h-44 overflow-auto">
+            <p className="text-slate-300 font-medium mb-2">Recent Invoices</p>
+            {invoices.slice(0, 8).map((i) => (
+              <p key={i.id} className="text-slate-400 mb-1">
+                {(i.subscription?.company?.name ?? 'Company')} - ${(i.amountCents / 100).toFixed(2)}
+              </p>
+            ))}
+            {invoices.length === 0 && <p className="text-slate-500">No invoices yet.</p>}
+          </div>
+        </div>
+      </div>
 
       {/* New credential result */}
       {newCred && (

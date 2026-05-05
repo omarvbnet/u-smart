@@ -40,6 +40,8 @@ class User {
   bool get isQualityEngineer => role == 'QUALITY_ENGINEER';
   bool get isSupervisionEngineer => role == 'SUPERVISION_ENGINEER';
   bool get isCoordinator => role == 'COORDINATOR';
+  bool get isManager => role == 'MANAGER';
+  bool get isTeamLeader => role == 'TEAM_LEADER';
   bool get isCompany => role == 'COMPANY' || role == 'COMPANY_OWNER';
   bool get isAdmin => role == 'ADMIN';
   bool get isTechnician => role == 'TECHNICIAN';

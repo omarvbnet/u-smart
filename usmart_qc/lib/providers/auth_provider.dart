@@ -25,6 +25,8 @@ class AuthProvider extends ChangeNotifier {
   bool get isWorker => _user?.isWorker ?? false;
   bool get isAdmin => _user?.isAdmin ?? false;
   bool get isCoordinator => _user?.isCoordinator ?? false;
+  bool get isManager => _user?.isManager ?? false;
+  bool get isTeamLeader => _user?.isTeamLeader ?? false;
   bool get isCompanyOwner => _user?.isCompanyOwner ?? false;
   bool get mustChangePassword => _user?.mustChangePassword ?? false;
 
@@ -37,7 +39,7 @@ class AuthProvider extends ChangeNotifier {
   /// Company hub (staff, billing): owners, company accounts, coordinators, and platform admins.
   bool get canAccessCompanyHub {
     final role = _user?.role ?? '';
-    final hub = role == 'COMPANY_OWNER' || role == 'COMPANY' || role == 'COORDINATOR' || role == 'ADMIN';
+    final hub = role == 'COMPANY_OWNER' || role == 'COMPANY' || role == 'COORDINATOR' || role == 'ADMIN' || role == 'MANAGER' || role == 'TEAM_LEADER';
     return hasCoordinatorCompany && hub;
   }
 
@@ -46,6 +48,8 @@ class AuthProvider extends ChangeNotifier {
       hasCoordinatorCompany &&
       (isCompanyOwner ||
           isCoordinator ||
+          isManager ||
+          isTeamLeader ||
           (_user?.role == 'ADMIN'));
 
   Future<void> tryAutoLogin() async {

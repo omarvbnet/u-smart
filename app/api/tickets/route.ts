@@ -9,6 +9,7 @@ import { sendTicketNotificationEmail, sendTicketCompletedEmail, notifyTicketsTic
 import { sendPushToRequesters } from '@/lib/push-notifications';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
+import { hasPrivilege } from '@/lib/coordinator-access';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,6 +31,7 @@ const ROLE_SCOPE_BY_TASK_CATEGORY: Record<string, string> = {
   SUPERVISION: 'SUPERVISION_ENGINEER',
   MAINTENANCE: 'TECHNICIAN',
 };
+const TASK_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'MANAGER', 'TEAM_LEADER']);
 
 async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
   try {
@@ -204,10 +206,12 @@ export async function POST(req: NextRequest) {
     let resubmitToRequester = false;
 
     if (coordinatorContext) {
-      const allowedCreatorRoles = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
-      if (!allowedCreatorRoles.has(coordinatorContext.role)) {
+      const canCreateTasks =
+        TASK_CREATOR_ROLES.has(coordinatorContext.role) ||
+        hasPrivilege(coordinatorContext.privileges, 'CREATE_TASKS');
+      if (!canCreateTasks) {
         return NextResponse.json(
-          { success: false, message: 'Only company owner/coordinator can create tasks.' },
+          { success: false, message: 'Your role is not allowed to create tasks.' },
           { status: 403 }
         );
       }
@@ -264,7 +268,15 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: false, message: 'Assigned user not found in your company.' }, { status: 404 });
         }
         const requiredRole = ROLE_SCOPE_BY_TASK_CATEGORY[taskCategoryRaw];
-        if (requiredRole && assignee.role !== requiredRole) {
+        const assigneeRole = String(assignee.role ?? '').toUpperCase();
+        const roleMatch =
+          !requiredRole ||
+          assigneeRole === requiredRole ||
+          assigneeRole === 'ENGINEER' ||
+          assigneeRole === 'TEAM_LEADER' ||
+          assigneeRole === 'MANAGER' ||
+          assigneeRole === 'COORDINATOR';
+        if (!roleMatch) {
           return NextResponse.json(
             { success: false, message: `Assigned user must have role ${requiredRole} for this task type.` },
             { status: 400 }
@@ -602,7 +614,8 @@ export async function GET(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const where: any = coordinatorRoleTicketWhere(
         coordinatorContext.companyId,
-        coordinatorContext.role
+        coordinatorContext.role,
+        coordinatorContext.departments
       );
       if (from) {
         const d = new Date(from);

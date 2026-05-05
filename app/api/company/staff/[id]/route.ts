@@ -2,131 +2,123 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
+import {
+  COMPANY_STAFF_CREATE_ROLES,
+  decodeProfileSkills,
+  encodeProfileSkills,
+  hasPrivilege,
+  normalizeCoordinatorRole,
+  normalizeDepartments,
+  normalizePrivileges,
+} from '@/lib/coordinator-access';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = prisma as any;
+const STAFF_MANAGER_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'MANAGER', 'COMPANY']);
 
-const ALLOWED_MANAGER_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN']);
-const ALLOWED_STAFF_ROLES = new Set([
-  'COMPANY_OWNER',
-  'COORDINATOR',
-  'ENGINEER',
-  'QUALITY_ENGINEER',
-  'SUPERVISION_ENGINEER',
-  'TECHNICIAN',
-  'CLIENT',
-]);
-
-async function resolveManagerCompany(req: NextRequest): Promise<{ managerId: string; companyId: string } | null> {
+async function resolveCompanyContext(req: NextRequest): Promise<{ companyId: string } | null> {
   const auth = getRequesterFromRequest(req);
   if (!auth) return null;
-
-  if (auth.payload.identitySource === 'coordinator_user' && auth.payload.companyId) {
-    const me = await db.coordinatorUser.findUnique({
+  if (auth.payload.identitySource === 'coordinator_user') {
+    const me = await (prisma as any).coordinatorUser.findUnique({
       where: { id: auth.payload.requesterId },
-      select: { role: true, companyId: true, status: true },
+      select: {
+        role: true,
+        companyId: true,
+        profile: {
+          select: { skills: true },
+        },
+      },
     });
-    if (!me || !ALLOWED_MANAGER_ROLES.has(String(me.role)) || me.status !== 'ACTIVE') return null;
-    return { managerId: auth.payload.requesterId as string, companyId: me.companyId as string };
+    const access = decodeProfileSkills(me?.profile?.skills ?? [], me?.role ?? 'COORDINATOR');
+    const canManage = me && (STAFF_MANAGER_ROLES.has(String(me.role)) || hasPrivilege(access.privileges, 'MANAGE_STAFF'));
+    if (!me || !me.companyId || !canManage) return null;
+    return { companyId: me.companyId };
   }
-
   if (auth.payload.identitySource === 'ticket_requester') {
-    const tr = await db.ticketRequester.findUnique({
+    const requester = await (prisma as any).ticketRequester.findUnique({
       where: { id: auth.payload.requesterId },
-      select: { role: true, username: true, email: true, status: true },
+      select: { id: true, username: true, email: true, role: true },
     });
-    const role = String((tr as { role?: string })?.role ?? '').toUpperCase();
-    const status = String((tr as { status?: string })?.status ?? 'ACTIVE').toUpperCase();
-    if (role !== 'COMPANY' || status === 'BLOCKED' || status === 'SUSPENDED') return null;
-    const companyId = await getLinkedCoordinatorCompanyId(db, {
-      id: auth.payload.requesterId as string,
-      username: (tr as { username?: string }).username ?? '',
-      email: (tr as { email?: string | null }).email ?? null,
-      role,
+    if (!requester || String(requester.role ?? '').toUpperCase() !== 'COMPANY') return null;
+    const companyId = await getLinkedCoordinatorCompanyId(prisma, {
+      id: requester.id,
+      username: requester.username,
+      email: requester.email ?? null,
+      role: requester.role ?? null,
     });
     if (!companyId) return null;
-    return { managerId: auth.payload.requesterId as string, companyId };
+    return { companyId };
   }
-
   return null;
 }
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const ctx = await resolveManagerCompany(req);
-  if (!ctx) return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
-
-  const user = await db.coordinatorUser.findFirst({
-    where: { id, companyId: ctx.companyId },
-    select: { id: true, username: true, name: true, email: true, role: true, status: true, mustChangePassword: true, createdAt: true },
-  });
-  if (!user) return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
-  return NextResponse.json({ success: true, user });
-}
-
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const context = await resolveCompanyContext(req);
+  if (!context) {
+    return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
+  }
   const { id } = await params;
-  const ctx = await resolveManagerCompany(req);
-  if (!ctx) return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
-
-  // Prevent self-modification of own status
-  if (id === ctx.managerId) {
-    return NextResponse.json({ success: false, message: 'Cannot modify your own account here.' }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ success: false, message: 'Missing staff id.' }, { status: 400 });
   }
+  const body = await req.json().catch(() => ({}));
+  const role = typeof body.role === 'string' ? normalizeCoordinatorRole(body.role) : '';
+  const departments = normalizeDepartments(body.departments);
+  const privileges = normalizePrivileges(body.privileges);
+  const status = typeof body.status === 'string' ? body.status.trim().toUpperCase() : '';
 
-  const target = await db.coordinatorUser.findFirst({
-    where: { id, companyId: ctx.companyId },
-    select: { id: true },
+  const existing = await (prisma as any).coordinatorUser.findFirst({
+    where: { id, companyId: context.companyId },
+    select: { id: true, role: true, profile: { select: { skills: true } } },
   });
-  if (!target) return NextResponse.json({ success: false, message: 'User not found in your company.' }, { status: 404 });
-
-  const body = await req.json();
-  const updateData: Record<string, unknown> = {};
-
-  if (typeof body.status === 'string') {
-    const s = body.status.toUpperCase();
-    if (s !== 'ACTIVE' && s !== 'INACTIVE') {
-      return NextResponse.json({ success: false, message: 'Invalid status. Use ACTIVE or INACTIVE.' }, { status: 400 });
-    }
-    updateData.status = s;
+  if (!existing) {
+    return NextResponse.json({ success: false, message: 'Staff member not found.' }, { status: 404 });
   }
 
-  if (typeof body.role === 'string') {
-    const r = body.role.toUpperCase();
-    if (!ALLOWED_STAFF_ROLES.has(r)) {
+  const updates: Record<string, unknown> = {};
+  if (role) {
+    if (!COMPANY_STAFF_CREATE_ROLES.has(role)) {
       return NextResponse.json({ success: false, message: 'Invalid role.' }, { status: 400 });
     }
-    updateData.role = r;
+    updates.role = role;
+  }
+  if (status) {
+    if (!['ACTIVE', 'SUSPENDED', 'BLOCKED'].includes(status)) {
+      return NextResponse.json({ success: false, message: 'Invalid status.' }, { status: 400 });
+    }
+    updates.status = status;
   }
 
-  if (Object.keys(updateData).length === 0) {
-    return NextResponse.json({ success: false, message: 'No valid fields to update.' }, { status: 400 });
-  }
-
-  const updated = await db.coordinatorUser.update({
+  const user = await (prisma as any).coordinatorUser.update({
     where: { id },
-    data: updateData,
-    select: { id: true, username: true, name: true, email: true, role: true, status: true },
+    data: updates,
+    select: { id: true, username: true, email: true, name: true, role: true, status: true },
   });
 
-  return NextResponse.json({ success: true, user: updated });
-}
-
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const ctx = await resolveManagerCompany(req);
-  if (!ctx) return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
-
-  if (id === ctx.managerId) {
-    return NextResponse.json({ success: false, message: 'Cannot delete your own account.' }, { status: 400 });
+  if (departments.length > 0 || privileges.length > 0) {
+    const currentSkills = (existing.profile?.skills ?? []) as string[];
+    await (prisma as any).coordinatorProfile.upsert({
+      where: { userId: id },
+      update: {
+        skills: encodeProfileSkills({ departments, privileges }, currentSkills),
+      },
+      create: {
+        userId: id,
+        skills: encodeProfileSkills({ departments, privileges }),
+      },
+    });
   }
-
-  const target = await db.coordinatorUser.findFirst({
-    where: { id, companyId: ctx.companyId },
-    select: { id: true },
+  const profile = await (prisma as any).coordinatorProfile.findUnique({
+    where: { userId: id },
+    select: { skills: true },
   });
-  if (!target) return NextResponse.json({ success: false, message: 'User not found.' }, { status: 404 });
+  const access = decodeProfileSkills(profile?.skills ?? [], user.role ?? 'COORDINATOR');
 
-  await db.coordinatorUser.delete({ where: { id } });
-  return NextResponse.json({ success: true, message: 'Staff member removed.' });
+  return NextResponse.json({
+    success: true,
+    user: {
+      ...user,
+      departments: access.departments,
+      privileges: access.privileges,
+    },
+  });
 }

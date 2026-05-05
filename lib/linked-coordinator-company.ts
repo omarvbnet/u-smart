@@ -60,39 +60,7 @@ export async function tryCompanyOwnerCoordinatorInsteadOfLegacy(
     const valid = await bcrypt.compare(password, owner.passwordHash);
     return valid ? owner : null;
   } catch {
-    // Backward-compat for older DBs missing coordinator_users.username:
-    // fall back to matching by email or local-part(email)=requester.username.
-    try {
-      const em = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
-      const local = requester.username.trim().toLowerCase();
-      const owner = await (prisma as any).coordinatorUser.findFirst({
-        where: {
-          role: 'COMPANY_OWNER',
-          OR: em
-            ? [
-                { email: { equals: em, mode: 'insensitive' } },
-                { email: { startsWith: `${local}@`, mode: 'insensitive' } },
-              ]
-            : [{ email: { startsWith: `${local}@`, mode: 'insensitive' } }],
-        },
-        select: {
-          id: true,
-          username: true,
-          name: true,
-          email: true,
-          passwordHash: true,
-          role: true,
-          status: true,
-          mustChangePassword: true,
-          companyId: true,
-        },
-      });
-      if (!owner) return null;
-      const valid = await bcrypt.compare(password, owner.passwordHash);
-      return valid ? owner : null;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
@@ -126,38 +94,45 @@ export async function getLinkedCoordinatorCompanyId(
     });
     return owner?.companyId ?? null;
   } catch {
-    // Backward-compat: username column may be absent; use email matching.
-    try {
-      const local = requester.username.trim().toLowerCase();
-      const em = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
-      const owner = await (prisma as any).coordinatorUser.findFirst({
-        where: {
-          role: 'COMPANY_OWNER',
-          OR: em
-            ? [
-                { email: { equals: em, mode: 'insensitive' } },
-                { email: { startsWith: `${local}@`, mode: 'insensitive' } },
-              ]
-            : [{ email: { startsWith: `${local}@`, mode: 'insensitive' } }],
-        },
-        select: { companyId: true },
-      });
-      return owner?.companyId ?? null;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
-export function coordinatorRoleTicketWhere(companyId: string, role: string): { coordinatorCompanyId: string } & Record<string, unknown> {
+export function coordinatorRoleTicketWhere(
+  companyId: string,
+  role: string,
+  departments: string[] = []
+): { coordinatorCompanyId: string } & Record<string, unknown> {
   const where: { coordinatorCompanyId: string } & Record<string, unknown> = { coordinatorCompanyId: companyId };
   const r = String(role).toUpperCase();
+  if (r === 'ADMIN' || r === 'COMPANY_OWNER' || r === 'MANAGER') {
+    return where;
+  }
   if (r === 'QUALITY_ENGINEER') {
     where.taskCategory = 'QUALITY';
-  } else if (r === 'SUPERVISION_ENGINEER') {
+    return where;
+  }
+  if (r === 'SUPERVISION_ENGINEER') {
     where.taskCategory = 'SUPERVISION';
-  } else if (r === 'TECHNICIAN') {
-    where.taskCategory = 'MAINTENANCE';
+    return where;
+  }
+  if (r === 'TECHNICIAN') {
+    where.taskCategory = { in: ['MAINTENANCE'] };
+    return where;
+  }
+  const normalizedDepartments = departments.map((d) => String(d).toUpperCase());
+  const categories: string[] = [];
+  if (normalizedDepartments.includes('QUALITY_CONTROL')) categories.push('QUALITY');
+  if (normalizedDepartments.includes('SUPERVISION')) categories.push('SUPERVISION');
+  if (
+    normalizedDepartments.includes('NETWORK_MAINTENANCE') ||
+    normalizedDepartments.includes('ELECTRICAL_DEPLOYMENTS') ||
+    normalizedDepartments.includes('MECHANICAL')
+  ) {
+    categories.push('MAINTENANCE');
+  }
+  if (categories.length > 0) {
+    where.taskCategory = { in: [...new Set(categories)] };
   }
   return where;
 }
