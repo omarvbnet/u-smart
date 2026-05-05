@@ -239,7 +239,7 @@ const TEMPLATES: Record<
       body: `${v.authorName} yanıtladı`,
     }),
     ku: (v) => ({
-      title: 'کۆمپانیا وەڵامی تیکەتەکانی دا`,
+      title: 'کۆمپانیا وەڵامی تیکەتەکانی دا',
       body: `${v.authorName} وەڵامی دا`,
     }),
   },
