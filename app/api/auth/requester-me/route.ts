@@ -96,6 +96,8 @@ export async function GET(req: NextRequest) {
   let hasUpdatedCredentials = false;
   let province: string | null = null;
   let provinceFilterActive = true;
+  let mustChangePassword = false;
+  let preferredLocale: string | null = null;
   try {
     const extended = await (prisma.ticketRequester as any).findUnique({
       where: { id: payload.requesterId },
@@ -109,8 +111,6 @@ export async function GET(req: NextRequest) {
         provinceFilterActive: true,
       },
     });
-    let mustChangePassword = false;
-    let preferredLocale: string | null = null;
     if (extended) {
       companyCertificationUrl = extended.companyCertificationUrl ?? null;
       status = extended.status ?? 'ACTIVE';
