@@ -556,7 +556,8 @@ export default function TicketDashboardPage() {
   }
 
   const isRestricted = user?.status === 'SUSPENDED' || user?.status === 'BLOCKED';
-  const isCompany = user?.role === 'COMPANY';
+  const isPersonal = user?.role === 'PERSONAL';
+  const canManageSites = user?.role === 'COMPANY' || user?.role === 'PERSONAL';
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white py-12 px-4">
@@ -875,11 +876,15 @@ export default function TicketDashboardPage() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">{t('ticketForm.siteName')}</label>
                   {sites.length > 0 ? (
                     <select
-                      value={sites.some((s) => s.siteId === ticketForm.siteName) ? ticketForm.siteName : (ticketForm.siteName ? '__manual__' : '')}
+                      value={
+                        sites.some((s) => s.siteId === ticketForm.siteName)
+                          ? ticketForm.siteName
+                          : (!isPersonal && ticketForm.siteName ? '__manual__' : '')
+                      }
                       onChange={(e) => {
                         const v = e.target.value;
                         if (v === '__manual__' || v === '') {
-                          setTicketForm((f) => ({ ...f, siteName: v === '__manual__' ? '' : f.siteName, siteLocations: '', province: '' }));
+                          setTicketForm((f) => ({ ...f, siteName: '', siteLocations: '', province: '' }));
                         } else {
                           const site = sites.find((s) => s.siteId === v);
                           if (site) {
@@ -895,7 +900,7 @@ export default function TicketDashboardPage() {
                           {s.siteId} — {s.location}
                         </option>
                       ))}
-                      <option value="__manual__" className="bg-[#0f1419]">— {t('ticketForm.typeNewSite')} —</option>
+                      {!isPersonal && <option value="__manual__" className="bg-[#0f1419]">— {t('ticketForm.typeNewSite')} —</option>}
                     </select>
                   ) : (
                     <input
@@ -907,7 +912,7 @@ export default function TicketDashboardPage() {
                       required
                     />
                   )}
-                  {sites.length > 0 && !sites.some((s) => s.siteId === ticketForm.siteName) && (
+                  {sites.length > 0 && !isPersonal && !sites.some((s) => s.siteId === ticketForm.siteName) && (
                     <input
                       type="text"
                       value={ticketForm.siteName}
@@ -1103,7 +1108,7 @@ export default function TicketDashboardPage() {
                 <Map className="w-5 h-5 text-cyan-400" />
                 {t('ticketForm.navSites')}
               </h3>
-              {isCompany && !isRestricted && (
+              {canManageSites && !isRestricted && (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -1219,7 +1224,7 @@ export default function TicketDashboardPage() {
                         <PlusCircle className="w-3.5 h-3.5" />
                         {t('ticketForm.openTicket')}
                       </button>
-                      {isCompany && !isRestricted && (
+                      {canManageSites && !isRestricted && (
                         <>
                           <button
                             type="button"

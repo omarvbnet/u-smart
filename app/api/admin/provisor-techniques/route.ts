@@ -5,6 +5,14 @@ import { prisma as _prisma } from '@/lib/prisma';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
+function isMissingProvisorTechniquesTable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if (!('code' in error) || (error as { code?: string }).code !== 'P2021') return false;
+  const meta = (error as { meta?: { table?: string } }).meta;
+  const table = typeof meta?.table === 'string' ? meta.table : '';
+  return table.includes('provisor_techniques');
+}
+
 function adminUnauthorized() {
   return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
 }
@@ -19,6 +27,14 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ success: true, techniques: rows });
   } catch (e) {
+    if (isMissingProvisorTechniquesTable(e)) {
+      return NextResponse.json({
+        success: true,
+        techniques: [],
+        tableMissing: true,
+        message: 'Techniques table is missing in this database. Run Prisma migrations.',
+      });
+    }
     console.error('GET /api/admin/provisor-techniques:', e);
     return NextResponse.json({ success: false, message: 'Failed to load techniques' }, { status: 500 });
   }
@@ -60,6 +76,12 @@ export async function POST(req: NextRequest) {
     const code = e && typeof e === 'object' && 'code' in e ? (e as { code: string }).code : '';
     if (code === 'P2002') {
       return NextResponse.json({ success: false, message: 'This slug already exists for this category' }, { status: 400 });
+    }
+    if (isMissingProvisorTechniquesTable(e)) {
+      return NextResponse.json(
+        { success: false, message: 'Techniques table is missing. Run Prisma migrations first.' },
+        { status: 503 }
+      );
     }
     console.error('POST /api/admin/provisor-techniques:', e);
     return NextResponse.json({ success: false, message: 'Failed to create technique' }, { status: 500 });

@@ -245,6 +245,7 @@ export default function QualityControlDashboardPage() {
   );
   const canManageSites =
     user?.role === 'COMPANY' ||
+    user?.role === 'PERSONAL' ||
     user?.role === 'COMPANY_OWNER' ||
     user?.role === 'COORDINATOR' ||
     user?.role === 'MANAGER' ||
@@ -263,6 +264,7 @@ export default function QualityControlDashboardPage() {
     ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
   /** Legacy requester (no companyId) can post simple tickets; coordinator staff cannot create. */
   const canOpenTicketForm = !user?.companyId || canCreateCoordinatorTasks;
+  const isPersonal = user?.role === 'PERSONAL';
 
   const loadSites = async () => {
     setSitesLoading(true);
@@ -1776,7 +1778,11 @@ export default function QualityControlDashboardPage() {
                 {sites.length > 0 ? (
                   <>
                     <select
-                      value={sites.some((s) => s.siteId === ticketForm.siteName) ? ticketForm.siteName : (ticketForm.siteName ? '__manual__' : '')}
+                      value={
+                        sites.some((s) => s.siteId === ticketForm.siteName)
+                          ? ticketForm.siteName
+                          : (!isPersonal && ticketForm.siteName ? '__manual__' : '')
+                      }
                       onChange={(e) => {
                         const v = e.target.value;
                         if (v === '__manual__' || v === '') {
@@ -1798,9 +1804,9 @@ export default function QualityControlDashboardPage() {
                           {s.siteId} — {s.location}
                         </option>
                       ))}
-                      <option value="__manual__" className="bg-[#0f1419]">— {t('ticketForm.typeNewSite')} —</option>
+                      {!isPersonal && <option value="__manual__" className="bg-[#0f1419]">— {t('ticketForm.typeNewSite')} —</option>}
                     </select>
-                    {!sites.some((s) => s.siteId === ticketForm.siteName) && (
+                    {!isPersonal && !sites.some((s) => s.siteId === ticketForm.siteName) && (
                       <input
                         value={ticketForm.siteName}
                         onChange={(e) => setTicketForm((f) => ({ ...f, siteName: e.target.value }))}

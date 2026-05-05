@@ -19,6 +19,14 @@ type Row = {
   active: boolean;
 };
 
+function isMissingProvisorTechniquesTable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if (!('code' in error) || (error as { code?: string }).code !== 'P2021') return false;
+  const meta = (error as { meta?: { table?: string } }).meta;
+  const table = typeof meta?.table === 'string' ? meta.table : '';
+  return table.includes('provisor_techniques');
+}
+
 function toPayload(rows: Row[]) {
   const inspection = rows
     .filter((r) => r.category === 'INSPECTION_QC' && r.active)
@@ -87,6 +95,10 @@ export async function GET(req: NextRequest) {
       fromDefaults: false,
     });
   } catch (e) {
+    if (isMissingProvisorTechniquesTable(e)) {
+      console.warn('GET /api/provisor-techniques: table missing, serving defaults');
+      return NextResponse.json({ success: true, ...defaultPayload(), tableMissing: true });
+    }
     console.error('GET /api/provisor-techniques:', e);
     return NextResponse.json({ success: false, message: 'Failed to load techniques' }, { status: 500 });
   }

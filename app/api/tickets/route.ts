@@ -33,42 +33,56 @@ const ROLE_SCOPE_BY_TASK_CATEGORY: Record<string, string> = {
 };
 const TASK_CREATOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'MANAGER', 'TEAM_LEADER']);
 
-async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
+async function notifyRoleNewTicket(
+  ticketId: string,
+  province: string,
+  siteName: string,
+  role: 'ENGINEER' | 'TECHNICIAN',
+  roleLabel: string
+) {
   try {
     if (typeof prisma.notification?.create !== 'function') return;
-    const engineers = await prisma.ticketRequester.findMany({
+    const recipients = await prisma.ticketRequester.findMany({
       where: {
-        role: 'ENGINEER',
+        role,
         status: 'ACTIVE',
         serviceSlug: 'quality-control-supervision',
       },
       select: { id: true, province: true, provinceFilterActive: true },
     });
-    for (const eng of engineers) {
-      const filterActive = eng.provinceFilterActive ?? true;
-      const engProvince = eng.province ?? null;
-      if (filterActive && engProvince && engProvince !== province) continue;
+    for (const recipient of recipients) {
+      const filterActive = recipient.provinceFilterActive ?? true;
+      const recipientProvince = recipient.province ?? null;
+      if (filterActive && recipientProvince && recipientProvince !== province) continue;
       try {
         await prisma.notification.create({
           data: {
             type: 'new_ticket',
             title: 'New ticket available',
-            message: `New QC ticket in ${province}: ${siteName}`,
+            message: `New ${roleLabel} ticket in ${province}: ${siteName}`,
             ticketId,
-            requesterId: eng.id,
+            requesterId: recipient.id,
             forAdmin: false,
           },
         });
-        await sendPushToRequesters(prisma, [eng.id], {
+        await sendPushToRequesters(prisma, [recipient.id], {
           title: 'New ticket available',
-          body: `New QC ticket in ${province}: ${siteName}`,
+          body: `New ${roleLabel} ticket in ${province}: ${siteName}`,
           data: { ticketId, type: 'new_ticket' },
         });
       } catch { /* skip */ }
     }
   } catch (e) {
-    console.error('notifyEngineersNewTicket:', e);
+    console.error('notifyRoleNewTicket:', e);
   }
+}
+
+async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
+  await notifyRoleNewTicket(ticketId, province, siteName, 'ENGINEER', 'QC');
+}
+
+async function notifyTechniciansNewTicket(ticketId: string, province: string, siteName: string) {
+  await notifyRoleNewTicket(ticketId, province, siteName, 'TECHNICIAN', 'maintenance');
 }
 
 function generateUsername(): string {
@@ -105,16 +119,18 @@ export async function POST(req: NextRequest) {
     const payload = auth?.payload ?? null;
     const coordinatorContext = payload ? await getCoordinatorContext(req) : null;
     let requester: { email?: string | null } | null = null;
+    let requesterRole: string | null = null;
 
     if (payload && !coordinatorContext) {
       const reqData = await prisma.ticketRequester.findUnique({
         where: { id: payload.requesterId },
-        select: { id: true, phone: true, name: true, company: true, serviceSlug: true, status: true, email: true },
+        select: { id: true, phone: true, name: true, company: true, serviceSlug: true, status: true, email: true, role: true },
       });
       requester = reqData;
       if (!reqData) {
         return NextResponse.json({ success: false, message: 'Requester not found' }, { status: 401 });
       }
+      requesterRole = (reqData as { role?: string | null }).role ?? null;
       const status = (reqData as { status?: string }).status;
       if (status === 'BLOCKED' || status === 'SUSPENDED') {
         return NextResponse.json(
@@ -164,11 +180,7 @@ export async function POST(req: NextRequest) {
 
     // Worker cannot create any tickets – view-only, admin-assigned
     if (payload && !coordinatorContext) {
-      const requesterRole = (await prisma.ticketRequester.findUnique({
-        where: { id: payload.requesterId },
-        select: { role: true },
-      })) as { role?: string } | null;
-      if (requesterRole?.role === 'WORKER') {
+      if (requesterRole === 'WORKER') {
         return NextResponse.json(
           { success: false, message: 'Workers cannot create tickets. You can only view tickets assigned to you.' },
           { status: 403 }
@@ -178,16 +190,38 @@ export async function POST(req: NextRequest) {
 
     const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
     if (isMaintenanceTicket && payload && !coordinatorContext) {
-      const requesterRole = (await prisma.ticketRequester.findUnique({
-        where: { id: payload.requesterId },
-        select: { role: true },
-      })) as { role?: string } | null;
       const allowedRoles = ['COMPANY', 'PERSONAL'];
-      if (!requesterRole?.role || !allowedRoles.includes(requesterRole.role)) {
+      if (!requesterRole || !allowedRoles.includes(requesterRole)) {
         return NextResponse.json(
           { success: false, message: 'Only company or personal can create maintenance tickets. Technicians handle them; engineers handle QC only.' },
           { status: 403 }
         );
+      }
+    }
+
+    if (payload && !coordinatorContext && requesterRole === 'PERSONAL') {
+      const siteDelegate = (prisma as any).site;
+      if (!siteDelegate?.findFirst) {
+        return NextResponse.json(
+          { success: false, message: 'Sites are not available right now. Please try again later.' },
+          { status: 503 }
+        );
+      }
+      const personalSite = await siteDelegate.findFirst({
+        where: {
+          requesterId: payload.requesterId,
+          siteId: siteName,
+        },
+        select: { siteId: true, province: true },
+      });
+      if (!personalSite) {
+        return NextResponse.json(
+          { success: false, message: 'Personal accounts can create tickets only for sites added in your dashboard.' },
+          { status: 403 }
+        );
+      }
+      if (!province || province === 'N/A') {
+        province = personalSite.province || province;
       }
     }
 
@@ -505,7 +539,11 @@ export async function POST(req: NextRequest) {
       });
 
       if (serviceSlug === 'quality-control-supervision') {
-        notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+        if (MAINTENANCE_TECHNIQUES.includes(technique)) {
+          notifyTechniciansNewTicket(ticket.id, province, siteName).catch(() => {});
+        } else {
+          notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+        }
       }
 
       return NextResponse.json({
@@ -548,8 +586,12 @@ export async function POST(req: NextRequest) {
       status: 'PENDING',
     });
 
-    if (serviceSlug === 'quality-control-supervision' && !MAINTENANCE_TECHNIQUES.includes(technique)) {
-      notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+    if (serviceSlug === 'quality-control-supervision') {
+      if (MAINTENANCE_TECHNIQUES.includes(technique)) {
+        notifyTechniciansNewTicket(ticket.id, province, siteName).catch(() => {});
+      } else {
+        notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+      }
     }
 
     const requesterEmail = (requester as { email?: string | null })?.email;

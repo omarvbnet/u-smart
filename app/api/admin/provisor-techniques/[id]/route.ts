@@ -5,6 +5,14 @@ import { prisma as _prisma } from '@/lib/prisma';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
+function isMissingProvisorTechniquesTable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if (!('code' in error) || (error as { code?: string }).code !== 'P2021') return false;
+  const meta = (error as { meta?: { table?: string } }).meta;
+  const table = typeof meta?.table === 'string' ? meta.table : '';
+  return table.includes('provisor_techniques');
+}
+
 function adminUnauthorized() {
   return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
 }
@@ -47,6 +55,12 @@ export async function PATCH(
     if (code === 'P2002') {
       return NextResponse.json({ success: false, message: 'Slug conflict' }, { status: 400 });
     }
+    if (isMissingProvisorTechniquesTable(e)) {
+      return NextResponse.json(
+        { success: false, message: 'Techniques table is missing. Run Prisma migrations first.' },
+        { status: 503 }
+      );
+    }
     console.error('PATCH /api/admin/provisor-techniques/[id]:', e);
     return NextResponse.json({ success: false, message: 'Failed to update' }, { status: 500 });
   }
@@ -71,6 +85,12 @@ export async function DELETE(
     const code = e && typeof e === 'object' && 'code' in e ? (e as { code: string }).code : '';
     if (code === 'P2025') {
       return NextResponse.json({ success: false, message: 'Not found' }, { status: 404 });
+    }
+    if (isMissingProvisorTechniquesTable(e)) {
+      return NextResponse.json(
+        { success: false, message: 'Techniques table is missing. Run Prisma migrations first.' },
+        { status: 503 }
+      );
     }
     console.error('DELETE /api/admin/provisor-techniques/[id]:', e);
     return NextResponse.json({ success: false, message: 'Failed to delete' }, { status: 500 });
