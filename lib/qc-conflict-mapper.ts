@@ -6,6 +6,12 @@
 export type VisitorRowForConflict = any;
 
 export const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'] as const;
+
+/** Runtime check — `includes()` on tuples requires narrowing; callers often have `string`. */
+export function isConflictInspectionLowercase(lowerCasedInspectionResult: string): boolean {
+  return (CONFLICT_RESULTS as readonly string[]).includes(lowerCasedInspectionResult);
+}
+
 export const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
 export function rowToConflictPayload(row: VisitorRowForConflict): Record<string, unknown> | null {
@@ -21,7 +27,7 @@ export function rowToConflictPayload(row: VisitorRowForConflict): Record<string,
   const inspectionResult = isMaintenance
     ? 'maintenance'
     : ((parsed.inspectionResult as string) ?? 'not_accepted');
-  if (!isMaintenance && !CONFLICT_RESULTS.includes(inspectionResult.toLowerCase())) return null;
+  if (!isMaintenance && !isConflictInspectionLowercase(inspectionResult.toLowerCase())) return null;
 
   const out: Record<string, unknown> = {
     id: row.id,

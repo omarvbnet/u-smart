@@ -7,7 +7,7 @@ import {
   isMissingVisitorRequestsCoordinatorCompanyIdColumn,
   invalidateVisitorRequestsCoordinatorCompanyIdCache,
 } from '@/lib/visitor-request-db-columns';
-import { CONFLICT_RESULTS, rowToConflictPayload } from '@/lib/qc-conflict-mapper';
+import { isConflictInspectionLowercase, rowToConflictPayload } from '@/lib/qc-conflict-mapper';
 
 const prisma = _prisma as any;
 
@@ -102,7 +102,7 @@ export async function GET(
 
     if (parsedCheck.conflictReported !== true && row.status === 'COMPLETED') {
       const ir = ((parsedCheck.inspectionResult as string) ?? '').toLowerCase();
-      if (CONFLICT_RESULTS.includes(ir)) {
+      if (isConflictInspectionLowercase(ir)) {
         parsedCheck.conflictReported = true;
         parsedCheck.conflictStatus = 'pending';
       }
