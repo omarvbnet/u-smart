@@ -10,16 +10,23 @@ function normalizeShareTarget(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
+async function resolveSiteDbId(params: Promise<unknown>): Promise<string | null> {
+  const resolved = await params;
+  if (!resolved || typeof resolved !== 'object') return null;
+  const id = (resolved as { id?: unknown }).id;
+  return typeof id === 'string' && id.trim().length > 0 ? id : null;
+}
+
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<unknown> }
 ) {
   const auth = getRequesterFromRequest(_req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
-  const { id: siteDbId } = await params;
+  const siteDbId = await resolveSiteDbId(params);
   if (!siteDbId) {
     return NextResponse.json({ success: false, message: 'Missing site id' }, { status: 400 });
   }
@@ -44,6 +51,7 @@ export async function GET(
       select: {
         id: true,
         createdAt: true,
+        includeTickets: true,
         sharedWith: { select: { id: true, username: true, name: true, email: true } },
       },
     });
@@ -55,13 +63,13 @@ export async function GET(
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<unknown> }) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
-  const { id: siteDbId } = await params;
+  const siteDbId = await resolveSiteDbId(params);
   if (!siteDbId) {
     return NextResponse.json({ success: false, message: 'Missing site id' }, { status: 400 });
   }
@@ -71,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: false, message: 'Site sharing not available' }, { status: 503 });
   }
 
-  let body: { usernameOrEmail?: string };
+  let body: { usernameOrEmail?: string; includeTickets?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -79,6 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const usernameOrEmail = typeof body.usernameOrEmail === 'string' ? body.usernameOrEmail : '';
+  const includeTickets = body.includeTickets !== false;
   if (!usernameOrEmail.trim()) {
     return NextResponse.json(
       { success: false, message: 'usernameOrEmail is required' },
@@ -92,9 +101,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       select: { role: true, status: true },
     });
     const role = me?.role ?? 'COMPANY';
-    if (role !== 'COMPANY' && role !== 'PERSONAL') {
+    const canShare =
+      role === 'COMPANY' ||
+      role === 'PERSONAL' ||
+      role === 'ENGINEER' ||
+      role === 'TECHNICIAN';
+    if (!canShare) {
       return NextResponse.json(
-        { success: false, message: 'Only company or personal accounts can share sites' },
+        { success: false, message: 'Your role cannot share sites' },
         { status: 403 }
       );
     }
@@ -144,6 +158,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data: {
         siteId: siteDbId,
         sharedWithRequesterId: recipient.id,
+        includeTickets,
       },
     });
 
@@ -165,13 +180,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<unknown> }) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
 
-  const { id: siteDbId } = await params;
+  const siteDbId = await resolveSiteDbId(params);
   const shareId = req.nextUrl.searchParams.get('shareId')?.trim();
   if (!siteDbId || !shareId) {
     return NextResponse.json(

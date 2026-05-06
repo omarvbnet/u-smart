@@ -8,6 +8,7 @@ import '../providers/tickets_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../widgets/language_selector.dart';
 import '../models/ticket.dart';
+import '../models/site.dart';
 import '../models/conflict.dart';
 import '../widgets/ticket_card.dart';
 import 'ticket_detail_screen.dart';
@@ -22,6 +23,7 @@ import '../widgets/stats_card.dart';
 import 'filtered_tickets_screen.dart';
 import 'conflicts_screen.dart';
 import '../widgets/update_password_sheet.dart';
+import '../widgets/site_share_dialog.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -1392,6 +1394,106 @@ class _EngineerAnalyticsTab extends StatelessWidget {
 class _EngineerSitesTab extends StatelessWidget {
   const _EngineerSitesTab();
 
+  Future<void> _confirmDelete(
+    BuildContext context,
+    SitesProvider provider,
+    Site site,
+    AppLocalizations l10n,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          l10n.t('site_delete_confirm_title'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          l10n.t('site_delete_confirm', {'name': site.siteId}),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4757)),
+            child: Text(l10n.t('site_delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final success = await provider.deleteSite(site.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? l10n.t('site_deleted') : l10n.t('site_delete_failed')),
+            backgroundColor:
+                success ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmRemoveShare(
+    BuildContext context,
+    SitesProvider provider,
+    Site site,
+    AppLocalizations l10n,
+  ) async {
+    final sid = site.shareId;
+    if (sid == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          l10n.t('site_remove_share_title'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          l10n.t('site_remove_share_confirm', {'name': site.siteId}),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel'),
+                style: TextStyle(color: Colors.white.withAlpha(120))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4757)),
+            child: Text(l10n.t('site_remove_share')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final success = await provider.revokeSiteShare(site.id, sid);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? l10n.t('site_remove_share_done') : l10n.t('site_share_failed')),
+          backgroundColor:
+              success ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   String _formatDate(DateTime d) {
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
@@ -1599,16 +1701,77 @@ class _EngineerSitesTab extends StatelessWidget {
                                         ],
                                       ),
                                     ),
-                                    IconButton(
-                                      onPressed: () => Navigator.of(context)
-                                          .push(MaterialPageRoute(
-                                            builder: (_) =>
-                                                SiteFormScreen(site: site),
-                                          ))
-                                          .then((_) => provider.fetchSites()),
-                                      icon: const Icon(Icons.edit_rounded,
-                                          color: Color(0xFF6C63FF), size: 20),
-                                      tooltip: l10n.t('site_edit'),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (site.canEdit) ...[
+                                          IconButton(
+                                            onPressed: () => Navigator.of(context)
+                                                .push(MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      SiteFormScreen(site: site),
+                                                ))
+                                                .then((_) =>
+                                                    provider.fetchSites()),
+                                            icon: const Icon(Icons.edit_rounded,
+                                                color: Color(0xFF6C63FF),
+                                                size: 20),
+                                            tooltip: l10n.t('site_edit'),
+                                          ),
+                                          IconButton(
+                                            onPressed: () => _confirmDelete(
+                                                context,
+                                                provider,
+                                                site,
+                                                l10n),
+                                            icon: const Icon(
+                                                Icons.delete_outline_rounded,
+                                                color: Color(0xFFFF4757),
+                                                size: 20),
+                                            tooltip: l10n.t('site_delete'),
+                                          ),
+                                          IconButton(
+                                            onPressed: () => promptShareSite(
+                                              context: context,
+                                              provider: provider,
+                                              site: site,
+                                              l10n: l10n,
+                                            ),
+                                            icon: const Icon(
+                                                Icons.person_add_alt_1_rounded,
+                                                color: Color(0xFF00D4AA),
+                                                size: 20),
+                                            tooltip:
+                                                l10n.t('site_share_title'),
+                                          ),
+                                        ] else ...[
+                                          IconButton(
+                                            onPressed: () => Navigator.of(context)
+                                                .push(MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      SiteFormScreen(
+                                                          site: site,
+                                                          readOnly: true),
+                                                ))
+                                                .then((_) =>
+                                                    provider.fetchSites()),
+                                            icon: const Icon(Icons.visibility_rounded,
+                                                color: Color(0xFF6C63FF),
+                                                size: 20),
+                                            tooltip: l10n.t('site_view_shared'),
+                                          ),
+                                          IconButton(
+                                            onPressed: () =>
+                                                _confirmRemoveShare(context,
+                                                    provider, site, l10n),
+                                            icon: const Icon(Icons.link_off_rounded,
+                                                color: Color(0xFFFFA502),
+                                                size: 20),
+                                            tooltip:
+                                                l10n.t('site_remove_share'),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ],
                                 ),

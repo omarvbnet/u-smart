@@ -47,7 +47,9 @@ export async function POST(
         return NextResponse.json({ success: false, message: 'Invalid ticket data' }, { status: 400 });
       }
     }
-    if (!parsed._ticket) {
+    const hasTicketStub = parsed._ticket != null && parsed._ticket !== false;
+    const siteNameStr = typeof parsed.siteName === 'string' ? parsed.siteName.trim() : '';
+    if (!hasTicketStub && !siteNameStr) {
       return NextResponse.json({ success: false, message: 'Invalid ticket' }, { status: 400 });
     }
 

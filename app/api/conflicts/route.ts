@@ -3,50 +3,19 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
+import { rowToConflictPayload } from '@/lib/qc-conflict-mapper';
 const prisma = _prisma as any;
 
-const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
-const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+/** Conflict cases that are still actionable (not resolved). */
+const OPEN_CONFLICT_STATUSES = new Set(['pending', 're_inspection']);
 
-function rowToConflict(row: any): any {
-  let parsed: Record<string, unknown> = {};
-  try {
-    parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
-  } catch {
-    return null;
-  }
-  if (parsed.conflictReported !== true) return null;
-  const technique = (row.technique ?? '').toLowerCase();
-  const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
-  const inspectionResult = isMaintenance ? 'maintenance' : ((parsed.inspectionResult as string) ?? 'not_accepted');
-  if (!isMaintenance && !CONFLICT_RESULTS.includes(inspectionResult.toLowerCase())) return null;
-
-  const out: Record<string, unknown> = {
-    id: row.id,
-    ticketId: row.id,
-    siteName: parsed.siteName ?? null,
-    siteCoordinator: parsed.siteCoordinator ?? null,
-    assignedEngineerId: parsed.assignedEngineerId ?? null,
-    assignedEngineerName: parsed.assignedEngineerName ?? null,
-    inspectionResult,
-    inspectionComments: parsed.inspectionComments ?? null,
-    ncrReason: parsed.ncrReason ?? null,
-    inspectionChecklist: Array.isArray(parsed.inspectionChecklist)
-      ? parsed.inspectionChecklist
-      : null,
-    status: (parsed.conflictStatus as string) ?? 'pending',
-    resolvedBy: parsed.conflictResolvedBy ?? null,
-    resolvedAt: parsed.conflictResolvedAt ?? null,
-    resolution: parsed.conflictResolution ?? null,
-    conflictReportComment: parsed.conflictReportComment ?? null,
-    reportedBy: parsed.conflictReportedBy ?? null,
-    reportedAt: parsed.conflictReportedAt ?? null,
-    isMaintenanceConflict: isMaintenance,
-  };
-  if (isMaintenance && Array.isArray(parsed.conflictImageUrls)) {
-    out.conflictImageUrls = parsed.conflictImageUrls.filter((u: unknown) => typeof u === 'string');
-  }
-  return out;
+function rowToConflict(row: unknown): Record<string, unknown> | null {
+  const mapped = rowToConflictPayload(row);
+  if (!mapped) return null;
+  delete mapped.resolutionComment;
+  delete mapped.serviceSlug;
+  delete mapped.updatedAt;
+  return mapped;
 }
 
 export async function GET(req: NextRequest) {
@@ -88,14 +57,21 @@ export async function GET(req: NextRequest) {
       };
     } else {
       const isRequester = requesterRole === 'COMPANY' || requesterRole === 'PERSONAL';
+      const engineerId = auth.payload.requesterId;
+      // Engineers: only tickets where this engineer is assigned (assignedEngineerId in company JSON).
+      const assignedToThisEngineer = {
+        company: { contains: `"assignedEngineerId":"${engineerId}"` },
+      } as const;
       where = {
         serviceSlug,
         status: { in: ['COMPLETED', 'IN_PROGRESS', 'PENDING'] },
         AND: [
           { company: { contains: 'conflictReported' } },
           isRequester
-            ? { requesterId: auth.payload.requesterId }
-            : { company: { contains: auth.payload.requesterId } },
+            ? { requesterId: engineerId }
+            : requesterRole === 'ENGINEER'
+              ? assignedToThisEngineer
+              : { company: { contains: engineerId } },
         ],
       };
     }
@@ -106,10 +82,17 @@ export async function GET(req: NextRequest) {
       select: { id: true, company: true, technique: true },
     });
 
-    const conflicts = rows
+    let conflicts = rows
       .map((r: any) => rowToConflict(r))
       .filter(Boolean)
       .filter((c: any) => c !== null);
+
+    // Engineers: inbox is only open cases on tickets they handled (DB filter + status).
+    if (!coordinatorContext && requesterRole === 'ENGINEER') {
+      conflicts = conflicts.filter(
+        (c: any) => c && OPEN_CONFLICT_STATUSES.has(String(c.status ?? 'pending').toLowerCase())
+      );
+    }
 
     return NextResponse.json({ success: true, conflicts });
   } catch (err) {

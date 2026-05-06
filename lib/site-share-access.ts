@@ -18,7 +18,7 @@ export async function getSharedSiteTicketOrClauses(
 ): Promise<SharedSiteTicketClause[]> {
   try {
     const rows = await prisma.siteShare.findMany({
-      where: { sharedWithRequesterId: recipientRequesterId },
+      where: { sharedWithRequesterId: recipientRequesterId, includeTickets: true },
       select: { site: { select: { requesterId: true, siteId: true } } },
     });
     return rows.map((r: { site: { requesterId: string; siteId: string } }) => ({
@@ -83,6 +83,7 @@ export async function viewerHasSharedSiteTicketRead(
     const n = await prisma.siteShare.count({
       where: {
         sharedWithRequesterId: viewerRequesterId,
+        includeTickets: true,
         site: { requesterId: ownerId, siteId: siteLogical },
       },
     });

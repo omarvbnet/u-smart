@@ -14,6 +14,11 @@ class ApiConfig {
   static const double geofenceRadiusMeters = 500;
 
   static const String login = '/api/auth/requester-login';
+  static const String requesterOtpSend = '/api/auth/requester-otp/send';
+  static const String requesterOtpVerifyLogin =
+      '/api/auth/requester-otp/verify-login';
+  static const String requesterOtpRegister =
+      '/api/auth/requester-otp/register';
   static const String logout = '/api/auth/requester-logout';
   static const String me = '/api/auth/requester-me';
   static const String deleteAccount = '/api/auth/requester-me';

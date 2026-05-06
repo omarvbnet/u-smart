@@ -22,6 +22,8 @@ class Site {
   final String? shareId;
   final String? ownerUsername;
   final String? ownerRequesterId;
+  /// When receiving a shared site: whether the sharer granted ticket visibility (API).
+  final bool shareIncludesTickets;
 
   Site({
     required this.id,
@@ -43,6 +45,7 @@ class Site {
     this.shareId,
     this.ownerUsername,
     this.ownerRequesterId,
+    this.shareIncludesTickets = true,
   });
 
   bool get hasCoordinates => latitude != null && longitude != null;
@@ -50,8 +53,10 @@ class Site {
   factory Site.fromJson(Map<String, dynamic> json) {
     final canEditRaw = json['canEdit'];
     final sharedRaw = json['sharedWithMe'];
+    final shareTkRaw = json['shareIncludesTickets'];
     final canEdit = canEditRaw is bool ? canEditRaw : true;
     final sharedWithMe = sharedRaw is bool ? sharedRaw : false;
+    final shareIncludesTickets = shareTkRaw is bool ? shareTkRaw : true;
 
     return Site(
       id: json['id'] as String,
@@ -77,6 +82,7 @@ class Site {
       shareId: json['shareId'] as String?,
       ownerUsername: json['ownerUsername'] as String?,
       ownerRequesterId: json['ownerRequesterId'] as String?,
+      shareIncludesTickets: shareIncludesTickets,
     );
   }
 }

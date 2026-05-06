@@ -70,6 +70,82 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String?> sendLoginEmailOtp(String email) async {
+    _error = null;
+    notifyListeners();
+    try {
+      final res = await _authService.sendRequesterEmailOtp(email);
+      if (res['success'] == true) return null;
+      return (res['message'] ?? 'Failed to send code').toString();
+    } catch (_) {
+      return 'Connection error. Please try again.';
+    }
+  }
+
+  /// Email + verification code — no password ([finalizeSessionFromAuthResponse] uses /me).
+  Future<bool> loginWithEmailOtp(String email, String code) async {
+    _error = null;
+    _loading = true;
+    notifyListeners();
+    try {
+      final trimmed = email.trim().toLowerCase();
+      final raw = await _authService.verifyLoginWithEmailOtpRaw(email, code);
+      final user = await _authService.finalizeSessionFromAuthResponse(raw, trimmed);
+      if (user != null) {
+        _user = user;
+        _loading = false;
+        notifyListeners();
+        return true;
+      }
+      _error = raw['message']?.toString() ?? invalidCredentialsMarker;
+    } catch (e) {
+      _error = 'Connection error. Please try again.';
+    }
+    _loading = false;
+    notifyListeners();
+    return false;
+  }
+
+  /// Direct sign-up after OTP (ticket_requester; all Provisor roles).
+  Future<bool> registerWithEmailOtp({
+    required String email,
+    required String code,
+    required String name,
+    required String phone,
+    required String role,
+    String? province,
+    String? company,
+  }) async {
+    _error = null;
+    _loading = true;
+    notifyListeners();
+    try {
+      final trimmed = email.trim().toLowerCase();
+      final raw = await _authService.registerWithEmailOtpRaw(
+        email: email,
+        code: code,
+        name: name,
+        phone: phone,
+        role: role,
+        province: province,
+        company: company,
+      );
+      final user = await _authService.finalizeSessionFromAuthResponse(raw, trimmed);
+      if (user != null) {
+        _user = user;
+        _loading = false;
+        notifyListeners();
+        return true;
+      }
+      _error = raw['message']?.toString() ?? 'Registration failed';
+    } catch (e) {
+      _error = 'Connection error. Please try again.';
+    }
+    _loading = false;
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> login(String username, String password) async {
     _error = null;
     _loading = true;

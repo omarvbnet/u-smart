@@ -325,7 +325,7 @@ model TicketRequester {
   username                String           @unique
   passwordHash            String
   name                    String?
-  email                   String?
+  email                   String?          @unique
   phone                   String
   company                 String?
   companyCertificationUrl String? // uploaded file path/URL
@@ -456,6 +456,8 @@ model SiteShare {
   site                  Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
   sharedWithRequesterId String
   sharedWith            TicketRequester @relation("SiteShareRecipient", fields: [sharedWithRequesterId], references: [id], onDelete: Cascade)
+  /// When false, recipient sees the site location card only — shared ticket OR-clauses are not applied.
+  includeTickets        Boolean         @default(true)
   createdAt             DateTime        @default(now())
 
   @@unique([siteId, sharedWithRequesterId])

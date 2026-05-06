@@ -3,50 +3,22 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
+import {
+  isMissingVisitorRequestsCoordinatorCompanyIdColumn,
+  invalidateVisitorRequestsCoordinatorCompanyIdCache,
+} from '@/lib/visitor-request-db-columns';
+import { CONFLICT_RESULTS, rowToConflictPayload } from '@/lib/qc-conflict-mapper';
 
 const prisma = _prisma as any;
 
-const CONFLICT_RESULTS = ['not_accepted', 'ncr', 'accepted_with_comments'];
-const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 const VALID_RESOLUTIONS = ['accepted', 'not_accepted', 'ncr', 'accepted_with_comments', 're_inspection', 'keep_same', 're_maintain', 'no_need'];
 
-function rowToConflict(row: any): any {
-  let parsed: Record<string, unknown> = {};
-  try {
-    parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
-  } catch {
-    return null;
-  }
-  const technique = (row.technique ?? '').toLowerCase();
-  const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
-  const inspectionResult = isMaintenance ? 'maintenance' : ((parsed.inspectionResult as string) ?? 'not_accepted');
-  const out: Record<string, unknown> = {
-    id: row.id,
-    ticketId: row.id,
-    siteName: parsed.siteName ?? null,
-    siteCoordinator: parsed.siteCoordinator ?? null,
-    assignedEngineerId: parsed.assignedEngineerId ?? null,
-    assignedEngineerName: parsed.assignedEngineerName ?? null,
-    inspectionResult,
-    inspectionComments: parsed.inspectionComments ?? null,
-    ncrReason: parsed.ncrReason ?? null,
-    inspectionChecklist: Array.isArray(parsed.inspectionChecklist)
-      ? parsed.inspectionChecklist
-      : null,
-    status: (parsed.conflictStatus as string) ?? 'pending',
-    resolvedBy: parsed.conflictResolvedBy ?? null,
-    resolvedAt: parsed.conflictResolvedAt ?? null,
-    resolution: parsed.conflictResolution ?? null,
-    resolutionComment: parsed.conflictResolutionComment ?? null,
-    reportedBy: parsed.conflictReportedBy ?? null,
-    reportedAt: parsed.conflictReportedAt ?? null,
-    conflictReportComment: parsed.conflictReportComment ?? null,
-    isMaintenanceConflict: isMaintenance,
-  };
-  if (isMaintenance && Array.isArray(parsed.conflictImageUrls)) {
-    out.conflictImageUrls = parsed.conflictImageUrls.filter((u: unknown) => typeof u === 'string');
-  }
-  return out;
+function rowToConflict(row: unknown): Record<string, unknown> | null {
+  const mapped = rowToConflictPayload(row);
+  if (!mapped) return mapped;
+  delete mapped.serviceSlug;
+  delete mapped.updatedAt;
+  return mapped;
 }
 
 export async function GET(
@@ -66,10 +38,39 @@ export async function GET(
   }
 
   try {
-    const row = await prisma.visitorRequest.findUnique({
-      where: { id },
-      select: { id: true, company: true, status: true, requesterId: true, technique: true, coordinatorCompanyId: true },
-    });
+    let row: {
+      id: string;
+      company: string | null;
+      status: string;
+      requesterId: string | null;
+      technique: string;
+      coordinatorCompanyId?: string | null;
+    } | null;
+    let coordinatorColumnSelectable = true;
+    try {
+      row = await prisma.visitorRequest.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          company: true,
+          status: true,
+          requesterId: true,
+          technique: true,
+          coordinatorCompanyId: true,
+        },
+      });
+    } catch (e: unknown) {
+      if (isMissingVisitorRequestsCoordinatorCompanyIdColumn(e)) {
+        invalidateVisitorRequestsCoordinatorCompanyIdCache();
+        coordinatorColumnSelectable = false;
+        row = await prisma.visitorRequest.findUnique({
+          where: { id },
+          select: { id: true, company: true, status: true, requesterId: true, technique: true },
+        });
+      } else {
+        throw e;
+      }
+    }
 
     if (!row) {
       return NextResponse.json({ success: false, message: 'Conflict not found' }, { status: 404 });
@@ -84,9 +85,13 @@ export async function GET(
     const assignedEngineerId = parsedCheck.assignedEngineerId as string | undefined;
     const isOwner = row.requesterId === auth.payload.requesterId;
     const isAssigned = assignedEngineerId === auth.payload.requesterId;
+    const coordinatorCompanyId = coordinatorColumnSelectable
+      ? (row.coordinatorCompanyId ?? null)
+      : null;
     const isCoordinatorAllowed =
       coordinatorContext &&
-      row.coordinatorCompanyId === coordinatorContext.companyId &&
+      coordinatorColumnSelectable &&
+      coordinatorCompanyId === coordinatorContext.companyId &&
       (coordinatorContext.role === 'ADMIN' ||
         coordinatorContext.role === 'COMPANY_OWNER' ||
         coordinatorContext.role === 'MANAGER' ||
@@ -170,10 +175,35 @@ export async function PATCH(
     } else if (requesterRole !== 'ADMIN') {
       whereClause.company = { contains: auth.payload.requesterId };
     }
-    const ticket = await prisma.visitorRequest.findFirst({
-      where: whereClause,
-      select: { id: true, company: true, requesterId: true, technique: true },
-    });
+
+    let ticket: {
+      id: string;
+      company: string | null;
+      requesterId: string | null;
+      technique: string;
+    } | null;
+
+    try {
+      ticket = await prisma.visitorRequest.findFirst({
+        where: whereClause,
+        select: { id: true, company: true, requesterId: true, technique: true },
+      });
+    } catch (e: unknown) {
+      if (isMissingVisitorRequestsCoordinatorCompanyIdColumn(e)) {
+        invalidateVisitorRequestsCoordinatorCompanyIdCache();
+        if (coordinatorContext) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'Database migration required for coordinator conflict actions. Run: npx prisma migrate deploy',
+            },
+            { status: 503 }
+          );
+        }
+      }
+      throw e;
+    }
 
     if (!ticket) {
       return NextResponse.json({ success: false, message: 'Conflict not found or not assigned to you' }, { status: 404 });

@@ -55,7 +55,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
     if (!mounted) return;
     final provider = context.read<TicketsProvider>();
     final bytes = await (xFile is XFile ? xFile.readAsBytes() : Future<List<int>>.value([]));
-    if (bytes.isEmpty) return;
+    if (!mounted || bytes.isEmpty) return;
     final ext = (path.split('.').lastOrNull ?? 'jpg').toLowerCase();
     final filename = 'ncr_evidence_${DateTime.now().millisecondsSinceEpoch}.$ext';
     setState(() => _uploading = true);
@@ -313,6 +313,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
                           ),
                         ),
                       );
+                      if (!mounted) return;
                       if (choice == 1 || choice == 2) {
                         final source = choice == 1 ? ImageSource.gallery : ImageSource.camera;
                         final picked = await _picker.pickImage(
@@ -321,7 +322,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
                           maxWidth: 1920,
                           maxHeight: 1920,
                         );
-                        if (picked != null) await _uploadImage(picked.path, picked);
+                        if (picked != null && mounted) await _uploadImage(picked.path, picked);
                       } else if (choice == 3) {
                         await _pickFile();
                       }

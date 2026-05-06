@@ -20,6 +20,18 @@ class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _emailOtpCtrl = TextEditingController();
+  final _otpCodeCtrl = TextEditingController();
+  final _regNameCtrl = TextEditingController();
+  final _regPhoneCtrl = TextEditingController();
+  final _regProvinceCtrl = TextEditingController();
+  final _regCompanyCtrl = TextEditingController();
+  bool _usePasswordLogin = false;
+  bool _otpSent = false;
+  bool _otpSendLoading = false;
+  bool _otpVerifyLoading = false;
+  bool _showSignupFields = false;
+  String _signupRole = 'COMPANY';
   bool _obscure = true;
   bool _submitting = false;
   String _forgotUsername = '';
@@ -96,8 +108,98 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final creds = await auth.getSavedCredentials();
     if (mounted && creds != null) {
-      _usernameCtrl.text = creds.username;
+      if (creds.username.contains('@')) {
+        _emailOtpCtrl.text = creds.username;
+      } else {
+        _usernameCtrl.text = creds.username;
+      }
       _passwordCtrl.text = creds.password;
+    }
+  }
+
+  bool _looksLikeEmail(String s) {
+    final t = s.trim();
+    return t.contains('@') && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t);
+  }
+
+  Future<void> _sendEmailOtp(AppLocalizations l10n) async {
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('privacy_agree_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final email = _emailOtpCtrl.text.trim();
+    if (!_looksLikeEmail(email)) {
+      _showSnack(l10n.t('invalid_email_format'), isError: true);
+      return;
+    }
+    setState(() => _otpSendLoading = true);
+    final err = await context.read<AuthProvider>().sendLoginEmailOtp(email);
+    if (!mounted) return;
+    setState(() {
+      _otpSendLoading = false;
+      if (err == null) _otpSent = true;
+    });
+    _showSnack(err ?? l10n.t('code_sent'), isError: err != null);
+  }
+
+  Future<void> _submitOtpLogin(AppLocalizations l10n) async {
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('privacy_agree_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _otpVerifyLoading = true);
+    final ok = await context.read<AuthProvider>().loginWithEmailOtp(
+          _emailOtpCtrl.text.trim(),
+          _otpCodeCtrl.text.trim(),
+        );
+    if (!mounted) return;
+    setState(() => _otpVerifyLoading = false);
+    if (!ok) {
+      final err = context.read<AuthProvider>().error;
+      _showSnack(
+        err == AuthProvider.invalidCredentialsMarker
+            ? l10n.t('invalid_code')
+            : (err ?? l10n.t('login_failed')),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _submitOtpRegister(AppLocalizations l10n) async {
+    if (!_agreedToTerms) return;
+    final name = _regNameCtrl.text.trim();
+    final phone = _regPhoneCtrl.text.trim();
+    if (name.isEmpty || phone.isEmpty) {
+      _showSnack('${l10n.t('signup_name')} / ${l10n.t('signup_phone')}', isError: true);
+      return;
+    }
+    setState(() => _otpVerifyLoading = true);
+    final ok = await context.read<AuthProvider>().registerWithEmailOtp(
+          email: _emailOtpCtrl.text.trim(),
+          code: _otpCodeCtrl.text.trim(),
+          name: name,
+          phone: phone,
+          role: _signupRole,
+          province: _regProvinceCtrl.text.trim().isEmpty ? null : _regProvinceCtrl.text.trim(),
+          company: _regCompanyCtrl.text.trim().isEmpty ? null : _regCompanyCtrl.text.trim(),
+        );
+    if (!mounted) return;
+    setState(() => _otpVerifyLoading = false);
+    if (!ok) {
+      final err = context.read<AuthProvider>().error;
+      _showSnack(err ?? l10n.t('login_failed'), isError: true);
     }
   }
 
@@ -140,6 +242,60 @@ class _LoginScreenState extends State<LoginScreen>
         backgroundColor: isError ? const Color(0xFFFF4757) : const Color(0xFF00D4AA),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _privacyCheckboxTile(AppLocalizations l10n) {
+    return InkWell(
+      onTap: () => setState(() => _agreedToTerms = !_agreedToTerms),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: _agreedToTerms,
+                onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                activeColor: const Color(0xFF6C63FF),
+                fillColor: WidgetStateProperty.resolveWith(
+                    (_) => _agreedToTerms ? const Color(0xFF6C63FF) : Colors.transparent),
+                side: BorderSide(color: Colors.white.withAlpha(100)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Wrap(
+                children: [
+                  Text(
+                    l10n.t('privacy_agree'),
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(220), fontSize: 13, height: 1.4),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                    ),
+                    child: Text(
+                      ' ${l10n.t('privacy_view_full')}',
+                      style: const TextStyle(
+                        color: Color(0xFF6C63FF),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -388,6 +544,12 @@ class _LoginScreenState extends State<LoginScreen>
     _logoCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
+    _emailOtpCtrl.dispose();
+    _otpCodeCtrl.dispose();
+    _regNameCtrl.dispose();
+    _regPhoneCtrl.dispose();
+    _regProvinceCtrl.dispose();
+    _regCompanyCtrl.dispose();
     _forgotCooldownTimer?.cancel();
     super.dispose();
   }
@@ -555,113 +717,81 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               child: Column(
                                 children: [
-                                  _buildField(
-                                    controller: _usernameCtrl,
-                                    hint: l10n.t('login_username'),
-                                    icon: Icons.person_outline_rounded,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _buildField(
-                                    controller: _passwordCtrl,
-                                    hint: l10n.t('login_password'),
-                                    icon: Icons.lock_outline_rounded,
-                                    obscure: _obscure,
-                                    suffix: IconButton(
-                                      icon: Icon(
-                                        _obscure
-                                            ? Icons
-                                                .visibility_off_outlined
-                                            : Icons
-                                                .visibility_outlined,
-                                        color: const Color(0xFF6B7280),
-                                        size: 20,
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton(
+                                      onPressed: () => setState(() {
+                                        _usePasswordLogin = !_usePasswordLogin;
+                                        _otpSent = false;
+                                        _showSignupFields = false;
+                                      }),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: const Color(0xFF9CA3AF),
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
                                       ),
-                                      onPressed: () => setState(
-                                          () => _obscure = !_obscure),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  InkWell(
-                                    onTap: () => setState(() => _agreedToTerms = !_agreedToTerms),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: Checkbox(
-                                              value: _agreedToTerms,
-                                              onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
-                                              activeColor: const Color(0xFF6C63FF),
-                                              fillColor: WidgetStateProperty.resolveWith((_) => _agreedToTerms ? const Color(0xFF6C63FF) : Colors.transparent),
-                                              side: BorderSide(color: Colors.white.withAlpha(100)),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Wrap(
-                                              children: [
-                                                Text(
-                                                  l10n.t('privacy_agree'),
-                                                  style: TextStyle(color: Colors.white.withAlpha(220), fontSize: 13, height: 1.4),
-                                                ),
-                                                GestureDetector(
-                                                  onTap: () => Navigator.of(context).push(
-                                                    MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
-                                                  ),
-                                                  child: Text(
-                                                    ' ${l10n.t('privacy_view_full')}',
-                                                    style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
+                                      child: Text(
+                                        _usePasswordLogin
+                                            ? l10n.t('login_use_email_otp')
+                                            : l10n.t('login_use_password'),
+                                        style: const TextStyle(fontSize: 13),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 16),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 54,
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFF6C63FF),
-                                            Color(0xFF5A52E0),
-                                          ],
+                                  const SizedBox(height: 12),
+                                  if (_usePasswordLogin) ...[
+                                    _buildField(
+                                      controller: _usernameCtrl,
+                                      hint: l10n.t('login_username'),
+                                      icon: Icons.person_outline_rounded,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _buildField(
+                                      controller: _passwordCtrl,
+                                      hint: l10n.t('login_password'),
+                                      icon: Icons.lock_outline_rounded,
+                                      obscure: _obscure,
+                                      suffix: IconButton(
+                                        icon: Icon(
+                                          _obscure
+                                              ? Icons.visibility_off_outlined
+                                              : Icons.visibility_outlined,
+                                          color: const Color(0xFF6B7280),
+                                          size: 20,
                                         ),
-                                        borderRadius:
-                                            BorderRadius.circular(16),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(0xFF6C63FF)
-                                                .withAlpha(80),
-                                            blurRadius: 20,
-                                            offset: const Offset(0, 6),
-                                          ),
-                                        ],
+                                        onPressed: () =>
+                                            setState(() => _obscure = !_obscure),
                                       ),
-                                      child: ElevatedButton(
-                                        onPressed:
-                                            (_submitting || !_agreedToTerms) ? null : _login,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              Colors.transparent,
-                                          shadowColor: Colors.transparent,
+                                    ),
+                                  ] else ...[
+                                    _buildField(
+                                      controller: _emailOtpCtrl,
+                                      hint: l10n.t('login_email_hint'),
+                                      icon: Icons.email_outlined,
+                                      keyboardType: TextInputType.emailAddress,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _privacyCheckboxTile(l10n),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 50,
+                                      child: OutlinedButton(
+                                        onPressed: (_otpSendLoading || !_agreedToTerms)
+                                            ? null
+                                            : () => _sendEmailOtp(l10n),
+                                        style: OutlinedButton.styleFrom(
                                           foregroundColor: Colors.white,
+                                          side: BorderSide(
+                                              color: Colors.white.withAlpha(60)),
                                           shape: RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(16),
                                           ),
                                         ),
-                                        child: _submitting
+                                        child: _otpSendLoading
                                             ? const SizedBox(
                                                 width: 22,
                                                 height: 22,
@@ -672,61 +802,353 @@ class _LoginScreenState extends State<LoginScreen>
                                                 ),
                                               )
                                             : Text(
-                                                l10n.t('login_sign_in'),
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight:
-                                                      FontWeight.w700,
-                                                  letterSpacing: 0.5,
+                                                l10n.t('login_send_otp'),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final narrow = constraints.maxWidth < 300;
-                                      return Wrap(
-                                        alignment: WrapAlignment.spaceBetween,
-                                        runSpacing: 4,
-                                        children: [
-                                          TextButton(
-                                            onPressed: () => _showForgotFlow(context, l10n),
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: const Color(0xFF6C63FF),
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                            child: Text(
-                                              l10n.t('forgot_password'),
-                                              style: TextStyle(fontSize: narrow ? 12 : 13),
+                                    if (_otpSent) ...[
+                                      const SizedBox(height: 16),
+                                      _buildField(
+                                        controller: _otpCodeCtrl,
+                                        hint: l10n.t('login_otp_hint'),
+                                        icon: Icons.pin_outlined,
+                                        keyboardType: TextInputType.number,
+                                        onSubmitted: (_) =>
+                                            _showSignupFields
+                                                ? _submitOtpRegister(l10n)
+                                                : _submitOtpLogin(l10n),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      TextButton(
+                                        onPressed: () => setState(() {
+                                          _showSignupFields = !_showSignupFields;
+                                        }),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor:
+                                              const Color(0xFF6C63FF),
+                                          padding: EdgeInsets.zero,
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          l10n.t('signup_expand'),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      if (_showSignupFields) ...[
+                                        const SizedBox(height: 8),
+                                        _buildField(
+                                          controller: _regNameCtrl,
+                                          hint: l10n.t('signup_name'),
+                                          icon: Icons.badge_outlined,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _buildField(
+                                          controller: _regPhoneCtrl,
+                                          hint: l10n.t('signup_phone'),
+                                          icon: Icons.phone_android_outlined,
+                                          keyboardType: TextInputType.phone,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            l10n.t('signup_role'),
+                                            style: TextStyle(
+                                              color:
+                                                  Colors.white.withAlpha(200),
+                                              fontSize: 13,
                                             ),
                                           ),
-                                          TextButton(
-                                            onPressed: () =>
-                                                showRegistrationRequestModal(context),
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: const Color(0xFF6C63FF),
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                            child: Text(
-                                              l10n.t('reg_request_title'),
-                                              style: TextStyle(
-                                                fontSize: narrow ? 12 : 14,
-                                                fontWeight: FontWeight.w500,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF12122A),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                                color:
+                                                    Colors.white.withAlpha(15)),
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: DropdownButton<String>(
+                                              value: _signupRole,
+                                              isExpanded: true,
+                                              dropdownColor:
+                                                  const Color(0xFF1a1a2e),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                              items: const [
+                                                'COMPANY',
+                                                'ENGINEER',
+                                                'TECHNICIAN',
+                                                'PERSONAL',
+                                                'WORKER',
+                                              ]
+                                                  .map(
+                                                    (r) => DropdownMenuItem(
+                                                      value: r,
+                                                      child: Text(r),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: (v) {
+                                                if (v != null) {
+                                                  setState(() => _signupRole = v);
+                                                }
+                                              },
                                             ),
                                           ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _buildField(
+                                          controller: _regProvinceCtrl,
+                                          hint: l10n
+                                              .t('signup_province_optional'),
+                                          icon: Icons.map_outlined,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        _buildField(
+                                          controller: _regCompanyCtrl,
+                                          hint:
+                                              l10n.t('signup_company_optional'),
+                                          icon: Icons.business_outlined,
+                                        ),
+                                      ],
+                                      const SizedBox(height: 16),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 54,
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [
+                                                Color(0xFF6C63FF),
+                                                Color(0xFF5A52E0),
+                                              ],
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF6C63FF)
+                                                    .withAlpha(80),
+                                                blurRadius: 20,
+                                                offset: const Offset(0, 6),
+                                              ),
+                                            ],
+                                          ),
+                                          child: ElevatedButton(
+                                            onPressed:
+                                                (_otpVerifyLoading ||
+                                                        !_agreedToTerms)
+                                                    ? null
+                                                    : (_showSignupFields
+                                                        ? () =>
+                                                            _submitOtpRegister(
+                                                                l10n)
+                                                        : () =>
+                                                            _submitOtpLogin(
+                                                                l10n)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              shadowColor:
+                                                  Colors.transparent,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                            ),
+                                            child: _otpVerifyLoading
+                                                ? const SizedBox(
+                                                    width: 22,
+                                                    height: 22,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2.5,
+                                                      color: Colors.white,
+                                                    ),
+                                                  )
+                                                : Text(
+                                                    _showSignupFields
+                                                        ? l10n
+                                                            .t('signup_submit')
+                                                        : l10n.t(
+                                                            'login_verify_sign_in'),
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                  if (_usePasswordLogin) ...[
+                                    const SizedBox(height: 16),
+                                    _privacyCheckboxTile(l10n),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 54,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xFF6C63FF),
+                                              Color(0xFF5A52E0),
+                                            ],
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF6C63FF)
+                                                  .withAlpha(80),
+                                              blurRadius: 20,
+                                              offset: const Offset(0, 6),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ElevatedButton(
+                                          onPressed: (_submitting ||
+                                                  !_agreedToTerms)
+                                              ? null
+                                              : _login,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                            ),
+                                          ),
+                                          child: _submitting
+                                              ? const SizedBox(
+                                                  width: 22,
+                                                  height: 22,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2.5,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : Text(
+                                                  l10n.t('login_sign_in'),
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final narrow =
+                                            constraints.maxWidth < 300;
+                                        return Wrap(
+                                          alignment:
+                                              WrapAlignment.spaceBetween,
+                                          runSpacing: 4,
+                                          children: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  _showForgotFlow(
+                                                      context, l10n),
+                                              style: TextButton.styleFrom(
+                                                foregroundColor:
+                                                    const Color(0xFF6C63FF),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                              ),
+                                              child: Text(
+                                                l10n.t('forgot_password'),
+                                                style: TextStyle(
+                                                    fontSize:
+                                                        narrow ? 12 : 13),
+                                              ),
+                                            ),
+                                            TextButton(
+                                              onPressed: () =>
+                                                  showRegistrationRequestModal(
+                                                      context),
+                                              style: TextButton.styleFrom(
+                                                foregroundColor:
+                                                    const Color(0xFF6C63FF),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                              ),
+                                              child: Text(
+                                                l10n.t(
+                                                    'registration_request_tertiary'),
+                                                style: TextStyle(
+                                                  fontSize: narrow ? 11 : 12,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
+                                                maxLines: 2,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ] else ...[
+                                    const SizedBox(height: 8),
+                                    Center(
+                                      child: TextButton(
+                                        onPressed: () =>
+                                            showRegistrationRequestModal(
+                                                context),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(0xFF6B7280),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          l10n.t('registration_request_tertiary'),
+                                          style: const TextStyle(fontSize: 11),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -750,10 +1172,13 @@ class _LoginScreenState extends State<LoginScreen>
     required IconData icon,
     bool obscure = false,
     Widget? suffix,
+    TextInputType keyboardType = TextInputType.text,
+    void Function(String)? onSubmitted,
   }) {
     return TextField(
       controller: controller,
       obscureText: obscure,
+      keyboardType: keyboardType,
       scrollPadding: const EdgeInsets.only(bottom: 40),
       style: const TextStyle(color: Colors.white, fontSize: 15),
       decoration: InputDecoration(
@@ -778,9 +1203,11 @@ class _LoginScreenState extends State<LoginScreen>
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
-      textInputAction:
-          suffix != null ? TextInputAction.done : TextInputAction.next,
-      onSubmitted: suffix != null ? (_) => _login() : null,
+      textInputAction: onSubmitted != null
+          ? TextInputAction.done
+          : (suffix != null ? TextInputAction.done : TextInputAction.next),
+      onSubmitted: onSubmitted ??
+          (suffix != null ? (_) => _login() : null),
     );
   }
 }

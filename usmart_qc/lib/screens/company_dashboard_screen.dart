@@ -25,6 +25,7 @@ import 'site_form_screen.dart';
 import 'filtered_tickets_screen.dart';
 import 'company_provisor_hub_screen.dart';
 import '../widgets/update_password_sheet.dart';
+import '../widgets/site_share_dialog.dart';
 import '../config/api_config.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -64,8 +65,10 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       ),
       conflicts.fetchConflicts(),
     ];
-    if (!isTechnician && !auth.isWorker) {
+    if (!auth.isWorker) {
       futures.add(context.read<SitesProvider>().fetchSites());
+    }
+    if (!isTechnician && !auth.isWorker) {
       futures.add(context.read<ProvisorTechniquesProvider>().ensureLoaded());
     }
     await Future.wait(futures);
@@ -78,11 +81,14 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
     final isTechnician = auth.isTechnician;
     final isWorker = auth.isWorker;
     final showCompanyTab = auth.canAccessCompanyHub;
-    final readOnlyRole = isTechnician || isWorker; // no create ticket, no sites
+    final readOnlyRole = isTechnician || isWorker; // no create ticket via FAB
+    final technicianWithSites = isTechnician && !isWorker;
 
     // Tab order depends on role
-    final tabChildren = readOnlyRole
+    final tabChildren = readOnlyRole && !technicianWithSites
         ? const [_TicketsTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()]
+        : readOnlyRole && technicianWithSites
+            ? const [_TicketsTab(), _SitesTab(allowCreateSite: false), _StatsTab(), _ConflictsTab(), _ProfileTab()]
         : showCompanyTab
             ? const [_TicketsTab(), _SitesTab(), _StatsTab(), _CompanyTab(), _ConflictsTab(), _ProfileTab()]
             : const [_TicketsTab(), _SitesTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()];
@@ -138,13 +144,21 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               selectedFontSize: 10,
               unselectedFontSize: 10,
               elevation: 0,
-              items: readOnlyRole
+              items: readOnlyRole && !technicianWithSites
                   ? [
                       _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
                       _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                       _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
                       _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                     ]
+                  : readOnlyRole && technicianWithSites
+                      ? [
+                          _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                          _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                          _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                          _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                          _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                        ]
                   : showCompanyTab
                       ? [
                           _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
@@ -165,8 +179,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
           ),
         ),
       ),
-      floatingActionButton: _currentTab == 0 &&
-              !readOnlyRole
+      floatingActionButton: _currentTab == 0 && !readOnlyRole
           ? Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
@@ -814,7 +827,10 @@ class _TicketSection {
 
 // ─── Sites Tab ───
 class _SitesTab extends StatelessWidget {
-  const _SitesTab();
+  const _SitesTab({this.allowCreateSite = true});
+
+  /// Technicians can open the Sites tab but cannot register new sites from the app.
+  final bool allowCreateSite;
 
   static String _fmtSiteHours(double h) {
     if (h <= 0) return '0';
@@ -880,79 +896,6 @@ class _SitesTab extends StatelessWidget {
         );
       }
     }
-  }
-
-  Future<void> _promptShareSite(
-    BuildContext context,
-    SitesProvider provider,
-    Site site,
-    AppLocalizations l10n,
-  ) async {
-    final ctrl = TextEditingController();
-    final submitted = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF12122A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          l10n.t('site_share_title'),
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: l10n.t('site_share_hint'),
-            hintStyle: TextStyle(color: Colors.white.withAlpha(120)),
-            filled: true,
-            fillColor: const Color(0xFF05051A),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.t('cancel'),
-                style: TextStyle(color: Colors.white.withAlpha(120))),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
-            child: Text(l10n.t('site_share_action')),
-          ),
-        ],
-      ),
-    );
-    final text = ctrl.text.trim();
-    ctrl.dispose();
-    if (submitted != true || text.isEmpty || !context.mounted) return;
-
-    final errMessage = await provider.shareSite(site.id, text);
-    if (!context.mounted) return;
-    if (errMessage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.t('site_share_ok')),
-          backgroundColor: const Color(0xFF00D4AA),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(errMessage.isNotEmpty ? errMessage : l10n.t('site_share_failed')),
-        backgroundColor: const Color(0xFFFF4757),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 
   Future<void> _confirmRemoveShare(
@@ -1100,29 +1043,32 @@ class _SitesTab extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () => Navigator.of(context)
-                                    .push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const SiteFormScreen(),
-                                      ),
-                                    )
-                                    .then((_) => provider.fetchSites()),
-                                icon: const Icon(Icons.add_rounded, size: 20),
-                                label: Text(l10n.t('site_add')),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6C63FF),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
+                              if (allowCreateSite) ...[
+                                const SizedBox(height: 24),
+                                ElevatedButton.icon(
+                                  onPressed: () => Navigator.of(context)
+                                      .push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const SiteFormScreen(),
+                                        ),
+                                      )
+                                      .then((_) => provider.fetchSites()),
+                                  icon: const Icon(Icons.add_rounded, size: 20),
+                                  label: Text(l10n.t('site_add')),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF6C63FF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         )
@@ -1256,7 +1202,8 @@ class _SitesTab extends StatelessWidget {
                                                 .push(
                                                   MaterialPageRoute(
                                                     builder: (_) =>
-                                                        SiteFormScreen(site: site),
+                                                        SiteFormScreen(
+                                                            site: site),
                                                   ),
                                                 )
                                                 .then(
@@ -1285,11 +1232,11 @@ class _SitesTab extends StatelessWidget {
                                             tooltip: l10n.t('site_delete'),
                                           ),
                                           IconButton(
-                                            onPressed: () => _promptShareSite(
-                                              context,
-                                              provider,
-                                              site,
-                                              l10n,
+                                            onPressed: () => promptShareSite(
+                                              context: context,
+                                              provider: provider,
+                                              site: site,
+                                              l10n: l10n,
                                             ),
                                             icon: const Icon(
                                               Icons.person_add_alt_1_rounded,
@@ -1374,20 +1321,22 @@ class _SitesTab extends StatelessWidget {
                 ),
               ],
             ),
-            Positioned(
-              right: 20,
-              bottom: 24,
-              child: FloatingActionButton(
-                heroTag: 'fab_new_site',
-                onPressed: () => Navigator.of(context)
-                    .push(
-                      MaterialPageRoute(builder: (_) => const SiteFormScreen()),
-                    )
-                    .then((_) => provider.fetchSites()),
-                backgroundColor: const Color(0xFF6C63FF),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
+            if (allowCreateSite)
+              Positioned(
+                right: 20,
+                bottom: 24,
+                child: FloatingActionButton(
+                  heroTag: 'fab_new_site',
+                  onPressed: () => Navigator.of(context)
+                      .push(
+                        MaterialPageRoute(
+                            builder: (_) => const SiteFormScreen()),
+                      )
+                      .then((_) => provider.fetchSites()),
+                  backgroundColor: const Color(0xFF6C63FF),
+                  child: const Icon(Icons.add_rounded, color: Colors.white),
+                ),
               ),
-            ),
           ],
         );
       },

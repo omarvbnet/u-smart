@@ -23,6 +23,7 @@ import {
   Network,
   HardHat,
   Sun,
+  Scale,
 } from 'lucide-react';
 
 const links = [
@@ -37,6 +38,7 @@ const links = [
   { href: '/admin/clean-energy-requests', label: 'Clean Energy Inbox', icon: Sun, badgeType: 'pending_clean_energy' as const },
   { href: '/admin/enterprise-networking-requests', label: 'Enterprise Networking', icon: Network, badgeType: 'pending_enterprise' as const },
   { href: '/admin/quality-requests', label: 'Quality Requests', icon: ClipboardCheck, badgeType: 'pending_qc' as const },
+  { href: '/admin/conflicts', label: 'Conflicts', icon: Scale },
   { href: '/admin/training-requests', label: 'Training', icon: GraduationCap, badgeType: 'pending_training' as const },
   { href: '/admin/product-requests', label: 'Product Orders', icon: Package, badgeType: 'pending_product' as const },
   { href: '/admin/checklists', label: 'Checklists', icon: CheckSquare },

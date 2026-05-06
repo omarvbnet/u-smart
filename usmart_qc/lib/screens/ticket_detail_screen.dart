@@ -2737,7 +2737,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ],
       ),
     );
-    ctrl.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
     return result;
   }
 
@@ -2783,7 +2783,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ],
       ),
     );
-    ctrl.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
     return result;
   }
 

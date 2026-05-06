@@ -93,11 +93,15 @@ class SitesProvider extends ChangeNotifier {
   }
 
   /// Shares an owned site with another requester by username or email (server validates).
-  Future<String?> shareSite(String siteDbId, String usernameOrEmail) async {
+  Future<String?> shareSite(String siteDbId, String usernameOrEmail,
+      {bool includeTickets = true}) async {
     try {
       final data = await _api.post(
         ApiConfig.siteShare(siteDbId),
-        body: {'usernameOrEmail': usernameOrEmail.trim()},
+        body: {
+          'usernameOrEmail': usernameOrEmail.trim(),
+          'includeTickets': includeTickets,
+        },
       );
       if (data['success'] == true) {
         await fetchSites();

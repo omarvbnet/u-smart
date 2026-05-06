@@ -175,6 +175,7 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             createdAt: true,
+            includeTickets: true,
             site: {
               select: {
                 id: true,
@@ -195,6 +196,7 @@ export async function GET(req: NextRequest) {
           shares.map(
             async (sh: {
               id: string;
+              includeTickets?: boolean;
               site: SiteRow & { requesterId: string; requester: { username: string; name: string | null } };
             }) => {
               const siteRow: SiteRow = {
@@ -207,13 +209,26 @@ export async function GET(req: NextRequest) {
                 createdAt: sh.site.createdAt,
                 updatedAt: sh.site.updatedAt,
               };
-              const row = await siteWithTicketCounts(siteRow, sh.site.requesterId, maintenanceSlugs);
+              const shareTickets = sh.includeTickets !== false;
+              const row = shareTickets
+                ? await siteWithTicketCounts(siteRow, sh.site.requesterId, maintenanceSlugs)
+                : {
+                    ...siteRow,
+                    ticketCount: 0,
+                    qualityControlCount: 0,
+                    enterpriseCount: 0,
+                    inspectionQcCount: 0,
+                    maintenanceQcCount: 0,
+                    inspectionHoursTotal: 0,
+                    maintenanceHoursTotal: 0,
+                  };
               const ownerLabel = sh.site.requester?.name?.trim() || sh.site.requester?.username || '';
               return {
                 ...row,
                 sharedWithMe: true,
                 canEdit: false,
                 shareId: sh.id,
+                shareIncludesTickets: shareTickets,
                 ownerRequesterId: sh.site.requesterId,
                 ownerUsername: ownerLabel,
               };

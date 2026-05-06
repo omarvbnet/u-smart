@@ -65,6 +65,46 @@ export async function tryCompanyOwnerCoordinatorInsteadOfLegacy(
 }
 
 /**
+ * Same lookup as tryCompanyOwnerCoordinatorInsteadOfLegacy but without password check,
+ * for email-OTP login when the user matched a legacy COMPANY ticket_requester row.
+ */
+export async function findLegacyCompanyOwnerCoordinator(
+  prisma: PrismaClient,
+  requester: RequesterMini
+): Promise<CoordinatorLoginRow | null> {
+  if (String(requester.role ?? '').toUpperCase() !== 'COMPANY') return null;
+  const or: Array<{ username?: { equals: string; mode: 'insensitive' }; email?: { equals: string; mode: 'insensitive' } }> = [
+    { username: { equals: requester.username, mode: 'insensitive' } },
+  ];
+  const em = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
+  if (em) {
+    or.push({ email: { equals: em, mode: 'insensitive' } });
+  }
+  try {
+    const owner = await (prisma as any).coordinatorUser.findFirst({
+      where: {
+        role: 'COMPANY_OWNER',
+        OR: or,
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        status: true,
+        mustChangePassword: true,
+        companyId: true,
+      },
+    });
+    return owner ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * When a dashboard user is still on the legacy `ticket_requester` row (role COMPANY)
  * but the same person has a coordinator COMPANY_OWNER account (same username/email),
  * return their coordinator company id so ticket/checklist queries can include

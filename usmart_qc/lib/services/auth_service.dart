@@ -32,6 +32,23 @@ class AuthService {
     await _saveToken(token);
   }
 
+  /// Prefills the login field on next cold start (email or username).
+  Future<void> rememberSavedLoginField(String usernameOrEmail) async {
+    final v = usernameOrEmail.trim();
+    if (v.isEmpty) return;
+    await _storage.write(key: _savedUsernameKey, value: v);
+  }
+
+  Future<User?> finalizeSessionFromAuthResponse(
+    Map<String, dynamic> data,
+    String identifierToSave,
+  ) async {
+    if (data['success'] != true || data['token'] is! String) return null;
+    await persistSessionToken(data['token'] as String);
+    await rememberSavedLoginField(identifierToSave);
+    return fetchMe();
+  }
+
   Future<String> _fetchRole() async {
     try {
       final data = await _api.get(ApiConfig.requesterRole);
@@ -75,6 +92,71 @@ class AuthService {
       return (user: user, token: token);
     }
     return null;
+  }
+
+  Future<Map<String, dynamic>> sendRequesterEmailOtp(String email) async {
+    final trimmed = email.trim().toLowerCase();
+    return _api.post(ApiConfig.requesterOtpSend, body: {'email': trimmed});
+  }
+
+  Future<Map<String, dynamic>> _postEmailOtpVerifyLogin(
+      String email, String code) async {
+    String? pushToken;
+    String phonePlatform = 'unknown';
+    try {
+      phonePlatform =
+          Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'unknown');
+      pushToken = await FirebaseMessaging.instance.getToken();
+    } catch (_) {}
+
+    final trimmed = email.trim().toLowerCase();
+    return _api.post(ApiConfig.requesterOtpVerifyLogin, body: {
+      'email': trimmed,
+      'code': code.trim(),
+      if (pushToken != null && pushToken.isNotEmpty) 'pushToken': pushToken,
+      if (pushToken != null && pushToken.isNotEmpty)
+        'phonePlatform': phonePlatform,
+    });
+  }
+
+  /// Parsed API body — use [finalizeSessionFromAuthResponse] on success.
+  Future<Map<String, dynamic>> verifyLoginWithEmailOtpRaw(
+      String email, String code) {
+    return _postEmailOtpVerifyLogin(email, code);
+  }
+
+  Future<Map<String, dynamic>> registerWithEmailOtpRaw({
+    required String email,
+    required String code,
+    required String name,
+    required String phone,
+    required String role,
+    String? province,
+    String? company,
+  }) async {
+    String? pushToken;
+    String phonePlatform = 'unknown';
+    try {
+      phonePlatform =
+          Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'unknown');
+      pushToken = await FirebaseMessaging.instance.getToken();
+    } catch (_) {}
+
+    final trimmed = email.trim().toLowerCase();
+    return _api.post(ApiConfig.requesterOtpRegister, body: {
+      'email': trimmed,
+      'code': code.trim(),
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'role': role.trim().toUpperCase(),
+      if (province != null && province.trim().isNotEmpty)
+        'province': province.trim(),
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      if (pushToken != null && pushToken.isNotEmpty) 'pushToken': pushToken,
+      if (pushToken != null && pushToken.isNotEmpty)
+        'phonePlatform': phonePlatform,
+    });
   }
 
   Future<User?> fetchMe() async {
