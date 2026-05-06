@@ -98,7 +98,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
-    const hasAccess = await verifyTicketAccess(prisma, id, auth.payload.requesterId);
+    const hasAccess = await verifyTicketReadAccess(prisma, id, auth.payload.requesterId);
     if (!hasAccess) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
     }
