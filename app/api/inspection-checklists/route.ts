@@ -10,7 +10,19 @@ import { hasPrivilege } from '@/lib/coordinator-access';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-const CHECKLIST_EDITOR_ROLES = new Set(['COMPANY_OWNER', 'COORDINATOR', 'ADMIN', 'MANAGER', 'TEAM_LEADER', 'COMPANY']);
+const CHECKLIST_EDITOR_ROLES = new Set([
+  'COMPANY_OWNER',
+  'COORDINATOR',
+  'ADMIN',
+  'MANAGER',
+  'TEAM_LEADER',
+  'ENGINEER',
+  'QUALITY_ENGINEER',
+  'SUPERVISION_ENGINEER',
+  'TECHNICIAN',
+  'CLIENT',
+  'COMPANY',
+]);
 
 function slugify(value: string): string {
   return value
@@ -25,14 +37,28 @@ async function ensureLegacyRequesterCompany(requesterId: string): Promise<string
     where: { id: requesterId },
     select: { id: true, username: true, email: true, role: true, name: true, company: true },
   });
-  const role = String((requester as { role?: string })?.role ?? '').toUpperCase();
-  if (!requester || role !== 'COMPANY') return null;
+  if (!requester) return null;
+
+  const username = (requester.username ?? '').trim();
+  const email = (typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '');
+  if (username || email) {
+    const existingOwner = await prisma.coordinatorUser.findFirst({
+      where: {
+        OR: [
+          ...(username ? [{ username: { equals: username, mode: 'insensitive' as const } }] : []),
+          ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+        ],
+      },
+      select: { companyId: true },
+    });
+    if (existingOwner?.companyId) return existingOwner.companyId;
+  }
 
   const linked = await getLinkedCoordinatorCompanyId(_prisma, {
     id: requester.id,
     username: requester.username ?? '',
     email: requester.email ?? null,
-    role,
+    role: requester.role ?? null,
   });
   if (linked) return linked;
 
@@ -96,14 +122,7 @@ export async function GET(req: NextRequest) {
     if (coordinatorContext) {
       companyScopeId = coordinatorContext.companyId;
     } else if (auth.payload.identitySource === 'ticket_requester') {
-      const tr = await prisma.ticketRequester.findUnique({
-        where: { id: auth.payload.requesterId },
-        select: { role: true, username: true, email: true },
-      });
-      const role = String((tr as { role?: string })?.role ?? '').toUpperCase();
-      if (role === 'COMPANY') {
-        companyScopeId = await ensureLegacyRequesterCompany(auth.payload.requesterId);
-      }
+      companyScopeId = await ensureLegacyRequesterCompany(auth.payload.requesterId);
     }
 
     if (!companyScopeId) {
@@ -167,14 +186,6 @@ export async function POST(req: NextRequest) {
       }
       companyId = coordinatorContext.companyId;
     } else if (auth.payload.identitySource === 'ticket_requester') {
-      const tr = await prisma.ticketRequester.findUnique({
-        where: { id: auth.payload.requesterId },
-        select: { role: true, username: true, email: true },
-      });
-      const role = String((tr as { role?: string })?.role ?? '').toUpperCase();
-      if (role !== 'COMPANY') {
-        return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
-      }
       companyId = await ensureLegacyRequesterCompany(auth.payload.requesterId);
       if (!companyId) {
         return NextResponse.json(

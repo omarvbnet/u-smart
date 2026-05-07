@@ -176,8 +176,34 @@ export default function QualityControlDashboardPage() {
     }
     setUser(meRes.user);
 
-    const isCompanyRole = ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'].includes(String(meRes.user.role ?? ''));
-    const coordRoles = ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'];
+    const isCompanyRole = [
+      'COMPANY_OWNER',
+      'COORDINATOR',
+      'MANAGER',
+      'TEAM_LEADER',
+      'ADMIN',
+      'COMPANY',
+      'ENGINEER',
+      'TECHNICIAN',
+      'QUALITY_ENGINEER',
+      'SUPERVISION_ENGINEER',
+      'CLIENT',
+      'PERSONAL',
+    ].includes(String(meRes.user.role ?? ''));
+    const coordRoles = [
+      'COMPANY_OWNER',
+      'COORDINATOR',
+      'MANAGER',
+      'TEAM_LEADER',
+      'ADMIN',
+      'COMPANY',
+      'ENGINEER',
+      'TECHNICIAN',
+      'QUALITY_ENGINEER',
+      'SUPERVISION_ENGINEER',
+      'CLIENT',
+      'PERSONAL',
+    ];
     if (
       isCompanyRole &&
       coordRoles.includes(String(meRes.user.role ?? ''))
@@ -256,7 +282,20 @@ export default function QualityControlDashboardPage() {
   // Company hub is available for all company-type roles.
   const canUseProvisorHub =
     user?.serviceSlug === 'quality-control-supervision' &&
-    ['COMPANY_OWNER', 'COORDINATOR', 'MANAGER', 'TEAM_LEADER', 'ADMIN', 'COMPANY'].includes(String(user?.role ?? ''));
+    [
+      'COMPANY_OWNER',
+      'COORDINATOR',
+      'MANAGER',
+      'TEAM_LEADER',
+      'ADMIN',
+      'COMPANY',
+      'ENGINEER',
+      'TECHNICIAN',
+      'QUALITY_ENGINEER',
+      'SUPERVISION_ENGINEER',
+      'CLIENT',
+      'PERSONAL',
+    ].includes(String(user?.role ?? ''));
 
   /** API requires taskCategory + checklist for coordinator JWT (owner / coordinator / platform admin). */
   const canCreateCoordinatorTasks =
