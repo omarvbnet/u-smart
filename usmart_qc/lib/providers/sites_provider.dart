@@ -113,6 +113,27 @@ class SitesProvider extends ChangeNotifier {
     }
   }
 
+  /// Time-bound public visitor link (URL) for anonymous site preview (web).
+  Future<Map<String, dynamic>> createSiteVisitorLink(
+    String siteDbId,
+    DateTime validFrom,
+    DateTime validUntil, {
+    bool includeTickets = false,
+  }) async {
+    try {
+      return await _api.post(
+        ApiConfig.siteVisitorLink(siteDbId),
+        body: {
+          'validFrom': validFrom.toUtc().toIso8601String(),
+          'validUntil': validUntil.toUtc().toIso8601String(),
+          'includeTickets': includeTickets,
+        },
+      );
+    } catch (_) {
+      return {'success': false, 'message': 'Connection error'};
+    }
+  }
+
   /// Owner revokes a share, or recipient removes the site from their list.
   Future<bool> revokeSiteShare(String siteDbId, String shareId) async {
     try {

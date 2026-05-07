@@ -908,5 +908,19 @@
     "search": "Ara",
     "filter": "Filtrele",
     "sort": "Sırala"
+  },
+  "SiteVisit": {
+    "title": "Paylaşılan sahayı önizle",
+    "subtitle": "Süresi sınırlı ziyaretçi bağlantısı.",
+    "invalid": "Bağlantı geçersiz veya süresi doldu.",
+    "retry": "Yenile",
+    "siteIdLabel": "Saha kodu",
+    "location": "Konum",
+    "province": "İl",
+    "coordinates": "Koordinatlar",
+    "validUntil": "Geçerlilik bitişi",
+    "ticketNote": "Kayıtta talep görünürlüğü olabilir; ayrıntılar Provisor uygulamasında.",
+    "previewOnly": "Yalnızca özet — talepler burada listelenmez.",
+    "home": "Anasayfa"
   }
 }

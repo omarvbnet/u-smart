@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
@@ -1076,44 +1077,62 @@ class _SitesTab extends StatelessWidget {
                           onRefresh: provider.fetchSites,
                           color: const Color(0xFF6C63FF),
                           child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
                             itemCount: provider.sites.length,
                             itemBuilder: (context, index) {
                               final site = provider.sites[index];
                               return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF12122A),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.white.withAlpha(10),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFF18182C),
+                                      Color(0xFF12122A),
+                                    ],
                                   ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.white.withAlpha(20),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withAlpha(26),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
                                 child: Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.all(12),
+                                      padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: [
                                             const Color(
                                               0xFF6C63FF,
-                                            ).withAlpha(30),
+                                            ).withAlpha(36),
                                             const Color(
                                               0xFF00D4AA,
-                                            ).withAlpha(15),
+                                            ).withAlpha(18),
                                           ],
                                         ),
-                                        borderRadius: BorderRadius.circular(14),
+                                        borderRadius:
+                                            BorderRadius.circular(12),
                                       ),
                                       child: const Icon(
                                         Icons.location_on_rounded,
                                         color: Color(0xFF8B83FF),
-                                        size: 22,
+                                        size: 20,
                                       ),
                                     ),
-                                    const SizedBox(width: 14),
+                                    const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -2045,13 +2064,8 @@ class _StatsTab extends StatelessWidget {
                   );
                 },
               ),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.2,
+              ResponsiveStatsGrid(
+                spacing: 12,
                 children: [
                   StatsCard(
                     label: l10n.t('within_sla'),
@@ -2106,6 +2120,36 @@ class _StatsTab extends StatelessWidget {
                         builder: (_) => FilteredTicketsScreen(
                           title: l10n.t('section_active'),
                           tickets: provider.activeTickets,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('total_maintenance_time'),
+                    value: _formatTotalInspectionHours(
+                      provider.totalMaintenanceHoursCompleted,
+                    ),
+                    icon: Icons.handyman_outlined,
+                    color: const Color(0xFF818CF8),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('total_maintenance_time'),
+                          tickets: provider.completedMaintenanceTickets,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('section_pending'),
+                    value: '${provider.pendingTickets.length}',
+                    icon: Icons.hourglass_empty_rounded,
+                    color: const Color(0xFFFBBF24),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('section_pending'),
+                          tickets: provider.pendingTickets,
                         ),
                       ),
                     ),
@@ -2179,13 +2223,8 @@ class _StatsTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.2,
+                ResponsiveStatsGrid(
+                  spacing: 12,
                   children: [
                     StatsCard(
                       label: l10n.t('accepted'),
@@ -2296,13 +2335,8 @@ class _TechnicianStatsContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.2,
+              ResponsiveStatsGrid(
+                spacing: 12,
                 children: [
                   StatsCard(
                     label: l10n.t('total_tickets'),
@@ -2344,6 +2378,36 @@ class _TechnicianStatsContent extends StatelessWidget {
                               ),
                             )
                         : null,
+                  ),
+                  StatsCard(
+                    label: l10n.t('total_maintenance_time'),
+                    value: _StatsTab._formatTotalInspectionHours(
+                      ticketsProvider.totalMaintenanceHoursCompleted,
+                    ),
+                    icon: Icons.handyman_outlined,
+                    color: const Color(0xFF818CF8),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('total_maintenance_time'),
+                          tickets: ticketsProvider.completedMaintenanceTickets,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('section_pending'),
+                    value: '${ticketsProvider.pendingTickets.length}',
+                    icon: Icons.hourglass_empty_rounded,
+                    color: const Color(0xFFFBBF24),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('section_pending'),
+                          tickets: ticketsProvider.pendingTickets,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -2447,24 +2511,29 @@ class _ProfileTab extends StatelessWidget {
             ],
             const SizedBox(height: 32),
             _profileRow(
+              context,
               Icons.person_outline_rounded,
               l10n.t('profile_username'),
               user.username,
               const Color(0xFF6C63FF),
+              copyValue: user.username,
             ),
             _profileRow(
+              context,
               Icons.phone_outlined,
               l10n.t('profile_phone'),
               user.phone ?? '-',
               const Color(0xFF00D4AA),
             ),
             _profileRow(
+              context,
               Icons.verified_outlined,
               l10n.t('profile_status'),
               user.status,
               const Color(0xFF4ADE80),
             ),
             _profileRow(
+              context,
               Icons.business_rounded,
               l10n.t('profile_role'),
               l10n.t('role_company'),
@@ -2753,7 +2822,18 @@ class _ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _profileRow(IconData icon, String label, String value, Color color) {
+  Widget _profileRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    Color color, {
+    String? copyValue,
+  }) {
+    final ml = MaterialLocalizations.of(context);
+    final snackL10n = AppLocalizations.of(context);
+    final canCopy =
+        copyValue != null && copyValue.isNotEmpty;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -2773,27 +2853,47 @@ class _ProfileTab extends StatelessWidget {
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withAlpha(80),
-                  fontSize: 11,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(80),
+                    fontSize: 11,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          if (canCopy)
+            IconButton(
+              tooltip: ml.copyButtonLabel,
+              icon: Icon(
+                Icons.copy_rounded,
+                color: Colors.white.withAlpha(120),
+                size: 20,
+              ),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: copyValue));
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  SnackBar(
+                    content: Text(snackL10n.t('copied_to_clipboard')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );

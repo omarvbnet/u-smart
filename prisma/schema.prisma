@@ -441,6 +441,7 @@ model Site {
   requesterId String
   requester   TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
   shares      SiteShare[]
+  visitorLinks SiteVisitorLink[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -463,6 +464,23 @@ model SiteShare {
   @@unique([siteId, sharedWithRequesterId])
   @@index([sharedWithRequesterId])
   @@map("site_shares")
+}
+
+/// Time-bound public visitor link for read-only site summary (share by URL).
+model SiteVisitorLink {
+  id                   String    @id @default(cuid())
+  siteId               String
+  site                 Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  token                String    @unique
+  createdByRequesterId String
+  validFrom            DateTime  @default(now())
+  validUntil           DateTime
+  includeTickets       Boolean   @default(false)
+  revokedAt            DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([siteId])
+  @@map("site_visitor_links")
 }
 
 enum RequesterStatus {

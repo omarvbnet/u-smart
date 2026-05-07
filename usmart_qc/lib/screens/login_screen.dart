@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/api_config.dart';
+import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -24,8 +25,8 @@ class _LoginScreenState extends State<LoginScreen>
   final _otpCodeCtrl = TextEditingController();
   final _regNameCtrl = TextEditingController();
   final _regPhoneCtrl = TextEditingController();
-  final _regProvinceCtrl = TextEditingController();
   final _regCompanyCtrl = TextEditingController();
+  String? _signupProvince;
   bool _usePasswordLogin = false;
   bool _otpSent = false;
   bool _otpSendLoading = false;
@@ -122,6 +123,38 @@ class _LoginScreenState extends State<LoginScreen>
     return t.contains('@') && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t);
   }
 
+  String _signupRoleLabel(AppLocalizations l10n, String code) {
+    switch (code) {
+      case 'ENGINEER':
+        return l10n.t('role_engineer');
+      case 'TECHNICIAN':
+        return l10n.t('role_technician');
+      case 'PERSONAL':
+        return l10n.t('role_personal');
+      case 'WORKER':
+        return l10n.t('role_worker');
+      case 'COMPANY':
+      default:
+        return l10n.t('role_company');
+    }
+  }
+
+  String _signupRoleHintKey(String code) {
+    switch (code) {
+      case 'ENGINEER':
+        return 'reg_role_engineer_hint';
+      case 'TECHNICIAN':
+        return 'reg_role_technician_hint';
+      case 'PERSONAL':
+        return 'reg_role_personal_hint';
+      case 'WORKER':
+        return 'reg_role_worker_hint';
+      case 'COMPANY':
+      default:
+        return 'reg_role_company_hint';
+    }
+  }
+
   Future<void> _sendEmailOtp(AppLocalizations l10n) async {
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,7 +225,7 @@ class _LoginScreenState extends State<LoginScreen>
           name: name,
           phone: phone,
           role: _signupRole,
-          province: _regProvinceCtrl.text.trim().isEmpty ? null : _regProvinceCtrl.text.trim(),
+          province: _signupProvince,
           company: _regCompanyCtrl.text.trim().isEmpty ? null : _regCompanyCtrl.text.trim(),
         );
     if (!mounted) return;
@@ -548,7 +581,6 @@ class _LoginScreenState extends State<LoginScreen>
     _otpCodeCtrl.dispose();
     _regNameCtrl.dispose();
     _regPhoneCtrl.dispose();
-    _regProvinceCtrl.dispose();
     _regCompanyCtrl.dispose();
     _forgotCooldownTimer?.cancel();
     super.dispose();
@@ -868,7 +900,16 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 6),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          l10n.t('signup_role_pick'),
+                                          style: TextStyle(
+                                            color: Colors.white.withAlpha(140),
+                                            fontSize: 12,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 12),
@@ -898,26 +939,99 @@ class _LoginScreenState extends State<LoginScreen>
                                                 'WORKER',
                                               ]
                                                   .map(
-                                                    (r) => DropdownMenuItem(
+                                                    (r) =>
+                                                        DropdownMenuItem(
                                                       value: r,
-                                                      child: Text(r),
+                                                      child: Text(
+                                                          _signupRoleLabel(
+                                                              l10n, r)),
                                                     ),
                                                   )
                                                   .toList(),
                                               onChanged: (v) {
                                                 if (v != null) {
-                                                  setState(() => _signupRole = v);
+                                                  setState(() =>
+                                                      _signupRole = v);
                                                 }
                                               },
                                             ),
                                           ),
                                         ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          l10n.t(_signupRoleHintKey(_signupRole)),
+                                          style: TextStyle(
+                                            color:
+                                                Colors.white.withAlpha(120),
+                                            fontSize: 11,
+                                            height: 1.35,
+                                          ),
+                                        ),
                                         const SizedBox(height: 12),
-                                        _buildField(
-                                          controller: _regProvinceCtrl,
-                                          hint: l10n
-                                              .t('signup_province_optional'),
-                                          icon: Icons.map_outlined,
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            l10n.t('signup_province_optional'),
+                                            style: TextStyle(
+                                              color:
+                                                  Colors.white.withAlpha(180),
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF12122A),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                                color:
+                                                    Colors.white.withAlpha(15)),
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: DropdownButton<String?>(
+                                              value: _signupProvince,
+                                              hint: Text(
+                                                l10n.t(
+                                                    'province_optional_none'),
+                                                style: TextStyle(
+                                                  color: Colors.white
+                                                      .withAlpha(140),
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                              isExpanded: true,
+                                              dropdownColor:
+                                                  const Color(0xFF1a1a2e),
+                                              iconEnabledColor:
+                                                  Colors.white.withAlpha(180),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                              ),
+                                              items: [
+                                                DropdownMenuItem<String?>(
+                                                  value: null,
+                                                  child: Text(
+                                                    l10n.t(
+                                                        'province_optional_none'),
+                                                  ),
+                                                ),
+                                                ...iraqProvinces.map(
+                                                  (p) =>
+                                                      DropdownMenuItem<String?>(
+                                                    value: p,
+                                                    child: Text(p),
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged: (v) => setState(
+                                                  () => _signupProvince = v),
+                                            ),
+                                          ),
                                         ),
                                         const SizedBox(height: 12),
                                         _buildField(

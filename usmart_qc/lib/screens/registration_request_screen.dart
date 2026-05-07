@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/registration_request_provider.dart';
 import '../services/device_phone_service.dart';
@@ -37,14 +38,6 @@ class _RegistrationRequestContent extends StatefulWidget {
   State<_RegistrationRequestContent> createState() =>
       _RegistrationRequestContentState();
 }
-
-/// Iraq provinces (19 governorates)
-const List<String> _iraqProvinces = [
-  'Al-Anbar', 'Babil', 'Baghdad', 'Basra', 'Dhi Qar',
-  'Al-Qadisiyyah', 'Diyala', 'Duhok', 'Erbil', 'Halabja',
-  'Karbala', 'Kirkuk', 'Maysan', 'Muthanna', 'Najaf',
-  'Ninawa', 'Salah Al-Din', 'Sulaymaniyah', 'Wasit',
-];
 
 class _RegistrationRequestContentState extends State<_RegistrationRequestContent> {
   int _step = 0; // 0=role, 1=email, 2=otp, 3=form
@@ -506,7 +499,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           label: l10n.t('reg_province'),
           hint: l10n.t('reg_province_hint'),
           value: _selectedProvince,
-          items: _iraqProvinces,
+          items: iraqProvinces,
           onChanged: (v) => setState(() => _selectedProvince = v),
         ),
         if (!_isPersonalRole) ...[

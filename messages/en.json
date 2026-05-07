@@ -991,5 +991,19 @@
     "search": "Search",
     "filter": "Filter",
     "sort": "Sort"
+  },
+  "SiteVisit": {
+    "title": "Shared site preview",
+    "subtitle": "Time-limited visitor link.",
+    "invalid": "This link is invalid or has expired.",
+    "retry": "Refresh",
+    "siteIdLabel": "Site ID",
+    "location": "Location",
+    "province": "Province",
+    "coordinates": "Coordinates",
+    "validUntil": "Link valid until",
+    "ticketNote": "This link may indicate ticket visibility in the app; full ticket data requires signing in with Provisor.",
+    "previewOnly": "Preview only — no tickets are listed on this public page.",
+    "home": "Back to home"
   }
 }

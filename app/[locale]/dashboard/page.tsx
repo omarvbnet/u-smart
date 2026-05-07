@@ -561,7 +561,7 @@ export default function TicketDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto w-full max-w-[120rem] px-3 sm:px-5 xl:px-10 2xl:px-14">
         {isRestricted && (
           <div className={`mb-6 rounded-xl border px-4 py-3 ${user?.status === 'BLOCKED' ? 'bg-red-500/20 border-red-500/40 text-red-300' : 'bg-amber-500/20 border-amber-500/40 text-amber-300'}`}>
             <p className="text-sm font-medium">
@@ -1179,35 +1179,35 @@ export default function TicketDashboardPage() {
                 <p className="text-gray-400">{t('ticketForm.noSites')}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-2 w-full">
                 {filteredSites.map((site) => (
                   <div
                     key={site.id}
-                    className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-5 hover:border-cyan-500/30 transition-all hover:shadow-lg hover:shadow-cyan-500/10"
+                    className="group w-full rounded-xl border border-white/[0.12] bg-gradient-to-br from-white/[0.07] via-white/[0.035] to-transparent p-3.5 sm:p-4 shadow-sm shadow-black/20 backdrop-blur-sm transition-all duration-200 hover:border-cyan-400/35 hover:shadow-md hover:shadow-cyan-500/10"
                   >
                     <button
                       type="button"
                       onClick={() => setSelectedSiteForTickets(site)}
-                      className="w-full text-left flex items-start justify-between mb-3 rounded-lg -m-1 p-1 hover:bg-white/5 transition-colors"
+                      className="w-full text-left flex items-start justify-between mb-2 rounded-lg -m-1 p-1 hover:bg-white/[0.04] transition-colors"
                     >
-                      <div>
-                        <h4 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-                          <MapPin className="w-5 h-5 text-cyan-400 shrink-0" />
-                          {site.siteId}
+                      <div className="min-w-0 pr-2">
+                        <h4 className="text-base sm:text-lg font-bold text-white mb-0.5 flex items-center gap-1.5 truncate">
+                          <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 shrink-0" />
+                          <span className="truncate">{site.siteId}</span>
                         </h4>
-                        <p className="text-sm text-gray-400">{site.location}</p>
-                        <p className="text-xs text-gray-500 mt-1">{site.province}</p>
+                        <p className="text-sm text-gray-400 line-clamp-2 leading-snug">{site.location}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{site.province}</p>
                       </div>
-                      <div className="flex flex-col gap-1 shrink-0 text-right">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-xs font-semibold">
+                      <div className="flex flex-col gap-0.5 shrink-0 text-right">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/18 text-cyan-300 rounded-md text-[11px] font-semibold">
                           <ClipboardList className="w-3 h-3" /> EN: {site.enterpriseCount ?? 0}
                         </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/18 text-amber-300 rounded-md text-[11px] font-semibold">
                           <ClipboardList className="w-3 h-3" /> QC: {site.qualityControlCount ?? 0}
                         </span>
                       </div>
                     </button>
-                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
+                    <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/[0.08]">
                       <button
                         type="button"
                         onClick={() => setSelectedSiteForTickets(site)}

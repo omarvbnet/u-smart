@@ -810,7 +810,7 @@ export default function QualityControlDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto w-full max-w-[120rem] px-3 sm:px-5 xl:px-10 2xl:px-14">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div className="min-w-0">
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
@@ -1454,41 +1454,41 @@ export default function QualityControlDashboardPage() {
                 <p className="text-gray-400">{t('ticketForm.noSites')}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-2 w-full">
                 {filteredSites.map((site) => (
                   <div
                     key={site.id}
-                    className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-5 hover:border-amber-500/30 transition-all"
+                    className="group w-full rounded-xl border border-white/[0.12] bg-gradient-to-br from-white/[0.07] via-white/[0.035] to-transparent p-3.5 sm:p-4 shadow-sm shadow-black/20 backdrop-blur-sm transition-all duration-200 hover:border-amber-400/35 hover:shadow-md hover:shadow-amber-500/10"
                   >
                     <button
                       type="button"
                       onClick={() => setSelectedSiteForTickets(site)}
-                      className="w-full text-left flex items-start justify-between mb-3 rounded-lg -m-1 p-1 hover:bg-white/5 transition-colors"
+                      className="w-full text-left flex items-start justify-between mb-2 rounded-lg -m-1 p-1 hover:bg-white/[0.04] transition-colors"
                     >
-                      <div>
-                        <h4 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-                          <MapPin className="w-5 h-5 text-amber-400 shrink-0" />
-                          {site.siteId}
+                      <div className="min-w-0 pr-2">
+                        <h4 className="text-base sm:text-lg font-bold text-white mb-0.5 flex items-center gap-1.5 truncate">
+                          <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                          <span className="truncate">{site.siteId}</span>
                         </h4>
-                        <p className="text-sm text-gray-400">{site.location}</p>
-                        <p className="text-xs text-gray-500 mt-1">{site.province}</p>
+                        <p className="text-sm text-gray-400 line-clamp-2 leading-snug">{site.location}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{site.province}</p>
                       </div>
-                      <div className="flex flex-col gap-1 shrink-0 text-right">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-xs font-semibold">
+                      <div className="flex flex-col gap-0.5 shrink-0 text-right">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/18 text-cyan-300 rounded-md text-[11px] font-semibold">
                           <ClipboardList className="w-3 h-3" /> EN: {site.enterpriseCount ?? 0}
                         </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/18 text-amber-300 rounded-md text-[11px] font-semibold">
                           <ClipboardList className="w-3 h-3" /> QC: {site.qualityControlCount ?? 0}
                         </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/18 text-violet-200 rounded-md text-[11px] font-semibold">
                           <ClipboardList className="w-3 h-3" /> {locale === 'ar' ? 'فحص' : 'Insp.'}: {site.inspectionQcCount ?? 0} · {fmtSiteHours(site.inspectionHoursTotal)}h
                         </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/18 text-emerald-300 rounded-md text-[11px] font-semibold">
                           <ClipboardList className="w-3 h-3" /> {locale === 'ar' ? 'صيانة' : 'Maint.'}: {site.maintenanceQcCount ?? 0} · {fmtSiteHours(site.maintenanceHoursTotal)}h
                         </span>
                       </div>
                     </button>
-                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10">
+                    <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/[0.08]">
                       <button
                         type="button"
                         onClick={() => setSelectedSiteForTickets(site)}

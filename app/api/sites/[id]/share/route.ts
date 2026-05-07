@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { stringifyNotificationPayload } from '@/lib/notification-i18n';
+import { sendLocalizedPushToRequesters } from '@/lib/push-notifications';
+import { sendSiteSharedEmail } from '@/lib/email';
 
 function getSiteDelegate() {
   return (prisma as any).site;
@@ -8,6 +11,18 @@ function getSiteDelegate() {
 
 function normalizeShareTarget(raw: string): string {
   return raw.trim().toLowerCase();
+}
+
+/** Prisma P2022 — column missing until migration `20260507200000_site_share_include_tickets` is applied. */
+function migrateMissingColumnResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      message:
+        'Database migration required: apply site_shares.includeTickets (run: npx prisma migrate deploy)',
+    },
+    { status: 503 }
+  );
 }
 
 async function resolveSiteDbId(params: Promise<unknown>): Promise<string | null> {
@@ -57,7 +72,10 @@ export async function GET(
     });
 
     return NextResponse.json({ success: true, shares: rows });
-  } catch (err) {
+  } catch (err: unknown) {
+    if ((err as { code?: string })?.code === 'P2022') {
+      return migrateMissingColumnResponse();
+    }
     console.error('GET /api/sites/[id]/share:', err);
     return NextResponse.json({ success: false, message: 'Failed to list shares' }, { status: 500 });
   }
@@ -133,7 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<unkno
         ],
         status: 'ACTIVE',
       },
-      select: { id: true, username: true, role: true },
+      select: { id: true, username: true, role: true, email: true, name: true },
     });
 
     if (!recipient) {
@@ -162,6 +180,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<unkno
       },
     });
 
+    const sharer = await prisma.ticketRequester.findUnique({
+      where: { id: auth.payload.requesterId },
+      select: { username: true, name: true },
+    });
+    const fromName =
+      (sharer?.name && String(sharer.name).trim()) ||
+      (sharer?.username && String(sharer.username).trim()) ||
+      'Someone';
+    const siteLabel = String(site.siteId ?? '').trim() || siteDbId.slice(0, 8);
+
+    const notifyPayload = {
+      key: 'site_shared_received' as const,
+      vars: {
+        fromName,
+        siteLabel,
+        accessMode: includeTickets ? ('tickets' as const) : ('location_only' as const),
+      },
+    };
+
+    try {
+      await prisma.notification.create({
+        data: {
+          type: 'site_share',
+          title: 'Site shared with you',
+          message: `${fromName} shared site ${siteLabel}`,
+          payload: stringifyNotificationPayload(notifyPayload),
+          requesterId: recipient.id,
+          forAdmin: false,
+        },
+      });
+    } catch (e) {
+      console.warn('notification create site_share:', e);
+    }
+
+    sendLocalizedPushToRequesters(prisma, [
+      { requesterId: recipient.id, payload: notifyPayload, data: { type: 'site_share' } },
+    ]).catch((e) => console.warn('FCM site_share:', e));
+
+    const recEmail =
+      recipient.email != null && typeof recipient.email === 'string' ? recipient.email.trim() : '';
+    if (recEmail) {
+      sendSiteSharedEmail({
+        to: recEmail,
+        fromDisplayName: fromName,
+        siteLabel,
+        includeTickets,
+      }).catch((e) => console.warn('email site_share:', e));
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Site shared',
@@ -174,6 +241,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<unkno
         { success: false, message: 'This user already has access to this site' },
         { status: 409 }
       );
+    }
+    if (code === 'P2022') {
+      return migrateMissingColumnResponse();
     }
     console.error('POST /api/sites/[id]/share:', err);
     return NextResponse.json({ success: false, message: 'Failed to share site' }, { status: 500 });

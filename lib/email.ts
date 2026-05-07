@@ -340,6 +340,33 @@ export async function sendTicketNotificationEmail(options: {
   });
 }
 
+/** Recipient email when another requester shares a site with them. */
+export async function sendSiteSharedEmail(options: {
+  to: string;
+  fromDisplayName: string;
+  siteLabel: string;
+  includeTickets: boolean;
+}): Promise<boolean> {
+  const { to, fromDisplayName, siteLabel, includeTickets } = options;
+  const safeFrom = escapeHtml(fromDisplayName);
+  const safeSite = escapeHtml(siteLabel);
+  const access = includeTickets
+    ? 'You have access including linked tickets in the Provisor app.'
+    : 'Shared as site details only (no linked tickets visibility).';
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const baseUrl = raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+  const subject = `[Provisor] ${safeFrom} shared a site with you — ${safeSite}`;
+  const html = `
+    <p style="margin:0 0 12px; color:#0f172a; font-size:18px; font-weight:600;">Site shared</p>
+    <p style="margin:0 0 16px; color:#475569; font-size:15px;"><strong>${safeFrom}</strong> shared site <strong>${safeSite}</strong> with your account.</p>
+    <p style="margin:0 0 20px; color:#475569; font-size:15px;">${escapeHtml(access)}</p>
+    <p style="margin:0 0 24px;"><a href="${baseUrl}" style="display:inline-block; padding:12px 22px; background:#6366f1; color:#fff; text-decoration:none; border-radius:8px; font-weight:600;">Open Provisor</a></p>
+    <p style="margin:0; color:#94a3b8; font-size:12px;">Provisor — Quality control & inspection</p>
+  `.trim();
+  const text = `Site shared\n\n${fromDisplayName} shared site "${siteLabel}" with you.\n\n${access}\n\n${baseUrl}`;
+  return sendEmail({ to, subject, html, text });
+}
+
 /** Send status update email for Clean Energy visitor request (non-dashboard requester). */
 export async function sendCleanEnergyRequestStatusEmail(options: {
   to: string;

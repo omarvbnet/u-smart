@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
@@ -11,6 +12,7 @@ import '../widgets/update_password_sheet.dart';
 import '../widgets/stats_card.dart';
 import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
+import 'filtered_tickets_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -497,41 +499,56 @@ class _SitesTab extends StatelessWidget {
                       onRefresh: provider.fetchSites,
                       color: const Color(0xFF6C63FF),
                       child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                         itemCount: provider.sites.length,
                         itemBuilder: (context, index) {
                           final site = provider.sites[index];
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF12122A),
-                              borderRadius: BorderRadius.circular(20),
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF18182C),
+                                  Color(0xFF12122A),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                  color: Colors.white.withAlpha(10)),
+                                  color: Colors.white.withAlpha(20)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(26),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       colors: [
                                         const Color(0xFF6C63FF)
-                                            .withAlpha(30),
+                                            .withAlpha(36),
                                         const Color(0xFF00D4AA)
-                                            .withAlpha(15),
+                                            .withAlpha(18),
                                       ],
                                     ),
                                     borderRadius:
-                                        BorderRadius.circular(14),
+                                        BorderRadius.circular(12),
                                   ),
                                   child: const Icon(
                                       Icons.location_on_rounded,
                                       color: Color(0xFF8B83FF),
-                                      size: 22),
+                                      size: 20),
                                 ),
-                                const SizedBox(width: 14),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -604,10 +621,16 @@ class _SitesTab extends StatelessWidget {
 class _StatsTab extends StatelessWidget {
   const _StatsTab();
 
+  static String _fmtHours(double h) {
+    if (h < 1) return '${(h * 60).round()} min';
+    return '${h.toStringAsFixed(1)} h';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<TicketsProvider>(
       builder: (context, provider, _) {
+        final l10n = AppLocalizations.of(context);
         final stats = provider.stats;
         final inspection = stats?.inspectionStats;
 
@@ -719,6 +742,36 @@ class _StatsTab extends StatelessWidget {
                         '${(provider.onSiteTickets.length + provider.inProgressTickets.length)}',
                     icon: Icons.play_circle_outline_rounded,
                     color: const Color(0xFF00D4AA),
+                  ),
+                  StatsCard(
+                    label: l10n.t('total_maintenance_time'),
+                    value: _fmtHours(
+                      provider.totalMaintenanceHoursCompleted,
+                    ),
+                    icon: Icons.handyman_outlined,
+                    color: const Color(0xFF818CF8),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('total_maintenance_time'),
+                          tickets: provider.completedMaintenanceTickets,
+                        ),
+                      ),
+                    ),
+                  ),
+                  StatsCard(
+                    label: l10n.t('section_pending'),
+                    value: '${provider.pendingTickets.length}',
+                    icon: Icons.hourglass_empty_rounded,
+                    color: const Color(0xFFFBBF24),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FilteredTicketsScreen(
+                          title: l10n.t('section_pending'),
+                          tickets: provider.pendingTickets,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -849,14 +902,35 @@ class _ProfileTab extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 32),
-            _profileRow(Icons.person_outline_rounded, 'Username',
-                user.username, const Color(0xFF6C63FF)),
-            _profileRow(Icons.phone_outlined, 'Phone',
-                user.phone ?? '-', const Color(0xFF00D4AA)),
-            _profileRow(Icons.verified_outlined, 'Status',
-                user.status, const Color(0xFF4ADE80)),
-            _profileRow(Icons.engineering_rounded, 'Role',
-                'QC Engineer', const Color(0xFFFBBF24)),
+            _profileRow(
+              context,
+              Icons.person_outline_rounded,
+              'Username',
+              user.username,
+              const Color(0xFF6C63FF),
+              copyValue: user.username,
+            ),
+            _profileRow(
+              context,
+              Icons.phone_outlined,
+              'Phone',
+              user.phone ?? '-',
+              const Color(0xFF00D4AA),
+            ),
+            _profileRow(
+              context,
+              Icons.verified_outlined,
+              'Status',
+              user.status,
+              const Color(0xFF4ADE80),
+            ),
+            _profileRow(
+              context,
+              Icons.engineering_rounded,
+              'Role',
+              'QC Engineer',
+              const Color(0xFFFBBF24),
+            ),
             const SizedBox(height: 12),
             _updatePasswordRow(context),
             const SizedBox(height: 32),
@@ -974,7 +1048,17 @@ class _ProfileTab extends StatelessWidget {
   }
 
   Widget _profileRow(
-      IconData icon, String label, String value, Color color) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    Color color, {
+    String? copyValue,
+  }) {
+    final ml = MaterialLocalizations.of(context);
+    final snackBarText = AppLocalizations.of(context).t('copied_to_clipboard');
+    final canCopy =
+        copyValue != null && copyValue.isNotEmpty;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -994,24 +1078,47 @@ class _ProfileTab extends StatelessWidget {
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                    color: Colors.white.withAlpha(80), fontSize: 11),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(80),
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,
-                    fontWeight: FontWeight.w600),
-              ),
-            ],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (canCopy)
+            IconButton(
+              tooltip: ml.copyButtonLabel,
+              icon: Icon(
+                Icons.copy_rounded,
+                color: Colors.white.withAlpha(120),
+                size: 20,
+              ),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: copyValue));
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  SnackBar(
+                    content: Text(snackBarText),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );

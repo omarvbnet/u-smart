@@ -65,6 +65,7 @@ class ApiConfig {
   static const String sites = '/api/sites';
   static String siteDetail(String id) => '/api/sites/$id';
   static String siteShare(String siteDbId) => '/api/sites/$siteDbId/share';
+  static String siteVisitorLink(String siteDbId) => '/api/sites/$siteDbId/visitor-link';
 
   static const String registrationRequests = '/api/registration-requests';
   static const String companyRequests = '/api/company-requests';

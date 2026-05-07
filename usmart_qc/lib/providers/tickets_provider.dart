@@ -150,6 +150,20 @@ class TicketsProvider extends ChangeNotifier {
     return sum;
   }
 
+  List<Ticket> get completedMaintenanceTickets => _tickets
+      .where((t) => t.isMaintenance && t.isCompleted)
+      .toList();
+
+  /// Active work duration for completed maintenance tickets (same timeline heuristic as inspection).
+  double get totalMaintenanceHoursCompleted {
+    double sum = 0;
+    for (final t in completedMaintenanceTickets) {
+      final h = t.inspectionHours;
+      if (h != null && h > 0) sum += h;
+    }
+    return sum;
+  }
+
   // Engineer-specific: available tickets (PENDING + not assigned), excluding own submissions
   List<Ticket> get availableTickets => _tickets.where((t) {
         if (!t.isPending || t.isAssigned) return false;

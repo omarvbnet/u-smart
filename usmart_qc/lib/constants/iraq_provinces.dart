@@ -1,0 +1,22 @@
+/// Iraq governorates (19 provinces) — shared by registration flows.
+const List<String> iraqProvinces = [
+  'Al-Anbar',
+  'Babil',
+  'Baghdad',
+  'Basra',
+  'Dhi Qar',
+  'Al-Qadisiyyah',
+  'Diyala',
+  'Duhok',
+  'Erbil',
+  'Halabja',
+  'Karbala',
+  'Kirkuk',
+  'Maysan',
+  'Muthanna',
+  'Najaf',
+  'Ninawa',
+  'Salah Al-Din',
+  'Sulaymaniyah',
+  'Wasit',
+];

@@ -1,5 +1,46 @@
 import 'package:flutter/material.dart';
 
+/// Responsive grid density for dashboard stat tiles.
+int statsGridCrossAxisCount(double width, int itemCount) {
+  if (itemCount <= 0) return 1;
+  if (itemCount == 1) return 1;
+  if (width >= 1000 && itemCount >= 4) return 4;
+  if (width >= 720 && itemCount == 3) return 3;
+  return 2;
+}
+
+double statsGridAspectRatio(double width, int cols) {
+  if (cols >= 4) return width >= 1100 ? 1.42 : 1.28;
+  if (cols == 3) return 1.22;
+  return width < 360 ? 1.02 : width < 420 ? 1.08 : 1.14;
+}
+
+class ResponsiveStatsGrid extends StatelessWidget {
+  final List<Widget> children;
+  final double spacing;
+
+  const ResponsiveStatsGrid({
+    super.key,
+    required this.children,
+    this.spacing = 11,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    final count = statsGridCrossAxisCount(w, children.length);
+    return GridView.count(
+      crossAxisCount: count,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: spacing,
+      mainAxisSpacing: spacing,
+      childAspectRatio: statsGridAspectRatio(w, count),
+      children: children,
+    );
+  }
+}
+
 class StatsCard extends StatelessWidget {
   final String label;
   final String value;

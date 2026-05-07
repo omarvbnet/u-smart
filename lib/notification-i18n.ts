@@ -15,7 +15,8 @@ export type NotificationCopyKey =
   | 'reinspect_requested'
   | 'ncr_resubmitted'
   | 'ncr_approved_reinspect'
-  | 'ncr_rework';
+  | 'ncr_rework'
+  | 'site_shared_received';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -357,6 +358,36 @@ const TEMPLATES: Record<
       body: v.comment?.trim()
         ? `ئەندازیار کارکردنەوەی داواکرد: ${v.comment}`
         : 'ئەندازیار کارکردنەوەی داواکرد تکایە چاک بکەوە و دووبارە بنێرە.',
+    }),
+  },
+  site_shared_received: {
+    en: (v) => ({
+      title: 'Site shared with you',
+      body:
+        v.accessMode === 'tickets'
+          ? `${v.fromName} shared site ${v.siteLabel} — you have access including linked tickets (Provisor app).`
+          : `${v.fromName} shared site ${v.siteLabel} — location details only.`,
+    }),
+    ar: (v) => ({
+      title: 'تمت مشاركة موقع معك',
+      body:
+        v.accessMode === 'tickets'
+          ? `شاركك ${v.fromName} الموقع ${v.siteLabel} — لديك وصول مع التذاكر المرتبطة (تطبيق Provisor).`
+          : `شاركك ${v.fromName} الموقع ${v.siteLabel} — تفاصيل الموقع فقط.`,
+    }),
+    tr: (v) => ({
+      title: 'Bir site sizinle paylaşıldı',
+      body:
+        v.accessMode === 'tickets'
+          ? `${v.fromName}, ${v.siteLabel} sitesini paylaştı — bağlı talepler dahil erişiminiz var (Provisor uygulaması).`
+          : `${v.fromName}, ${v.siteLabel} sitesini paylaştı — yalnızca konum bilgisi.`,
+    }),
+    ku: (v) => ({
+      title: 'شوێنێک بۆتەوە هاوبەش کرا',
+      body:
+        v.accessMode === 'tickets'
+          ? `${v.fromName} شوێن ${v.siteLabel} بۆتەوە هاوبەش کرد — دەستڕاگەیشتن بۆ تیکەتە بەستراوەکان (ئەپی Provisor).`
+          : `${v.fromName} شوێن ${v.siteLabel} بۆتەوە هاوبەش کرد — وردەکاری شوێنەکە بە تەنها.`,
     }),
   },
 };
