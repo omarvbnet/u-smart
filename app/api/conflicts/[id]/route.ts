@@ -1,5 +1,6 @@
+import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma as _prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
@@ -268,7 +269,7 @@ export async function PATCH(
             status: newTicketStatus,
           },
         });
-      } catch (logErr) {
+      } catch {
         /* ticketStatusLog may not exist */
       }
     }

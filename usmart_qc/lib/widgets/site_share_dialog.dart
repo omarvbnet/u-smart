@@ -202,24 +202,31 @@ class _SiteShareDialogState extends State<_SiteShareDialog>
       ),
       content: SizedBox(
         width: 360,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TabBar(
-              controller: _tabs,
-              indicatorColor: const Color(0xFF6C63FF),
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white54,
-              tabs: [
-                Tab(text: l10n.t('site_share_tab_user')),
-                Tab(text: l10n.t('site_share_tab_visitor')),
-              ],
-            ),
-            SizedBox(
-              height: 320,
-              child: TabBarView(
-                controller: _tabs,
-                children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            const tabBarHeight = 52.0;
+            final maxH = constraints.maxHeight;
+            final viewHeight = maxH.isFinite && maxH > tabBarHeight + 80
+                ? (maxH - tabBarHeight).clamp(120.0, maxH - tabBarHeight)
+                : 280.0;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TabBar(
+                  controller: _tabs,
+                  indicatorColor: const Color(0xFF6C63FF),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white54,
+                  tabs: [
+                    Tab(text: l10n.t('site_share_tab_user')),
+                    Tab(text: l10n.t('site_share_tab_visitor')),
+                  ],
+                ),
+                SizedBox(
+                  height: viewHeight,
+                  child: TabBarView(
+                    controller: _tabs,
+                    children: [
                   SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -352,10 +359,12 @@ class _SiteShareDialogState extends State<_SiteShareDialog>
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ],
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
       actions: [
