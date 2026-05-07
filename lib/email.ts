@@ -598,6 +598,7 @@ export async function notifyTicketsRegistrationRequest(data: {
   province: string;
   evidenceUrl: string;
   role: string;
+  specialization?: string;
 }): Promise<void> {
   const roleLabels: Record<string, string> = {
     COMPANY: 'Company',
@@ -608,7 +609,7 @@ export async function notifyTicketsRegistrationRequest(data: {
   const roleText = roleLabels[data.role] || data.role;
   const html = `
     <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New Provisor registration request</strong></p>
-    <table style="border-collapse:collapse;">${row('Request ID', data.id)}${row('Legal name', data.legalName)}${row('Email', data.email)}${row('Phone', data.phone)}${row('Province', data.province)}${row('Role', roleText)}${row('Evidence', data.evidenceUrl)}</table>
+    <table style="border-collapse:collapse;">${row('Request ID', data.id)}${row('Legal name', data.legalName)}${row('Email', data.email)}${row('Phone', data.phone)}${row('Province', data.province)}${row('Role', roleText)}${data.specialization ? row('Specialization', data.specialization) : ''}${row('Evidence', data.evidenceUrl)}</table>
     <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
   sendTicketsNotification(`New registration: ${data.legalName} (${roleText})`, html).catch((e) => console.error('Tickets notification (registration):', e));
 }
@@ -734,6 +735,56 @@ export async function sendCompanyAccountApprovedEmail(
     subject: 'تم تفعيل حسابك — U-SMART لوحة التحكم',
     html,
     text,
+  });
+}
+
+export async function sendRequesterVerificationApprovedEmail(
+  to: string,
+  params: { name: string; role: string; specialization?: string | null; username: string }
+): Promise<boolean> {
+  const role = params.role.toUpperCase();
+  const label =
+    role === 'ENGINEER' ? 'Engineer' : role === 'TECHNICIAN' ? 'Technician' : params.role;
+  const specializationText = params.specialization ? ` (${params.specialization})` : '';
+  const html = `
+    <p style="margin:0 0 12px; font-size:16px; color:#0f172a;"><strong>Verification approved</strong></p>
+    <p style="margin:0 0 12px; color:#334155;">Hello ${escapeHtml(params.name || 'User')},</p>
+    <p style="margin:0 0 12px; color:#334155;">
+      Your ${escapeHtml(label)} account${escapeHtml(specializationText)} has been approved and verified.
+    </p>
+    <p style="margin:0 0 12px; color:#334155;">
+      Username: <strong>${escapeHtml(params.username)} ✅ Verified</strong>
+    </p>
+    <p style="margin:0; color:#64748b; font-size:12px;">U-SMART Team</p>
+  `.trim();
+  return sendEmail({
+    to,
+    subject: 'Your account verification was approved - U-SMART',
+    html,
+  });
+}
+
+export async function sendRequesterVerificationRejectedEmail(
+  to: string,
+  params: { name: string; role: string; reason: string }
+): Promise<boolean> {
+  const role = params.role.toUpperCase();
+  const label =
+    role === 'ENGINEER' ? 'Engineer' : role === 'TECHNICIAN' ? 'Technician' : params.role;
+  const html = `
+    <p style="margin:0 0 12px; font-size:16px; color:#0f172a;"><strong>Verification rejected</strong></p>
+    <p style="margin:0 0 12px; color:#334155;">Hello ${escapeHtml(params.name || 'User')},</p>
+    <p style="margin:0 0 12px; color:#334155;">
+      Your ${escapeHtml(label)} verification request was rejected.
+    </p>
+    <p style="margin:0 0 8px; color:#334155;"><strong>Reason:</strong></p>
+    <p style="margin:0 0 12px; color:#334155;">${escapeHtml(params.reason)}</p>
+    <p style="margin:0; color:#64748b; font-size:12px;">Please update your documents/details and submit a new request.</p>
+  `.trim();
+  return sendEmail({
+    to,
+    subject: 'Your account verification was rejected - U-SMART',
+    html,
   });
 }
 

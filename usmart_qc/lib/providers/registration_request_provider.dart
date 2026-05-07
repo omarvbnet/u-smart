@@ -114,11 +114,11 @@ class RegistrationRequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Send email OTP. Returns true on success.
-  Future<bool> sendEmailOtp(String email) async {
+  /// Send phone OTP. Returns true on success.
+  Future<bool> sendPhoneOtp(String phone) async {
     _error = null;
     try {
-      final res = await _api.post(ApiConfig.otpEmailSend, body: {'email': email.trim().toLowerCase()});
+      final res = await _api.post(ApiConfig.requesterOtpSend, body: {'phone': phone.trim()});
       return res['success'] == true;
     } catch (e) {
       _error = e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Failed to send code';
@@ -127,12 +127,12 @@ class RegistrationRequestProvider extends ChangeNotifier {
     }
   }
 
-  /// Verify email OTP. Returns true if valid.
-  Future<bool> verifyEmailOtp(String email, String code) async {
+  /// Verify phone OTP. Returns true if valid.
+  Future<bool> verifyPhoneOtp(String phone, String code) async {
     _error = null;
     try {
-      final res = await _api.post(ApiConfig.otpEmailVerify, body: {
-        'email': email.trim().toLowerCase(),
+      final res = await _api.post(ApiConfig.otpVerify, body: {
+        'phone': phone.trim(),
         'code': code.replaceAll(RegExp(r'\D'), ''),
       });
       return res['success'] == true;

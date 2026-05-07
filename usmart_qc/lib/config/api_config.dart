@@ -74,6 +74,8 @@ class ApiConfig {
 
   static const String otpEmailSend = '/api/otp/email/send';
   static const String otpEmailVerify = '/api/otp/email/verify';
+  static const String otpSend = '/api/otp/send';
+  static const String otpVerify = '/api/otp/verify';
 
   static const String provisorTechniques = '/api/provisor-techniques';
 

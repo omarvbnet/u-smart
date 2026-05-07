@@ -5,8 +5,8 @@ import { notifyTicketsRegistrationRequest } from '@/lib/email';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 import { getVerifiedEmailFromCookie } from '@/lib/otp-auth';
 
-// Only COMPANY and PERSONAL can self-register. ENGINEER and TECHNICIAN are added by admin only.
 const VALID_ROLES = ['COMPANY', 'PERSONAL'] as const;
+const VALID_SPECIALIZATIONS = ['ELECTRICAL', 'MECHANICAL', 'CIVIL', 'TELECOM', 'PROGRAMMER'] as const;
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,14 +19,12 @@ export async function POST(req: NextRequest) {
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
     const roleRaw = typeof body.role === 'string' ? body.role.toUpperCase().trim() : '';
-    if (roleRaw === 'ENGINEER' || roleRaw === 'TECHNICIAN' || roleRaw === 'WORKER') {
-      return NextResponse.json(
-        { success: false, message: 'Engineer, Technician, and Worker roles can only be assigned by admin. Please register as Company or Personal.' },
-        { status: 400 }
-      );
-    }
     const role = VALID_ROLES.includes(roleRaw as (typeof VALID_ROLES)[number]) ? roleRaw : 'COMPANY';
-
+    const specializationRaw = typeof body.specialization === 'string' ? body.specialization.trim().toUpperCase() : '';
+    const specialization =
+      VALID_SPECIALIZATIONS.includes(specializationRaw as (typeof VALID_SPECIALIZATIONS)[number])
+        ? specializationRaw
+        : null;
     const evidenceRequired = role === 'COMPANY';
     if (!legalName || !phone || !email || !province || (evidenceRequired && !evidenceUrl)) {
       return NextResponse.json(
@@ -126,6 +124,7 @@ export async function POST(req: NextRequest) {
         username: username || null,
         passwordHash,
         role,
+        specialization,
       },
     }) as { id: string };
 
@@ -137,6 +136,7 @@ export async function POST(req: NextRequest) {
       province,
       evidenceUrl,
       role,
+      specialization: specialization || undefined,
     }).catch((e) => console.error('Tickets notification (registration):', e));
 
     return NextResponse.json({

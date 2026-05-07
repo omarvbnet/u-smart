@@ -94,13 +94,12 @@ class AuthService {
     return null;
   }
 
-  Future<Map<String, dynamic>> sendRequesterEmailOtp(String email) async {
-    final trimmed = email.trim().toLowerCase();
-    return _api.post(ApiConfig.requesterOtpSend, body: {'email': trimmed});
+  Future<Map<String, dynamic>> sendRequesterPhoneOtp(String phone) async {
+    return _api.post(ApiConfig.requesterOtpSend, body: {'phone': phone.trim()});
   }
 
-  Future<Map<String, dynamic>> _postEmailOtpVerifyLogin(
-      String email, String code) async {
+  Future<Map<String, dynamic>> _postPhoneOtpVerifyLogin(
+      String phone, String code) async {
     String? pushToken;
     String phonePlatform = 'unknown';
     try {
@@ -109,9 +108,8 @@ class AuthService {
       pushToken = await FirebaseMessaging.instance.getToken();
     } catch (_) {}
 
-    final trimmed = email.trim().toLowerCase();
     return _api.post(ApiConfig.requesterOtpVerifyLogin, body: {
-      'email': trimmed,
+      'phone': phone.trim(),
       'code': code.trim(),
       if (pushToken != null && pushToken.isNotEmpty) 'pushToken': pushToken,
       if (pushToken != null && pushToken.isNotEmpty)
@@ -120,16 +118,16 @@ class AuthService {
   }
 
   /// Parsed API body — use [finalizeSessionFromAuthResponse] on success.
-  Future<Map<String, dynamic>> verifyLoginWithEmailOtpRaw(
-      String email, String code) {
-    return _postEmailOtpVerifyLogin(email, code);
+  Future<Map<String, dynamic>> verifyLoginWithPhoneOtpRaw(
+      String phone, String code) {
+    return _postPhoneOtpVerifyLogin(phone, code);
   }
 
-  Future<Map<String, dynamic>> registerWithEmailOtpRaw({
-    required String email,
+  Future<Map<String, dynamic>> registerWithPhoneOtpRaw({
+    required String phone,
     required String code,
     required String name,
-    required String phone,
+    String? email,
     required String role,
     String? province,
     String? company,
@@ -142,12 +140,12 @@ class AuthService {
       pushToken = await FirebaseMessaging.instance.getToken();
     } catch (_) {}
 
-    final trimmed = email.trim().toLowerCase();
     return _api.post(ApiConfig.requesterOtpRegister, body: {
-      'email': trimmed,
+      'phone': phone.trim(),
       'code': code.trim(),
       'name': name.trim(),
-      'phone': phone.trim(),
+      if (email != null && email.trim().isNotEmpty)
+        'email': email.trim().toLowerCase(),
       'role': role.trim().toUpperCase(),
       if (province != null && province.trim().isNotEmpty)
         'province': province.trim(),

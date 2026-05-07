@@ -98,6 +98,8 @@ export async function GET(req: NextRequest) {
   let provinceFilterActive = true;
   let mustChangePassword = false;
   let preferredLocale: string | null = null;
+  let specialization: string | null = null;
+  let verificationStatus: string = 'PENDING';
   try {
     const extended = await (prisma.ticketRequester as any).findUnique({
       where: { id: payload.requesterId },
@@ -109,6 +111,8 @@ export async function GET(req: NextRequest) {
         preferredLocale: true,
         province: true,
         provinceFilterActive: true,
+        specialization: true,
+        verificationStatus: true,
       },
     });
     if (extended) {
@@ -119,6 +123,8 @@ export async function GET(req: NextRequest) {
       preferredLocale = extended.preferredLocale ?? null;
       province = extended.province ?? null;
       provinceFilterActive = extended.provinceFilterActive ?? true;
+      specialization = extended.specialization ?? null;
+      verificationStatus = extended.verificationStatus ?? 'PENDING';
     }
   } catch {
     /* use defaults */
@@ -152,6 +158,8 @@ export async function GET(req: NextRequest) {
       companyId: null,
       mustChangePassword,
       preferredLocale,
+      specialization,
+      verificationStatus,
       ...(linkedCoordinatorCompanyId ? { linkedCoordinatorCompanyId } : {}),
     },
   });

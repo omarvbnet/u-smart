@@ -5,8 +5,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
+function resolveDatabaseUrl(): string | undefined {
+  const isProduction = process.env.NODE_ENV === 'production'
+  if (isProduction) {
+    return process.env.DATABASE_URL_PROD || process.env.DATABASE_URL
+  }
+  return process.env.DATABASE_URL_LOCAL || process.env.DATABASE_URL
+}
+
 function createPrisma(): PrismaClient {
+  const datasourceUrl = resolveDatabaseUrl()
   return new PrismaClient({
+    ...(datasourceUrl ? { datasourceUrl } : {}),
     log: process.env.NODE_ENV === 'development'
       ? ['query', 'error', 'warn']
       : ['error']

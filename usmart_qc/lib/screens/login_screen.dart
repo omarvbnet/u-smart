@@ -21,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  final _emailOtpCtrl = TextEditingController();
+  final _phoneOtpCtrl = TextEditingController();
   final _otpCodeCtrl = TextEditingController();
   final _regNameCtrl = TextEditingController();
   final _regPhoneCtrl = TextEditingController();
@@ -109,18 +109,16 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final creds = await auth.getSavedCredentials();
     if (mounted && creds != null) {
-      if (creds.username.contains('@')) {
-        _emailOtpCtrl.text = creds.username;
-      } else {
-        _usernameCtrl.text = creds.username;
-      }
+      _usernameCtrl.text = creds.username;
       _passwordCtrl.text = creds.password;
     }
   }
 
-  bool _looksLikeEmail(String s) {
+  String _normalizePhone(String s) {
     final t = s.trim();
-    return t.contains('@') && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t);
+    if (t.isEmpty) return '';
+    if (t.startsWith('+')) return '+${t.substring(1).replaceAll(RegExp(r'\D'), '')}';
+    return '+${t.replaceAll(RegExp(r'\D'), '')}';
   }
 
   String _signupRoleLabel(AppLocalizations l10n, String code) {
@@ -155,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _sendEmailOtp(AppLocalizations l10n) async {
+  Future<void> _sendPhoneOtp(AppLocalizations l10n) async {
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -166,13 +164,13 @@ class _LoginScreenState extends State<LoginScreen>
       );
       return;
     }
-    final email = _emailOtpCtrl.text.trim();
-    if (!_looksLikeEmail(email)) {
-      _showSnack(l10n.t('invalid_email_format'), isError: true);
+    final phone = _normalizePhone(_phoneOtpCtrl.text);
+    if (phone.length < 8) {
+      _showSnack('Enter a valid phone number', isError: true);
       return;
     }
     setState(() => _otpSendLoading = true);
-    final err = await context.read<AuthProvider>().sendLoginEmailOtp(email);
+    final err = await context.read<AuthProvider>().sendLoginPhoneOtp(phone);
     if (!mounted) return;
     setState(() {
       _otpSendLoading = false;
@@ -193,8 +191,8 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     setState(() => _otpVerifyLoading = true);
-    final ok = await context.read<AuthProvider>().loginWithEmailOtp(
-          _emailOtpCtrl.text.trim(),
+    final ok = await context.read<AuthProvider>().loginWithPhoneOtp(
+          _normalizePhone(_phoneOtpCtrl.text),
           _otpCodeCtrl.text.trim(),
         );
     if (!mounted) return;
@@ -219,11 +217,11 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     setState(() => _otpVerifyLoading = true);
-    final ok = await context.read<AuthProvider>().registerWithEmailOtp(
-          email: _emailOtpCtrl.text.trim(),
+    final ok = await context.read<AuthProvider>().registerWithPhoneOtp(
+          phone: _normalizePhone(phone),
           code: _otpCodeCtrl.text.trim(),
           name: name,
-          phone: phone,
+          email: null,
           role: _signupRole,
           province: _signupProvince,
           company: _regCompanyCtrl.text.trim().isEmpty ? null : _regCompanyCtrl.text.trim(),
@@ -577,7 +575,7 @@ class _LoginScreenState extends State<LoginScreen>
     _logoCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
-    _emailOtpCtrl.dispose();
+    _phoneOtpCtrl.dispose();
     _otpCodeCtrl.dispose();
     _regNameCtrl.dispose();
     _regPhoneCtrl.dispose();
@@ -799,10 +797,10 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   ] else ...[
                                     _buildField(
-                                      controller: _emailOtpCtrl,
-                                      hint: l10n.t('login_email_hint'),
-                                      icon: Icons.email_outlined,
-                                      keyboardType: TextInputType.emailAddress,
+                                      controller: _phoneOtpCtrl,
+                                      hint: l10n.t('signup_phone'),
+                                      icon: Icons.phone_android_outlined,
+                                      keyboardType: TextInputType.phone,
                                     ),
                                     const SizedBox(height: 16),
                                     _privacyCheckboxTile(l10n),
@@ -813,7 +811,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       child: OutlinedButton(
                                         onPressed: (_otpSendLoading || !_agreedToTerms)
                                             ? null
-                                            : () => _sendEmailOtp(l10n),
+                                            : () => _sendPhoneOtp(l10n),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Colors.white,
                                           side: BorderSide(

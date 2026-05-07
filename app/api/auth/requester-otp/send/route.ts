@@ -1,11 +1,7 @@
-/**
- * Sends a login/sign-up verification code to email (same delivery as /api/otp/email/send).
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { setEmailOtp } from '@/lib/email-otp-store';
-import { sendOtpEmail } from '@/lib/email';
-import { isValidEmailFormat, normalizeEmailInput } from '@/lib/email-input';
+import { setOtp } from '@/lib/otp-store';
+import { sendOtpSms } from '@/lib/sms';
 
 const OTP_EXPIRY_MINUTES = 10;
 const CODE_LENGTH = 6;
@@ -22,10 +18,10 @@ function generateCode(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const email = typeof body.email === 'string' ? normalizeEmailInput(body.email).toLowerCase() : '';
-    if (!email || !isValidEmailFormat(email)) {
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    if (!phone || phone.length < 8) {
       return NextResponse.json(
-        { success: false, message: 'Valid email address is required' },
+        { success: false, message: 'Valid phone number is required' },
         { status: 400 }
       );
     }
@@ -35,31 +31,31 @@ export async function POST(req: NextRequest) {
 
     try {
       const db = prisma as unknown as {
-        emailOtp?: { create: (args: { data: { email: string; code: string; expiresAt: Date } }) => Promise<unknown> };
+        phoneOtp?: { create: (args: { data: { phone: string; code: string; expiresAt: Date } }) => Promise<unknown> };
       };
-      if (db.emailOtp?.create) {
-        await db.emailOtp.create({
-          data: { email, code, expiresAt },
+      if (db.phoneOtp?.create) {
+        await db.phoneOtp.create({
+          data: { phone, code, expiresAt },
         });
       }
     } catch (dbErr) {
-      console.error('Email OTP save (requester-otp):', dbErr);
+      console.error('Phone OTP save (requester-otp):', dbErr);
     }
 
     const isDev = process.env.NODE_ENV !== 'production';
-    setEmailOtp(email, code);
+    if (isDev) setOtp(phone, code);
 
-    const sent = await sendOtpEmail(email, code);
+    const sent = await sendOtpSms(phone, code);
     if (!sent && !isDev) {
       return NextResponse.json(
-        { success: false, message: 'Failed to send verification email. Please try again.' },
+        { success: false, message: 'Failed to send verification SMS. Please try again.' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Verification code sent to your email',
+      message: 'Verification code sent to your phone',
       ...(isDev && { devCode: code }),
     });
   } catch (e) {

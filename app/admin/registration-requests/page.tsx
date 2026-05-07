@@ -11,6 +11,8 @@ type RegistrationRequest = {
   province?: string;
   evidenceUrl: string;
   role: string;
+  specialization?: string | null;
+  rejectionReason?: string | null;
   status: string;
   createdAt: string;
 };
@@ -21,6 +23,7 @@ export default function AdminRegistrationRequestsPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [approveResult, setApproveResult] = useState<{ id: string; username: string; password: string | null } | null>(null);
   const [actionError, setActionError] = useState<string>('');
+  const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
 
   const load = async () => {
     setLoading(true);
@@ -40,10 +43,20 @@ export default function AdminRegistrationRequestsPage() {
     setApproveResult(null);
     setActionError('');
     try {
+      const payload: { action: 'approve' | 'reject'; reason?: string } = { action };
+      if (action === 'reject') {
+        const reason = (rejectReason[id] || '').trim();
+        if (!reason) {
+          setActionError('Please provide a rejection reason.');
+          setActionId(null);
+          return;
+        }
+        payload.reason = reason;
+      }
       const res = await fetch(`/api/admin/registration-requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
@@ -137,6 +150,7 @@ export default function AdminRegistrationRequestsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Province</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Specialization</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Evidence</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -171,6 +185,7 @@ export default function AdminRegistrationRequestsPage() {
                             : 'Company'}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.specialization ?? '—'}</td>
                   <td className="px-4 py-3 text-sm">
                     <a
                       href={r.evidenceUrl.startsWith('http') ? r.evidenceUrl : r.evidenceUrl.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${r.evidenceUrl}` : r.evidenceUrl}
@@ -216,7 +231,19 @@ export default function AdminRegistrationRequestsPage() {
                           <XMarkIcon className="w-3.5 h-3.5" />
                           Reject
                         </button>
+                        <div className="mt-2">
+                          <input
+                            type="text"
+                            value={rejectReason[r.id] || ''}
+                            onChange={(e) => setRejectReason((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            placeholder="Reject reason (required)"
+                            className="w-56 px-2 py-1 text-xs rounded border border-gray-300"
+                          />
+                        </div>
                       </>
+                    )}
+                    {r.status === 'REJECTED' && r.rejectionReason && (
+                      <div className="mt-1 text-xs text-red-600">Reason: {r.rejectionReason}</div>
                     )}
                   </td>
                 </tr>

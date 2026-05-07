@@ -125,7 +125,7 @@ export default function TicketDashboardPage() {
   const params = useParams();
   const t = useTranslations('Index');
   const locale = typeof params?.locale === 'string' ? params.locale : 'en';
-  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; status?: string; hasUpdatedCredentials?: boolean; serviceSlug?: string; role?: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; username: string; name: string | null; phone?: string; company?: string | null; companyCertificationUrl?: string | null; status?: string; hasUpdatedCredentials?: boolean; serviceSlug?: string; role?: string; verificationStatus?: string | null } | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; read: boolean; createdAt: string }[]>([]);
   const [slaStats, setSlaStats] = useState<SlaStats | null>(null);
@@ -577,6 +577,11 @@ export default function TicketDashboardPage() {
             </h1>
             <p className="text-gray-400 mt-1">
               {user?.name ? `${t('ticketForm.welcome')}, ${user.name}` : `${t('ticketForm.welcome')} (${user?.username})`}
+              {user?.verificationStatus === 'APPROVED' && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">
+                  Verified
+                </span>
+              )}
             </p>
             {user && (
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400">

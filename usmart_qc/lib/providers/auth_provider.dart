@@ -70,11 +70,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> sendLoginEmailOtp(String email) async {
+  Future<String?> sendLoginPhoneOtp(String phone) async {
     _error = null;
     notifyListeners();
     try {
-      final res = await _authService.sendRequesterEmailOtp(email);
+      final res = await _authService.sendRequesterPhoneOtp(phone);
       if (res['success'] == true) return null;
       return (res['message'] ?? 'Failed to send code').toString();
     } catch (_) {
@@ -82,15 +82,15 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Email + verification code — no password ([finalizeSessionFromAuthResponse] uses /me).
-  Future<bool> loginWithEmailOtp(String email, String code) async {
+  /// Phone + verification code — no password ([finalizeSessionFromAuthResponse] uses /me).
+  Future<bool> loginWithPhoneOtp(String phone, String code) async {
     _error = null;
     _loading = true;
     notifyListeners();
     try {
-      final trimmed = email.trim().toLowerCase();
-      final raw = await _authService.verifyLoginWithEmailOtpRaw(email, code);
-      final user = await _authService.finalizeSessionFromAuthResponse(raw, trimmed);
+      final normalizedPhone = phone.trim();
+      final raw = await _authService.verifyLoginWithPhoneOtpRaw(phone, code);
+      final user = await _authService.finalizeSessionFromAuthResponse(raw, normalizedPhone);
       if (user != null) {
         _user = user;
         _loading = false;
@@ -107,11 +107,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Direct sign-up after OTP (ticket_requester; all Provisor roles).
-  Future<bool> registerWithEmailOtp({
-    required String email,
+  Future<bool> registerWithPhoneOtp({
+    required String phone,
     required String code,
     required String name,
-    required String phone,
+    String? email,
     required String role,
     String? province,
     String? company,
@@ -120,17 +120,17 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     try {
-      final trimmed = email.trim().toLowerCase();
-      final raw = await _authService.registerWithEmailOtpRaw(
-        email: email,
+      final normalizedPhone = phone.trim();
+      final raw = await _authService.registerWithPhoneOtpRaw(
         code: code,
         name: name,
         phone: phone,
+        email: email,
         role: role,
         province: province,
         company: company,
       );
-      final user = await _authService.finalizeSessionFromAuthResponse(raw, trimmed);
+      final user = await _authService.finalizeSessionFromAuthResponse(raw, normalizedPhone);
       if (user != null) {
         _user = user;
         _loading = false;

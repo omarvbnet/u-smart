@@ -40,7 +40,7 @@ class _RegistrationRequestContent extends StatefulWidget {
 }
 
 class _RegistrationRequestContentState extends State<_RegistrationRequestContent> {
-  int _step = 0; // 0=role, 1=email, 2=otp, 3=form
+  int _step = 0; // 0=role, 1=phone, 2=otp, 3=form
   String? _role;
   final _legalName = TextEditingController();
   final _phone = TextEditingController();
@@ -51,6 +51,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
   bool _otpSending = false;
   bool _otpVerifying = false;
   final _otpCode = TextEditingController();
+  String? _verifiedPhone;
 
   bool get _isPersonalRole => _role == 'PERSONAL';
 
@@ -118,6 +119,28 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
+    final normalizedPhone = _normalizePhone(_phone.text);
+    final verifiedPhone = _verifiedPhone;
+    if (normalizedPhone.isEmpty || verifiedPhone == null || normalizedPhone != verifiedPhone) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please verify your phone number first'),
+          backgroundColor: Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (!_isPersonalRole && _legalName.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Company name is required'),
+          backgroundColor: Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final province = _selectedProvince?.trim() ?? '';
     if (province.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -144,8 +167,8 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
 
     final provider = context.read<RegistrationRequestProvider>();
     final ok = await provider.submit(
-      legalName: _legalName.text.trim(),
-      phone: _phone.text.trim(),
+      legalName: _isPersonalRole ? 'Individual' : _legalName.text.trim(),
+      phone: normalizedPhone,
       email: _email.text.trim(),
       province: province,
       evidenceUrl: _isPersonalRole ? '' : _evidenceUrl,
@@ -275,12 +298,12 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
 
   Widget _buildForm(AppLocalizations l10n) {
     if (_step == 0) return _buildRoleStep(l10n);
-    if (_step == 1) return _buildEmailStep(l10n);
+    if (_step == 1) return _buildPhoneStep(l10n);
     if (_step == 2) return _buildOtpStep(l10n);
     return _buildFormStep(l10n);
   }
 
-  Widget _buildEmailStep(AppLocalizations l10n) {
+  Widget _buildPhoneStep(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -289,27 +312,43 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           child: Text('← ${l10n.t('reg_back')}', style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13)),
         ),
         const SizedBox(height: 8),
-        Text(l10n.t('reg_email_verify_title'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+        Text('Verify your phone', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        Text(l10n.t('reg_email_verify_hint'), style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 13)),
+        Text('We will send a 6-digit code to your phone number', style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 13)),
         const SizedBox(height: 16),
-        _TextField(
-          controller: _email,
-          label: l10n.t('reg_email'),
-          hint: 'email@example.com',
-          icon: Icons.email_outlined,
-          keyboardType: TextInputType.emailAddress,
-          onChanged: (_) => setState(() {}),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: _TextField(
+                controller: _phone,
+                label: l10n.t('reg_phone'),
+                hint: '+964...',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: TextButton.icon(
+                onPressed: _fetchDevicePhone,
+                icon: const Icon(Icons.phone_android, size: 18, color: Color(0xFF6C63FF)),
+                label: Text(l10n.t('use_my_phone'), style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 12)),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _otpSending || !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim())
+            onPressed: _otpSending || _normalizePhone(_phone.text).isEmpty
                 ? null
                 : () async {
                     setState(() => _otpSending = true);
-                    final ok = await context.read<RegistrationRequestProvider>().sendEmailOtp(_email.text.trim());
+                    final ok = await _startPhoneVerification();
                     if (mounted) {
                       setState(() => _otpSending = false);
                       if (ok) {
@@ -343,7 +382,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           child: Text('← ${l10n.t('reg_back')}', style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13)),
         ),
         const SizedBox(height: 8),
-        Text('${l10n.t('reg_code_placeholder')} — ${_email.text}', style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13)),
+        Text('${l10n.t('reg_code_placeholder')} — ${_phone.text}', style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13)),
         const SizedBox(height: 12),
         _TextField(
           controller: _otpCode,
@@ -361,7 +400,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
                 ? null
                 : () async {
                     setState(() => _otpVerifying = true);
-                    final ok = await context.read<RegistrationRequestProvider>().verifyEmailOtp(_email.text.trim(), _otpCode.text);
+                    final ok = await _verifyPhoneCode();
                     if (mounted) {
                       setState(() => _otpVerifying = false);
                       if (ok) {
@@ -416,6 +455,9 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
                     _role = 'COMPANY';
                     _step = 1;
                     _email.clear();
+                    _phone.clear();
+                    _legalName.clear();
+                    _verifiedPhone = null;
                   });
                 },
               ),
@@ -431,6 +473,9 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
                     _role = 'PERSONAL';
                     _step = 1;
                     _email.clear();
+                    _phone.clear();
+                    _legalName.clear();
+                    _verifiedPhone = null;
                   });
                 },
               ),
@@ -455,14 +500,16 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           ),
         ),
         const SizedBox(height: 8),
-        _TextField(
-          controller: _legalName,
-          label: l10n.t('reg_legal_name'),
-          hint: l10n.t('reg_legal_name_hint'),
-          icon: Icons.person_outline_rounded,
-          keyboardType: TextInputType.name,
-        ),
-        const SizedBox(height: 12),
+        if (!_isPersonalRole) ...[
+          _TextField(
+            controller: _legalName,
+            label: 'Company name',
+            hint: 'Enter your company name',
+            icon: Icons.business_rounded,
+            keyboardType: TextInputType.name,
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -489,7 +536,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
         const SizedBox(height: 12),
         _TextField(
           controller: _email,
-          label: l10n.t('reg_email'),
+          label: '${l10n.t('reg_email')} (optional)',
           hint: 'email@example.com',
           icon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
@@ -599,6 +646,34 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
         ),
       ],
     );
+  }
+
+  String _normalizePhone(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.startsWith('+')) {
+      return '+${trimmed.substring(1).replaceAll(RegExp(r'\D'), '')}';
+    }
+    return '+${trimmed.replaceAll(RegExp(r'\D'), '')}';
+  }
+
+  Future<bool> _startPhoneVerification() async {
+    final provider = context.read<RegistrationRequestProvider>();
+    final normalizedPhone = _normalizePhone(_phone.text);
+    if (normalizedPhone.isEmpty) return false;
+    _verifiedPhone = null;
+    return provider.sendPhoneOtp(normalizedPhone);
+  }
+
+  Future<bool> _verifyPhoneCode() async {
+    final provider = context.read<RegistrationRequestProvider>();
+    final normalizedPhone = _normalizePhone(_phone.text);
+    if (normalizedPhone.isEmpty) return false;
+    final code = _otpCode.text.replaceAll(RegExp(r'\D'), '');
+    if (code.length != 6) return false;
+    final ok = await provider.verifyPhoneOtp(normalizedPhone, code);
+    if (ok) _verifiedPhone = normalizedPhone;
+    return ok;
   }
 }
 

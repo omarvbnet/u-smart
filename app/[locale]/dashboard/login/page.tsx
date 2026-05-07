@@ -20,7 +20,15 @@ export default function RequesterLoginPage() {
   const [showRegistration, setShowRegistration] = useState(false);
   const [regStep, setRegStep] = useState<'role' | 'form'>('role');
   const [regRole, setRegRole] = useState<'COMPANY' | 'PERSONAL' | null>(null);
-  const [regForm, setRegForm] = useState({ legalName: '', phone: '', email: '', province: '', username: '', password: '' });
+  const [regForm, setRegForm] = useState({
+    legalName: '',
+    phone: '',
+    email: '',
+    province: '',
+    username: '',
+    password: '',
+    specialization: '',
+  });
   const [regEvidenceUrl, setRegEvidenceUrl] = useState('');
   const [regEvidenceUploading, setRegEvidenceUploading] = useState(false);
   const [regSubmitting, setRegSubmitting] = useState(false);
@@ -150,7 +158,7 @@ export default function RequesterLoginPage() {
           <div className="mt-6 pt-6 border-t border-white/10">
             <button
               type="button"
-              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '', province: '', username: '', password: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
+              onClick={() => { setShowRegistration(true); setRegStep('role'); setRegRole(null); setRegForm({ legalName: '', phone: '', email: '', province: '', username: '', password: '', specialization: '' }); setRegEvidenceUrl(''); setRegSuccess(false); setRegError(''); }}
               className="w-full py-2.5 text-sm text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-xl border border-cyan-500/30 transition-colors"
             >
               {t('ticketForm.requestRegistration') || 'Request for registration'}
@@ -245,6 +253,7 @@ export default function RequesterLoginPage() {
                         password: regForm.password,
                         evidenceUrl: regEvidenceUrl,
                         role: regRole,
+                        specialization: undefined,
                       }),
                     });
                     const data = await res.json();

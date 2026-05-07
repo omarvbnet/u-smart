@@ -4,7 +4,11 @@ import crypto from 'crypto';
 import { RequesterRole } from '@prisma/client';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendCompanyAccountApprovedEmail } from '@/lib/email';
+import {
+  sendCompanyAccountApprovedEmail,
+  sendRequesterVerificationApprovedEmail,
+  sendRequesterVerificationRejectedEmail,
+} from '@/lib/email';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
 
 function normalizePhone(phone: string): string {
@@ -73,10 +77,19 @@ export async function PATCH(
     }
 
     if (action === 'reject') {
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      if (!reason) {
+        return NextResponse.json({ success: false, message: 'Rejection reason is required.' }, { status: 400 });
+      }
       await delegate.update({
         where: { id },
-        data: { status: 'REJECTED' },
+        data: { status: 'REJECTED', rejectionReason: reason },
       });
+      sendRequesterVerificationRejectedEmail(rr.email, {
+        name: rr.legalName,
+        role: rr.role,
+        reason,
+      }).catch((e) => console.error('Rejection email failed:', e));
       return NextResponse.json({ success: true, status: 'REJECTED' });
     }
 
@@ -194,6 +207,13 @@ export async function PATCH(
 
       const serviceSlug = 'quality-control-supervision';
       const requesterRole: RequesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL', 'WORKER'].includes(rr.role) ? (rr.role as RequesterRole) : 'COMPANY';
+      const specializationRaw = (rr as { specialization?: string | null }).specialization ?? null;
+      const specialization =
+        typeof specializationRaw === 'string' &&
+        ['ELECTRICAL', 'MECHANICAL', 'CIVIL', 'TELECOM', 'PROGRAMMER'].includes(specializationRaw)
+          ? specializationRaw
+          : null;
+      const requiresVerification = requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN';
 
       await prisma.ticketRequester.create({
         data: {
@@ -205,6 +225,9 @@ export async function PATCH(
           companyCertificationUrl: rr.evidenceUrl,
           serviceSlug,
           role: requesterRole,
+          specialization,
+          verificationStatus: requiresVerification ? 'APPROVED' : 'PENDING',
+          verifiedAt: requiresVerification ? new Date() : null,
         },
       });
 
@@ -287,6 +310,14 @@ export async function PATCH(
         username,
         password: passwordForEmail,
       }).catch((e) => console.error('Approval email failed:', e));
+      if (requiresVerification) {
+        sendRequesterVerificationApprovedEmail(rr.email, {
+          name: rr.legalName,
+          role: rr.role,
+          specialization,
+          username,
+        }).catch((e) => console.error('Verification approved email failed:', e));
+      }
 
       return NextResponse.json({
         success: true,

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { normalizeEmailInput, isValidEmailFormat } from '@/lib/email-input';
-import { consumeEmailOtp } from '@/lib/consume-email-otp';
+import { consumePhoneOtp } from '@/lib/consume-phone-otp';
 import { findLegacyCompanyOwnerCoordinator } from '@/lib/linked-coordinator-company';
 import {
   nextResponseCoordinatorSession,
@@ -9,30 +8,30 @@ import {
   nextResponseTicketRequesterSession,
 } from '@/lib/provisor-otp-login-issue';
 
-/** Email + OTP sign-in for ticket requesters and coordinator users (no password). */
+/** Phone + OTP sign-in for ticket requesters and coordinator users (no password). */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const emailRaw = typeof body.email === 'string' ? normalizeEmailInput(body.email).toLowerCase() : '';
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const code = body.code != null ? String(body.code).trim() : '';
     const pushToken = typeof body.pushToken === 'string' ? body.pushToken.trim() : '';
     const phonePlatform =
       typeof body.phonePlatform === 'string' ? body.phonePlatform.trim().toLowerCase() : '';
 
-    if (!emailRaw || !isValidEmailFormat(emailRaw) || !code) {
+    if (!phone || !code) {
       return NextResponse.json(
-        { success: false, message: 'Valid email and verification code are required' },
+        { success: false, message: 'Valid phone number and verification code are required' },
         { status: 400 }
       );
     }
 
-    const validOtp = await consumeEmailOtp(emailRaw, code);
+    const validOtp = await consumePhoneOtp(phone, code);
     if (!validOtp) {
       return NextResponse.json({ success: false, message: 'Invalid or expired code' }, { status: 401 });
     }
 
     const requester = await prisma.ticketRequester.findFirst({
-      where: { email: { equals: emailRaw, mode: 'insensitive' } },
+      where: { phone: { equals: phone } },
       select: {
         id: true,
         username: true,
@@ -93,7 +92,7 @@ export async function POST(req: NextRequest) {
     } | null = null;
     try {
       coordinatorUser = await (prisma as any).coordinatorUser.findFirst({
-        where: { email: { equals: emailRaw, mode: 'insensitive' } },
+        where: { phone: { equals: phone } },
         select: {
           id: true,
           username: true,
@@ -124,7 +123,7 @@ export async function POST(req: NextRequest) {
       {
         success: false,
         code: 'NO_ACCOUNT',
-        message: 'No account for this email. Create one with the sign-up option.',
+        message: 'No account for this phone number. Create one with the sign-up option.',
       },
       { status: 404 }
     );
