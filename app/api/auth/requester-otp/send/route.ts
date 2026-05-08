@@ -45,17 +45,17 @@ export async function POST(req: NextRequest) {
     const isDev = process.env.NODE_ENV !== 'production';
     if (isDev) setOtp(phone, code);
 
-    const sent = await sendOtpSms(phone, code, 'whatsapp');
+    const sent = await sendOtpSms(phone, code, 'sms');
     if (!sent && !isDev) {
       return NextResponse.json(
-        { success: false, message: 'Failed to send verification code on WhatsApp. Please try again.' },
+        { success: false, message: 'Failed to send verification code by SMS. Please try again.' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Verification code sent to your WhatsApp',
+      message: 'Verification code sent by SMS',
       ...(isDev && { devCode: code }),
     });
   } catch (e) {
