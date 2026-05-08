@@ -10,8 +10,6 @@ import {
 } from '@/lib/visitor-request-db-columns';
 import { isConflictInspectionLowercase, rowToConflictPayload } from '@/lib/qc-conflict-mapper';
 
-const prisma = _prisma as any;
-
 const VALID_RESOLUTIONS = ['accepted', 'not_accepted', 'ncr', 'accepted_with_comments', 're_inspection', 'keep_same', 're_maintain', 'no_need'];
 
 function rowToConflict(row: unknown): Record<string, unknown> | null {
