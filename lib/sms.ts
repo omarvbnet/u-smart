@@ -37,6 +37,9 @@ function toWhatsAppAddress(rawPhone: string): string {
   return phone ? `whatsapp:${phone}` : '';
 }
 
+/** Twilio's well-known WhatsApp Sandbox number — only usable with the whatsapp: scheme. */
+const TWILIO_WHATSAPP_SANDBOX = '+14155238886';
+
 export async function sendOtpSms(
   rawPhone: string,
   code: string,
@@ -47,20 +50,40 @@ export async function sendOtpSms(
 
   const sid = normalizeAccountSid(process.env.TWILIO_ACCOUNT_SID);
   const token = normalizeEnvValue(process.env.TWILIO_AUTH_TOKEN);
-  const smsFrom = normalizePhone(normalizeEnvValue(process.env.TWILIO_PHONE));
+
+  // SMS sender: prefer TWILIO_SMS_FROM, fall back to TWILIO_PHONE.
+  // (TWILIO_PHONE may legitimately be the WhatsApp Sandbox number, which is NOT SMS-capable.)
+  const smsFrom = normalizePhone(
+    normalizeEnvValue(process.env.TWILIO_SMS_FROM || process.env.TWILIO_PHONE)
+  );
+
+  // WhatsApp sender: prefer TWILIO_WHATSAPP_FROM, fall back to TWILIO_PHONE.
   const whatsappFrom = toWhatsAppAddress(
     normalizeEnvValue(process.env.TWILIO_WHATSAPP_FROM || process.env.TWILIO_PHONE)
   );
+
   const from = channel === 'whatsapp' ? whatsappFrom : smsFrom;
   const to = channel === 'whatsapp' ? toWhatsAppAddress(phone) : phone;
   if (!sid || !token || !from) {
     console.error(
-      'Twilio OTP config missing: TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_PHONE (and optional TWILIO_WHATSAPP_FROM)'
+      `Twilio OTP config missing for channel=${channel}: ` +
+        `need TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN and ` +
+        (channel === 'whatsapp'
+          ? 'TWILIO_WHATSAPP_FROM (or TWILIO_PHONE).'
+          : 'TWILIO_SMS_FROM (or a SMS-capable TWILIO_PHONE).')
     );
     return false;
   }
   if (!/^AC[a-zA-Z0-9]{32}$/.test(sid)) {
-    console.error('Twilio SMS config invalid: TWILIO_ACCOUNT_SID must start with AC and be 34 chars');
+    console.error('Twilio config invalid: TWILIO_ACCOUNT_SID must start with AC and be 34 chars');
+    return false;
+  }
+  if (channel === 'sms' && smsFrom === TWILIO_WHATSAPP_SANDBOX) {
+    console.error(
+      `Twilio SMS misconfiguration: the configured "From" (${smsFrom}) is Twilio's WhatsApp Sandbox number, ` +
+        `which cannot send SMS. Set TWILIO_SMS_FROM to an SMS-enabled Twilio number ` +
+        `(buy one in Console → Phone Numbers → Buy a number, or use a verified outbound number).`
+    );
     return false;
   }
 
@@ -74,7 +97,16 @@ export async function sendOtpSms(
     });
     return true;
   } catch (error) {
-    console.error(`Twilio ${channel} OTP failed:`, error);
+    // Surface a friendlier hint for the very common "WhatsApp number used as SMS sender" mismatch.
+    const e = error as { code?: number; status?: number; message?: string };
+    if (channel === 'sms' && e?.code === 21660) {
+      console.error(
+        `Twilio SMS error 21660: From=${from} is not an SMS-capable number on your account. ` +
+          `Either configure TWILIO_SMS_FROM with a real Twilio SMS number, or call sendOtpSms(..., 'whatsapp') instead.`
+      );
+    } else {
+      console.error(`Twilio ${channel} OTP failed:`, error);
+    }
     return false;
   }
 }
