@@ -84,6 +84,33 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, count: 0 });
       }
     }
+    if (type === 'pending_conflicts') {
+      try {
+        // Open conflicts = visitor_request rows whose JSON `company` field contains a conflictReported flag
+        // and whose conflictStatus is still pending (not yet resolved or sent for re-inspection).
+        // We mirror the cheap heuristic used by /api/admin/conflicts.
+        const rows = await prisma.visitorRequest.findMany({
+          where: { company: { contains: 'conflictReported' } },
+          select: { company: true },
+          take: 5000,
+        });
+        let count = 0;
+        for (const r of rows) {
+          try {
+            const parsed = typeof r.company === 'string' ? JSON.parse(r.company) : null;
+            if (!parsed) continue;
+            if (parsed.conflictReported !== true) continue;
+            const s = String(parsed.conflictStatus ?? 'pending').toLowerCase();
+            if (s === 'pending') count++;
+          } catch {
+            /* skip malformed rows */
+          }
+        }
+        return NextResponse.json({ success: true, count });
+      } catch {
+        return NextResponse.json({ success: true, count: 0 });
+      }
+    }
     if (type === 'admin_unread') {
       const count = await prisma.notification.count({
         where: { forAdmin: true, read: false },

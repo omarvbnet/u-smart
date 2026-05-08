@@ -16,7 +16,9 @@ export type NotificationCopyKey =
   | 'ncr_resubmitted'
   | 'ncr_approved_reinspect'
   | 'ncr_rework'
-  | 'site_shared_received';
+  | 'site_shared_received'
+  | 'conflict_resolved'
+  | 'conflict_reinspection';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -388,6 +390,70 @@ const TEMPLATES: Record<
         v.accessMode === 'tickets'
           ? `${v.fromName} شوێن ${v.siteLabel} بۆتەوە هاوبەش کرد — دەستڕاگەیشتن بۆ تیکەتە بەستراوەکان (ئەپی Provisor).`
           : `${v.fromName} شوێن ${v.siteLabel} بۆتەوە هاوبەش کرد — وردەکاری شوێنەکە بە تەنها.`,
+    }),
+  },
+  conflict_resolved: {
+    en: (v) => {
+      const label = RESULT_LABEL.en[v.resultKey] ?? v.resultKey;
+      return {
+        title: 'Conflict resolved by admin',
+        body: v.siteName
+          ? `Admin resolved the conflict on "${v.siteName}". Final result: ${label}.`
+          : `Admin resolved the conflict on this ticket. Final result: ${label}.`,
+      };
+    },
+    ar: (v) => {
+      const label = RESULT_LABEL.ar[v.resultKey] ?? v.resultKey;
+      return {
+        title: 'تمت تسوية النزاع من قِبل الإدارة',
+        body: v.siteName
+          ? `قامت الإدارة بتسوية النزاع على "${v.siteName}". النتيجة النهائية: ${label}.`
+          : `قامت الإدارة بتسوية النزاع على هذه التذكرة. النتيجة النهائية: ${label}.`,
+      };
+    },
+    tr: (v) => {
+      const label = RESULT_LABEL.tr[v.resultKey] ?? v.resultKey;
+      return {
+        title: 'Anlaşmazlık yönetici tarafından çözüldü',
+        body: v.siteName
+          ? `Yönetici "${v.siteName}" üzerindeki anlaşmazlığı çözdü. Nihai sonuç: ${label}.`
+          : `Yönetici bu bildirimdeki anlaşmazlığı çözdü. Nihai sonuç: ${label}.`,
+      };
+    },
+    ku: (v) => {
+      const label = RESULT_LABEL.ku[v.resultKey] ?? v.resultKey;
+      return {
+        title: 'ململانێ لەلایەن بەڕێوەبەرەوە چارەسەر کرا',
+        body: v.siteName
+          ? `بەڕێوەبەر ململانێی سەر "${v.siteName}"ی چارەسەر کرد. ئەنجامی کۆتایی: ${label}.`
+          : `بەڕێوەبەر ململانێی ئەم تیکەتە چارەسەر کرد. ئەنجامی کۆتایی: ${label}.`,
+      };
+    },
+  },
+  conflict_reinspection: {
+    en: (v) => ({
+      title: 'Re-inspection ordered',
+      body: v.siteName
+        ? `Admin sent "${v.siteName}" back for re-inspection. The ticket is now in progress.`
+        : 'Admin sent this ticket back for re-inspection. The ticket is now in progress.',
+    }),
+    ar: (v) => ({
+      title: 'تم طلب إعادة الفحص',
+      body: v.siteName
+        ? `أعادت الإدارة "${v.siteName}" لإعادة الفحص. التذكرة الآن قيد التنفيذ.`
+        : 'أعادت الإدارة هذه التذكرة لإعادة الفحص. التذكرة الآن قيد التنفيذ.',
+    }),
+    tr: (v) => ({
+      title: 'Yeniden denetim istendi',
+      body: v.siteName
+        ? `Yönetici "${v.siteName}" için yeniden denetim istedi. Talep şu an devam ediyor.`
+        : 'Yönetici bu talep için yeniden denetim istedi. Talep şu an devam ediyor.',
+    }),
+    ku: (v) => ({
+      title: 'دووبارە پشکنین داواکراوە',
+      body: v.siteName
+        ? `بەڕێوەبەر "${v.siteName}"ی نێردەوە بۆ دووبارە پشکنین. تیکەتەکە ئێستا لە کاردایە.`
+        : 'بەڕێوەبەر ئەم تیکەتە نێردەوە بۆ دووبارە پشکنین. تیکەتەکە ئێستا لە کاردایە.',
     }),
   },
 };

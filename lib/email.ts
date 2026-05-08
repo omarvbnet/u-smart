@@ -340,6 +340,72 @@ export async function sendTicketNotificationEmail(options: {
   });
 }
 
+/** Notify a recipient (requester or engineer) that the admin has resolved a conflict on their ticket. */
+export async function sendConflictResolutionEmail(options: {
+  to: string;
+  recipientRole: 'requester' | 'engineer';
+  ticketId: string;
+  siteName?: string | null;
+  resolution: string;
+  comment?: string | null;
+  newStatus?: string | null;
+}): Promise<boolean> {
+  const { to, recipientRole, ticketId, siteName, resolution, comment, newStatus } = options;
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const baseUrl = raw.startsWith('http') ? raw : raw ? `https://${raw}` : 'https://usmart-iot.com';
+  const ticketUrl = `${baseUrl}/en/ticket/${ticketId}`;
+
+  const resolutionLabel: Record<string, string> = {
+    accepted: 'Accepted',
+    accepted_with_comments: 'Accepted with comments',
+    not_accepted: 'Not accepted',
+    ncr: 'NCR — Non-conforming',
+    keep_same: 'Keep original result',
+    re_inspection: 'Re-inspection required',
+    re_maintain: 'Re-maintain (back to pending)',
+    no_need: 'No further maintenance needed',
+  };
+  const resultText = resolutionLabel[resolution] ?? resolution;
+  const safeSite = escapeHtml(siteName || '—');
+  const safeComment = comment ? escapeHtml(comment) : '';
+  const safeStatus = newStatus ? escapeHtml(newStatus) : '';
+  const greeting =
+    recipientRole === 'requester'
+      ? 'You reported a conflict on this ticket and the admin has just resolved it.'
+      : 'You handled this ticket and the admin has just resolved the reported conflict.';
+  const isReinspection = resolution === 're_inspection' || resolution === 're_maintain';
+
+  const subject = isReinspection
+    ? `[U-SMART] Re-inspection required — ticket #${ticketId.slice(-8)}`
+    : `[U-SMART] Conflict resolved — ticket #${ticketId.slice(-8)}`;
+
+  const html = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f4f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+      <tr><td align="center" style="padding: 32px 16px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          <tr><td style="background: linear-gradient(135deg, ${isReinspection ? '#0369a1 0%, #0ea5e9' : '#475569 0%, #0f172a'} 100%); padding: 28px 36px;">
+            <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:700;">${escapeHtml(isReinspection ? 'Re-inspection ordered' : 'Conflict resolved')}</h1>
+            <p style="margin:6px 0 0; color:rgba(255,255,255,0.9); font-size:14px;">Ticket #${escapeHtml(ticketId.slice(-8))}</p>
+          </td></tr>
+          <tr><td style="padding: 28px 36px; color:#0f172a;">
+            <p style="margin:0 0 18px; font-size:15px; color:#334155;">${escapeHtml(greeting)}</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px; border-collapse:collapse;">
+              <tr><td style="padding:8px 0; color:#64748b; font-size:13px; width:160px;">Site</td><td style="padding:8px 0; color:#0f172a; font-size:14px; font-weight:600;">${safeSite}</td></tr>
+              <tr><td style="padding:8px 0; color:#64748b; font-size:13px;">Final result</td><td style="padding:8px 0; color:${isReinspection ? '#0ea5e9' : '#0f172a'}; font-size:14px; font-weight:700; text-transform:capitalize;">${escapeHtml(resultText)}</td></tr>
+              ${safeStatus ? `<tr><td style="padding:8px 0; color:#64748b; font-size:13px;">Ticket status</td><td style="padding:8px 0; color:#0f172a; font-size:14px;">${safeStatus}</td></tr>` : ''}
+              ${safeComment ? `<tr><td style="padding:8px 0; color:#64748b; font-size:13px; vertical-align:top;">Admin comment</td><td style="padding:8px 0; color:#0f172a; font-size:14px;">${safeComment}</td></tr>` : ''}
+            </table>
+            <p style="margin:0 0 22px;"><a href="${ticketUrl}" style="display:inline-block; padding:12px 22px; background:#0ea5e9; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:600;">Open ticket</a></p>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">U-SMART · automatic notification</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  `.trim();
+  const text = `${isReinspection ? 'Re-inspection ordered' : 'Conflict resolved'}\n\n${greeting}\n\nSite: ${siteName || '—'}\nFinal result: ${resultText}${newStatus ? `\nTicket status: ${newStatus}` : ''}${comment ? `\nAdmin comment: ${comment}` : ''}\n\n${ticketUrl}\n\nU-SMART`;
+  return sendEmail({ to, subject, html, text });
+}
+
 /** Recipient email when another requester shares a site with them. */
 export async function sendSiteSharedEmail(options: {
   to: string;
