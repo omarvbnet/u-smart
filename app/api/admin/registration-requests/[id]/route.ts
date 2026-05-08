@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { RequesterRole } from '@prisma/client';
+import { RequesterRole, RequesterSpecialization } from '@prisma/client';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import {
@@ -208,10 +208,17 @@ export async function PATCH(
       const serviceSlug = 'quality-control-supervision';
       const requesterRole: RequesterRole = ['COMPANY', 'ENGINEER', 'TECHNICIAN', 'PERSONAL', 'WORKER'].includes(rr.role) ? (rr.role as RequesterRole) : 'COMPANY';
       const specializationRaw = (rr as { specialization?: string | null }).specialization ?? null;
-      const specialization =
+      const validSpecializations: readonly RequesterSpecialization[] = [
+        'ELECTRICAL',
+        'MECHANICAL',
+        'CIVIL',
+        'TELECOM',
+        'PROGRAMMER',
+      ];
+      const specialization: RequesterSpecialization | null =
         typeof specializationRaw === 'string' &&
-        ['ELECTRICAL', 'MECHANICAL', 'CIVIL', 'TELECOM', 'PROGRAMMER'].includes(specializationRaw)
-          ? specializationRaw
+        validSpecializations.includes(specializationRaw as RequesterSpecialization)
+          ? (specializationRaw as RequesterSpecialization)
           : null;
       const requiresVerification = requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN';
 

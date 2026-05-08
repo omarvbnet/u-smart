@@ -19,8 +19,8 @@ export async function sendOtpSms(rawPhone: string, code: string): Promise<boolea
   if (!sid || !token || !from) return false;
 
   try {
-    const twilioImport = (await import('twilio')) as TwilioModule;
-    const client = twilioImport.default(sid, token);
+    const twilioFactory = (await import('twilio')) as unknown as TwilioModule;
+    const client = twilioFactory(sid, token);
     await client.messages.create({
       to: phone,
       from,

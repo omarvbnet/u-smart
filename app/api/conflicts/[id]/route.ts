@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, TicketStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
@@ -222,7 +222,7 @@ export async function PATCH(
     parsed.conflictResolution = resolution;
     if (comment) parsed.conflictResolutionComment = comment;
 
-    let newTicketStatus: string | null = null;
+    let newTicketStatus: TicketStatus | null = null;
     if (resolution === 're_maintain') {
       parsed.status = 'PENDING';
       newTicketStatus = 'PENDING';
@@ -248,7 +248,9 @@ export async function PATCH(
       parsed.inspectionResult = resolution;
     }
 
-    const updateData: { company: string; status?: string; completedAt?: null } = { company: JSON.stringify(parsed) };
+    const updateData: { company: string; status?: TicketStatus; completedAt?: null } = {
+      company: JSON.stringify(parsed),
+    };
     if (newTicketStatus) {
       updateData.status = newTicketStatus;
       updateData.completedAt = null;
