@@ -50,6 +50,7 @@ const links = [
   { href: '/admin/registration-requests', label: 'Registration Req.', icon: UserCircle },
   { href: '/admin/companies', label: 'Companies', icon: Building },
   { href: '/admin/coordinator-companies', label: 'Coordinator Companies', icon: Building2 },
+  { href: '/admin/private-companies', label: 'Private workspaces', icon: Building, badgeType: 'pending_private_company' as const },
   { href: '/admin/requesters', label: 'Requesters', icon: TicketCheck },
   { href: '/admin/push-notifications', label: 'Push notifications', icon: TicketCheck },
   { href: '/admin/users', label: 'Users', icon: UserCircle },
@@ -63,17 +64,19 @@ export default function AdminNav() {
   const [qcPendingCount, setQcPendingCount] = useState(0);
   const [trainingPendingCount, setTrainingPendingCount] = useState(0);
   const [productPendingCount, setProductPendingCount] = useState(0);
+  const [privateCompanyPendingCount, setPrivateCompanyPendingCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [visitorRes, cleanEnergyRes, enterpriseRes, qcRes, trainingRes, productRes] = await Promise.all([
+        const [visitorRes, cleanEnergyRes, enterpriseRes, qcRes, trainingRes, productRes, privateRes] = await Promise.all([
           fetch('/api/notifications/count?type=pending_visitor_tickets'),
           fetch('/api/notifications/count?type=pending_clean_energy_tickets'),
           fetch('/api/notifications/count?type=pending_tickets'),
           fetch('/api/notifications/count?type=pending_qc_tickets'),
           fetch('/api/notifications/count?type=pending_training_requests'),
           fetch('/api/notifications/count?type=pending_product_requests'),
+          fetch('/api/notifications/count?type=pending_private_companies'),
         ]);
         const visitorData = await visitorRes.json();
         const cleanEnergyData = await cleanEnergyRes.json();
@@ -81,12 +84,14 @@ export default function AdminNav() {
         const qcData = await qcRes.json();
         const trainingData = await trainingRes.json();
         const productData = await productRes.json();
+        const privateData = await privateRes.json().catch(() => ({}));
         if (visitorData.success && typeof visitorData.count === 'number') setVisitorPendingCount(visitorData.count);
         if (cleanEnergyData.success && typeof cleanEnergyData.count === 'number') setCleanEnergyPendingCount(cleanEnergyData.count);
         if (enterpriseData.success && typeof enterpriseData.count === 'number') setEnterprisePendingCount(enterpriseData.count);
         if (qcData.success && typeof qcData.count === 'number') setQcPendingCount(qcData.count);
         if (trainingData.success && typeof trainingData.count === 'number') setTrainingPendingCount(trainingData.count);
         if (productData.success && typeof productData.count === 'number') setProductPendingCount(productData.count);
+        if (privateData?.success && typeof privateData.count === 'number') setPrivateCompanyPendingCount(privateData.count);
       } catch {
         /* ignore */
       }
@@ -109,14 +114,16 @@ export default function AdminNav() {
           (href === '/admin/enterprise-networking-requests' && badgeType === 'pending_enterprise' && enterprisePendingCount > 0) ||
           (href === '/admin/quality-requests' && badgeType === 'pending_qc' && qcPendingCount > 0) ||
           (href === '/admin/training-requests' && badgeType === 'pending_training' && trainingPendingCount > 0) ||
-          (href === '/admin/product-requests' && badgeType === 'pending_product' && productPendingCount > 0);
+          (href === '/admin/product-requests' && badgeType === 'pending_product' && productPendingCount > 0) ||
+          (href === '/admin/private-companies' && badgeType === 'pending_private_company' && privateCompanyPendingCount > 0);
         const badgeCount =
           href === '/admin/visitor-requests' ? visitorPendingCount :
           href === '/admin/clean-energy-requests' ? cleanEnergyPendingCount :
           href === '/admin/enterprise-networking-requests' ? enterprisePendingCount :
           href === '/admin/quality-requests' ? qcPendingCount :
           href === '/admin/training-requests' ? trainingPendingCount :
-          href === '/admin/product-requests' ? productPendingCount : 0;
+          href === '/admin/product-requests' ? productPendingCount :
+          href === '/admin/private-companies' ? privateCompanyPendingCount : 0;
         return (
           <Link
             key={href}

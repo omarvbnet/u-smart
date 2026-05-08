@@ -117,6 +117,74 @@ async function notifyTechniciansNewTicket(ticketId: string, province: string, si
   await notifyRoleNewTicket(ticketId, province, siteName, 'TECHNICIAN', 'maintenance');
 }
 
+/**
+ * Notify only members of a private-company workspace whose role is allowed
+ * to act on the ticket (engineers/technicians/managers/coordinators) plus the
+ * workspace owner. Used when a ticket is scoped to PRIVATE_COMPANY_STAFF.
+ */
+async function notifyPrivateCompanyMembersNewTicket(
+  ticketId: string,
+  privateCompanyId: string,
+  technique: string,
+  province: string,
+  siteName: string
+) {
+  try {
+    const company = await (prisma as any).privateCompany.findUnique({
+      where: { id: privateCompanyId },
+      select: {
+        ownerRequesterId: true,
+        staff: {
+          select: { id: true, role: true, status: true, province: true, provinceFilterActive: true },
+        },
+      },
+    });
+    if (!company) return;
+    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
+    const allowed = new Set<string>(['MANAGER', 'COORDINATOR']);
+    if (isMaintenance) {
+      allowed.add('TECHNICIAN');
+    } else {
+      allowed.add('ENGINEER');
+    }
+    const recipientIds = new Set<string>([company.ownerRequesterId]);
+    for (const s of (company.staff ?? []) as Array<{
+      id: string;
+      role: string | null;
+      status: string | null;
+      province: string | null;
+      provinceFilterActive: boolean | null;
+    }>) {
+      if ((s.status ?? 'ACTIVE') !== 'ACTIVE') continue;
+      const role = String(s.role ?? '').toUpperCase();
+      if (!allowed.has(role)) continue;
+      const filterActive = s.provinceFilterActive ?? true;
+      if (filterActive && s.province && s.province !== province) continue;
+      recipientIds.add(s.id);
+    }
+    const roleKind = isMaintenance ? 'maintenance' : 'qc';
+    for (const recipientId of recipientIds) {
+      try {
+        await notifyRequesterI18n({
+          prisma,
+          type: 'new_ticket',
+          ticketId,
+          requesterId: recipientId,
+          payload: {
+            key: 'new_ticket_role',
+            vars: { roleKind, province, siteName },
+          },
+          data: { ticketId, type: 'new_ticket', scope: 'private_company' },
+        });
+      } catch {
+        /* skip */
+      }
+    }
+  } catch (e) {
+    console.error('notifyPrivateCompanyMembersNewTicket:', e);
+  }
+}
+
 function generateUsername(): string {
   const prefix = 'req';
   const random = crypto.randomBytes(4).toString('hex');
@@ -269,6 +337,7 @@ export async function POST(req: NextRequest) {
     let checklistTemplateId: string | null = null;
     let assigneeCoordinatorUserId: string | null = null;
     let assignmentScope: string | null = null;
+    let privateCompanyIdForTicket: string | null = null;
     let resubmitToRequester = false;
     let autoTaskCategory: 'QUALITY' | 'SUPERVISION' | 'MAINTENANCE' | null = null;
     let autoRoleScope: 'QUALITY_ENGINEER' | 'SUPERVISION_ENGINEER' | 'TECHNICIAN' | null = null;
@@ -388,36 +457,108 @@ export async function POST(req: NextRequest) {
         | 'QUALITY_ENGINEER'
         | 'SUPERVISION_ENGINEER'
         | 'TECHNICIAN';
-      let requesterCompanyScopeId: string | null = null;
+
+      // Private-company scope: when the requester is in an APPROVED workspace
+      // they can choose to keep the ticket inside their own staff or open it to
+      // every system engineer/technician (default).
       if (payload && requester?.id) {
-        requesterCompanyScopeId = await getRequesterChecklistCompanyId({
-          id: requester.id,
-          username: requester.username ?? null,
-          email: requester.email ?? null,
-          role: requester.role ?? requesterRole,
-        });
+        try {
+          const me = await prisma.ticketRequester.findUnique({
+            where: { id: requester.id },
+            select: {
+              privateCompanyId: true,
+              privateCompanyOwned: { select: { id: true, status: true } },
+            },
+          });
+          const myWorkspaceId =
+            (me as { privateCompanyOwned?: { id: string; status: string } | null })
+              ?.privateCompanyOwned?.status === 'APPROVED'
+              ? (me as { privateCompanyOwned?: { id: string } | null })?.privateCompanyOwned?.id ?? null
+              : (me as { privateCompanyId?: string | null })?.privateCompanyId ?? null;
+          const requestedScopeRaw =
+            typeof body.assignmentScope === 'string' ? body.assignmentScope.trim().toUpperCase() : '';
+          const wantsPrivate =
+            requestedScopeRaw === 'PRIVATE_COMPANY' ||
+            requestedScopeRaw === 'PRIVATE_COMPANY_STAFF';
+          if (myWorkspaceId && wantsPrivate) {
+            assignmentScope = 'PRIVATE_COMPANY_STAFF';
+            privateCompanyIdForTicket = myWorkspaceId;
+          }
+        } catch (_) {
+          /* private-company tables may be absent on legacy databases */
+        }
       }
-      const checklistCandidates = await (prisma as any).inspectionChecklist.findMany({
-        where: {
-          taskCategory: autoTaskCategory,
-          OR: [
-            ...(requesterCompanyScopeId ? [{ companyId: requesterCompanyScopeId }] : []),
-            { companyId: null },
-          ],
-        },
-        select: { id: true, companyId: true, techniqueTypes: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
-      });
-      const techniqueMatched = checklistCandidates.filter((c: { techniqueTypes?: string[] | null }) => {
-        const types = Array.isArray(c.techniqueTypes) ? c.techniqueTypes : [];
-        return types.length === 0 || types.includes(technique);
-      });
-      const best = techniqueMatched.sort((a: { companyId?: string | null }, b: { companyId?: string | null }) => {
-        const aCompany = a.companyId ? 1 : 0;
-        const bCompany = b.companyId ? 1 : 0;
-        return bCompany - aCompany;
-      })[0];
-      autoChecklistTemplateId = best?.id ?? null;
+
+      // Optional client-provided checklist (private-company workspace or shared admin templates).
+      const explicitChecklistId = typeof body.checklistTemplateId === 'string' ? body.checklistTemplateId.trim() : '';
+      if (explicitChecklistId) {
+        let resolved: { id: string; source: 'private' | 'admin' } | null = null;
+        try {
+          const pc = await (prisma as any).privateCompanyChecklist?.findUnique?.({
+            where: { id: explicitChecklistId },
+            select: { id: true, companyId: true, techniqueTypes: true, category: true },
+          });
+          if (pc && payload && requester?.id) {
+            const me = await prisma.ticketRequester.findUnique({
+              where: { id: requester.id },
+              select: {
+                privateCompanyId: true,
+                privateCompanyOwned: { select: { id: true, status: true } },
+              },
+            });
+            const myWorkspaceId =
+              me?.privateCompanyOwned?.status === 'APPROVED'
+                ? me.privateCompanyOwned.id
+                : (me?.privateCompanyId ?? null);
+            if (myWorkspaceId && myWorkspaceId === pc.companyId) {
+              resolved = { id: pc.id, source: 'private' };
+            }
+          }
+        } catch (_) {
+          /* table may be absent on legacy databases */
+        }
+        if (!resolved) {
+          const ic = await (prisma as any).inspectionChecklist.findFirst({
+            where: { id: explicitChecklistId },
+            select: { id: true, companyId: true, techniqueTypes: true, taskCategory: true },
+          });
+          if (ic) resolved = { id: ic.id, source: 'admin' };
+        }
+        if (resolved) autoChecklistTemplateId = resolved.id;
+      }
+
+      if (!autoChecklistTemplateId) {
+        let requesterCompanyScopeId: string | null = null;
+        if (payload && requester?.id) {
+          requesterCompanyScopeId = await getRequesterChecklistCompanyId({
+            id: requester.id,
+            username: requester.username ?? null,
+            email: requester.email ?? null,
+            role: requester.role ?? requesterRole,
+          });
+        }
+        const checklistCandidates = await (prisma as any).inspectionChecklist.findMany({
+          where: {
+            taskCategory: autoTaskCategory,
+            OR: [
+              ...(requesterCompanyScopeId ? [{ companyId: requesterCompanyScopeId }] : []),
+              { companyId: null },
+            ],
+          },
+          select: { id: true, companyId: true, techniqueTypes: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        const techniqueMatched = checklistCandidates.filter((c: { techniqueTypes?: string[] | null }) => {
+          const types = Array.isArray(c.techniqueTypes) ? c.techniqueTypes : [];
+          return types.length === 0 || types.includes(technique);
+        });
+        const best = techniqueMatched.sort((a: { companyId?: string | null }, b: { companyId?: string | null }) => {
+          const aCompany = a.companyId ? 1 : 0;
+          const bCompany = b.companyId ? 1 : 0;
+          return bCompany - aCompany;
+        })[0];
+        autoChecklistTemplateId = best?.id ?? null;
+      }
     }
 
     const designSpecifications = typeof body.designSpecifications === 'string' ? body.designSpecifications.trim() : '';
@@ -452,6 +593,10 @@ export async function POST(req: NextRequest) {
       if (autoChecklistTemplateId) {
         companyPayloadObj.checklistTemplateId = autoChecklistTemplateId;
       }
+      if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket) {
+        companyPayloadObj.assignmentScope = assignmentScope;
+        companyPayloadObj.privateCompanyId = privateCompanyIdForTicket;
+      }
     }
     if (isMaintenanceTicket && maintenanceReason) {
       companyPayloadObj.maintenanceReason = maintenanceReason;
@@ -480,6 +625,7 @@ export async function POST(req: NextRequest) {
       workflowState?: string;
       assignmentScope?: string;
       checklistTemplateId?: string;
+      privateCompanyId?: string;
       coordinatorCompanyId?: string;
       createdByCoordinatorUserId?: string;
       assigneeCoordinatorUserId?: string;
@@ -516,6 +662,10 @@ export async function POST(req: NextRequest) {
       if (autoTaskCategory) ticketData.taskCategory = autoTaskCategory;
       if (autoRoleScope) ticketData.roleScope = autoRoleScope;
       if (autoChecklistTemplateId) ticketData.checklistTemplateId = autoChecklistTemplateId;
+      if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket) {
+        ticketData.assignmentScope = assignmentScope;
+        ticketData.privateCompanyId = privateCompanyIdForTicket;
+      }
     }
 
     const ticket = await prisma.visitorRequest.create({
@@ -668,7 +818,15 @@ export async function POST(req: NextRequest) {
     });
 
     if (serviceSlug === 'quality-control-supervision') {
-      if (MAINTENANCE_TECHNIQUES.includes(technique)) {
+      if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket) {
+        notifyPrivateCompanyMembersNewTicket(
+          ticket.id,
+          privateCompanyIdForTicket,
+          technique,
+          province,
+          siteName
+        ).catch(() => {});
+      } else if (MAINTENANCE_TECHNIQUES.includes(technique)) {
         notifyTechniciansNewTicket(ticket.id, province, siteName).catch(() => {});
       } else {
         notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
@@ -825,6 +983,8 @@ export async function GET(req: NextRequest) {
         email: true,
         province: true,
         provinceFilterActive: true,
+        privateCompanyId: true,
+        privateCompanyOwned: { select: { id: true, status: true } },
       },
     });
     if (!requester) {
@@ -837,6 +997,32 @@ export async function GET(req: NextRequest) {
     const requesterRole = (requester as { role?: string }).role ?? 'COMPANY';
     const requesterProvince = (requester as { province?: string | null }).province ?? null;
     const provinceFilterActive = (requester as { provinceFilterActive?: boolean }).provinceFilterActive ?? true;
+
+    // Private-company workspace: when the requester is the owner of an APPROVED workspace OR
+    // a staff member, their ticket view is widened to every member of that workspace.
+    const ownedPrivateCompanyId =
+      (requester as { privateCompanyOwned?: { id: string; status: string } | null }).privateCompanyOwned?.status === 'APPROVED'
+        ? (requester as { privateCompanyOwned?: { id: string } | null }).privateCompanyOwned?.id ?? null
+        : null;
+    const staffPrivateCompanyId = (requester as { privateCompanyId?: string | null }).privateCompanyId ?? null;
+    const privateCompanyId = ownedPrivateCompanyId ?? staffPrivateCompanyId;
+    let privateCompanyMemberIds: string[] = [];
+    if (privateCompanyId) {
+      try {
+        const members = await prisma.ticketRequester.findMany({
+          where: {
+            OR: [
+              { privateCompanyOwned: { is: { id: privateCompanyId } } },
+              { privateCompanyId },
+            ],
+          },
+          select: { id: true },
+        });
+        privateCompanyMemberIds = (members as Array<{ id: string }>).map((m) => m.id);
+      } catch (_) {
+        privateCompanyMemberIds = [];
+      }
+    }
 
     const { searchParams } = new URL(req.url);
     const doExport = searchParams.get('export') === '1';
@@ -853,6 +1039,18 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let where: any;
 
+    // Workspace scoping for staff (engineer/technician/worker): PRIVATE_COMPANY_STAFF
+    // tickets stay inside their workspace; everyone else sees only public tickets.
+    const myStaffWorkspaceId = staffPrivateCompanyId;
+    const privateCompanyTicketScope = myStaffWorkspaceId
+      ? {
+          OR: [
+            { assignmentScope: { not: 'PRIVATE_COMPANY_STAFF' as const } },
+            { privateCompanyId: myStaffWorkspaceId },
+          ],
+        }
+      : { OR: [{ assignmentScope: { not: 'PRIVATE_COMPANY_STAFF' as const } }, { privateCompanyId: null }] };
+
     if (requesterRole === 'ENGINEER') {
       // Engineers see ONLY QC tickets (inspection, supervision, etc.). Maintenance tickets are for Technicians and Admin only.
       const pendingFilter: any = { status: 'PENDING' };
@@ -862,9 +1060,11 @@ export async function GET(req: NextRequest) {
       where = {
         serviceSlug: filterServiceSlug,
         technique: { notIn: MAINTENANCE_TECHNIQUES },
-        OR: [
-          pendingFilter,
-          { company: { contains: payload.requesterId } },
+        AND: [
+          {
+            OR: [pendingFilter, { company: { contains: payload.requesterId } }],
+          },
+          privateCompanyTicketScope,
         ],
       };
     } else if (requesterRole === 'TECHNICIAN') {
@@ -872,15 +1072,18 @@ export async function GET(req: NextRequest) {
       where = {
         serviceSlug: filterServiceSlug,
         technique: { in: MAINTENANCE_TECHNIQUES },
+        AND: [privateCompanyTicketScope],
       };
     } else if (requesterRole === 'WORKER') {
       // Workers see ONLY tickets assigned to them by admin (assignedEngineerId in company JSON)
       where = {
         serviceSlug: filterServiceSlug,
         company: { contains: payload.requesterId },
+        AND: [privateCompanyTicketScope],
       };
     } else {
-      // COMPANY: own requester tickets plus coordinator-company tickets when linked (same owner)
+      // COMPANY / MANAGER / COORDINATOR / etc.: own requester tickets plus coordinator-company
+      // tickets when linked (same owner). Private-company members ALL share the same view.
       const linkedCompanyId =
         requesterRole === 'COMPANY'
           ? await getLinkedCoordinatorCompanyId(prisma, {
@@ -890,15 +1093,21 @@ export async function GET(req: NextRequest) {
               role: requesterRole,
             })
           : null;
+      const ownedRequesterIds = privateCompanyMemberIds.length > 0
+        ? privateCompanyMemberIds
+        : [payload.requesterId];
       if (linkedCompanyId) {
         where = {
           serviceSlug: filterServiceSlug,
-          OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }],
+          OR: [
+            { requesterId: { in: ownedRequesterIds } },
+            { coordinatorCompanyId: linkedCompanyId },
+          ],
         };
       } else {
         where = {
-          requesterId: payload.requesterId,
           serviceSlug: filterServiceSlug,
+          requesterId: { in: ownedRequesterIds },
         };
       }
       if (requesterRole === 'COMPANY' || requesterRole === 'PERSONAL') {

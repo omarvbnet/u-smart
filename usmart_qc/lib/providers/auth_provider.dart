@@ -106,7 +106,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  /// Direct sign-up after OTP (ticket_requester; all Provisor roles).
+  /// Direct sign-up after OTP (self-registration roles only: COMPANY/PERSONAL).
   Future<bool> registerWithPhoneOtp({
     required String phone,
     required String code,

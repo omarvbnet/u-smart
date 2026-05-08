@@ -31,6 +31,8 @@ class _LoginScreenState extends State<LoginScreen>
   bool _otpSent = false;
   bool _otpSendLoading = false;
   bool _otpVerifyLoading = false;
+  int _otpResendCooldown = 0;
+  Timer? _otpCooldownTimer;
   bool _showSignupFields = false;
   String _signupRole = 'COMPANY';
   bool _obscure = true;
@@ -123,14 +125,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   String _signupRoleLabel(AppLocalizations l10n, String code) {
     switch (code) {
-      case 'ENGINEER':
-        return l10n.t('role_engineer');
-      case 'TECHNICIAN':
-        return l10n.t('role_technician');
       case 'PERSONAL':
         return l10n.t('role_personal');
-      case 'WORKER':
-        return l10n.t('role_worker');
       case 'COMPANY':
       default:
         return l10n.t('role_company');
@@ -139,14 +135,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   String _signupRoleHintKey(String code) {
     switch (code) {
-      case 'ENGINEER':
-        return 'reg_role_engineer_hint';
-      case 'TECHNICIAN':
-        return 'reg_role_technician_hint';
       case 'PERSONAL':
         return 'reg_role_personal_hint';
-      case 'WORKER':
-        return 'reg_role_worker_hint';
       case 'COMPANY':
       default:
         return 'reg_role_company_hint';
@@ -174,8 +164,23 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() {
       _otpSendLoading = false;
-      if (err == null) _otpSent = true;
+      if (err == null) {
+        _otpSent = true;
+        _otpResendCooldown = 60;
+      }
     });
+    if (err == null) {
+      _otpCooldownTimer?.cancel();
+      _otpCooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) return;
+        if (_otpResendCooldown <= 1) {
+          t.cancel();
+          setState(() => _otpResendCooldown = 0);
+        } else {
+          setState(() => _otpResendCooldown--);
+        }
+      });
+    }
     _showSnack(err ?? l10n.t('code_sent'), isError: err != null);
   }
 
@@ -199,6 +204,21 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _otpVerifyLoading = false);
     if (!ok) {
       final err = context.read<AuthProvider>().error;
+      final noAccount = (err ?? '').toLowerCase().contains('no account for this phone number');
+      if (noAccount) {
+        setState(() {
+          _showSignupFields = true;
+          _otpSent = true;
+          if (_regPhoneCtrl.text.trim().isEmpty) {
+            _regPhoneCtrl.text = _normalizePhone(_phoneOtpCtrl.text);
+          }
+        });
+        _showSnack(
+          "You don't have an account with this number. Please create a new account.",
+          isError: true,
+        );
+        return;
+      }
       _showSnack(
         err == AuthProvider.invalidCredentialsMarker
             ? l10n.t('invalid_code')
@@ -580,6 +600,7 @@ class _LoginScreenState extends State<LoginScreen>
     _regNameCtrl.dispose();
     _regPhoneCtrl.dispose();
     _regCompanyCtrl.dispose();
+    _otpCooldownTimer?.cancel();
     _forgotCooldownTimer?.cancel();
     super.dispose();
   }
@@ -810,6 +831,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       height: 50,
                                       child: OutlinedButton(
                                         onPressed: (_otpSendLoading || !_agreedToTerms)
+                                                || _otpResendCooldown > 0
                                             ? null
                                             : () => _sendPhoneOtp(l10n),
                                         style: OutlinedButton.styleFrom(
@@ -832,7 +854,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                 ),
                                               )
                                             : Text(
-                                                l10n.t('login_send_otp'),
+                                                _otpResendCooldown > 0
+                                                    ? '${l10n.t('login_send_otp')} (${_otpResendCooldown}s)'
+                                                    : l10n.t('login_send_otp'),
                                                 style: const TextStyle(
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -931,10 +955,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               ),
                                               items: const [
                                                 'COMPANY',
-                                                'ENGINEER',
-                                                'TECHNICIAN',
                                                 'PERSONAL',
-                                                'WORKER',
                                               ]
                                                   .map(
                                                     (r) =>

@@ -16,6 +16,7 @@ import 'providers/locale_provider.dart';
 import 'providers/conflicts_provider.dart';
 import 'providers/registration_request_provider.dart';
 import 'providers/provisor_techniques_provider.dart';
+import 'providers/private_company_provider.dart';
 import 'config/api_config.dart';
 
 void main() async {
@@ -93,6 +94,16 @@ void main() async {
 
   final conflictsProvider = ConflictsProvider(apiService);
   final registrationRequestProvider = RegistrationRequestProvider(apiService);
+  final privateCompanyProvider = PrivateCompanyProvider(apiService);
+
+  authProvider.addListener(() {
+    privateCompanyProvider.setCurrentRequesterId(authProvider.user?.id);
+    if (authProvider.isLoggedIn) {
+      privateCompanyProvider.refresh();
+    } else {
+      privateCompanyProvider.reset();
+    }
+  });
 
   runApp(
     MultiProvider(
@@ -106,6 +117,7 @@ void main() async {
         ChangeNotifierProvider.value(value: conflictsProvider),
         ChangeNotifierProvider.value(value: registrationRequestProvider),
         ChangeNotifierProvider.value(value: techniquesProvider),
+        ChangeNotifierProvider.value(value: privateCompanyProvider),
       ],
       child: const ProvisrApp(),
     ),

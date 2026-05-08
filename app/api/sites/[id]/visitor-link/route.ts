@@ -202,6 +202,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<unknow
 
     return NextResponse.json({ success: true, links });
   } catch (err: unknown) {
+    if ((err as { code?: string })?.code === 'P2021' || String(err ?? '').includes('site_visitor_links')) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Database migration required for visitor links (npx prisma migrate deploy)',
+        },
+        { status: 503 }
+      );
+    }
     console.error('GET /api/sites/[id]/visitor-link:', err);
     return NextResponse.json({ success: false, message: 'Failed to list visitor links' }, { status: 500 });
   }
@@ -251,7 +260,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<unk
     });
 
     return NextResponse.json({ success: true });
-  } catch (err) {
+  } catch (err: unknown) {
+    if ((err as { code?: string })?.code === 'P2021' || String(err ?? '').includes('site_visitor_links')) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Database migration required for visitor links (npx prisma migrate deploy)',
+        },
+        { status: 503 }
+      );
+    }
     console.error('DELETE /api/sites/[id]/visitor-link:', err);
     return NextResponse.json({ success: false, message: 'Failed to revoke visitor link' }, { status: 500 });
   }

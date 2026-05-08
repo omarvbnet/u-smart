@@ -414,6 +414,14 @@ class TicketsProvider extends ChangeNotifier {
           body['assigneeCoordinatorUserId'] = assigneeCoordinatorUserId.trim();
         }
         body['resubmitToRequester'] = resubmitToRequester;
+      } else {
+        // Requester-side optional fields for private-company workspaces.
+        if (checklistTemplateId != null && checklistTemplateId.trim().isNotEmpty) {
+          body['checklistTemplateId'] = checklistTemplateId.trim();
+        }
+        if (assignmentScope != null && assignmentScope.trim().isNotEmpty) {
+          body['assignmentScope'] = assignmentScope.trim().toUpperCase();
+        }
       }
       final data = await _api.post(ApiConfig.tickets, body: body);
       if (data['success'] == true) {

@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
+import '../providers/private_company_provider.dart';
 import 'attachment_viewer_screen.dart';
 
 const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_building', 'tech_hse', 'tech_investigation', 'tech_tracking'];
@@ -29,6 +30,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _submitting = false;
   bool _uploading = false;
   final List<String> _attachmentUrls = [];
+  String? _selectedChecklistId;
+  /// 'PRIVATE_COMPANY' = restrict to my workspace staff, null/'GLOBAL' = open to all engineers
+  String _assignmentScope = 'GLOBAL';
 
   @override
   void initState() {
@@ -40,6 +44,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       final slugs = tech.inspection.map((e) => e.slug).toList();
       if (slugs.isNotEmpty && !slugs.contains(_technique)) {
         setState(() => _technique = slugs.first);
+      }
+      final pc = context.read<PrivateCompanyProvider>();
+      if (pc.workspace == null && (pc.membership.isOwner || pc.membership.isStaff)) {
+        await pc.refresh();
       }
     });
   }
@@ -73,6 +81,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     final technique =
         validIds.contains(_technique) ? _technique : validIds.first;
     final designSpecs = _designSpecsCtrl.text.trim();
+    final pc = context.read<PrivateCompanyProvider>();
+    final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
+    final scopeForApi =
+        inWorkspace && _assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : null;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
@@ -80,6 +92,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       slaHours: sla,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
+      checklistTemplateId: _selectedChecklistId,
+      assignmentScope: scopeForApi,
     );
 
     if (mounted) {
@@ -339,6 +353,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 16),
+          _buildAssignmentScopePicker(l10n),
+          const SizedBox(height: 16),
+          _buildOptionalChecklistPicker(l10n, selectedTechnique),
+          const SizedBox(height: 16),
           _buildDesignSpecsField(l10n),
           const SizedBox(height: 16),
           _buildAttachmentsSection(l10n),
@@ -385,6 +403,331 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAssignmentScopePicker(AppLocalizations l10n) {
+    return Consumer<PrivateCompanyProvider>(
+      builder: (context, pc, _) {
+        final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
+        if (!inWorkspace) return const SizedBox.shrink();
+        final isPrivate = _assignmentScope == 'PRIVATE_COMPANY';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.t('ticket_assignment_scope').toUpperCase(),
+              style: TextStyle(
+                color: Colors.white.withAlpha(80),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withAlpha(10)),
+              ),
+              child: Row(
+                children: [
+                  _scopeOption(
+                    l10n: l10n,
+                    selected: isPrivate,
+                    icon: Icons.workspaces_rounded,
+                    title: l10n.t('scope_private_company'),
+                    subtitle: l10n.t('scope_private_company_hint'),
+                    onTap: () => setState(() => _assignmentScope = 'PRIVATE_COMPANY'),
+                  ),
+                  _scopeOption(
+                    l10n: l10n,
+                    selected: !isPrivate,
+                    icon: Icons.public_rounded,
+                    title: l10n.t('scope_global'),
+                    subtitle: l10n.t('scope_global_hint'),
+                    onTap: () => setState(() => _assignmentScope = 'GLOBAL'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _scopeOption({
+    required AppLocalizations l10n,
+    required bool selected,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: selected
+                ? const LinearGradient(
+                    colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                  )
+                : null,
+            color: selected ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: selected ? Colors.white : const Color(0xFF8B83FF),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? Colors.white : Colors.white.withAlpha(220),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected
+                      ? Colors.white.withAlpha(230)
+                      : Colors.white.withAlpha(140),
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionalChecklistPicker(AppLocalizations l10n, String technique) {
+    return Consumer<PrivateCompanyProvider>(
+      builder: (context, pc, _) {
+        final ws = pc.workspace;
+        if (ws == null || !pc.isApproved) {
+          return const SizedBox.shrink();
+        }
+        final checklists = ws.checklists;
+        if (checklists.isEmpty) return const SizedBox.shrink();
+
+        final filtered = checklists.where((c) {
+          if (c.techniqueTypes.isEmpty) return true;
+          return c.techniqueTypes.contains(technique);
+        }).toList();
+        if (filtered.isEmpty) return const SizedBox.shrink();
+
+        final hasSelection = _selectedChecklistId != null &&
+            filtered.any((c) => c.id == _selectedChecklistId);
+        if (_selectedChecklistId != null && !hasSelection) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _selectedChecklistId = null);
+          });
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  l10n.t('attach_checklist_optional').toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(80),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C63FF).withAlpha(28),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFF6C63FF).withAlpha(60),
+                    ),
+                  ),
+                  child: const Text(
+                    'OPTIONAL',
+                    style: TextStyle(
+                      color: Color(0xFF8B83FF),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withAlpha(10)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: hasSelection ? _selectedChecklistId : null,
+                  isExpanded: true,
+                  hint: Row(
+                    children: [
+                      const Icon(Icons.fact_check_outlined,
+                          color: Color(0xFF6C63FF), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.t('no_checklist_selected'),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(120),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  icon: Icon(Icons.expand_more_rounded,
+                      color: Colors.white.withAlpha(80)),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.block_rounded,
+                              color: Color(0xFF4B5563), size: 18),
+                          const SizedBox(width: 10),
+                          Text(
+                            l10n.t('no_checklist_selected'),
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(160),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...filtered.map(
+                      (c) => DropdownMenuItem<String?>(
+                        value: c.id,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF6C63FF),
+                                    Color(0xFF00D4AA),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.checklist_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    c.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${c.items.length} item(s)'
+                                    '${c.category != null ? ' · ${c.category}' : ''}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white.withAlpha(120),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _selectedChecklistId = v),
+                ),
+              ),
+            ),
+            if (hasSelection) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C63FF).withAlpha(15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF6C63FF).withAlpha(40),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: Color(0xFF8B83FF), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.t('checklist_attached_hint'),
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(180),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 

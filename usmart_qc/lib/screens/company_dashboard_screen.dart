@@ -25,6 +25,8 @@ import 'conflicts_screen.dart';
 import 'site_form_screen.dart';
 import 'filtered_tickets_screen.dart';
 import 'company_provisor_hub_screen.dart';
+import 'private_company_hub_screen.dart';
+import '../providers/private_company_provider.dart';
 import '../widgets/update_password_sheet.dart';
 import '../widgets/site_share_dialog.dart';
 import '../config/api_config.dart';
@@ -419,6 +421,68 @@ class _TicketsTabState extends State<_TicketsTab> {
                         ),
                         icon: const Icon(Icons.business_center_outlined, color: Color(0xFF8B83FF)),
                         tooltip: 'Company hub',
+                      );
+                    },
+                  ),
+                  Consumer2<AuthProvider, PrivateCompanyProvider>(
+                    builder: (context, auth, pc, _) {
+                      final role = (auth.user?.role ?? '').toUpperCase();
+                      final canRequest = role == 'COMPANY';
+                      final hasMembership =
+                          pc.membership.isOwner || pc.membership.isStaff;
+                      if (!canRequest && !hasMembership) {
+                        return const SizedBox.shrink();
+                      }
+                      final pendingDot = pc.workspace?.isPending == true ||
+                          pc.workspace?.isRejected == true ||
+                          pc.workspace?.isSuspended == true;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            IconButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const PrivateCompanyHubScreen(),
+                                ),
+                              ),
+                              icon: ShaderMask(
+                                shaderCallback: (b) => const LinearGradient(
+                                  colors: [
+                                    Color(0xFF6C63FF),
+                                    Color(0xFF00D4AA),
+                                  ],
+                                ).createShader(b),
+                                child: const Icon(
+                                  Icons.workspaces_rounded,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              tooltip: 'Private workspace',
+                            ),
+                            if (pendingDot)
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    color: pc.workspace?.isPending == true
+                                        ? const Color(0xFFFBBF24)
+                                        : const Color(0xFFFF4757),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFF05051A),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       );
                     },
                   ),

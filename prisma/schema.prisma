@@ -250,6 +250,8 @@ model VisitorRequest {
   workflowState                  ProviderWorkflowState    @default(OPEN)
   assignmentScope                ProviderAssignmentScope?
   checklistTemplateId            String?
+  privateCompanyId               String?
+  privateCompany                 PrivateCompany?          @relation("PrivateCompanyScopedTickets", fields: [privateCompanyId], references: [id], onDelete: SetNull)
   coordinatorCompanyId           String?
   coordinatorCompany             CoordinatorCompany?      @relation(fields: [coordinatorCompanyId], references: [id], onDelete: SetNull)
   createdByCoordinatorUserId     String?
@@ -349,6 +351,17 @@ model TicketRequester {
   sites                   Site[]
   siteSharesReceived      SiteShare[]      @relation("SiteShareRecipient")
   companyProfile          Company? // when created from company request
+
+  // ── Private company workspace (mobile-first feature) ──────────────────
+  /// The workspace this requester owns (set when this is the COMPANY-role owner of the workspace).
+  privateCompanyOwned        PrivateCompany?           @relation("PrivateCompanyOwner")
+  /// Workspace the requester belongs to as staff member.
+  privateCompanyId           String?
+  privateCompany             PrivateCompany?           @relation("PrivateCompanyStaff", fields: [privateCompanyId], references: [id], onDelete: SetNull)
+  privateCompanyDepartmentId String?
+  privateCompanyDepartment   PrivateCompanyDepartment? @relation("PrivateCompanyDepartmentMember", fields: [privateCompanyDepartmentId], references: [id], onDelete: SetNull)
+  /// Created checklists inside their workspace.
+  privateCompanyChecklistsCreated PrivateCompanyChecklist[] @relation("PrivateCompanyChecklistCreator")
 
   @@map("ticket_requesters")
 }
@@ -501,6 +514,9 @@ enum RequesterRole {
   TECHNICIAN
   PERSONAL
   WORKER
+  // Roles below are used by the private-company workspace feature (mobile app)
+  MANAGER
+  COORDINATOR
 }
 
 enum RequesterSpecialization {
@@ -816,6 +832,7 @@ enum ProviderWorkflowState {
 enum ProviderAssignmentScope {
   COMPANY_STAFF
   USMART_STAFF
+  PRIVATE_COMPANY_STAFF
 }
 
 enum TicketBillingPlan {
@@ -1278,4 +1295,78 @@ model CoordinatorVoiceCallRecord {
 
   @@index([companyId])
   @@map("coordinator_voice_call_records")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Private Company Workspace (mobile-app feature)
+// A COMPANY-role requester can request to open a private workspace; once an
+// admin approves it the owner can create departments, assign staff, and build
+// checklists. Staff see only their company's tickets and notifications.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum PrivateCompanyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model PrivateCompany {
+  id               String                     @id @default(cuid())
+  name             String
+  description      String?
+  logoUrl          String?
+  ownerRequesterId String                     @unique
+  owner            TicketRequester            @relation("PrivateCompanyOwner", fields: [ownerRequesterId], references: [id], onDelete: Cascade)
+  status           PrivateCompanyStatus       @default(PENDING)
+  rejectionReason  String?
+  approvedAt       DateTime?
+  approvedById     String? // admin User id (web admin)
+  departments      PrivateCompanyDepartment[]
+  staff            TicketRequester[]          @relation("PrivateCompanyStaff")
+  checklists       PrivateCompanyChecklist[]
+  scopedTickets    VisitorRequest[]           @relation("PrivateCompanyScopedTickets")
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([status])
+  @@map("private_companies")
+}
+
+model PrivateCompanyDepartment {
+  id          String            @id @default(cuid())
+  companyId   String
+  company     PrivateCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  color       String? // hex color for UI accent
+  iconKey     String? // material icon key for UI
+  sortOrder   Int               @default(0)
+  members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("private_company_departments")
+}
+
+model PrivateCompanyChecklist {
+  id             String                @id @default(cuid())
+  companyId      String
+  company        PrivateCompany        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  category       ProviderTaskCategory?
+  techniqueTypes String[]              @default([])
+  items          Json // [{ id, label, weight?, required? }]
+  createdById    String
+  createdBy      TicketRequester       @relation("PrivateCompanyChecklistCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  departmentId   String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([companyId])
+  @@index([departmentId])
+  @@map("private_company_checklists")
 }
