@@ -6,6 +6,7 @@
  * - WHATSAPP_CLOUD_ACCESS_TOKEN — Graph API permanent / system-user token with whatsapp_business_messaging
  * - WHATSAPP_CLOUD_PHONE_NUMBER_ID — "Phone number ID" from WhatsApp → API Setup
  * - WHATSAPP_OTP_TEMPLATE_NAME — approved template name (e.g. otp_verify)
+ * - WHATSAPP_OTP_TEMPLATE — optional shorthand; same as WHATSAPP_OTP_TEMPLATE_NAME
  * - WHATSAPP_OTP_TEMPLATE_LANGUAGE — optional, default en_US (must match template)
  * - WHATSAPP_CLOUD_GRAPH_VERSION — optional, default v22.0
  * - WHATSAPP_OTP_TEMPLATE_BODY_VARS — optional, "1" (default) or "2"; if "2", second body var = expiry minutes
@@ -44,7 +45,9 @@ export async function sendOtpWhatsAppCloud({
 }: SendOtpWhatsAppCloudArgs): Promise<boolean> {
   const token = normalizeEnvValue(process.env.WHATSAPP_CLOUD_ACCESS_TOKEN);
   const phoneNumberId = normalizeEnvValue(process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID);
-  const templateName = normalizeEnvValue(process.env.WHATSAPP_OTP_TEMPLATE_NAME);
+  const templateName = normalizeEnvValue(
+    process.env.WHATSAPP_OTP_TEMPLATE_NAME ?? process.env.WHATSAPP_OTP_TEMPLATE,
+  );
   const language =
     normalizeEnvValue(process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE) || 'en_US';
   const graphVersion =
@@ -58,7 +61,7 @@ export async function sendOtpWhatsAppCloud({
     const missing: string[] = [];
     if (!token) missing.push('WHATSAPP_CLOUD_ACCESS_TOKEN');
     if (!phoneNumberId) missing.push('WHATSAPP_CLOUD_PHONE_NUMBER_ID');
-    if (!templateName) missing.push('WHATSAPP_OTP_TEMPLATE_NAME');
+    if (!templateName) missing.push('WHATSAPP_OTP_TEMPLATE_NAME (or WHATSAPP_OTP_TEMPLATE)');
     if (!to) {
       missing.push(
         `recipient_phone (digits after normalize; got "${phone.replace(/\s/g, ' ')}" → empty — need country code, e.g. +964…)`,
