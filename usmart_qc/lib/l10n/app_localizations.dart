@@ -26,6 +26,18 @@ class AppLocalizations {
     return s;
   }
 
+  /// Success copy after [/api/auth/requester-otp/send] — aligned with JSON `otpChannel`.
+  String otpDeliverySuccessMessage(String? otpChannel) {
+    switch (otpChannel) {
+      case 'whatsapp':
+        return t('requester_otp_sent_whatsapp');
+      case 'sms':
+        return t('requester_otp_sent_sms');
+      default:
+        return t('requester_otp_sent');
+    }
+  }
+
   static const List<Locale> supportedLocales = [
     Locale('en'),
     Locale('ar'),

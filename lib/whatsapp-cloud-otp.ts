@@ -55,10 +55,16 @@ export async function sendOtpWhatsAppCloud({
 
   const to = toWhatsAppCloudRecipient(phone);
   if (!token || !phoneNumberId || !templateName || !to) {
-    console.error(
-      'WhatsApp Cloud OTP: missing WHATSAPP_CLOUD_ACCESS_TOKEN, WHATSAPP_CLOUD_PHONE_NUMBER_ID, ' +
-        'WHATSAPP_OTP_TEMPLATE_NAME, or phone could not be normalized'
-    );
+    const missing: string[] = [];
+    if (!token) missing.push('WHATSAPP_CLOUD_ACCESS_TOKEN');
+    if (!phoneNumberId) missing.push('WHATSAPP_CLOUD_PHONE_NUMBER_ID');
+    if (!templateName) missing.push('WHATSAPP_OTP_TEMPLATE_NAME');
+    if (!to) {
+      missing.push(
+        `recipient_phone (digits after normalize; got "${phone.replace(/\s/g, ' ')}" → empty — need country code, e.g. +964…)`,
+      );
+    }
+    console.error(`WhatsApp Cloud OTP: incomplete config — missing or invalid:\n  - ${missing.join('\n  - ')}`);
     return false;
   }
 

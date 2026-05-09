@@ -160,16 +160,16 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     setState(() => _otpSendLoading = true);
-    final err = await context.read<AuthProvider>().sendLoginPhoneOtp(phone);
+    final sent = await context.read<AuthProvider>().sendLoginPhoneOtp(phone);
     if (!mounted) return;
     setState(() {
       _otpSendLoading = false;
-      if (err == null) {
+      if (sent.error == null) {
         _otpSent = true;
         _otpResendCooldown = 60;
       }
     });
-    if (err == null) {
+    if (sent.error == null) {
       _otpCooldownTimer?.cancel();
       _otpCooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (!mounted) return;
@@ -181,7 +181,9 @@ class _LoginScreenState extends State<LoginScreen>
         }
       });
     }
-    _showSnack(err ?? l10n.t('code_sent'), isError: err != null);
+    final snackMsg =
+        sent.error ?? l10n.otpDeliverySuccessMessage(sent.otpChannel);
+    _showSnack(snackMsg, isError: sent.error != null);
   }
 
   Future<void> _submitOtpLogin(AppLocalizations l10n) async {

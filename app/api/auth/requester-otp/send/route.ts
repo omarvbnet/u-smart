@@ -7,10 +7,25 @@ import { sendOtpWhatsAppCloud } from '@/lib/whatsapp-cloud-otp';
 const OTP_EXPIRY_MINUTES = 10;
 const CODE_LENGTH = 6;
 
-/** `sms` → Twilio SMS; `whatsapp` → Meta WhatsApp Cloud API (`lib/whatsapp-cloud-otp.ts`) */
-function requesterOtpChannel(): 'sms' | 'whatsapp' {
+/** Default when JSON body omits `channel`: `sms` → Twilio; `whatsapp` → Meta Cloud API (`lib/whatsapp-cloud-otp.ts`) */
+function requesterOtpChannelFromEnv(): 'sms' | 'whatsapp' {
   const raw = (process.env.REQUESTER_OTP_CHANNEL ?? 'sms').toLowerCase().trim();
   return raw === 'whatsapp' ? 'whatsapp' : 'sms';
+}
+
+/** Provisor app may send `{ channel: "whatsapp" | "sms" }` — wins over env default. */
+function parsePreferredChannel(raw: unknown): 'sms' | 'whatsapp' | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const v = raw.toLowerCase().trim();
+  if (v === 'sms') return 'sms';
+  if (v === 'whatsapp') return 'whatsapp';
+  return undefined;
+}
+
+function resolveRequesterOtpChannel(body: Record<string, unknown>): 'sms' | 'whatsapp' {
+  const preferred =
+    parsePreferredChannel(body.channel) ?? parsePreferredChannel(body.deliveryChannel);
+  return preferred ?? requesterOtpChannelFromEnv();
 }
 
 function generateCode(): string {
@@ -24,7 +39,7 @@ function generateCode(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     if (!phone || phone.length < 8) {
       return NextResponse.json(
@@ -52,7 +67,7 @@ export async function POST(req: NextRequest) {
     const isDev = process.env.NODE_ENV !== 'production';
     if (isDev) setOtp(phone, code);
 
-    const channel = requesterOtpChannel();
+    const channel = resolveRequesterOtpChannel(body);
     const sent =
       channel === 'whatsapp'
         ? await sendOtpWhatsAppCloud({
@@ -64,7 +79,11 @@ export async function POST(req: NextRequest) {
     if (!sent && !isDev) {
       const via = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
       return NextResponse.json(
-        { success: false, message: `Failed to send verification code by ${via}. Please try again.` },
+        {
+          success: false,
+          otpChannel: channel,
+          message: `Failed to send verification code by ${via}. Please try again.`,
+        },
         { status: 500 }
       );
     }
@@ -72,6 +91,7 @@ export async function POST(req: NextRequest) {
     const deliveryLabel = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
     return NextResponse.json({
       success: true,
+      otpChannel: channel,
       message: `Verification code sent by ${deliveryLabel}`,
       ...(isDev && { devCode: code }),
     });

@@ -2,6 +2,11 @@ import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../services/api_service.dart';
 
+typedef RequesterPhoneOtpSendResult = ({
+  bool success,
+  String? otpChannel,
+});
+
 class RegistrationRequestProvider extends ChangeNotifier {
   final ApiService _api;
 
@@ -114,16 +119,27 @@ class RegistrationRequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Send phone OTP. Returns true on success.
-  Future<bool> sendPhoneOtp(String phone) async {
+  /// Sends phone OTP via backend (Meta WhatsApp when `channel` resolves to whatsapp).
+  Future<RequesterPhoneOtpSendResult> sendPhoneOtp(String phone) async {
     _error = null;
     try {
-      final res = await _api.post(ApiConfig.requesterOtpSend, body: {'phone': phone.trim()});
-      return res['success'] == true;
+      final res = await _api.post(ApiConfig.requesterOtpSend, body: {
+        'phone': phone.trim(),
+        'channel': ApiConfig.normalizedRequesterOtpDeliveryChannel,
+      });
+      final ok = res['success'] == true;
+      if (!ok) {
+        _error = res['message'] as String? ?? 'Failed to send code';
+        notifyListeners();
+      }
+      return (
+        success: ok,
+        otpChannel: ok ? res['otpChannel']?.toString() : null,
+      );
     } catch (e) {
       _error = e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Failed to send code';
       notifyListeners();
-      return false;
+      return (success: false, otpChannel: null);
     }
   }
 

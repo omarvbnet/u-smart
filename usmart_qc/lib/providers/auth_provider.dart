@@ -70,15 +70,23 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> sendLoginPhoneOtp(String phone) async {
+  Future<({String? error, String? otpChannel})> sendLoginPhoneOtp(String phone) async {
     _error = null;
     notifyListeners();
     try {
       final res = await _authService.sendRequesterPhoneOtp(phone);
-      if (res['success'] == true) return null;
-      return (res['message'] ?? 'Failed to send code').toString();
+      if (res['success'] == true) {
+        return (error: null, otpChannel: res['otpChannel']?.toString());
+      }
+      return (
+        error: (res['message'] ?? 'Failed to send code').toString(),
+        otpChannel: null,
+      );
     } catch (_) {
-      return 'Connection error. Please try again.';
+      return (
+        error: 'Connection error. Please try again.',
+        otpChannel: null,
+      );
     }
   }
 

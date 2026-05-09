@@ -15,6 +15,18 @@ class ApiConfig {
 
   static const String login = '/api/auth/requester-login';
   static const String requesterOtpSend = '/api/auth/requester-otp/send';
+
+  /// JSON `channel` for [requesterOtpSend]: `sms` | `whatsapp` (matches server Meta Cloud path).
+  /// `--dart-define=REQUESTER_OTP_CHANNEL=sms` for Twilio SMS testing.
+  static const String requesterOtpDeliveryChannel = String.fromEnvironment(
+    'REQUESTER_OTP_CHANNEL',
+    defaultValue: 'whatsapp',
+  );
+
+  static String get normalizedRequesterOtpDeliveryChannel {
+    final c = requesterOtpDeliveryChannel.toLowerCase().trim();
+    return (c == 'sms' || c == 'whatsapp') ? c : 'whatsapp';
+  }
   static const String requesterOtpVerifyLogin =
       '/api/auth/requester-otp/verify-login';
   static const String requesterOtpRegister =

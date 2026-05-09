@@ -659,10 +659,20 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
 
   Future<bool> _startPhoneVerification() async {
     final provider = context.read<RegistrationRequestProvider>();
+    final l10n = AppLocalizations.of(context);
     final normalizedPhone = _normalizePhone(_phone.text);
     if (normalizedPhone.isEmpty) return false;
     _verifiedPhone = null;
-    return provider.sendPhoneOtp(normalizedPhone);
+    final r = await provider.sendPhoneOtp(normalizedPhone);
+    if (r.success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.otpDeliverySuccessMessage(r.otpChannel)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return r.success;
   }
 
   Future<bool> _verifyPhoneCode() async {

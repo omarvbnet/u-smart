@@ -95,7 +95,10 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> sendRequesterPhoneOtp(String phone) async {
-    return _api.post(ApiConfig.requesterOtpSend, body: {'phone': phone.trim()});
+    return _api.post(ApiConfig.requesterOtpSend, body: {
+      'phone': phone.trim(),
+      'channel': ApiConfig.normalizedRequesterOtpDeliveryChannel,
+    });
   }
 
   Future<Map<String, dynamic>> _postPhoneOtpVerifyLogin(
