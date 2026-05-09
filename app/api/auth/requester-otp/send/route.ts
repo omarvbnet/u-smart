@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setOtp } from '@/lib/otp-store';
 import { sendOtpSms } from '@/lib/sms';
+import { sendOtpWhatsAppCloud } from '@/lib/whatsapp-cloud-otp';
 
 const OTP_EXPIRY_MINUTES = 10;
 const CODE_LENGTH = 6;
+
+/** `sms` → Twilio SMS; `whatsapp` → Meta WhatsApp Cloud API (`lib/whatsapp-cloud-otp.ts`) */
+function requesterOtpChannel(): 'sms' | 'whatsapp' {
+  const raw = (process.env.REQUESTER_OTP_CHANNEL ?? 'sms').toLowerCase().trim();
+  return raw === 'whatsapp' ? 'whatsapp' : 'sms';
+}
 
 function generateCode(): string {
   const digits = '0123456789';
@@ -45,17 +52,27 @@ export async function POST(req: NextRequest) {
     const isDev = process.env.NODE_ENV !== 'production';
     if (isDev) setOtp(phone, code);
 
-    const sent = await sendOtpSms(phone, code, 'sms');
+    const channel = requesterOtpChannel();
+    const sent =
+      channel === 'whatsapp'
+        ? await sendOtpWhatsAppCloud({
+            phone,
+            code,
+            expiryMinutes: OTP_EXPIRY_MINUTES,
+          })
+        : await sendOtpSms(phone, code, 'sms');
     if (!sent && !isDev) {
+      const via = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
       return NextResponse.json(
-        { success: false, message: 'Failed to send verification code by SMS. Please try again.' },
+        { success: false, message: `Failed to send verification code by ${via}. Please try again.` },
         { status: 500 }
       );
     }
 
+    const deliveryLabel = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
     return NextResponse.json({
       success: true,
-      message: 'Verification code sent by SMS',
+      message: `Verification code sent by ${deliveryLabel}`,
       ...(isDev && { devCode: code }),
     });
   } catch (e) {
