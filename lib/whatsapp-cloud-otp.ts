@@ -125,15 +125,19 @@ export async function sendOtpWhatsAppCloud({
 
     const data = (await res.json().catch(() => ({}))) as {
       messages?: unknown;
-      error?: { message?: string; code?: number };
+      error?: { message?: string; code?: number; error_subcode?: number };
     };
 
     if (!res.ok || data?.error) {
-      console.error(
-        'WhatsApp Cloud OTP failed:',
-        res.status,
-        data?.error?.message ?? JSON.stringify(data)
-      );
+      const code = data?.error?.code;
+      const msg = data?.error?.message ?? JSON.stringify(data);
+      console.error('WhatsApp Cloud OTP failed:', res.status, msg);
+      if (code === 131030 || /allowed list/i.test(String(msg))) {
+        console.error(
+          'Hint (#131030): Add this recipient under Meta app → WhatsApp → API setup ' +
+            '(test / allowed recipient numbers), or use a fully live app + approved messaging tier.'
+        );
+      }
       return false;
     }
 
