@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import {
-  CAN_MANAGE_STAFF_ROLES,
-  getPrivateCompanyMembership,
-} from '@/lib/private-company-context';
+import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -12,8 +9,9 @@ const prisma = _prisma as any;
 const DEFAULT_COLORS = ['#6C63FF', '#00D4AA', '#FBBF24', '#38BDF8', '#FF9F43', '#A78BFA', '#4ADE80', '#FF4757'];
 
 /**
- * Allows the workspace owner OR a MANAGER / COORDINATOR staff member of an
- * APPROVED workspace. Used for create / edit / delete department mutations.
+ * Department mutations are workspace-wide structural changes, so we restrict
+ * them to the workspace OWNER (the COMPANY-role requester). Managers and
+ * coordinators can only manage staff inside existing departments.
  */
 async function ownerOnly(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -21,34 +19,16 @@ async function ownerOnly(req: NextRequest) {
     return { ok: false as const, response: NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 }) };
   }
   const m = await getPrivateCompanyMembership(auth.payload.requesterId);
-  if (!m.effectiveCompanyId) {
-    return { ok: false as const, response: NextResponse.json({ success: false, message: 'No workspace.' }, { status: 403 }) };
+  if (!m.ownedCompanyId || m.ownedCompanyStatus !== 'APPROVED') {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { success: false, message: 'Only the workspace owner can manage departments.' },
+        { status: 403 }
+      ),
+    };
   }
-  const company = await prisma.privateCompany.findUnique({
-    where: { id: m.effectiveCompanyId },
-    select: { status: true },
-  });
-  if (!company || company.status !== 'APPROVED') {
-    return { ok: false as const, response: NextResponse.json({ success: false, message: 'Workspace is not active.' }, { status: 403 }) };
-  }
-  const isOwner = m.ownedCompanyId === m.effectiveCompanyId;
-  if (!isOwner) {
-    const me = await prisma.ticketRequester.findUnique({
-      where: { id: auth.payload.requesterId },
-      select: { role: true },
-    });
-    const role = String(me?.role ?? '').toUpperCase();
-    if (!CAN_MANAGE_STAFF_ROLES.has(role)) {
-      return {
-        ok: false as const,
-        response: NextResponse.json(
-          { success: false, message: 'Only the owner, managers, or coordinators can manage departments.' },
-          { status: 403 }
-        ),
-      };
-    }
-  }
-  return { ok: true as const, requesterId: auth.payload.requesterId, companyId: m.effectiveCompanyId };
+  return { ok: true as const, requesterId: auth.payload.requesterId, companyId: m.ownedCompanyId };
 }
 
 /** GET — list departments for the workspace (owner OR staff). */

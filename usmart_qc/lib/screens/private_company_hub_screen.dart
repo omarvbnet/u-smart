@@ -603,8 +603,18 @@ class _OverviewTab extends StatelessWidget {
   const _OverviewTab({required this.workspace});
   final PrivateCompanyWorkspace workspace;
 
+  void _openBroadcast(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BroadcastSheet(workspace: workspace),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pc = context.watch<PrivateCompanyProvider>();
     final byRole = <String, int>{};
     for (final s in workspace.staff) {
       byRole[s.role] = (byRole[s.role] ?? 0) + 1;
@@ -612,6 +622,16 @@ class _OverviewTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
+        if (pc.canBroadcastNotifications) ...[
+          _GradientButton(
+            onPressed:
+                pc.submitting ? null : () => _openBroadcast(context),
+            label: 'Send notification',
+            icon: Icons.campaign_rounded,
+            stretch: true,
+          ),
+          const SizedBox(height: 14),
+        ],
         Row(
           children: [
             Expanded(
@@ -773,7 +793,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        if (pc.canManageStaff)
+        if (pc.canManageDepartments)
           _GradientButton(
             onPressed: pc.submitting ? null : () => _openCreate(),
             label: 'New department',
@@ -785,7 +805,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
           _EmptyState(
             icon: Icons.account_tree_outlined,
             title: 'No departments yet',
-            subtitle: pc.canManageStaff
+            subtitle: pc.canManageDepartments
                 ? 'Create departments to organize your team and assign tickets cleanly.'
                 : 'Your owner has not created any department yet.',
           )
@@ -832,7 +852,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
                           ],
                         ),
                       ),
-                      if (pc.canManageStaff)
+                      if (pc.canManageDepartments)
                         PopupMenuButton<String>(
                           color: const Color(0xFF12122A),
                           icon: const Icon(Icons.more_vert_rounded, color: Colors.white54),
@@ -1325,6 +1345,8 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
   String? _departmentId;
   String? _specialization;
 
+  bool _initialDefaultsApplied = false;
+
   @override
   void initState() {
     super.initState();
@@ -1339,6 +1361,23 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
       _departmentId = e.departmentId;
       _specialization = e.specialization;
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialDefaultsApplied) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    if (widget.existing == null && pc.isDepartmentManager) {
+      // Lock the new staff member to the manager's own department and to the
+      // execution roles the backend will accept.
+      _departmentId = pc.myDepartmentId;
+      const allowedManagerRoles = {'ENGINEER', 'TECHNICIAN', 'WORKER'};
+      if (!allowedManagerRoles.contains(_role)) {
+        _role = 'TECHNICIAN';
+      }
+    }
+    _initialDefaultsApplied = true;
   }
 
   @override
@@ -1434,58 +1473,121 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: ['MANAGER', 'COORDINATOR', 'ENGINEER', 'TECHNICIAN', 'WORKER'].map((r) {
-                    final selected = _role == r;
-                    final color = _staffRoleColor(r);
-                    return GestureDetector(
-                      onTap: () => setState(() => _role = r),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: selected ? color.withAlpha(40) : Colors.white10,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: selected ? color : Colors.white24,
-                              width: selected ? 1.4 : 1),
-                        ),
-                        child: Text(
-                          _staffRoleLabel(r),
-                          style: TextStyle(
-                            color: selected ? color : Colors.white60,
-                            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                            fontSize: 12,
+                  children: () {
+                    // Owners can grant every staff role. Managers / coordinators
+                    // can only assign the "execution" roles to their own team.
+                    final allRoles = const [
+                      'MANAGER',
+                      'COORDINATOR',
+                      'ENGINEER',
+                      'TECHNICIAN',
+                      'WORKER',
+                    ];
+                    final allowed = pc.isOwner
+                        ? allRoles
+                        : const ['ENGINEER', 'TECHNICIAN', 'WORKER'];
+                    return allowed.map((r) {
+                      final selected = _role == r;
+                      final color = _staffRoleColor(r);
+                      return GestureDetector(
+                        onTap: () => setState(() => _role = r),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selected ? color.withAlpha(40) : Colors.white10,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: selected ? color : Colors.white24,
+                                width: selected ? 1.4 : 1),
+                          ),
+                          child: Text(
+                            _staffRoleLabel(r),
+                            style: TextStyle(
+                              color: selected ? color : Colors.white60,
+                              fontWeight:
+                                  selected ? FontWeight.w700 : FontWeight.w500,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList();
+                  }(),
                 ),
                 const SizedBox(height: 18),
                 const _SectionTitle('Department'),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    GestureDetector(
-                      onTap: () => setState(() => _departmentId = null),
-                      child: _ChipBox(
-                        label: 'No department',
-                        selected: _departmentId == null,
-                        color: const Color(0xFF6B7280),
+                if (pc.isDepartmentManager)
+                  // Managers / coordinators can only add staff inside their own
+                  // department, so we render a locked badge instead of a picker.
+                  Builder(builder: (_) {
+                    final myDept = widget.departments
+                        .cast<PrivateCompanyDepartment?>()
+                        .firstWhere(
+                          (d) => d?.id == pc.myDepartmentId,
+                          orElse: () => null,
+                        );
+                    final color = myDept?.colorValue ?? const Color(0xFF6B7280);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: color.withAlpha(28),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: color.withAlpha(80)),
                       ),
-                    ),
-                    ...widget.departments.map((d) => GestureDetector(
-                          onTap: () => setState(() => _departmentId = d.id),
-                          child: _ChipBox(
-                            label: d.name,
-                            selected: _departmentId == d.id,
-                            color: d.colorValue,
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_outline_rounded,
+                              color: color, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              myDept?.name ?? 'Your department',
+                              style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
                           ),
-                        )),
-                  ],
-                ),
+                          Text(
+                            'Locked to your team',
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(140),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  })
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(() => _departmentId = null),
+                        child: _ChipBox(
+                          label: 'No department',
+                          selected: _departmentId == null,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                      ...widget.departments.map((d) => GestureDetector(
+                            onTap: () =>
+                                setState(() => _departmentId = d.id),
+                            child: _ChipBox(
+                              label: d.name,
+                              selected: _departmentId == d.id,
+                              color: d.colorValue,
+                            ),
+                          )),
+                    ],
+                  ),
                 const SizedBox(height: 18),
                 const _SectionTitle('Specialization'),
                 const SizedBox(height: 8),
@@ -2282,6 +2384,319 @@ class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
                   onPressed: pc.submitting ? null : _submit,
                   label: pc.submitting ? 'Saving…' : 'Save checklist',
                   icon: Icons.save_rounded,
+                  stretch: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Owner notification broadcast sheet ─────────────────────────────────────
+
+enum _BroadcastMode { all, departments, specializations, both }
+
+class _BroadcastSheet extends StatefulWidget {
+  const _BroadcastSheet({required this.workspace});
+  final PrivateCompanyWorkspace workspace;
+
+  @override
+  State<_BroadcastSheet> createState() => _BroadcastSheetState();
+}
+
+class _BroadcastSheetState extends State<_BroadcastSheet> {
+  static const _specializations = [
+    'ELECTRICAL',
+    'MECHANICAL',
+    'CIVIL',
+    'TELECOM',
+    'PROGRAMMER',
+  ];
+
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  _BroadcastMode _mode = _BroadcastMode.all;
+  final Set<String> _departmentIds = <String>{};
+  final Set<String> _specs = <String>{};
+  bool _includeOwner = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  String _modeApi() {
+    switch (_mode) {
+      case _BroadcastMode.all:
+        return 'all';
+      case _BroadcastMode.departments:
+        return 'departments';
+      case _BroadcastMode.specializations:
+        return 'specializations';
+      case _BroadcastMode.both:
+        return 'both';
+    }
+  }
+
+  bool get _showDepartments =>
+      _mode == _BroadcastMode.departments || _mode == _BroadcastMode.both;
+  bool get _showSpecs =>
+      _mode == _BroadcastMode.specializations || _mode == _BroadcastMode.both;
+
+  Future<void> _send() async {
+    final pc = context.read<PrivateCompanyProvider>();
+    final body = _body.text.trim();
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Type a message before sending.'),
+          backgroundColor: Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (_showDepartments && _departmentIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pick at least one department.'),
+          backgroundColor: Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (_showSpecs && _specs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pick at least one specialization.'),
+          backgroundColor: Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final delivered = await pc.broadcastNotification(
+      message: body,
+      title: _title.text.trim(),
+      mode: _modeApi(),
+      departmentIds: _departmentIds.toList(),
+      specializations: _specs.toList(),
+      includeOwner: _includeOwner,
+    );
+    if (delivered != null && mounted) Navigator.pop(context);
+  }
+
+  Widget _modeChip(String label, _BroadcastMode mode, IconData icon) {
+    final selected = _mode == mode;
+    return GestureDetector(
+      onTap: () => setState(() => _mode = mode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF6C63FF).withAlpha(50)
+              : Colors.white.withAlpha(10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? const Color(0xFF6C63FF) : Colors.white24,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 14,
+                color: selected
+                    ? const Color(0xFF8B83FF)
+                    : Colors.white.withAlpha(160)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? const Color(0xFF8B83FF)
+                    : Colors.white.withAlpha(170),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pc = context.watch<PrivateCompanyProvider>();
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A0A1F),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: const [
+                    Icon(Icons.campaign_rounded, color: Color(0xFF6C63FF)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Send notification',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Reach the right people in your workspace.',
+                  style: TextStyle(
+                      color: Colors.white.withAlpha(170), fontSize: 12),
+                ),
+                const SizedBox(height: 18),
+                _DarkField(
+                  controller: _title,
+                  label: 'Title (optional)',
+                  hint: 'e.g. Site visit tomorrow at 9 AM',
+                  icon: Icons.title_rounded,
+                ),
+                const SizedBox(height: 12),
+                _DarkField(
+                  controller: _body,
+                  label: 'Message *',
+                  hint: 'What do you want your team to know?',
+                  icon: Icons.message_rounded,
+                  maxLines: 4,
+                ),
+                const SizedBox(height: 18),
+                const _SectionTitle('Audience'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _modeChip(
+                        'All staff', _BroadcastMode.all, Icons.groups_rounded),
+                    _modeChip('By department', _BroadcastMode.departments,
+                        Icons.account_tree_rounded),
+                    _modeChip('By specialization',
+                        _BroadcastMode.specializations, Icons.engineering_rounded),
+                    _modeChip(
+                        'Both filters', _BroadcastMode.both, Icons.tune_rounded),
+                  ],
+                ),
+                if (_showDepartments) ...[
+                  const SizedBox(height: 16),
+                  const _SectionTitle('Departments'),
+                  const SizedBox(height: 8),
+                  if (widget.workspace.departments.isEmpty)
+                    Text(
+                      'No departments yet. Create one first.',
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(160), fontSize: 12),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.workspace.departments.map((d) {
+                        final selected = _departmentIds.contains(d.id);
+                        return GestureDetector(
+                          onTap: () => setState(() {
+                            if (selected) {
+                              _departmentIds.remove(d.id);
+                            } else {
+                              _departmentIds.add(d.id);
+                            }
+                          }),
+                          child: _ChipBox(
+                            label: d.name,
+                            selected: selected,
+                            color: d.colorValue,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                ],
+                if (_showSpecs) ...[
+                  const SizedBox(height: 16),
+                  const _SectionTitle('Specializations'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _specializations.map((s) {
+                      final selected = _specs.contains(s);
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          if (selected) {
+                            _specs.remove(s);
+                          } else {
+                            _specs.add(s);
+                          }
+                        }),
+                        child: _ChipBox(
+                          label: _specLabel(s),
+                          selected: selected,
+                          color: _specColor(s),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Switch(
+                      value: _includeOwner,
+                      activeColor: const Color(0xFF6C63FF),
+                      onChanged: (v) => setState(() => _includeOwner = v),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Also send a copy to me',
+                        style: TextStyle(
+                            color: Colors.white.withAlpha(200), fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _GradientButton(
+                  onPressed: pc.submitting ? null : _send,
+                  label: pc.submitting ? 'Sending…' : 'Send notification',
+                  icon: Icons.send_rounded,
                   stretch: true,
                 ),
               ],

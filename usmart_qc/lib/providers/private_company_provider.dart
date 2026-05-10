@@ -65,6 +65,24 @@ class PrivateCompanyProvider extends ChangeNotifier {
     return role == 'MANAGER' || role == 'COORDINATOR';
   }
 
+  /// Only the workspace owner can create / edit / delete departments.
+  bool get canManageDepartments => isOwner;
+
+  /// Only the workspace owner can broadcast workspace announcements.
+  bool get canBroadcastNotifications => isOwner;
+
+  /// True for managers/coordinators (non-owner) — they are scoped to their own
+  /// department and may only grant the ENGINEER / TECHNICIAN / WORKER roles.
+  bool get isDepartmentManager {
+    if (isOwner) return false;
+    if (!isStaff) return false;
+    final role = _resolvedRole;
+    return role == 'MANAGER' || role == 'COORDINATOR';
+  }
+
+  /// Department id the current user belongs to (when staff).
+  String? get myDepartmentId => _membership.departmentId;
+
   /// Cached entry of the current user inside the workspace's staff list (only set
   /// when [setCurrentRequesterId] has been called and the user is staff).
   PrivateCompanyStaff? _myStaffEntry;
@@ -489,6 +507,51 @@ class PrivateCompanyProvider extends ChangeNotifier {
     } catch (_) {
       _setError('Network error.');
       return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  // ─── Owner broadcast ─────────────────────────────────────────────────────
+
+  /// Owner-only. Sends an in-app + push notification to staff matching the
+  /// selected audience. `mode` is one of 'all', 'departments', 'specializations',
+  /// or 'both'. Returns the number of staff the notification was delivered to,
+  /// or null on failure.
+  Future<int?> broadcastNotification({
+    required String message,
+    String? title,
+    String mode = 'all',
+    List<String> departmentIds = const [],
+    List<String> specializations = const [],
+    bool includeOwner = false,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyNotifications, body: {
+        'body': message,
+        if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        'mode': mode,
+        if (departmentIds.isNotEmpty) 'departmentIds': departmentIds,
+        if (specializations.isNotEmpty) 'specializations': specializations,
+        'includeOwner': includeOwner,
+      });
+      if (res['success'] == true) {
+        final delivered = (res['delivered'] as num?)?.toInt() ?? 0;
+        _setSuccess(
+          delivered == 0
+              ? 'Notification queued.'
+              : 'Notification sent to $delivered staff member${delivered == 1 ? '' : 's'}.',
+        );
+        return delivered;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to send notification.');
+      return null;
+    } catch (_) {
+      _setError('Network error while sending the notification.');
+      return null;
     } finally {
       _submitting = false;
       notifyListeners();

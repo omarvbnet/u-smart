@@ -18,7 +18,8 @@ export type NotificationCopyKey =
   | 'ncr_rework'
   | 'site_shared_received'
   | 'conflict_resolved'
-  | 'conflict_reinspection';
+  | 'conflict_reinspection'
+  | 'workspace_announcement';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -454,6 +455,24 @@ const TEMPLATES: Record<
       body: v.siteName
         ? `بەڕێوەبەر "${v.siteName}"ی نێردەوە بۆ دووبارە پشکنین. تیکەتەکە ئێستا لە کاردایە.`
         : 'بەڕێوەبەر ئەم تیکەتە نێردەوە بۆ دووبارە پشکنین. تیکەتەکە ئێستا لە کاردایە.',
+    }),
+  },
+  workspace_announcement: {
+    en: (v) => ({
+      title: v.title?.trim() || 'Workspace announcement',
+      body: v.body?.trim() || 'Your workspace owner sent you a message.',
+    }),
+    ar: (v) => ({
+      title: v.title?.trim() || 'إشعار من المالك',
+      body: v.body?.trim() || 'أرسل مالك مساحة العمل رسالة لك.',
+    }),
+    tr: (v) => ({
+      title: v.title?.trim() || 'Çalışma alanı duyurusu',
+      body: v.body?.trim() || 'Çalışma alanı sahibi size bir mesaj gönderdi.',
+    }),
+    ku: (v) => ({
+      title: v.title?.trim() || 'ڕاگەیەنراوی ئۆفیس',
+      body: v.body?.trim() || 'خاوەنی شوێنی کار پەیامێکی بۆ ناردووی.',
     }),
   },
 };

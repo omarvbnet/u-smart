@@ -106,6 +106,14 @@ export async function GET(req: NextRequest) {
 
     // Staff branch: include lightweight workspace info
     if (requester.privateCompanyId) {
+      const myRole = String(requester.role ?? '').toUpperCase();
+      const myDepartmentId = requester.privateCompanyDepartmentId ?? null;
+      // Managers / coordinators / engineers / technicians / workers see only
+      // staff inside their own department. Department-less staff see only
+      // themselves. Owner branch above always sees every staff member.
+      const staffWhere: Record<string, unknown> | undefined = myDepartmentId
+        ? { privateCompanyDepartmentId: myDepartmentId }
+        : { id: requester.id };
       const ws = await prisma.privateCompany.findUnique({
         where: { id: requester.privateCompanyId },
         select: {
@@ -128,9 +136,11 @@ export async function GET(req: NextRequest) {
               _count: { select: { members: true } },
             },
           },
-          // Staff need to see their teammates so the client can resolve their
-          // own role + permissions (e.g. canCreateChecklists / canManageStaff).
+          // Staff need to see their teammates (same department only) so the
+          // client can resolve their own role + permissions (e.g.
+          // canCreateChecklists / canManageStaff).
           staff: {
+            where: staffWhere,
             orderBy: { createdAt: 'desc' },
             select: {
               id: true,
@@ -167,8 +177,8 @@ export async function GET(req: NextRequest) {
           isOwner: false,
           isStaff: true,
           status: ws?.status ?? null,
-          departmentId: requester.privateCompanyDepartmentId ?? null,
-          role: String(requester.role ?? '').toUpperCase() || null,
+          departmentId: myDepartmentId,
+          role: myRole || null,
         },
         workspace: ws,
       });

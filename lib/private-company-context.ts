@@ -35,6 +35,16 @@ export const CAN_CREATE_CHECKLIST_ROLES = new Set([
 /** Roles that can manage workspace staff (add / edit / reset password / soft remove). */
 export const CAN_MANAGE_STAFF_ROLES = new Set(['MANAGER', 'COORDINATOR', 'COMPANY']);
 
+/**
+ * Roles that can create / edit / delete departments. Department structure is
+ * a workspace-wide concern, so it is intentionally restricted to the COMPANY
+ * owner (the only requester whose role is `COMPANY` inside a workspace).
+ */
+export const CAN_MANAGE_DEPARTMENTS_ROLES = new Set(['COMPANY']);
+
+/** Roles a manager / coordinator is allowed to grant when adding a staff member. */
+export const MANAGER_CAN_GRANT_STAFF_ROLES = new Set(['ENGINEER', 'TECHNICIAN', 'WORKER']);
+
 /** Roles inside a workspace that can create tickets for the workspace. */
 export const CAN_CREATE_TICKETS_ROLES = new Set([
   'COMPANY',
