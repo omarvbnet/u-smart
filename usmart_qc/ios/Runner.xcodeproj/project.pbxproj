@@ -201,7 +201,6 @@
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				C4D5812F9342A68123E00AB1 /* Strip Mach-O before Pods embed */,
 				A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */,
-				EBFB461BB2C4FE4C7CBA063C /* [CP] Embed Pods Frameworks */,
 				AF742416BEA00582444DD409 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
@@ -372,23 +371,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/bash \"${PROJECT_DIR}/strip_ios_build_products.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		EBFB461BB2C4FE4C7CBA063C /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		F7DD2031C17C2DCBD962315E /* [CP] Check Pods Manifest.lock */ = {

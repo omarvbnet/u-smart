@@ -9,8 +9,13 @@
  * - WHATSAPP_OTP_TEMPLATE — optional shorthand; same as WHATSAPP_OTP_TEMPLATE_NAME
  * - WHATSAPP_OTP_TEMPLATE_LANGUAGE — optional, default en_US (must match template)
  * - WHATSAPP_CLOUD_GRAPH_VERSION — optional, default v22.0
- * - WHATSAPP_OTP_TEMPLATE_BODY_VARS — optional, "1" (default) or "2"; if "2", second body var = expiry minutes
- * - WHATSAPP_OTP_URL_BUTTON_INDEX — optional; if set ("0"|"1"), adds button/url component with OTP as suffix (matches copy-URL auth templates)
+ * - WHATSAPP_OTP_TEMPLATE_BODY_VARS — optional, "0" | "1" (default) | "2" (OTP + expiry for {{2}})
+ * - WHATSAPP_OTP_URL_BUTTON_INDEX — explicit "0" | "1" for dynamic URL suffix (OTP) on the template button
+ * - WHATSAPP_OTP_BUTTON_MODE — optional:
+ *     - unset / "utility": add URL button only if WHATSAPP_OTP_URL_BUTTON_INDEX is "0"|"1" (backward compatible).
+ *     - "auth"|"authentication"|"copy_code": always send Meta auth-style URL button + body (fixes #131008 on copy-code auth templates).
+ *     - "none": never add a button component (body-only Utility templates).
+ * - WHATSAPP_OTP_USE_COUPON_CODE_BUTTON — set "true" to send `sub_type: COPY_CODE` + `coupon_code` param (some API versions).
  */
 
 function normalizeEnvValue(raw: string | undefined): string {
@@ -53,8 +58,25 @@ export async function sendOtpWhatsAppCloud({
   const graphVersion =
     normalizeEnvValue(process.env.WHATSAPP_CLOUD_GRAPH_VERSION) || 'v22.0';
   const bodyVarsRaw = normalizeEnvValue(process.env.WHATSAPP_OTP_TEMPLATE_BODY_VARS) || '1';
-  const bodyVarCount = bodyVarsRaw === '2' ? 2 : 1;
-  const urlButtonIdx = normalizeEnvValue(process.env.WHATSAPP_OTP_URL_BUTTON_INDEX);
+  const bodyVarCount: 0 | 1 | 2 =
+    bodyVarsRaw === '0' ? 0 : bodyVarsRaw === '2' ? 2 : 1;
+
+  const buttonMode = normalizeEnvValue(process.env.WHATSAPP_OTP_BUTTON_MODE).toLowerCase();
+  const explicitButtonIdx = normalizeEnvValue(process.env.WHATSAPP_OTP_URL_BUTTON_INDEX);
+  const useCouponCodeStyle =
+    normalizeEnvValue(process.env.WHATSAPP_OTP_USE_COUPON_CODE_BUTTON).toLowerCase() === 'true';
+
+  /** Meta Authentication “copy code” sends must include URL button idx 0 with same OTP — see Meta auth OTP docs. */
+  let urlButtonIdx: '0' | '1' | null = null;
+  const authModes = new Set(['auth', 'authentication', 'copy_code', 'otp']);
+  if (buttonMode === 'none' || buttonMode === 'utility' || buttonMode === '') {
+    if (explicitButtonIdx === '0' || explicitButtonIdx === '1') urlButtonIdx = explicitButtonIdx;
+  } else if (authModes.has(buttonMode)) {
+    urlButtonIdx = explicitButtonIdx === '1' ? '1' : '0';
+  }
+  if (useCouponCodeStyle) {
+    urlButtonIdx = explicitButtonIdx === '1' ? '1' : '0';
+  }
 
   const to = toWhatsAppCloudRecipient(phone);
   if (!token || !phoneNumberId || !templateName || !to) {
@@ -71,9 +93,10 @@ export async function sendOtpWhatsAppCloud({
     return false;
   }
 
-  const bodyParameters: { type: 'text'; text: string }[] = [
-    { type: 'text', text: code },
-  ];
+  const bodyParameters: { type: 'text'; text: string }[] = [];
+  if (bodyVarCount >= 1) {
+    bodyParameters.push({ type: 'text', text: code });
+  }
   if (bodyVarCount >= 2) {
     bodyParameters.push({
       type: 'text',
@@ -81,20 +104,30 @@ export async function sendOtpWhatsAppCloud({
     });
   }
 
-  const components: unknown[] = [
-    {
+  const components: unknown[] = [];
+  if (bodyVarCount >= 1) {
+    components.push({
       type: 'body',
       parameters: bodyParameters,
-    },
-  ];
+    });
+  }
 
   if (urlButtonIdx === '0' || urlButtonIdx === '1') {
-    components.push({
-      type: 'button',
-      sub_type: 'url',
-      index: urlButtonIdx,
-      parameters: [{ type: 'text', text: code }],
-    });
+    if (useCouponCodeStyle) {
+      components.push({
+        type: 'button',
+        sub_type: 'COPY_CODE',
+        index: urlButtonIdx,
+        parameters: [{ type: 'coupon_code', coupon_code: code }],
+      });
+    } else {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: urlButtonIdx,
+        parameters: [{ type: 'text', text: code }],
+      });
+    }
   }
 
   const payload = {
@@ -123,19 +156,34 @@ export async function sendOtpWhatsAppCloud({
       body: JSON.stringify(payload),
     });
 
-    const data = (await res.json().catch(() => ({}))) as {
-      messages?: unknown;
-      error?: { message?: string; code?: number; error_subcode?: number };
-    };
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
 
-    if (!res.ok || data?.error) {
-      const code = data?.error?.code;
-      const msg = data?.error?.message ?? JSON.stringify(data);
+    const err = data?.error as
+      | { message?: string; code?: number; error_subcode?: number; error_data?: unknown }
+      | undefined;
+
+    if (!res.ok || err) {
+      const code = err?.code;
+      const msg = err?.message ?? JSON.stringify(data);
       console.error('WhatsApp Cloud OTP failed:', res.status, msg);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('WhatsApp Cloud OTP Graph response:', JSON.stringify(data));
+      }
       if (code === 131030 || /allowed list/i.test(String(msg))) {
         console.error(
           'Hint (#131030): Add this recipient under Meta app → WhatsApp → API setup ' +
             '(test / allowed recipient numbers), or use a fully live app + approved messaging tier.'
+        );
+      }
+      if (
+        code === 131008 ||
+        /parameter is missing|requires a parameter|131008/i.test(String(msg))
+      ) {
+        console.error(
+          'Hint (#131008): Match template components — e.g. Authentication + Copy code needs BOTH body OTP ' +
+            'and URL button suffix: set WHATSAPP_OTP_BUTTON_MODE=auth (or WHATSAPP_OTP_URL_BUTTON_INDEX=0). ' +
+            'Utility templates with only {{1}} in the body must use WHATSAPP_OTP_BUTTON_MODE=none ' +
+            'and fix WHATSAPP_OTP_TEMPLATE_BODY_VARS (use 2 if template has OTP + expiry).'
         );
       }
       return false;
