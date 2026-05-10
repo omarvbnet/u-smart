@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
           isOwner: true,
           isStaff: false,
           status: ws.status,
+          role: String(requester.role ?? '').toUpperCase() || 'COMPANY',
         },
         workspace: ws,
       });
@@ -116,17 +117,46 @@ export async function GET(req: NextRequest) {
           approvedAt: true,
           departments: {
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-            select: { id: true, name: true, color: true, iconKey: true },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              color: true,
+              iconKey: true,
+              sortOrder: true,
+              createdAt: true,
+              _count: { select: { members: true } },
+            },
+          },
+          // Staff need to see their teammates so the client can resolve their
+          // own role + permissions (e.g. canCreateChecklists / canManageStaff).
+          staff: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              username: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+              specialization: true,
+              status: true,
+              privateCompanyDepartmentId: true,
+              createdAt: true,
+            },
           },
           checklists: {
             orderBy: { createdAt: 'desc' },
             select: {
               id: true,
               name: true,
+              description: true,
               category: true,
               techniqueTypes: true,
               items: true,
+              createdById: true,
               departmentId: true,
+              createdAt: true,
             },
           },
         },
@@ -138,6 +168,7 @@ export async function GET(req: NextRequest) {
           isStaff: true,
           status: ws?.status ?? null,
           departmentId: requester.privateCompanyDepartmentId ?? null,
+          role: String(requester.role ?? '').toUpperCase() || null,
         },
         workspace: ws,
       });
@@ -145,7 +176,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      membership: { isOwner: false, isStaff: false, status: null },
+      membership: { isOwner: false, isStaff: false, status: null, role: null },
       workspace: null,
     });
   } catch (err) {

@@ -32,6 +32,17 @@ export const CAN_CREATE_CHECKLIST_ROLES = new Set([
   'COMPANY',
 ]);
 
+/** Roles that can manage workspace staff (add / edit / reset password / soft remove). */
+export const CAN_MANAGE_STAFF_ROLES = new Set(['MANAGER', 'COORDINATOR', 'COMPANY']);
+
+/** Roles inside a workspace that can create tickets for the workspace. */
+export const CAN_CREATE_TICKETS_ROLES = new Set([
+  'COMPANY',
+  'MANAGER',
+  'COORDINATOR',
+  'ENGINEER',
+]);
+
 export function isStaffRole(role: string | null | undefined): boolean {
   return !!role && STAFF_ROLES.has(role.toUpperCase());
 }

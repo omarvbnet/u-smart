@@ -31,18 +31,38 @@ class PrivateCompanyProvider extends ChangeNotifier {
   bool get isRejected => _workspace?.isRejected ?? false;
   bool get isSuspended => _workspace?.isSuspended ?? false;
 
+  /// Resolved uppercase role for the current user inside the workspace.
+  /// Prefers the authoritative `membership.role` from the API and falls back
+  /// to the cached staff-list entry (which is only present once the workspace
+  /// has been refreshed and the staff list includes the current user).
+  String? get _resolvedRole {
+    final fromMembership = _membership.role?.toUpperCase();
+    if (fromMembership != null && fromMembership.isNotEmpty) return fromMembership;
+    final fromStaff = _myStaffEntry?.role.toUpperCase();
+    if (fromStaff != null && fromStaff.isNotEmpty) return fromStaff;
+    return null;
+  }
+
   /// Roles that can create checklists (engineers, managers, coordinators, owner).
   bool get canCreateChecklists {
     if (isOwner) return true;
     if (!isStaff) return false;
-    final me = _myStaffEntry;
-    if (me == null) return false;
-    final role = me.role.toUpperCase();
+    final role = _resolvedRole;
+    if (role == null) return false;
     return role == 'MANAGER' ||
         role == 'COORDINATOR' ||
         role == 'ENGINEER' ||
         role == 'QUALITY_ENGINEER' ||
         role == 'SUPERVISION_ENGINEER';
+  }
+
+  /// Roles that can add / edit / suspend / reset-password staff members.
+  /// Owner + MANAGER + COORDINATOR. Hard-delete remains owner-only.
+  bool get canManageStaff {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole;
+    return role == 'MANAGER' || role == 'COORDINATOR';
   }
 
   /// Cached entry of the current user inside the workspace's staff list (only set

@@ -6,6 +6,7 @@ import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import 'complete_phone_registration_screen.dart';
 import 'privacy_policy_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -183,12 +184,37 @@ class _LoginScreenState extends State<LoginScreen>
       final err = auth.error;
       final noAccount = auth.otpVerifyFailureCode == 'NO_ACCOUNT' ||
           (err ?? '').toLowerCase().contains('no account');
+      if (noAccount) {
+        // Phone is not registered yet — the OTP we just verified is still
+        // valid for ~5 minutes, so push the profile-completion screen which
+        // will register the requester using the same code and then navigate
+        // straight to the dashboard on success.
+        final phone = _normalizePhone(_phoneOtpCtrl.text);
+        final code = _otpCodeCtrl.text.trim();
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('phone_not_registered_body')),
+            backgroundColor: const Color(0xFF6C63FF),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CompletePhoneRegistrationScreen(
+              verifiedPhone: phone,
+              verifiedOtpCode: code,
+            ),
+          ),
+        );
+        return;
+      }
       _showSnack(
-        noAccount
-            ? l10n.t('phone_not_registered_body')
-            : err == AuthProvider.invalidCredentialsMarker
-                ? l10n.t('invalid_code')
-                : (err ?? l10n.t('login_failed')),
+        err == AuthProvider.invalidCredentialsMarker
+            ? l10n.t('invalid_code')
+            : (err ?? l10n.t('login_failed')),
         isError: true,
       );
     }

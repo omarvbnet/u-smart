@@ -9,23 +9,40 @@ const prisma = _prisma as any;
 
 const TASK_CATEGORIES = ['MAINTENANCE', 'QUALITY', 'SUPERVISION'] as const;
 
-type ChecklistItemInput = { id?: string; label?: unknown; weight?: unknown; required?: unknown };
+type ChecklistItemInput = {
+  id?: string;
+  label?: unknown;
+  weight?: unknown;
+  required?: unknown;
+  severity?: unknown;
+};
 
-function normalizeItems(raw: unknown): Array<{ id: string; label: string; weight?: string; required?: boolean }> | null {
+type StoredChecklistItem = {
+  id: string;
+  label: string;
+  weight?: string;
+  required?: boolean;
+  severity: 'minor' | 'major';
+};
+
+function normalizeItems(raw: unknown): StoredChecklistItem[] | null {
   if (!Array.isArray(raw)) return null;
   const items = raw
     .map((it) => {
       const item = it as ChecklistItemInput;
       const label = typeof item.label === 'string' ? item.label.trim() : '';
       if (!label) return null;
+      const sev = typeof item.severity === 'string' ? item.severity.trim().toLowerCase() : '';
+      const severity: 'minor' | 'major' = sev === 'major' ? 'major' : 'minor';
       return {
         id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : crypto.randomBytes(6).toString('hex'),
         label,
         weight: typeof item.weight === 'string' ? item.weight.trim() : undefined,
         required: item.required === true ? true : undefined,
-      };
+        severity,
+      } satisfies StoredChecklistItem;
     })
-    .filter(Boolean) as Array<{ id: string; label: string; weight?: string; required?: boolean }>;
+    .filter(Boolean) as StoredChecklistItem[];
   if (items.length === 0) return null;
   return items;
 }

@@ -3,7 +3,11 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { getPrivateCompanyMembership, PRIVATE_COMPANY_STAFF_ROLES } from '@/lib/private-company-context';
+import {
+  CAN_MANAGE_STAFF_ROLES,
+  getPrivateCompanyMembership,
+  PRIVATE_COMPANY_STAFF_ROLES,
+} from '@/lib/private-company-context';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -47,7 +51,55 @@ async function ownerGuard(req: NextRequest) {
       ),
     };
   }
-  return { ok: true as const, requesterId: auth.payload.requesterId, companyId: m.ownedCompanyId };
+  return { ok: true as const, requesterId: auth.payload.requesterId, companyId: m.ownedCompanyId, isOwner: true as const };
+}
+
+/**
+ * Allows the owner OR a MANAGER / COORDINATOR staff member of an APPROVED
+ * workspace. Used for non-destructive staff management (create / edit /
+ * reset password / soft-suspend).
+ */
+async function managerGuard(req: NextRequest) {
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
+    return { ok: false as const, response: NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 }) };
+  }
+  const m = await getPrivateCompanyMembership(auth.payload.requesterId);
+  if (!m.effectiveCompanyId) {
+    return { ok: false as const, response: NextResponse.json({ success: false, message: 'No workspace.' }, { status: 403 }) };
+  }
+  const company = await prisma.privateCompany.findUnique({
+    where: { id: m.effectiveCompanyId },
+    select: { status: true },
+  });
+  if (!company || company.status !== 'APPROVED') {
+    return { ok: false as const, response: NextResponse.json({ success: false, message: 'Workspace is not active.' }, { status: 403 }) };
+  }
+  const isOwner = m.ownedCompanyId === m.effectiveCompanyId;
+  let allowed = isOwner;
+  if (!allowed) {
+    const me = await prisma.ticketRequester.findUnique({
+      where: { id: auth.payload.requesterId },
+      select: { role: true },
+    });
+    const role = String(me?.role ?? '').toUpperCase();
+    allowed = CAN_MANAGE_STAFF_ROLES.has(role);
+  }
+  if (!allowed) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { success: false, message: 'Only the owner, managers, or coordinators can manage staff.' },
+        { status: 403 }
+      ),
+    };
+  }
+  return {
+    ok: true as const,
+    requesterId: auth.payload.requesterId,
+    companyId: m.effectiveCompanyId,
+    isOwner,
+  };
 }
 
 /** GET — list staff (and the owner, marked) inside the workspace. Visible to everyone in the workspace. */
@@ -89,9 +141,9 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** POST — owner creates a staff requester account. */
+/** POST — owner / manager / coordinator creates a staff requester account. */
 export async function POST(req: NextRequest) {
-  const guard = await ownerGuard(req);
+  const guard = await managerGuard(req);
   if (!guard.ok) return guard.response;
   const body = await req.json().catch(() => ({}));
   const firstName = typeof body?.firstName === 'string' ? body.firstName.trim() : '';
@@ -181,11 +233,12 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** PATCH — owner updates a staff member (role/department/specialization/status), or
- *  resets their password by passing { id, resetPassword: true }. The new
- *  temporary password is returned only once in the response. */
+/** PATCH — owner / manager / coordinator updates a staff member
+ *  (role / department / specialization / status), or resets their password
+ *  by passing `{ id, resetPassword: true }`. The new temporary password is
+ *  returned only once in the response. */
 export async function PATCH(req: NextRequest) {
-  const guard = await ownerGuard(req);
+  const guard = await managerGuard(req);
   if (!guard.ok) return guard.response;
   const body = await req.json().catch(() => ({}));
   const id = typeof body?.id === 'string' ? body.id : '';
@@ -282,14 +335,20 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ success: true, user: updated });
 }
 
-/** DELETE — owner removes a staff member from the workspace (does NOT delete the user). */
+/** DELETE — soft-remove (any manager-level user) or hard-delete (owner only). */
 export async function DELETE(req: NextRequest) {
-  const guard = await ownerGuard(req);
+  const guard = await managerGuard(req);
   if (!guard.ok) return guard.response;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id') ?? '';
   if (!id) return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
   const hard = searchParams.get('hard') === '1';
+  if (hard && !guard.isOwner) {
+    return NextResponse.json(
+      { success: false, message: 'Only the workspace owner can permanently delete a staff account.' },
+      { status: 403 }
+    );
+  }
   const target = await prisma.ticketRequester.findFirst({
     where: { id, privateCompanyId: guard.companyId },
     select: { id: true },

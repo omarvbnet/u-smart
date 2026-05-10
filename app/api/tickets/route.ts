@@ -290,10 +290,41 @@ export async function POST(req: NextRequest) {
 
     const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
     if (isMaintenanceTicket && payload && !coordinatorContext) {
+      // Private-company workspace members (manager/coordinator/engineer) are
+      // also allowed to file maintenance tickets on behalf of their workspace.
+      let inPrivateWorkspace = false;
+      try {
+        const me = await prisma.ticketRequester.findUnique({
+          where: { id: payload.requesterId },
+          select: {
+            privateCompanyId: true,
+            privateCompanyOwned: { select: { id: true, status: true } },
+          },
+        });
+        const meAny = me as {
+          privateCompanyId?: string | null;
+          privateCompanyOwned?: { id: string; status: string } | null;
+        } | null;
+        inPrivateWorkspace =
+          (meAny?.privateCompanyOwned?.status === 'APPROVED') ||
+          !!meAny?.privateCompanyId;
+      } catch {
+        inPrivateWorkspace = false;
+      }
       const allowedRoles = ['COMPANY', 'PERSONAL'];
-      if (!requesterRole || !allowedRoles.includes(requesterRole)) {
+      const allowedPrivateStaff = ['MANAGER', 'COORDINATOR', 'ENGINEER'];
+      const allowed =
+        (requesterRole && allowedRoles.includes(requesterRole)) ||
+        (inPrivateWorkspace &&
+          requesterRole != null &&
+          allowedPrivateStaff.includes(requesterRole));
+      if (!allowed) {
         return NextResponse.json(
-          { success: false, message: 'Only company or personal can create maintenance tickets. Technicians handle them; engineers handle QC only.' },
+          {
+            success: false,
+            message:
+              'Only company / personal accounts (or workspace managers, coordinators, and engineers) can create maintenance tickets.',
+          },
           { status: 403 }
         );
       }
@@ -668,9 +699,48 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const ticket = await prisma.visitorRequest.create({
-      data: ticketData,
-    });
+    let ticket;
+    try {
+      ticket = await prisma.visitorRequest.create({ data: ticketData });
+    } catch (createErr) {
+      const err = createErr as Error & { code?: string; meta?: unknown };
+      const isMissingColumn =
+        err?.code === 'P2022' ||
+        /column .* does not exist/i.test(err?.message ?? '');
+      // P2022 = column missing in DB. Some private-company columns may not
+      // have been migrated yet on legacy environments — retry once without
+      // them so basic ticket creation still succeeds.
+      const droppedKeys: string[] = [];
+      if (isMissingColumn) {
+        const fallbackData: Record<string, unknown> = { ...ticketData };
+        for (const key of [
+          'privateCompanyId',
+          'assignmentScope',
+          'workflowState',
+          'roleScope',
+          'taskCategory',
+          'checklistTemplateId',
+          'assigneeCoordinatorUserId',
+          'coordinatorCompanyId',
+          'createdByCoordinatorUserId',
+        ]) {
+          if (key in fallbackData) {
+            droppedKeys.push(key);
+            delete fallbackData[key];
+          }
+        }
+        try {
+          ticket = await prisma.visitorRequest.create({ data: fallbackData as typeof ticketData });
+          console.warn(
+            `POST /api/tickets: created ticket without optional columns due to schema drift. Dropped: ${droppedKeys.join(', ')}. Run prisma migrate deploy.`
+          );
+        } catch (retryErr) {
+          throw retryErr;
+        }
+      } else {
+        throw createErr;
+      }
+    }
 
     if (coordinatorContext) {
       const companyRow = await (prisma as any).coordinatorCompany.findUnique({

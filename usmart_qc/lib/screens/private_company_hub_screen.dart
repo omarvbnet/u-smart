@@ -773,7 +773,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        if (pc.isOwner)
+        if (pc.canManageStaff)
           _GradientButton(
             onPressed: pc.submitting ? null : () => _openCreate(),
             label: 'New department',
@@ -785,7 +785,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
           _EmptyState(
             icon: Icons.account_tree_outlined,
             title: 'No departments yet',
-            subtitle: pc.isOwner
+            subtitle: pc.canManageStaff
                 ? 'Create departments to organize your team and assign tickets cleanly.'
                 : 'Your owner has not created any department yet.',
           )
@@ -832,7 +832,7 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
                           ],
                         ),
                       ),
-                      if (pc.isOwner)
+                      if (pc.canManageStaff)
                         PopupMenuButton<String>(
                           color: const Color(0xFF12122A),
                           icon: const Icon(Icons.more_vert_rounded, color: Colors.white54),
@@ -1239,7 +1239,7 @@ class _StaffTabState extends State<_StaffTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        if (pc.isOwner)
+        if (pc.canManageStaff)
           _GradientButton(
             onPressed: pc.submitting ? null : () => _openCreate(),
             label: 'Add staff member',
@@ -1288,7 +1288,7 @@ class _StaffTabState extends State<_StaffTab> {
           _EmptyState(
             icon: Icons.group_off_rounded,
             title: 'No matching staff',
-            subtitle: pc.isOwner
+            subtitle: pc.canManageStaff
                 ? 'Adjust filters or add a new staff member.'
                 : 'No staff to show for this filter.',
           )
@@ -1296,9 +1296,11 @@ class _StaffTabState extends State<_StaffTab> {
           ...filtered.map((s) => _StaffRow(
                 staff: s,
                 departments: widget.workspace.departments,
-                onEdit: pc.isOwner ? () => _openCreate(existing: s) : null,
+                onEdit: pc.canManageStaff
+                    ? () => _openCreate(existing: s)
+                    : null,
                 onResetPassword:
-                    pc.isOwner ? () => _resetPassword(s) : null,
+                    pc.canManageStaff ? () => _resetPassword(s) : null,
               )),
       ],
     );
@@ -1646,6 +1648,59 @@ class _StaffRow extends StatelessWidget {
   }
 }
 
+class _SeverityChip extends StatelessWidget {
+  const _SeverityChip({
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? color.withAlpha(60) : Colors.white.withAlpha(10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? color : Colors.white.withAlpha(20),
+            width: selected ? 1.2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              size: 12,
+              color: selected ? color : Colors.white.withAlpha(120),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? color : Colors.white.withAlpha(160),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StaffBadge extends StatelessWidget {
   const _StaffBadge({required this.label, required this.color});
   final String label;
@@ -1886,24 +1941,50 @@ class _ChecklistsTabState extends State<_ChecklistsTab> {
                   ],
                   if (c.items.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    ...c.items.take(4).map((it) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle_outline_rounded,
-                                  size: 16, color: color),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  it.label,
-                                  style: TextStyle(
-                                      color: Colors.white.withAlpha(220),
-                                      fontSize: 12),
+                    ...c.items.take(4).map((it) {
+                      final severityColor = it.isMajor
+                          ? const Color(0xFFFF4757)
+                          : const Color(0xFF8B83FF);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded,
+                                size: 16, color: color),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                it.label,
+                                style: TextStyle(
+                                    color: Colors.white.withAlpha(220),
+                                    fontSize: 12),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: severityColor.withAlpha(28),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: severityColor.withAlpha(70),
                                 ),
                               ),
-                            ],
-                          ),
-                        )),
+                              child: Text(
+                                it.isMajor ? 'MAJOR' : 'MINOR',
+                                style: TextStyle(
+                                  color: severityColor,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                     if (c.items.length > 4)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
@@ -1931,14 +2012,22 @@ class _ChecklistEditorSheet extends StatefulWidget {
   State<_ChecklistEditorSheet> createState() => _ChecklistEditorSheetState();
 }
 
+class _ChecklistDraftItem {
+  _ChecklistDraftItem({String? text}) : controller = TextEditingController(text: text ?? '');
+
+  final TextEditingController controller;
+  PrivateCompanyChecklistItemSeverity severity =
+      PrivateCompanyChecklistItemSeverity.minor;
+
+  void dispose() => controller.dispose();
+}
+
 class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   String? _category;
   String? _departmentId;
-  final List<TextEditingController> _items = [
-    TextEditingController(),
-  ];
+  final List<_ChecklistDraftItem> _items = [_ChecklistDraftItem()];
 
   @override
   void dispose() {
@@ -1955,11 +2044,11 @@ class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
     final name = _name.text.trim();
     if (name.isEmpty) return;
     final items = _items
-        .map((c) => c.text.trim())
-        .where((s) => s.isNotEmpty)
-        .map((label) => PrivateCompanyChecklistItem(
-              id: '${DateTime.now().microsecondsSinceEpoch}-${label.hashCode}',
-              label: label,
+        .where((it) => it.controller.text.trim().isNotEmpty)
+        .map((it) => PrivateCompanyChecklistItem(
+              id: '${DateTime.now().microsecondsSinceEpoch}-${it.controller.text.trim().hashCode}',
+              label: it.controller.text.trim(),
+              severity: it.severity,
             ))
         .toList();
     final ok = await pc.createChecklist(
@@ -2067,72 +2156,125 @@ class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
                 const SizedBox(height: 18),
                 const _SectionTitle('Items'),
                 const SizedBox(height: 8),
-                ..._items.asMap().entries.map((entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+                ..._items.asMap().entries.map((entry) {
+                  final draft = entry.value;
+                  final isMajor =
+                      draft.severity == PrivateCompanyChecklistItemSeverity.major;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF12122A),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isMajor
+                              ? const Color(0xFFFF4757).withAlpha(80)
+                              : Colors.white.withAlpha(15),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6C63FF).withAlpha(30),
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '${entry.key + 1}',
-                              style: const TextStyle(
-                                color: Color(0xFF8B83FF),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
+                          Row(
+                            children: [
+                              Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6C63FF).withAlpha(30),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${entry.key + 1}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF8B83FF),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: entry.value,
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: 'Item ${entry.key + 1}',
-                                hintStyle: TextStyle(color: Colors.white.withAlpha(60)),
-                                filled: true,
-                                fillColor: const Color(0xFF12122A),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: draft.controller,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 14),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: 'Item ${entry.key + 1}',
+                                    hintStyle: TextStyle(
+                                        color: Colors.white.withAlpha(60)),
+                                    border: InputBorder.none,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(vertical: 6),
+                                  ),
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.white.withAlpha(15)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
-                                ),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               ),
-                            ),
+                              if (_items.length > 1)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                      minWidth: 28, minHeight: 28),
+                                  icon: const Icon(Icons.remove_circle_outline,
+                                      color: Color(0xFFFF4757), size: 18),
+                                  onPressed: () => setState(() {
+                                    _items.removeAt(entry.key).dispose();
+                                  }),
+                                ),
+                            ],
                           ),
-                          if (_items.length > 1)
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline,
-                                  color: Color(0xFFFF4757)),
-                              onPressed: () => setState(() {
-                                _items.removeAt(entry.key);
-                              }),
-                            ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(left: 34, right: 8),
+                                child: Text(
+                                  'Severity',
+                                  style: TextStyle(
+                                    color: Colors.white.withAlpha(140),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                              ),
+                              _SeverityChip(
+                                label: 'Minor',
+                                color: const Color(0xFF8B83FF),
+                                selected: !isMajor,
+                                onTap: () => setState(() {
+                                  draft.severity =
+                                      PrivateCompanyChecklistItemSeverity.minor;
+                                }),
+                              ),
+                              const SizedBox(width: 6),
+                              _SeverityChip(
+                                label: 'Major',
+                                color: const Color(0xFFFF4757),
+                                selected: isMajor,
+                                onTap: () => setState(() {
+                                  draft.severity =
+                                      PrivateCompanyChecklistItemSeverity.major;
+                                }),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                    )),
+                    ),
+                  );
+                }),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
                     icon: const Icon(Icons.add_rounded, color: Color(0xFF8B83FF)),
                     label: const Text('Add item',
                         style: TextStyle(color: Color(0xFF8B83FF), fontWeight: FontWeight.w600)),
-                    onPressed: () => setState(() => _items.add(TextEditingController())),
+                    onPressed: () =>
+                        setState(() => _items.add(_ChecklistDraftItem())),
                   ),
                 ),
                 const SizedBox(height: 16),

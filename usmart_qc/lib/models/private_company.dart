@@ -168,6 +168,18 @@ class PrivateCompanyStaff {
   }
 }
 
+/// Severity of a checklist item — used during inspection to weight findings.
+enum PrivateCompanyChecklistItemSeverity { minor, major }
+
+PrivateCompanyChecklistItemSeverity _severityFromString(String? raw) {
+  return (raw ?? '').toLowerCase() == 'major'
+      ? PrivateCompanyChecklistItemSeverity.major
+      : PrivateCompanyChecklistItemSeverity.minor;
+}
+
+String _severityToString(PrivateCompanyChecklistItemSeverity s) =>
+    s == PrivateCompanyChecklistItemSeverity.major ? 'major' : 'minor';
+
 /// One workspace checklist item.
 class PrivateCompanyChecklistItem {
   PrivateCompanyChecklistItem({
@@ -175,12 +187,16 @@ class PrivateCompanyChecklistItem {
     required this.label,
     this.weight,
     this.required = false,
+    this.severity = PrivateCompanyChecklistItemSeverity.minor,
   });
 
   final String id;
   final String label;
   final String? weight;
   final bool required;
+  final PrivateCompanyChecklistItemSeverity severity;
+
+  bool get isMajor => severity == PrivateCompanyChecklistItemSeverity.major;
 
   factory PrivateCompanyChecklistItem.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyChecklistItem(
@@ -188,6 +204,7 @@ class PrivateCompanyChecklistItem {
       label: json['label'] as String? ?? '',
       weight: json['weight'] as String?,
       required: json['required'] == true,
+      severity: _severityFromString(json['severity'] as String?),
     );
   }
 
@@ -196,6 +213,7 @@ class PrivateCompanyChecklistItem {
         'label': label,
         if (weight != null) 'weight': weight,
         if (required) 'required': true,
+        'severity': _severityToString(severity),
       };
 }
 
@@ -336,12 +354,17 @@ class PrivateCompanyMembership {
     this.isStaff = false,
     this.status,
     this.departmentId,
+    this.role,
   });
 
   final bool isOwner;
   final bool isStaff;
   final PrivateCompanyStatus? status;
   final String? departmentId;
+  /// Authoritative server-side role (uppercase) for the requester inside the
+  /// workspace context. Used by permission helpers when the staff list is not
+  /// available client-side.
+  final String? role;
 
   factory PrivateCompanyMembership.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyMembership(
@@ -351,6 +374,7 @@ class PrivateCompanyMembership {
           ? privateCompanyStatusFromString(json['status'])
           : null,
       departmentId: json['departmentId'] as String?,
+      role: (json['role'] as String?)?.toUpperCase(),
     );
   }
 
