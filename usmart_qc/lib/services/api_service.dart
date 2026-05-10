@@ -63,7 +63,27 @@ class ApiService {
       headers: _headers,
       body: body != null ? jsonEncode(body) : null,
     );
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> data;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        data = Map<String, dynamic>.from(decoded);
+      } else {
+        data = {
+          'success': false,
+          'message': 'Invalid server response',
+        };
+      }
+    } catch (_) {
+      data = {
+        'success': false,
+        'message': response.statusCode >= 500
+            ? 'Server error'
+            : 'Invalid server response',
+      };
+    }
+    data['_httpStatus'] = response.statusCode;
+    return data;
   }
 
   Future<Map<String, dynamic>> patch(String path,

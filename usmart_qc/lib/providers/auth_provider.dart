@@ -94,20 +94,29 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Phone + verification code — no password ([finalizeSessionFromAuthResponse] uses /me).
+  ///
+  /// Does **not** toggle [loading] — doing so would replace `MaterialApp.home` with
+  /// [SplashScreen] and dispose [LoginScreen] while awaiting the API, which breaks
+  /// post-login navigation (e.g. push to complete registration when code is NO_ACCOUNT).
   Future<bool> loginWithPhoneOtp(String phone, String code) async {
     _error = null;
     _otpVerifyFailureCode = null;
-    _loading = true;
     notifyListeners();
     try {
       final normalizedPhone = phone.trim();
       final raw = await _authService.verifyLoginWithPhoneOtpRaw(phone, code);
-      final codeFromApi = raw['code']?.toString();
+      var codeFromApi = raw['code']?.toString();
+      final httpStatus = raw['_httpStatus'];
+      if (codeFromApi != 'NO_ACCOUNT' &&
+          httpStatus == 404 &&
+          raw['success'] == false) {
+        final msg = (raw['message'] ?? '').toString().toLowerCase();
+        if (msg.contains('no account')) codeFromApi = 'NO_ACCOUNT';
+      }
       final user = await _authService.finalizeSessionFromAuthResponse(raw, normalizedPhone);
       if (user != null) {
         _otpVerifyFailureCode = null;
         _user = user;
-        _loading = false;
         notifyListeners();
         return true;
       }
@@ -116,7 +125,6 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       _error = 'Connection error. Please try again.';
     }
-    _loading = false;
     notifyListeners();
     return false;
   }
@@ -132,7 +140,6 @@ class AuthProvider extends ChangeNotifier {
     String? company,
   }) async {
     _error = null;
-    _loading = true;
     notifyListeners();
     try {
       final normalizedPhone = phone.trim();
@@ -148,7 +155,6 @@ class AuthProvider extends ChangeNotifier {
       final user = await _authService.finalizeSessionFromAuthResponse(raw, normalizedPhone);
       if (user != null) {
         _user = user;
-        _loading = false;
         notifyListeners();
         return true;
       }
@@ -156,7 +162,6 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       _error = 'Connection error. Please try again.';
     }
-    _loading = false;
     notifyListeners();
     return false;
   }
