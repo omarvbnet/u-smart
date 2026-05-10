@@ -1116,6 +1116,115 @@ class _StaffTabState extends State<_StaffTab> {
     );
   }
 
+  Future<void> _resetPassword(PrivateCompanyStaff staff) async {
+    final pc = context.read<PrivateCompanyProvider>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Reset password?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          'A new temporary password will be generated for "${staff.name ?? staff.username}". '
+          'They will be required to change it on first login. Make sure to copy '
+          'the new password — it is shown only once.',
+          style: TextStyle(color: Colors.white.withAlpha(180), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Reset password',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final newPassword = await pc.resetStaffPassword(staff.id);
+    if (!mounted || newPassword == null) return;
+    await _showCredentialsDialog(staff.username, newPassword);
+  }
+
+  Future<void> _showCredentialsDialog(String username, String temporaryPassword) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.vpn_key_rounded, color: Color(0xFF8B5CF6)),
+            SizedBox(width: 8),
+            Text('New temporary password',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Share these credentials with the staff member. They will be '
+              'required to change the password on next sign-in.',
+              style: TextStyle(color: Colors.white.withAlpha(180), height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            _CredentialRow(label: 'Username', value: username),
+            const SizedBox(height: 8),
+            _CredentialRow(label: 'Temporary password', value: temporaryPassword),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFB400).withAlpha(20),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFFB400).withAlpha(60)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Color(0xFFFFB400), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This password will not be shown again.',
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(220), fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C63FF),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Done', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
@@ -1188,6 +1297,8 @@ class _StaffTabState extends State<_StaffTab> {
                 staff: s,
                 departments: widget.workspace.departments,
                 onEdit: pc.isOwner ? () => _openCreate(existing: s) : null,
+                onResetPassword:
+                    pc.isOwner ? () => _resetPassword(s) : null,
               )),
       ],
     );
@@ -1425,10 +1536,16 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
 }
 
 class _StaffRow extends StatelessWidget {
-  const _StaffRow({required this.staff, required this.departments, this.onEdit});
+  const _StaffRow({
+    required this.staff,
+    required this.departments,
+    this.onEdit,
+    this.onResetPassword,
+  });
   final PrivateCompanyStaff staff;
   final List<PrivateCompanyDepartment> departments;
   final VoidCallback? onEdit;
+  final VoidCallback? onResetPassword;
 
   @override
   Widget build(BuildContext context) {
@@ -1464,76 +1581,149 @@ class _StaffRow extends StatelessWidget {
               children: [
                 Text(
                   staff.name ?? staff.username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 2),
-                Row(
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withAlpha(28),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _staffRoleLabel(staff.role),
-                        style: TextStyle(
-                            color: color, fontSize: 10, fontWeight: FontWeight.w700),
-                      ),
+                    _StaffBadge(
+                      label: _staffRoleLabel(staff.role),
+                      color: color,
                     ),
-                    if (staff.specialization != null) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _specColor(staff.specialization!).withAlpha(28),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _specLabel(staff.specialization!),
-                          style: TextStyle(
-                              color: _specColor(staff.specialization!),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700),
-                        ),
+                    if (staff.specialization != null)
+                      _StaffBadge(
+                        label: _specLabel(staff.specialization!),
+                        color: _specColor(staff.specialization!),
                       ),
-                    ],
-                    if (dept != null) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: dept.colorValue.withAlpha(28),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          dept.name,
-                          style: TextStyle(
-                              color: dept.colorValue,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700),
-                        ),
+                    if (dept != null)
+                      _StaffBadge(
+                        label: dept.name,
+                        color: dept.colorValue,
                       ),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '@${staff.username}${staff.email != null ? ' · ${staff.email}' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: Colors.white.withAlpha(120), fontSize: 11),
                 ),
               ],
             ),
           ),
+          if (onResetPassword != null)
+            IconButton(
+              tooltip: 'Reset password',
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.vpn_key_rounded,
+                  color: Color(0xFF8B5CF6), size: 18),
+              onPressed: onResetPassword,
+            ),
           if (onEdit != null)
             IconButton(
-              icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B83FF), size: 18),
+              tooltip: 'Edit',
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.edit_rounded,
+                  color: Color(0xFF8B83FF), size: 18),
               onPressed: onEdit,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StaffBadge extends StatelessWidget {
+  const _StaffBadge({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(28),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+            color: color, fontSize: 10, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _CredentialRow extends StatelessWidget {
+  const _CredentialRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withAlpha(24)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(160),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                SelectableText(
+                  value,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: [FontFeature.tabularFigures()]),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy',
+            icon: const Icon(Icons.copy_rounded,
+                color: Color(0xFF8B83FF), size: 18),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: value));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$label copied'),
+                  duration: const Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFF12122A),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

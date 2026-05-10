@@ -181,7 +181,9 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** PATCH — owner updates a staff member (role/department/specialization/status). */
+/** PATCH — owner updates a staff member (role/department/specialization/status), or
+ *  resets their password by passing { id, resetPassword: true }. The new
+ *  temporary password is returned only once in the response. */
 export async function PATCH(req: NextRequest) {
   const guard = await ownerGuard(req);
   if (!guard.ok) return guard.response;
@@ -190,9 +192,46 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
   const target = await prisma.ticketRequester.findFirst({
     where: { id, privateCompanyId: guard.companyId },
-    select: { id: true },
+    select: { id: true, username: true },
   });
   if (!target) return NextResponse.json({ success: false, message: 'Staff not found.' }, { status: 404 });
+
+  // Branch: password reset — generates a new temp password, marks the staff member
+  // as needing a forced change on next login, and returns the new password ONCE.
+  if (body?.resetPassword === true) {
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+    const updated = await prisma.ticketRequester.update({
+      where: { id },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+        hasUpdatedCredentials: false,
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        specialization: true,
+        status: true,
+        privateCompanyDepartmentId: true,
+      },
+    });
+    return NextResponse.json({
+      success: true,
+      user: updated,
+      credentials: {
+        username: updated.username,
+        temporaryPassword,
+        mustChangePassword: true,
+      },
+    });
+  }
+
   const data: Record<string, unknown> = {};
   if (typeof body?.role === 'string') {
     const r = body.role.trim().toUpperCase();

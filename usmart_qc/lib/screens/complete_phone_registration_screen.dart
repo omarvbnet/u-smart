@@ -103,7 +103,22 @@ class _CompletePhoneRegistrationScreenState
     if (!ok) {
       final err = context.read<AuthProvider>().error;
       _showSnack(err ?? l10n.t('login_failed'));
+      return;
     }
+    // Registration succeeded — a session is now active. Pop everything we
+    // pushed on top of the root so the reactive `MaterialApp.home` reveals the
+    // dashboard (CompanyDashboardScreen / EngineerDashboardScreen).
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    navigator.popUntil((route) => route.isFirst);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.t('account_created')),
+        backgroundColor: const Color(0xFF00D4AA),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override

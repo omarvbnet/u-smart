@@ -3,13 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/api_config.dart';
-import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'privacy_policy_screen.dart';
-import 'registration_request_screen.dart';
-import 'complete_phone_registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,18 +21,13 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordCtrl = TextEditingController();
   final _phoneOtpCtrl = TextEditingController();
   final _otpCodeCtrl = TextEditingController();
-  final _regNameCtrl = TextEditingController();
-  final _regPhoneCtrl = TextEditingController();
-  final _regCompanyCtrl = TextEditingController();
-  String? _signupProvince;
   bool _usePasswordLogin = false;
+  bool _isPrivateRoleMode = false;
   bool _otpSent = false;
   bool _otpSendLoading = false;
   bool _otpVerifyLoading = false;
   int _otpResendCooldown = 0;
   Timer? _otpCooldownTimer;
-  bool _showSignupFields = false;
-  String _signupRole = 'COMPANY';
   bool _obscure = true;
   bool _submitting = false;
   String _forgotUsername = '';
@@ -125,26 +117,6 @@ class _LoginScreenState extends State<LoginScreen>
     return '+${t.replaceAll(RegExp(r'\D'), '')}';
   }
 
-  String _signupRoleLabel(AppLocalizations l10n, String code) {
-    switch (code) {
-      case 'PERSONAL':
-        return l10n.t('role_personal');
-      case 'COMPANY':
-      default:
-        return l10n.t('role_company');
-    }
-  }
-
-  String _signupRoleHintKey(String code) {
-    switch (code) {
-      case 'PERSONAL':
-        return 'reg_role_personal_hint';
-      case 'COMPANY':
-      default:
-        return 'reg_role_company_hint';
-    }
-  }
-
   Future<void> _sendPhoneOtp(AppLocalizations l10n) async {
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,60 +183,14 @@ class _LoginScreenState extends State<LoginScreen>
       final err = auth.error;
       final noAccount = auth.otpVerifyFailureCode == 'NO_ACCOUNT' ||
           (err ?? '').toLowerCase().contains('no account');
-      if (noAccount) {
-        final phone = _normalizePhone(_phoneOtpCtrl.text);
-        final otp = _otpCodeCtrl.text.trim();
-        if (!mounted) return;
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute(
-            builder: (_) => CompletePhoneRegistrationScreen(
-              verifiedPhone: phone,
-              verifiedOtpCode: otp,
-            ),
-          ),
-        );
-        return;
-      }
       _showSnack(
-        err == AuthProvider.invalidCredentialsMarker
-            ? l10n.t('invalid_code')
-            : (err ?? l10n.t('login_failed')),
+        noAccount
+            ? l10n.t('phone_not_registered_body')
+            : err == AuthProvider.invalidCredentialsMarker
+                ? l10n.t('invalid_code')
+                : (err ?? l10n.t('login_failed')),
         isError: true,
       );
-    }
-  }
-
-  Future<void> _submitOtpRegister(AppLocalizations l10n) async {
-    if (!_agreedToTerms) return;
-    final name = _regNameCtrl.text.trim();
-    final phone = _regPhoneCtrl.text.trim();
-    if (name.isEmpty || phone.isEmpty) {
-      _showSnack('${l10n.t('signup_name')} / ${l10n.t('signup_phone')}', isError: true);
-      return;
-    }
-    if (_signupProvince == null || _signupProvince!.isEmpty) {
-      _showSnack(l10n.t('validation_province_required'), isError: true);
-      return;
-    }
-    if (_signupRole == 'COMPANY' && _regCompanyCtrl.text.trim().isEmpty) {
-      _showSnack(l10n.t('validation_company_name_required'), isError: true);
-      return;
-    }
-    setState(() => _otpVerifyLoading = true);
-    final ok = await context.read<AuthProvider>().registerWithPhoneOtp(
-          phone: _normalizePhone(phone),
-          code: _otpCodeCtrl.text.trim(),
-          name: name,
-          email: null,
-          role: _signupRole,
-          province: _signupProvince,
-          company: _signupRole == 'COMPANY' ? _regCompanyCtrl.text.trim() : null,
-        );
-    if (!mounted) return;
-    setState(() => _otpVerifyLoading = false);
-    if (!ok) {
-      final err = context.read<AuthProvider>().error;
-      _showSnack(err ?? l10n.t('login_failed'), isError: true);
     }
   }
 
@@ -611,9 +537,6 @@ class _LoginScreenState extends State<LoginScreen>
     _passwordCtrl.dispose();
     _phoneOtpCtrl.dispose();
     _otpCodeCtrl.dispose();
-    _regNameCtrl.dispose();
-    _regPhoneCtrl.dispose();
-    _regCompanyCtrl.dispose();
     _otpCooldownTimer?.cancel();
     _forgotCooldownTimer?.cancel();
     _scrollController.dispose();
@@ -790,7 +713,9 @@ class _LoginScreenState extends State<LoginScreen>
                                       onPressed: () => setState(() {
                                         _usePasswordLogin = !_usePasswordLogin;
                                         _otpSent = false;
-                                        _showSignupFields = false;
+                                        if (!_usePasswordLogin) {
+                                          _isPrivateRoleMode = false;
+                                        }
                                       }),
                                       style: TextButton.styleFrom(
                                         foregroundColor: const Color(0xFF9CA3AF),
@@ -809,6 +734,10 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                   const SizedBox(height: 12),
                                   if (_usePasswordLogin) ...[
+                                    if (_isPrivateRoleMode) ...[
+                                      _buildPrivateRoleHeader(l10n),
+                                      const SizedBox(height: 14),
+                                    ],
                                     _buildField(
                                       controller: _usernameCtrl,
                                       hint: l10n.t('login_username'),
@@ -887,189 +816,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         icon: Icons.pin_outlined,
                                         keyboardType: TextInputType.number,
                                         onSubmitted: (_) =>
-                                            _showSignupFields
-                                                ? _submitOtpRegister(l10n)
-                                                : _submitOtpLogin(l10n),
+                                            _submitOtpLogin(l10n),
                                       ),
-                                      const SizedBox(height: 8),
-                                      TextButton(
-                                        onPressed: () => setState(() {
-                                          _showSignupFields = !_showSignupFields;
-                                        }),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor:
-                                              const Color(0xFF6C63FF),
-                                          padding: EdgeInsets.zero,
-                                          minimumSize: Size.zero,
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                        child: Text(
-                                          l10n.t('signup_expand'),
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                      if (_showSignupFields) ...[
-                                        const SizedBox(height: 8),
-                                        _buildField(
-                                          controller: _regNameCtrl,
-                                          hint: l10n.t('signup_name'),
-                                          icon: Icons.badge_outlined,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        _buildField(
-                                          controller: _regPhoneCtrl,
-                                          hint: l10n.t('login_phone_hint'),
-                                          icon: Icons.phone_android_outlined,
-                                          keyboardType: TextInputType.phone,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            l10n.t('signup_role'),
-                                            style: TextStyle(
-                                              color:
-                                                  Colors.white.withAlpha(200),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          l10n.t('signup_role_pick'),
-                                          style: TextStyle(
-                                            color: Colors.white.withAlpha(140),
-                                            fontSize: 12,
-                                            height: 1.3,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF12122A),
-                                            borderRadius:
-                                                BorderRadius.circular(14),
-                                            border: Border.all(
-                                                color:
-                                                    Colors.white.withAlpha(15)),
-                                          ),
-                                          child: DropdownButtonHideUnderline(
-                                            child: DropdownButton<String>(
-                                              value: _signupRole,
-                                              isExpanded: true,
-                                              dropdownColor:
-                                                  const Color(0xFF1a1a2e),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 15,
-                                              ),
-                                              items: const [
-                                                'COMPANY',
-                                                'PERSONAL',
-                                              ]
-                                                  .map(
-                                                    (r) =>
-                                                        DropdownMenuItem(
-                                                      value: r,
-                                                      child: Text(
-                                                          _signupRoleLabel(
-                                                              l10n, r)),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (v) {
-                                                if (v != null) {
-                                                  setState(() =>
-                                                      _signupRole = v);
-                                                }
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          l10n.t(_signupRoleHintKey(_signupRole)),
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withAlpha(120),
-                                            fontSize: 11,
-                                            height: 1.35,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            l10n.t('signup_province_required_label'),
-                                            style: TextStyle(
-                                              color:
-                                                  Colors.white.withAlpha(180),
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF12122A),
-                                            borderRadius:
-                                                BorderRadius.circular(14),
-                                            border: Border.all(
-                                                color:
-                                                    Colors.white.withAlpha(15)),
-                                          ),
-                                          child: DropdownButtonHideUnderline(
-                                            child: DropdownButton<String?>(
-                                              value: _signupProvince,
-                                              hint: Text(
-                                                l10n.t('province_select_hint'),
-                                                style: TextStyle(
-                                                  color: Colors.white
-                                                      .withAlpha(140),
-                                                  fontSize: 15,
-                                                ),
-                                              ),
-                                              isExpanded: true,
-                                              dropdownColor:
-                                                  const Color(0xFF1a1a2e),
-                                              iconEnabledColor:
-                                                  Colors.white.withAlpha(180),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 15,
-                                              ),
-                                              items: iraqProvinces
-                                                  .map(
-                                                    (p) =>
-                                                        DropdownMenuItem<String?>(
-                                                      value: p,
-                                                      child: Text(p),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (v) => setState(
-                                                  () => _signupProvince = v),
-                                            ),
-                                          ),
-                                        ),
-                                        if (_signupRole == 'COMPANY') ...[
-                                          const SizedBox(height: 12),
-                                          _buildField(
-                                            controller: _regCompanyCtrl,
-                                            hint: l10n
-                                                .t('signup_company_required_hint'),
-                                            icon: Icons.business_outlined,
-                                          ),
-                                        ],
-                                      ],
                                       const SizedBox(height: 16),
                                       SizedBox(
                                         width: double.infinity,
@@ -1098,13 +846,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                 (_otpVerifyLoading ||
                                                         !_agreedToTerms)
                                                     ? null
-                                                    : (_showSignupFields
-                                                        ? () =>
-                                                            _submitOtpRegister(
-                                                                l10n)
-                                                        : () =>
-                                                            _submitOtpLogin(
-                                                                l10n)),
+                                                    : () => _submitOtpLogin(
+                                                        l10n),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor:
                                                   Colors.transparent,
@@ -1127,11 +870,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                     ),
                                                   )
                                                 : Text(
-                                                    _showSignupFields
-                                                        ? l10n
-                                                            .t('signup_submit')
-                                                        : l10n.t(
-                                                            'login_verify_sign_in'),
+                                                    l10n.t(
+                                                        'login_verify_sign_in'),
                                                     style: const TextStyle(
                                                       fontSize: 16,
                                                       fontWeight:
@@ -1143,6 +883,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                       ),
                                     ],
+                                    const SizedBox(height: 20),
+                                    _buildPrivateRoleCta(l10n),
                                   ],
                                   if (_usePasswordLogin) ...[
                                     const SizedBox(height: 16),
@@ -1207,87 +949,23 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final narrow =
-                                            constraints.maxWidth < 300;
-                                        return Wrap(
-                                          alignment:
-                                              WrapAlignment.spaceBetween,
-                                          runSpacing: 4,
-                                          children: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  _showForgotFlow(
-                                                      context, l10n),
-                                              style: TextButton.styleFrom(
-                                                foregroundColor:
-                                                    const Color(0xFF6C63FF),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
-                                                minimumSize: Size.zero,
-                                                tapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                              child: Text(
-                                                l10n.t('forgot_password'),
-                                                style: TextStyle(
-                                                    fontSize:
-                                                        narrow ? 12 : 13),
-                                              ),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  showRegistrationRequestModal(
-                                                      context),
-                                              style: TextButton.styleFrom(
-                                                foregroundColor:
-                                                    const Color(0xFF6C63FF),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
-                                                minimumSize: Size.zero,
-                                                tapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                              child: Text(
-                                                l10n.t(
-                                                    'registration_request_tertiary'),
-                                                style: TextStyle(
-                                                  fontSize: narrow ? 11 : 12,
-                                                  fontWeight: FontWeight.w400,
-                                                ),
-                                                maxLines: 2,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ] else ...[
-                                    const SizedBox(height: 8),
-                                    Center(
+                                    Align(
+                                      alignment: Alignment.centerLeft,
                                       child: TextButton(
                                         onPressed: () =>
-                                            showRegistrationRequestModal(
-                                                context),
+                                            _showForgotFlow(context, l10n),
                                         style: TextButton.styleFrom(
-                                          foregroundColor: const Color(0xFF6B7280),
+                                          foregroundColor:
+                                              const Color(0xFF6C63FF),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
                                           minimumSize: Size.zero,
                                           tapTargetSize:
                                               MaterialTapTargetSize.shrinkWrap,
                                         ),
                                         child: Text(
-                                          l10n.t('registration_request_tertiary'),
-                                          style: const TextStyle(fontSize: 11),
-                                          textAlign: TextAlign.center,
+                                          l10n.t('forgot_password'),
+                                          style: const TextStyle(fontSize: 13),
                                         ),
                                       ),
                                     ),
@@ -1302,6 +980,128 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Prominent CTA shown beneath the phone-OTP form so private-company staff
+  /// (manager / coordinator / engineer / technician / worker) have a clear
+  /// way into the password sign-in flow created for them by their workspace owner.
+  Widget _buildPrivateRoleCta(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(height: 1, color: Colors.white.withAlpha(20)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                l10n.t('login_or_divider'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(120),
+                  fontSize: 11,
+                  letterSpacing: 1.4,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Container(height: 1, color: Colors.white.withAlpha(20)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() {
+              _usePasswordLogin = true;
+              _isPrivateRoleMode = true;
+              _otpSent = false;
+              _otpCodeCtrl.clear();
+            }),
+            icon: const Icon(Icons.workspaces_rounded,
+                color: Color(0xFF8B5CF6), size: 20),
+            label: Text(
+              l10n.t('private_role_login_button'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6).withAlpha(20),
+              side: BorderSide(color: const Color(0xFF8B5CF6).withAlpha(120)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.t('private_role_login_hint'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withAlpha(140),
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Decorative chip that appears above the username field once the user has
+  /// chosen the "Private role" entry point, so they know they're on the right path.
+  Widget _buildPrivateRoleHeader(AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF8B5CF6).withAlpha(45),
+            const Color(0xFF6C63FF).withAlpha(20),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF8B5CF6).withAlpha(80)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.workspaces_rounded,
+              color: Color(0xFFB794F6), size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.t('private_role_login_button'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.t('private_role_login_hint'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(170),
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

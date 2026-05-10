@@ -348,6 +348,37 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  /// Owner regenerates a staff member's temporary password.
+  /// Returns the new temp password (visible only this once) or null on failure.
+  Future<String?> resetStaffPassword(String id) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(ApiConfig.privateCompanyStaff, body: {
+        'id': id,
+        'resetPassword': true,
+      });
+      if (res['success'] == true) {
+        final cred = res['credentials'] as Map<String, dynamic>?;
+        final tempPassword = cred?['temporaryPassword'] as String?;
+        final username = cred?['username'] as String?;
+        await refresh();
+        _setSuccess(
+          'Password reset. Username: $username · temp password: $tempPassword',
+        );
+        return tempPassword;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to reset password.');
+      return null;
+    } catch (_) {
+      _setError('Network error while resetting password.');
+      return null;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> removeStaff(String id, {bool hardDelete = false}) async {
     _submitting = true;
     notifyListeners();
