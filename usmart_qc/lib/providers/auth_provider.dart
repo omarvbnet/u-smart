@@ -12,6 +12,8 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _loading = true;
   String? _error;
+  /// From last `loginWithPhoneOtp` API body when `success` is false (e.g. `NO_ACCOUNT`).
+  String? _otpVerifyFailureCode;
 
   AuthProvider(this._authService, this._apiService);
 
@@ -19,6 +21,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggedIn => _user != null;
   bool get loading => _loading;
   String? get error => _error;
+  String? get otpVerifyFailureCode => _otpVerifyFailureCode;
   bool get isEngineer => _user?.isEngineer ?? false;
   bool get isCompany => _user?.isCompany ?? true;
   bool get isTechnician => _user?.isTechnician ?? false;
@@ -93,18 +96,22 @@ class AuthProvider extends ChangeNotifier {
   /// Phone + verification code — no password ([finalizeSessionFromAuthResponse] uses /me).
   Future<bool> loginWithPhoneOtp(String phone, String code) async {
     _error = null;
+    _otpVerifyFailureCode = null;
     _loading = true;
     notifyListeners();
     try {
       final normalizedPhone = phone.trim();
       final raw = await _authService.verifyLoginWithPhoneOtpRaw(phone, code);
+      final codeFromApi = raw['code']?.toString();
       final user = await _authService.finalizeSessionFromAuthResponse(raw, normalizedPhone);
       if (user != null) {
+        _otpVerifyFailureCode = null;
         _user = user;
         _loading = false;
         notifyListeners();
         return true;
       }
+      _otpVerifyFailureCode = codeFromApi;
       _error = raw['message']?.toString() ?? invalidCredentialsMarker;
     } catch (e) {
       _error = 'Connection error. Please try again.';

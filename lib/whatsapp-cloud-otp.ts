@@ -16,6 +16,8 @@
  *     - "auth"|"authentication"|"copy_code": always send Meta auth-style URL button + body (fixes #131008 on copy-code auth templates).
  *     - "none": never add a button component (body-only Utility templates).
  * - WHATSAPP_OTP_USE_COUPON_CODE_BUTTON — set "true" to send `sub_type: COPY_CODE` + `coupon_code` param (some API versions).
+ *
+ * Error #132000 = parameter **count** mismatch vs approved template (adjust body vars + button mode).
  */
 
 function normalizeEnvValue(raw: string | undefined): string {
@@ -166,7 +168,8 @@ export async function sendOtpWhatsAppCloud({
       const code = err?.code;
       const msg = err?.message ?? JSON.stringify(data);
       console.error('WhatsApp Cloud OTP failed:', res.status, msg);
-      if (process.env.NODE_ENV !== 'production') {
+      const logFull = process.env.NODE_ENV !== 'production' || code === 131008 || code === 132000;
+      if (logFull) {
         console.error('WhatsApp Cloud OTP Graph response:', JSON.stringify(data));
       }
       if (code === 131030 || /allowed list/i.test(String(msg))) {
@@ -184,6 +187,14 @@ export async function sendOtpWhatsAppCloud({
             'and URL button suffix: set WHATSAPP_OTP_BUTTON_MODE=auth (or WHATSAPP_OTP_URL_BUTTON_INDEX=0). ' +
             'Utility templates with only {{1}} in the body must use WHATSAPP_OTP_BUTTON_MODE=none ' +
             'and fix WHATSAPP_OTP_TEMPLATE_BODY_VARS (use 2 if template has OTP + expiry).'
+        );
+      }
+      if (code === 132000 || /132000|does not match the expected number/i.test(String(msg))) {
+        console.error(
+          'Hint (#132000): In WhatsApp Manager, open this template and count body {{n}} placeholders and buttons. ' +
+            'Set WHATSAPP_OTP_TEMPLATE_BODY_VARS to the number of body variables (0/1/2) — e.g. only {{1}} ⇒ 1; {{1}}{{2}} ⇒ 2. ' +
+            'If template has NO dynamic URL/copy button, use WHATSAPP_OTP_BUTTON_MODE=none. If it HAS copy-code/URL suffix, use auth mode or WHATSAPP_OTP_URL_BUTTON_INDEX=0. ' +
+            'Arabic vs English is a separate template: WHATSAPP_OTP_TEMPLATE_LANGUAGE must match the approved language code exactly.'
         );
       }
       return false;

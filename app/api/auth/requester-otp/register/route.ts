@@ -64,6 +64,15 @@ export async function POST(req: NextRequest) {
     if (!name) {
       return NextResponse.json({ success: false, message: 'Name is required' }, { status: 400 });
     }
+    if (!province) {
+      return NextResponse.json({ success: false, message: 'Province is required' }, { status: 400 });
+    }
+    if (role === RequesterRole.COMPANY && !company) {
+      return NextResponse.json(
+        { success: false, message: 'Company name is required for company accounts' },
+        { status: 400 }
+      );
+    }
 
     const validOtp = await consumePhoneOtp(phone, code);
     if (!validOtp) {

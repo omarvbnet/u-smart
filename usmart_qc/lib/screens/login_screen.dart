@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import 'privacy_policy_screen.dart';
 import 'registration_request_screen.dart';
+import 'complete_phone_registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,6 +48,7 @@ class _LoginScreenState extends State<LoginScreen>
   int _forgotResendCooldown = 0;
   Timer? _forgotCooldownTimer;
   VoidCallback? _forgotSheetRedraw;
+  final ScrollController _scrollController = ScrollController();
 
   void _notifyForgotSheet() {
     if (mounted) setState(() {});
@@ -156,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
     final phone = _normalizePhone(_phoneOtpCtrl.text);
     if (phone.length < 8) {
-      _showSnack('Enter a valid phone number', isError: true);
+      _showSnack(l10n.t('login_phone_invalid'), isError: true);
       return;
     }
     setState(() => _otpSendLoading = true);
@@ -205,19 +207,21 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() => _otpVerifyLoading = false);
     if (!ok) {
-      final err = context.read<AuthProvider>().error;
-      final noAccount = (err ?? '').toLowerCase().contains('no account for this phone number');
+      final auth = context.read<AuthProvider>();
+      final err = auth.error;
+      final noAccount = auth.otpVerifyFailureCode == 'NO_ACCOUNT' ||
+          (err ?? '').toLowerCase().contains('no account');
       if (noAccount) {
-        setState(() {
-          _showSignupFields = true;
-          _otpSent = true;
-          if (_regPhoneCtrl.text.trim().isEmpty) {
-            _regPhoneCtrl.text = _normalizePhone(_phoneOtpCtrl.text);
-          }
-        });
-        _showSnack(
-          "You don't have an account with this number. Please create a new account.",
-          isError: true,
+        final phone = _normalizePhone(_phoneOtpCtrl.text);
+        final otp = _otpCodeCtrl.text.trim();
+        if (!mounted) return;
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => CompletePhoneRegistrationScreen(
+              verifiedPhone: phone,
+              verifiedOtpCode: otp,
+            ),
+          ),
         );
         return;
       }
@@ -238,6 +242,14 @@ class _LoginScreenState extends State<LoginScreen>
       _showSnack('${l10n.t('signup_name')} / ${l10n.t('signup_phone')}', isError: true);
       return;
     }
+    if (_signupProvince == null || _signupProvince!.isEmpty) {
+      _showSnack(l10n.t('validation_province_required'), isError: true);
+      return;
+    }
+    if (_signupRole == 'COMPANY' && _regCompanyCtrl.text.trim().isEmpty) {
+      _showSnack(l10n.t('validation_company_name_required'), isError: true);
+      return;
+    }
     setState(() => _otpVerifyLoading = true);
     final ok = await context.read<AuthProvider>().registerWithPhoneOtp(
           phone: _normalizePhone(phone),
@@ -246,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen>
           email: null,
           role: _signupRole,
           province: _signupProvince,
-          company: _regCompanyCtrl.text.trim().isEmpty ? null : _regCompanyCtrl.text.trim(),
+          company: _signupRole == 'COMPANY' ? _regCompanyCtrl.text.trim() : null,
         );
     if (!mounted) return;
     setState(() => _otpVerifyLoading = false);
@@ -604,6 +616,7 @@ class _LoginScreenState extends State<LoginScreen>
     _regCompanyCtrl.dispose();
     _otpCooldownTimer?.cancel();
     _forgotCooldownTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -656,6 +669,7 @@ class _LoginScreenState extends State<LoginScreen>
             child: Align(
               alignment: Alignment.topCenter,
               child: SingleChildScrollView(
+                controller: _scrollController,
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.only(
                   left: 24,
@@ -821,7 +835,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   ] else ...[
                                     _buildField(
                                       controller: _phoneOtpCtrl,
-                                      hint: l10n.t('signup_phone'),
+                                      hint: l10n.t('login_phone_hint'),
                                       icon: Icons.phone_android_outlined,
                                       keyboardType: TextInputType.phone,
                                     ),
@@ -908,7 +922,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         const SizedBox(height: 12),
                                         _buildField(
                                           controller: _regPhoneCtrl,
-                                          hint: l10n.t('signup_phone'),
+                                          hint: l10n.t('login_phone_hint'),
                                           icon: Icons.phone_android_outlined,
                                           keyboardType: TextInputType.phone,
                                         ),
@@ -992,7 +1006,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         Align(
                                           alignment: Alignment.centerLeft,
                                           child: Text(
-                                            l10n.t('signup_province_optional'),
+                                            l10n.t('signup_province_required_label'),
                                             style: TextStyle(
                                               color:
                                                   Colors.white.withAlpha(180),
@@ -1016,8 +1030,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             child: DropdownButton<String?>(
                                               value: _signupProvince,
                                               hint: Text(
-                                                l10n.t(
-                                                    'province_optional_none'),
+                                                l10n.t('province_select_hint'),
                                                 style: TextStyle(
                                                   color: Colors.white
                                                       .withAlpha(140),
@@ -1033,34 +1046,29 @@ class _LoginScreenState extends State<LoginScreen>
                                                 color: Colors.white,
                                                 fontSize: 15,
                                               ),
-                                              items: [
-                                                DropdownMenuItem<String?>(
-                                                  value: null,
-                                                  child: Text(
-                                                    l10n.t(
-                                                        'province_optional_none'),
-                                                  ),
-                                                ),
-                                                ...iraqProvinces.map(
-                                                  (p) =>
-                                                      DropdownMenuItem<String?>(
-                                                    value: p,
-                                                    child: Text(p),
-                                                  ),
-                                                ),
-                                              ],
+                                              items: iraqProvinces
+                                                  .map(
+                                                    (p) =>
+                                                        DropdownMenuItem<String?>(
+                                                      value: p,
+                                                      child: Text(p),
+                                                    ),
+                                                  )
+                                                  .toList(),
                                               onChanged: (v) => setState(
                                                   () => _signupProvince = v),
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 12),
-                                        _buildField(
-                                          controller: _regCompanyCtrl,
-                                          hint:
-                                              l10n.t('signup_company_optional'),
-                                          icon: Icons.business_outlined,
-                                        ),
+                                        if (_signupRole == 'COMPANY') ...[
+                                          const SizedBox(height: 12),
+                                          _buildField(
+                                            controller: _regCompanyCtrl,
+                                            hint: l10n
+                                                .t('signup_company_required_hint'),
+                                            icon: Icons.business_outlined,
+                                          ),
+                                        ],
                                       ],
                                       const SizedBox(height: 16),
                                       SizedBox(

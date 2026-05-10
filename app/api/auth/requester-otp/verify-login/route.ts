@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { consumePhoneOtp } from '@/lib/consume-phone-otp';
+import { consumePhoneOtp, peekPhoneOtpValid } from '@/lib/consume-phone-otp';
 import { findLegacyCompanyOwnerCoordinator } from '@/lib/linked-coordinator-company';
 import {
   nextResponseCoordinatorSession,
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validOtp = await consumePhoneOtp(phone, code);
+    const validOtp = await peekPhoneOtpValid(phone, code);
     if (!validOtp) {
       return NextResponse.json({ success: false, message: 'Invalid or expired code' }, { status: 401 });
     }
@@ -66,9 +66,11 @@ export async function POST(req: NextRequest) {
             { status: 403 }
           );
         }
+        await consumePhoneOtp(phone, code);
         return nextResponseLegacyOwnerSession(ownerCoord, pushToken, phonePlatform);
       }
 
+      await consumePhoneOtp(phone, code);
       return nextResponseTicketRequesterSession(
         {
           ...requester,
@@ -116,6 +118,7 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
+      await consumePhoneOtp(phone, code);
       return nextResponseCoordinatorSession(coordinatorUser, pushToken, phonePlatform);
     }
 

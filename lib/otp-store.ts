@@ -32,6 +32,19 @@ export function normalizeCode(code: string): string {
   return digits.length >= 6 ? digits.slice(-6) : digits.padStart(6, '0');
 }
 
+/** True if code matches in-memory OTP for this phone, without removing it (for verify-login peek). */
+export function peekOtpValid(phone: string, code: string): boolean {
+  const normalized = phone.trim();
+  const codeStr = normalizeCode(code);
+  const entry = getStore().get(normalized);
+  if (!entry) return false;
+  if (Date.now() > entry.expiresAt) {
+    getStore().delete(normalized);
+    return false;
+  }
+  return normalizeCode(entry.code) === codeStr;
+}
+
 export function checkOtp(phone: string, code: string): boolean {
   const normalized = phone.trim();
   const codeStr = normalizeCode(code);
