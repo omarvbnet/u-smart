@@ -139,6 +139,68 @@ class ApiService {
     }
   }
 
+  /// Multipart POST returning JSON (e.g. warehouse Excel import).
+  Future<Map<String, dynamic>> postMultipartFile(
+    String path, {
+    required String filePath,
+    String fieldName = 'file',
+  }) async {
+    try {
+      final request = http.MultipartRequest('POST', _uri(path));
+      if (_token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+      if (_requestLocaleCode != null && _requestLocaleCode!.isNotEmpty) {
+        request.headers['X-Provisor-Locale'] = _requestLocaleCode!;
+      }
+      request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+      return _multipartJsonResponse(request);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> postMultipartBytes(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+    String fieldName = 'file',
+  }) async {
+    try {
+      final request = http.MultipartRequest('POST', _uri(path));
+      if (_token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+      if (_requestLocaleCode != null && _requestLocaleCode!.isNotEmpty) {
+        request.headers['X-Provisor-Locale'] = _requestLocaleCode!;
+      }
+      request.files.add(http.MultipartFile.fromBytes(fieldName, bytes, filename: filename));
+      return _multipartJsonResponse(request);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> _multipartJsonResponse(http.MultipartRequest request) async {
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final m = Map<String, dynamic>.from(decoded);
+        m['_httpStatus'] = streamed.statusCode;
+        return m;
+      }
+    } catch (_) {
+      /* fall through */
+    }
+    return {
+      'success': false,
+      'message': body.isNotEmpty ? body : 'Invalid server response',
+      '_httpStatus': streamed.statusCode,
+    };
+  }
+
   Future<String?> _handleUploadResponse(http.MultipartRequest request) async {
     final streamed = await request.send();
     final body = await streamed.stream.bytesToString();

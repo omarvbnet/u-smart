@@ -36,7 +36,8 @@
     "routing": "^0.0.2",
     "stripe": "^20.3.1",
     "three": "^0.182.0",
-    "twilio": "^5.12.1"
+    "twilio": "^5.12.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

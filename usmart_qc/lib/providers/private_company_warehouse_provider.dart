@@ -1,0 +1,522 @@
+import 'package:flutter/foundation.dart';
+import '../config/api_config.dart';
+import '../models/private_company_warehouse.dart';
+import '../services/api_service.dart';
+
+/// Manages all state for the Private Company workspace warehouse:
+/// material catalog, serial-numbered items, assignments, ticket-usage
+/// records, and the rolling dashboard.
+class PrivateCompanyWarehouseProvider extends ChangeNotifier {
+  PrivateCompanyWarehouseProvider(this._api);
+
+  final ApiService _api;
+
+  // ── Snapshot state ─────────────────────────────────────────────────────
+  WarehouseDashboard? _dashboard;
+  List<WarehouseMaterial> _materials = const [];
+  List<WarehouseItem> _items = const [];
+  List<WarehouseMovement> _activity = const [];
+
+  WarehouseDashboard? get dashboard => _dashboard;
+  List<WarehouseMaterial> get materials => _materials;
+  List<WarehouseItem> get items => _items;
+  List<WarehouseMovement> get activity => _activity;
+
+  // ── UI flags ───────────────────────────────────────────────────────────
+  bool _loading = false;
+  bool _submitting = false;
+  String? _error;
+  String? _lastSuccess;
+
+  bool get loading => _loading;
+  bool get submitting => _submitting;
+  String? get error => _error;
+  String? get lastSuccess => _lastSuccess;
+
+  void clearMessages() {
+    _error = null;
+    _lastSuccess = null;
+    notifyListeners();
+  }
+
+  void _setError(String? message) {
+    _error = message;
+    if (message != null) _lastSuccess = null;
+    notifyListeners();
+  }
+
+  void _setSuccess(String? message) {
+    _lastSuccess = message;
+    if (message != null) _error = null;
+    notifyListeners();
+  }
+
+  // ── Filters applied when refreshing the items list ────────────────────
+  String? _filterProvince;
+  String? _filterStatus; // api code, e.g. 'IN_WAREHOUSE'
+  String? _filterMaterialId;
+  String? _filterAssignedToId;
+  String? _filterTicketId;
+  String _filterQuery = '';
+  bool _mineOnly = false;
+
+  String? get filterProvince => _filterProvince;
+  String? get filterStatus => _filterStatus;
+  String? get filterMaterialId => _filterMaterialId;
+  String? get filterAssignedToId => _filterAssignedToId;
+  String? get filterTicketId => _filterTicketId;
+  String get filterQuery => _filterQuery;
+  bool get mineOnly => _mineOnly;
+
+  bool get hasAnyFilter =>
+      _filterProvince != null ||
+      _filterStatus != null ||
+      _filterMaterialId != null ||
+      _filterAssignedToId != null ||
+      _filterTicketId != null ||
+      _filterQuery.isNotEmpty ||
+      _mineOnly;
+
+  void setFilters({
+    Object? province = _sentinel,
+    Object? status = _sentinel,
+    Object? materialId = _sentinel,
+    Object? assignedToId = _sentinel,
+    Object? ticketId = _sentinel,
+    String? query,
+    bool? mineOnly,
+  }) {
+    if (province != _sentinel) _filterProvince = province as String?;
+    if (status != _sentinel) _filterStatus = status as String?;
+    if (materialId != _sentinel) _filterMaterialId = materialId as String?;
+    if (assignedToId != _sentinel) _filterAssignedToId = assignedToId as String?;
+    if (ticketId != _sentinel) _filterTicketId = ticketId as String?;
+    if (query != null) _filterQuery = query;
+    if (mineOnly != null) _mineOnly = mineOnly;
+    notifyListeners();
+  }
+
+  void resetFilters() {
+    _filterProvince = null;
+    _filterStatus = null;
+    _filterMaterialId = null;
+    _filterAssignedToId = null;
+    _filterTicketId = null;
+    _filterQuery = '';
+    _mineOnly = false;
+    notifyListeners();
+  }
+
+  static const Object _sentinel = Object();
+
+  // ── Refreshers ─────────────────────────────────────────────────────────
+
+  Future<void> refreshAll() async {
+    _loading = true;
+    notifyListeners();
+    await Future.wait([
+      _loadDashboard(),
+      _loadMaterials(),
+      _loadItems(),
+      _loadActivity(),
+    ]);
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> _loadDashboard() async {
+    try {
+      final res = await _api.getSafe(ApiConfig.privateCompanyWarehouseDashboard);
+      if (res != null && res['success'] == true) {
+        _dashboard = WarehouseDashboard.fromJson(res);
+      }
+    } catch (_) {
+      /* swallow — UI surfaces _error if needed */
+    }
+  }
+
+  Future<void> _loadMaterials() async {
+    try {
+      final res = await _api.getSafe(ApiConfig.privateCompanyWarehouseMaterials);
+      if (res != null && res['success'] == true) {
+        _materials = ((res['materials'] as List?) ?? const [])
+            .map((m) => WarehouseMaterial.fromJson(m as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final query = <String, String>{};
+      if (_filterProvince != null) query['province'] = _filterProvince!;
+      if (_filterStatus != null) query['status'] = _filterStatus!;
+      if (_filterMaterialId != null) query['materialId'] = _filterMaterialId!;
+      if (_filterAssignedToId != null) query['assignedToId'] = _filterAssignedToId!;
+      if (_filterTicketId != null) query['ticketId'] = _filterTicketId!;
+      if (_filterQuery.trim().isNotEmpty) query['q'] = _filterQuery.trim();
+      if (_mineOnly) query['mine'] = '1';
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseItems,
+        query: query.isEmpty ? null : query,
+      );
+      if (res != null && res['success'] == true) {
+        _items = ((res['items'] as List?) ?? const [])
+            .map((m) => WarehouseItem.fromJson(m as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadActivity() async {
+    try {
+      final res = await _api.getSafe(ApiConfig.privateCompanyWarehouseActivity);
+      if (res != null && res['success'] == true) {
+        _activity = ((res['movements'] as List?) ?? const [])
+            .map((m) => WarehouseMovement.fromJson(m as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> refreshDashboard() async {
+    await _loadDashboard();
+    notifyListeners();
+  }
+
+  Future<void> refreshMaterials() async {
+    await _loadMaterials();
+    notifyListeners();
+  }
+
+  Future<void> refreshItems() async {
+    await _loadItems();
+    notifyListeners();
+  }
+
+  Future<void> refreshActivity() async {
+    await _loadActivity();
+    notifyListeners();
+  }
+
+  // ── Catalog actions ───────────────────────────────────────────────────
+
+  Future<bool> createMaterial({
+    required String name,
+    String? description,
+    String? category,
+    String? unit,
+    String tracking = 'SERIAL',
+    String? color,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyWarehouseMaterials, body: {
+        'name': name,
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+        if (category != null && category.trim().isNotEmpty) 'category': category.trim(),
+        if (unit != null && unit.trim().isNotEmpty) 'unit': unit.trim(),
+        'tracking': tracking,
+        if (color != null && color.trim().isNotEmpty) 'color': color.trim(),
+      });
+      if (res['success'] == true) {
+        await _loadMaterials();
+        _setSuccess('Material added.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to add material.');
+      return false;
+    } catch (_) {
+      _setError('Network error while adding material.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateMaterial(
+    String id, {
+    String? name,
+    String? description,
+    String? category,
+    String? unit,
+    String? tracking,
+    String? color,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(ApiConfig.privateCompanyWarehouseMaterials, body: {
+        'id': id,
+        if (name != null) 'name': name,
+        if (description != null) 'description': description,
+        if (category != null) 'category': category,
+        if (unit != null) 'unit': unit,
+        if (tracking != null) 'tracking': tracking,
+        if (color != null) 'color': color,
+      });
+      if (res['success'] == true) {
+        await _loadMaterials();
+        _setSuccess('Material updated.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to update material.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  /// Bulk stock from an Excel / CSV file (owner or warehouse keeper only).
+  Future<Map<String, dynamic>> importMaterialsFromExcel({
+    String? filePath,
+    List<int>? fileBytes,
+    String filename = 'import.xlsx',
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final Map<String, dynamic> res;
+      if (filePath != null && filePath.isNotEmpty) {
+        res = await _api.postMultipartFile(
+          ApiConfig.privateCompanyWarehouseMaterialsImport,
+          filePath: filePath,
+        );
+      } else if (fileBytes != null && fileBytes.isNotEmpty) {
+        res = await _api.postMultipartBytes(
+          ApiConfig.privateCompanyWarehouseMaterialsImport,
+          bytes: fileBytes,
+          filename: filename,
+        );
+      } else {
+        _setError('No file selected.');
+        return {'success': false};
+      }
+      if (res['success'] == true) {
+        await Future.wait([_loadMaterials(), _loadItems(), _loadDashboard(), _loadActivity()]);
+        final n = (res['createdItems'] as num?)?.toInt() ?? 0;
+        final errs = (res['errors'] as List?)?.length ?? 0;
+        _setSuccess(
+          errs > 0
+              ? 'Imported $n row(s). Some rows had issues — see server message.'
+              : (res['message']?.toString() ?? 'Import finished.'),
+        );
+        return res;
+      }
+      _setError(res['message']?.toString() ?? 'Import failed.');
+      return res;
+    } catch (e) {
+      _setError(e.toString());
+      return {'success': false, 'message': e.toString()};
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteMaterial(String id) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.delete(
+        ApiConfig.privateCompanyWarehouseMaterials,
+        query: {'id': id},
+      );
+      if (res['success'] == true) {
+        await _loadMaterials();
+        _setSuccess('Material deleted.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to delete material.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Item actions ──────────────────────────────────────────────────────
+
+  /// Stock new items. For SERIAL materials [serialNumbers] is required; for
+  /// BULK materials the server generates a lot code. Returns the number of
+  /// items actually created (duplicates are skipped server-side).
+  Future<int?> stockItems({
+    required String materialId,
+    required String province,
+    List<String> serialNumbers = const [],
+    int? quantity,
+    String? notes,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyWarehouseItems, body: {
+        'materialId': materialId,
+        'province': province,
+        if (serialNumbers.isNotEmpty) 'serialNumbers': serialNumbers,
+        if (quantity != null) 'quantity': quantity,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      });
+      if (res['success'] == true || (res['created'] as num?)?.toInt() != null) {
+        final created = (res['created'] as num?)?.toInt() ?? 0;
+        final dups = (res['duplicates'] as List?)?.length ?? 0;
+        await Future.wait([_loadItems(), _loadDashboard(), _loadMaterials()]);
+        _setSuccess(dups > 0
+            ? 'Added $created item(s). Skipped $dups duplicate(s).'
+            : 'Added $created item(s).');
+        return created;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to stock items.');
+      return null;
+    } catch (_) {
+      _setError('Network error while stocking items.');
+      return null;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateItem(
+    String id, {
+    String? serialNumber,
+    String? province,
+    String? notes,
+    String? status,
+    int? quantity,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(ApiConfig.privateCompanyWarehouseItems, body: {
+        'id': id,
+        if (serialNumber != null) 'serialNumber': serialNumber,
+        if (province != null) 'province': province,
+        if (notes != null) 'notes': notes,
+        if (status != null) 'status': status,
+        if (quantity != null) 'quantity': quantity,
+      });
+      if (res['success'] == true) {
+        await Future.wait([_loadItems(), _loadActivity()]);
+        _setSuccess('Item updated.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to update item.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteItem(String id) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.delete(
+        ApiConfig.privateCompanyWarehouseItems,
+        query: {'id': id},
+      );
+      if (res['success'] == true) {
+        await Future.wait([_loadItems(), _loadDashboard(), _loadActivity()]);
+        _setSuccess(res['retired'] == true ? 'Item retired.' : 'Item removed.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to remove item.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _itemAction(
+    String id,
+    String action, {
+    Map<String, dynamic> body = const {},
+    String? successMessage,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        ApiConfig.privateCompanyWarehouseItemDetail(id),
+        body: {'action': action, ...body},
+      );
+      if (res['success'] == true) {
+        await Future.wait([_loadItems(), _loadDashboard(), _loadActivity()]);
+        if (successMessage != null) _setSuccess(successMessage);
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Action failed.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> assignItem(String id, String toStaffId, {String? note}) =>
+      _itemAction(id, 'assign',
+          body: {'toStaffId': toStaffId, if (note != null) 'note': note},
+          successMessage: 'Item assigned.');
+
+  Future<bool> transferItem(String id, String toStaffId, {String? note}) =>
+      _itemAction(id, 'transfer',
+          body: {'toStaffId': toStaffId, if (note != null) 'note': note},
+          successMessage: 'Item transferred.');
+
+  Future<bool> returnItem(String id, {String? note}) =>
+      _itemAction(id, 'return',
+          body: {if (note != null) 'note': note},
+          successMessage: 'Item returned to warehouse.');
+
+  Future<bool> useOnTicket(String id, String ticketId, {String? note, int? quantity}) =>
+      _itemAction(id, 'use',
+          body: {
+            'ticketId': ticketId,
+            if (note != null) 'note': note,
+            if (quantity != null) 'quantity': quantity,
+          },
+          successMessage: 'Recorded on ticket.');
+
+  Future<bool> markDamaged(String id, {String? note}) =>
+      _itemAction(id, 'damage',
+          body: {if (note != null) 'note': note},
+          successMessage: 'Marked damaged.');
+
+  Future<bool> markLost(String id, {String? note}) =>
+      _itemAction(id, 'lose',
+          body: {if (note != null) 'note': note},
+          successMessage: 'Marked lost.');
+
+  void reset() {
+    _dashboard = null;
+    _materials = const [];
+    _items = const [];
+    _activity = const [];
+    resetFilters();
+    _error = null;
+    _lastSuccess = null;
+    notifyListeners();
+  }
+}

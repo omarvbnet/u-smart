@@ -1,11 +1,15 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../constants/iraq_provinces.dart';
 import '../models/private_company.dart';
+import '../models/private_company_warehouse.dart';
 import '../providers/auth_provider.dart';
 import '../providers/private_company_provider.dart';
+import '../providers/private_company_warehouse_provider.dart';
 
 /// Single entry-point for the Private Company workspace feature on mobile.
 /// Renders one of three states:
@@ -400,7 +404,12 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 5, vsync: this);
+    // Eager-load warehouse data the first time the hub opens.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final wh = context.read<PrivateCompanyWarehouseProvider>();
+      if (wh.dashboard == null && !wh.loading) wh.refreshAll();
+    });
   }
 
   @override
@@ -453,11 +462,14 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
             labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             unselectedLabelStyle:
                 const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: const [
               Tab(icon: Icon(Icons.dashboard_rounded, size: 18), text: 'Overview'),
               Tab(icon: Icon(Icons.account_tree_rounded, size: 18), text: 'Departments'),
               Tab(icon: Icon(Icons.groups_rounded, size: 18), text: 'Staff'),
               Tab(icon: Icon(Icons.checklist_rounded, size: 18), text: 'Checklists'),
+              Tab(icon: Icon(Icons.inventory_2_rounded, size: 18), text: 'Warehouse'),
             ],
           ),
         ),
@@ -469,6 +481,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
               _DepartmentsTab(workspace: ws),
               _StaffTab(workspace: ws),
               _ChecklistsTab(workspace: ws),
+              _WarehouseTab(workspace: ws),
             ],
           ),
         ),
@@ -1279,7 +1292,14 @@ class _StaffTabState extends State<_StaffTab> {
                   _filterDepartmentId = null;
                 }),
               ),
-              ...['MANAGER', 'COORDINATOR', 'ENGINEER', 'TECHNICIAN', 'WORKER'].map((r) {
+              ...[
+                'MANAGER',
+                'COORDINATOR',
+                'ENGINEER',
+                'TECHNICIAN',
+                'WORKER',
+                'WAREHOUSE_KEEPER',
+              ].map((r) {
                 return _FilterChip(
                   selected: _filterRole == r,
                   label: _staffRoleLabel(r),
@@ -1344,6 +1364,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
   String _role = 'TECHNICIAN';
   String? _departmentId;
   String? _specialization;
+  String? _province;
 
   bool _initialDefaultsApplied = false;
 
@@ -1360,6 +1381,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
       _role = e.role.isNotEmpty ? e.role : 'TECHNICIAN';
       _departmentId = e.departmentId;
       _specialization = e.specialization;
+      _province = e.province;
     }
   }
 
@@ -1393,6 +1415,16 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
     final pc = context.read<PrivateCompanyProvider>();
     final firstName = _firstName.text.trim();
     if (firstName.isEmpty) return;
+    final province = _province;
+    if (province == null || province.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Please pick the staff member’s province so notifications can be routed correctly.'),
+        ),
+      );
+      return;
+    }
     if (widget.existing == null) {
       final temp = await pc.createStaff(
         firstName: firstName,
@@ -1402,6 +1434,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
         role: _role,
         departmentId: _departmentId,
         specialization: _specialization,
+        province: province,
       );
       if (mounted && temp != null) {
         Navigator.pop(context);
@@ -1413,6 +1446,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
         departmentId: _departmentId ?? '',
         specialization: _specialization ?? '',
         name: '${_firstName.text.trim()} ${_lastName.text.trim()}'.trim(),
+        province: province,
       );
       if (ok && mounted) Navigator.pop(context);
     }
@@ -1482,6 +1516,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                       'ENGINEER',
                       'TECHNICIAN',
                       'WORKER',
+                      'WAREHOUSE_KEEPER',
                     ];
                     final allowed = pc.isOwner
                         ? allRoles
@@ -1614,6 +1649,40 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const _SectionTitle('Province *'),
+                    const SizedBox(width: 6),
+                    Icon(Icons.public_rounded,
+                        color: Colors.white.withAlpha(120), size: 14),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Used to route ticket & announcement notifications to staff in this governorate.',
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: iraqProvinces.map((p) {
+                    final selected = _province == p;
+                    return GestureDetector(
+                      onTap: () => setState(() => _province = p),
+                      child: _ChipBox(
+                        label: p,
+                        selected: selected,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    );
+                  }).toList(),
+                ),
                 const SizedBox(height: 22),
                 _GradientButton(
                   onPressed: pc.submitting ? null : _submit,
@@ -1710,6 +1779,11 @@ class _StaffRow extends StatelessWidget {
                       _StaffBadge(
                         label: dept.name,
                         color: dept.colorValue,
+                      ),
+                    if (staff.province != null && staff.province!.isNotEmpty)
+                      _StaffBadge(
+                        label: staff.province!,
+                        color: const Color(0xFF38BDF8),
                       ),
                   ],
                 ),
@@ -2421,6 +2495,7 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
   _BroadcastMode _mode = _BroadcastMode.all;
   final Set<String> _departmentIds = <String>{};
   final Set<String> _specs = <String>{};
+  final Set<String> _provinces = <String>{};
   bool _includeOwner = false;
 
   @override
@@ -2487,6 +2562,7 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
       mode: _modeApi(),
       departmentIds: _departmentIds.toList(),
       specializations: _specs.toList(),
+      provinces: _provinces.toList(),
       includeOwner: _includeOwner,
     );
     if (delivered != null && mounted) Navigator.pop(context);
@@ -2674,6 +2750,65 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                     }).toList(),
                   ),
                 ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const _SectionTitle('Provinces (optional)'),
+                    const SizedBox(width: 6),
+                    Icon(Icons.public_rounded,
+                        color: Colors.white.withAlpha(120), size: 14),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _provinces.isEmpty
+                      ? 'Leave empty to reach every governorate. Pick provinces to narrow the audience.'
+                      : '${_provinces.length} province${_provinces.length == 1 ? '' : 's'} selected.',
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: iraqProvinces.map((p) {
+                    final selected = _provinces.contains(p);
+                    return GestureDetector(
+                      onTap: () => setState(() {
+                        if (selected) {
+                          _provinces.remove(p);
+                        } else {
+                          _provinces.add(p);
+                        }
+                      }),
+                      child: _ChipBox(
+                        label: p,
+                        selected: selected,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                if (_provinces.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: TextButton.icon(
+                      onPressed: () => setState(() => _provinces.clear()),
+                      icon: const Icon(Icons.clear_rounded,
+                          color: Color(0xFF8B83FF), size: 16),
+                      label: const Text(
+                        'Clear province filter',
+                        style: TextStyle(
+                          color: Color(0xFF8B83FF),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 18),
                 Row(
                   children: [
@@ -3427,6 +3562,8 @@ String _staffRoleLabel(String role) {
       return 'Technician';
     case 'WORKER':
       return 'Worker';
+    case 'WAREHOUSE_KEEPER':
+      return 'Warehouse keeper';
     case 'COMPANY':
       return 'Company';
     default:
@@ -3446,6 +3583,8 @@ Color _staffRoleColor(String role) {
       return const Color(0xFFFF9F43);
     case 'WORKER':
       return const Color(0xFFA78BFA);
+    case 'WAREHOUSE_KEEPER':
+      return const Color(0xFFCA8A04);
     case 'COMPANY':
       return const Color(0xFFFBBF24);
     default:
@@ -3521,4 +3660,2419 @@ IconData _iconFromKey(String? key) {
     default:
       return Icons.account_tree_rounded;
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// WAREHOUSE TAB
+//
+// Holds four sub-tabs:
+//   • Dashboard — aggregate counters + recent activity
+//   • Inventory — searchable / filterable list of items (with actions)
+//   • Materials — catalog management (managers only)
+//   • Activity  — full movement log
+//
+// Visibility rules:
+//   • Owner / manager / coordinator: everything
+//   • Engineer / technician / worker: items currently assigned to them
+//     and movements they participated in
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _WarehouseTab extends StatefulWidget {
+  const _WarehouseTab({required this.workspace});
+  final PrivateCompanyWorkspace workspace;
+
+  @override
+  State<_WarehouseTab> createState() => _WarehouseTabState();
+}
+
+class _WarehouseTabState extends State<_WarehouseTab>
+    with SingleTickerProviderStateMixin {
+  late final TabController _subTabs;
+
+  @override
+  void initState() {
+    super.initState();
+    _subTabs = TabController(length: 4, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _subTabs.dispose();
+    super.dispose();
+  }
+
+  bool _canManage(BuildContext context) {
+    final pc = context.read<PrivateCompanyProvider>();
+    return pc.canManageWarehouse;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final canManage = _canManage(context);
+    return Column(
+      children: [
+        if (wh.error != null)
+          _DismissibleBanner(
+            text: wh.error!,
+            color: const Color(0xFFFF4757),
+            icon: Icons.error_outline_rounded,
+            onClose: wh.clearMessages,
+          ),
+        if (wh.lastSuccess != null)
+          _DismissibleBanner(
+            text: wh.lastSuccess!,
+            color: const Color(0xFF00D4AA),
+            icon: Icons.check_circle_outline_rounded,
+            onClose: wh.clearMessages,
+          ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF12122A).withAlpha(180),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withAlpha(15)),
+          ),
+          child: TabBar(
+            controller: _subTabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            indicator: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF38BDF8), Color(0xFF6C63FF)],
+              ),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: const EdgeInsets.all(4),
+            dividerColor: Colors.transparent,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white54,
+            labelStyle:
+                const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            unselectedLabelStyle:
+                const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            tabs: const [
+              Tab(icon: Icon(Icons.insights_rounded, size: 16), text: 'Dashboard'),
+              Tab(icon: Icon(Icons.inventory_2_rounded, size: 16), text: 'Inventory'),
+              Tab(icon: Icon(Icons.category_rounded, size: 16), text: 'Materials'),
+              Tab(icon: Icon(Icons.history_rounded, size: 16), text: 'Activity'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _subTabs,
+            children: [
+              _WarehouseDashboardView(canManage: canManage),
+              _WarehouseInventoryView(canManage: canManage),
+              _WarehouseMaterialsView(canManage: canManage),
+              _WarehouseActivityView(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Dashboard sub-tab ─────────────────────────────────────────────────────
+
+class _WarehouseDashboardView extends StatelessWidget {
+  const _WarehouseDashboardView({required this.canManage});
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final d = wh.dashboard;
+    return RefreshIndicator(
+      onRefresh: wh.refreshAll,
+      color: const Color(0xFF38BDF8),
+      backgroundColor: const Color(0xFF12122A),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          if (d == null && wh.loading) ...const [
+            SizedBox(height: 80),
+            Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+          ] else if (d == null) ...[
+            const SizedBox(height: 60),
+            const Center(
+              child: Icon(Icons.inventory_2_rounded,
+                  color: Colors.white24, size: 72),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                'Your warehouse is empty.',
+                style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                canManage
+                    ? 'Add materials and stock items to get started.'
+                    : 'Once your managers stock items, your assignments will appear here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
+              ),
+            ),
+            if (canManage) ...[
+              const SizedBox(height: 24),
+              Center(
+                child: _GradientButton(
+                  onPressed: () => _openAddMaterial(context),
+                  label: 'Add material',
+                  icon: Icons.add_box_rounded,
+                ),
+              ),
+            ],
+          ] else ...[
+            // Headline counters
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Total items',
+                    value: '${d.total}',
+                    icon: Icons.inventory_2_rounded,
+                    color: const Color(0xFF38BDF8),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MetricCard(
+                    label: 'In warehouse',
+                    value: '${d.byStatus[MaterialItemStatus.inWarehouse] ?? 0}',
+                    icon: Icons.warehouse_rounded,
+                    color: const Color(0xFF6C63FF),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Assigned',
+                    value: '${d.byStatus[MaterialItemStatus.assigned] ?? 0}',
+                    icon: Icons.person_pin_circle_rounded,
+                    color: const Color(0xFFFFA53A),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Used',
+                    value: '${d.byStatus[MaterialItemStatus.used] ?? 0}',
+                    icon: Icons.task_alt_rounded,
+                    color: const Color(0xFF00D4AA),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Damaged',
+                    value: '${d.byStatus[MaterialItemStatus.damaged] ?? 0}',
+                    icon: Icons.report_problem_rounded,
+                    color: const Color(0xFFFF4757),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Lost',
+                    value: '${d.byStatus[MaterialItemStatus.lost] ?? 0}',
+                    icon: Icons.help_outline_rounded,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            const _SectionTitle('Stock by province'),
+            const SizedBox(height: 8),
+            if (d.byProvince.isEmpty)
+              _EmptyBlock(text: 'No items stocked yet.')
+            else
+              _GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      for (final r in d.byProvince)
+                        _BarRow(
+                          label: r.province,
+                          value: r.count,
+                          maxValue: d.byProvince.first.count,
+                          color: const Color(0xFF38BDF8),
+                          icon: Icons.public_rounded,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 18),
+            const _SectionTitle('Top materials'),
+            const SizedBox(height: 8),
+            if (d.byMaterial.isEmpty)
+              _EmptyBlock(text: 'No materials yet.')
+            else
+              _GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      for (final r in d.byMaterial)
+                        _BarRow(
+                          label: r.name,
+                          value: r.count,
+                          maxValue: d.byMaterial.first.count,
+                          color: _parseHex(r.color) ?? const Color(0xFF6C63FF),
+                          icon: Icons.category_rounded,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 18),
+            const _SectionTitle('Held by staff'),
+            const SizedBox(height: 8),
+            if (d.heldByStaff.isEmpty)
+              _EmptyBlock(text: 'No staff are currently holding items.')
+            else
+              _GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      for (final r in d.heldByStaff)
+                        _BarRow(
+                          label: (r.name?.trim().isNotEmpty == true)
+                              ? r.name!
+                              : (r.username ?? '—'),
+                          subLabel: [
+                            if (r.role != null && r.role!.isNotEmpty) r.role!,
+                            if (r.province != null && r.province!.isNotEmpty)
+                              r.province!,
+                          ].join(' • '),
+                          value: r.count,
+                          maxValue: d.heldByStaff.first.count,
+                          color: const Color(0xFFFFA53A),
+                          icon: Icons.person_rounded,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 18),
+            const _SectionTitle('Tickets consuming most items'),
+            const SizedBox(height: 8),
+            if (d.topUsageTickets.isEmpty)
+              _EmptyBlock(text: 'No materials have been used on tickets yet.')
+            else
+              _GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      for (final r in d.topUsageTickets)
+                        _BarRow(
+                          label: r.siteName?.isNotEmpty == true
+                              ? r.siteName!
+                              : (r.technique ?? r.ticketId ?? '—'),
+                          subLabel: [
+                            if (r.technique != null) r.technique!,
+                            if (r.province != null) r.province!,
+                            if (r.status != null) r.status!,
+                          ].join(' • '),
+                          value: r.used,
+                          maxValue: d.topUsageTickets.first.used,
+                          color: const Color(0xFF00D4AA),
+                          icon: Icons.confirmation_number_rounded,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 18),
+            const _SectionTitle('Recent activity'),
+            const SizedBox(height: 8),
+            if (d.recentMovements.isEmpty)
+              _EmptyBlock(text: 'No movements yet.')
+            else
+              ...d.recentMovements.map((m) => _MovementCard(movement: m)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _openAddMaterial(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _MaterialEditorSheet(),
+    );
+  }
+}
+
+// ─── Inventory sub-tab ─────────────────────────────────────────────────────
+
+class _WarehouseInventoryView extends StatefulWidget {
+  const _WarehouseInventoryView({required this.canManage});
+  final bool canManage;
+
+  @override
+  State<_WarehouseInventoryView> createState() =>
+      _WarehouseInventoryViewState();
+}
+
+class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Search by serial or note',
+                    hintStyle:
+                        TextStyle(color: Colors.white.withAlpha(80), fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        color: Color(0xFF8B83FF), size: 18),
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear_rounded,
+                                color: Colors.white54, size: 18),
+                            onPressed: () {
+                              _search.clear();
+                              wh.setFilters(query: '');
+                              wh.refreshItems();
+                            },
+                          ),
+                    filled: true,
+                    fillColor: const Color(0xFF12122A),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (v) {
+                    wh.setFilters(query: v);
+                  },
+                  onSubmitted: (_) => wh.refreshItems(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Filters',
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFF12122A),
+                  foregroundColor: const Color(0xFF8B83FF),
+                ),
+                onPressed: () => _openFilters(context),
+                icon: const Icon(Icons.tune_rounded, size: 20),
+              ),
+              if (widget.canManage) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Stock items',
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C63FF),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => _openStockSheet(context),
+                  icon: const Icon(Icons.add_box_rounded, size: 20),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (wh.hasAnyFilter)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _activeFilterChips(wh),
+                  ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.clear_all_rounded,
+                      color: Color(0xFF8B83FF), size: 16),
+                  label: const Text(
+                    'Reset',
+                    style: TextStyle(color: Color(0xFF8B83FF), fontSize: 12),
+                  ),
+                  onPressed: () {
+                    wh.resetFilters();
+                    _search.clear();
+                    wh.refreshItems();
+                  },
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: wh.refreshItems,
+            color: const Color(0xFF38BDF8),
+            backgroundColor: const Color(0xFF12122A),
+            child: wh.items.isEmpty
+                ? ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      const SizedBox(height: 60),
+                      const Center(
+                        child: Icon(Icons.inbox_rounded,
+                            color: Colors.white24, size: 72),
+                      ),
+                      const SizedBox(height: 14),
+                      Center(
+                        child: Text(
+                          wh.hasAnyFilter
+                              ? 'No items match the current filters.'
+                              : (widget.canManage
+                                  ? 'Stock your first item to get started.'
+                                  : 'You don\'t hold any items right now.'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white.withAlpha(160), fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    itemCount: wh.items.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final item = wh.items[i];
+                      return _InventoryRow(
+                        item: item,
+                        canManage: widget.canManage,
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _activeFilterChips(PrivateCompanyWarehouseProvider wh) {
+    final chips = <Widget>[];
+    if (wh.mineOnly) {
+      chips.add(const _FilterChipBadge(label: 'Mine only'));
+    }
+    if (wh.filterProvince != null) {
+      chips.add(_FilterChipBadge(label: 'Province: ${wh.filterProvince}'));
+    }
+    if (wh.filterStatus != null) {
+      chips.add(_FilterChipBadge(
+        label: 'Status: ${materialItemStatusLabel(materialItemStatusFromString(wh.filterStatus))}',
+      ));
+    }
+    if (wh.filterMaterialId != null) {
+      final mat = wh.materials.cast<WarehouseMaterial?>().firstWhere(
+            (m) => m?.id == wh.filterMaterialId,
+            orElse: () => null,
+          );
+      chips.add(_FilterChipBadge(label: 'Material: ${mat?.name ?? '—'}'));
+    }
+    return chips;
+  }
+
+  void _openFilters(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _InventoryFiltersSheet(),
+    );
+  }
+
+  void _openStockSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _StockItemsSheet(),
+    );
+  }
+}
+
+class _InventoryRow extends StatelessWidget {
+  const _InventoryRow({required this.item, required this.canManage});
+  final WarehouseItem item;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _statusColor(item.status);
+    return _GlassCard(
+      child: InkWell(
+        onTap: () => _openActions(context, item, canManage),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: statusColor.withAlpha(40),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: statusColor.withAlpha(80)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      _statusIcon(item.status),
+                      color: statusColor,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.materialName ?? 'Material',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'SN: ${item.serialNumber}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Colors.white.withAlpha(160), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (canManage)
+                    const Icon(Icons.more_horiz_rounded,
+                        color: Colors.white54, size: 20),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  _StaffBadge(
+                    label: materialItemStatusLabel(item.status),
+                    color: statusColor,
+                  ),
+                  if (item.province.isNotEmpty)
+                    _StaffBadge(
+                      label: item.province,
+                      color: const Color(0xFF38BDF8),
+                    ),
+                  if (item.assignedToName != null)
+                    _StaffBadge(
+                      label: item.assignedToName!,
+                      color: const Color(0xFFFFA53A),
+                    ),
+                  if (item.usedTicketSiteName != null)
+                    _StaffBadge(
+                      label: 'Ticket: ${item.usedTicketSiteName}',
+                      color: const Color(0xFF00D4AA),
+                    ),
+                  if (item.quantity > 1)
+                    _StaffBadge(
+                      label: '×${item.quantity}${item.materialUnit != null ? ' ${item.materialUnit}' : ''}',
+                      color: const Color(0xFF94A3B8),
+                    ),
+                ],
+              ),
+              if (item.notes != null && item.notes!.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  item.notes!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openActions(BuildContext context, WarehouseItem item, bool canManage) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ItemActionsSheet(item: item, canManage: canManage),
+    );
+  }
+}
+
+// ─── Materials sub-tab ─────────────────────────────────────────────────────
+
+class _WarehouseMaterialsView extends StatefulWidget {
+  const _WarehouseMaterialsView({required this.canManage});
+  final bool canManage;
+
+  @override
+  State<_WarehouseMaterialsView> createState() => _WarehouseMaterialsViewState();
+}
+
+class _WarehouseMaterialsViewState extends State<_WarehouseMaterialsView> {
+  Future<void> _pickAndImportExcel(BuildContext context) async {
+    final pick = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx', 'xls', 'csv'],
+      withData: true,
+    );
+    if (!context.mounted || pick == null || pick.files.isEmpty) return;
+    final f = pick.files.single;
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    await wh.importMaterialsFromExcel(
+      filePath: f.path,
+      fileBytes: f.bytes,
+      filename: f.name,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    return Column(
+      children: [
+        if (widget.canManage)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: wh.submitting ? null : () => _pickAndImportExcel(context),
+                  icon: const Icon(Icons.upload_file_rounded, color: Color(0xFF38BDF8)),
+                  label: const Text('Import Excel / CSV'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withAlpha(60)),
+                  ),
+                ),
+                _GradientButton(
+                  onPressed: () => _openEditor(context),
+                  label: 'Add material',
+                  icon: Icons.add_box_rounded,
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: wh.refreshMaterials,
+            color: const Color(0xFF38BDF8),
+            backgroundColor: const Color(0xFF12122A),
+            child: wh.materials.isEmpty
+                ? ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      const SizedBox(height: 60),
+                      const Center(
+                        child: Icon(Icons.category_rounded,
+                            color: Colors.white24, size: 72),
+                      ),
+                      const SizedBox(height: 14),
+                      Center(
+                        child: Text(
+                          widget.canManage
+                              ? 'Define your first material to start stocking.'
+                              : 'No materials in the catalog yet.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white.withAlpha(160), fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    itemCount: wh.materials.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final m = wh.materials[i];
+                      return _MaterialRow(
+                        material: m,
+                        canManage: widget.canManage,
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openEditor(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _MaterialEditorSheet(),
+    );
+  }
+}
+
+class _MaterialRow extends StatelessWidget {
+  const _MaterialRow({required this.material, required this.canManage});
+  final WarehouseMaterial material;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _parseHex(material.color) ?? const Color(0xFF6C63FF);
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withAlpha(40),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withAlpha(80)),
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.category_rounded, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    material.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14),
+                  ),
+                  const SizedBox(height: 3),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      _StaffBadge(
+                        label: material.tracking == MaterialTracking.bulk
+                            ? 'BULK'
+                            : 'SERIAL',
+                        color: color,
+                      ),
+                      if (material.category != null && material.category!.isNotEmpty)
+                        _StaffBadge(
+                            label: material.category!,
+                            color: const Color(0xFF94A3B8)),
+                      if (material.unit != null && material.unit!.isNotEmpty)
+                        _StaffBadge(
+                            label: material.unit!,
+                            color: const Color(0xFF94A3B8)),
+                      _StaffBadge(
+                        label: '${material.itemCount} items',
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    ],
+                  ),
+                  if (material.description != null &&
+                      material.description!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      material.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(140), fontSize: 11),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (canManage)
+              PopupMenuButton<String>(
+                color: const Color(0xFF12122A),
+                iconColor: Colors.white60,
+                onSelected: (v) async {
+                  final wh = context.read<PrivateCompanyWarehouseProvider>();
+                  switch (v) {
+                    case 'edit':
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) =>
+                            _MaterialEditorSheet(existing: material),
+                      );
+                      break;
+                    case 'delete':
+                      final ok = await _confirm(
+                        context,
+                        'Delete material?',
+                        material.itemCount > 0
+                            ? 'This material has ${material.itemCount} item(s). You must retire or remove them first.'
+                            : 'This cannot be undone.',
+                      );
+                      if (ok == true) await wh.deleteMaterial(material.id);
+                      break;
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text('Edit', style: TextStyle(color: Colors.white)),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child:
+                        Text('Delete', style: TextStyle(color: Color(0xFFFF4757))),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Activity sub-tab ──────────────────────────────────────────────────────
+
+class _WarehouseActivityView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    return RefreshIndicator(
+      onRefresh: wh.refreshActivity,
+      color: const Color(0xFF38BDF8),
+      backgroundColor: const Color(0xFF12122A),
+      child: wh.activity.isEmpty
+          ? ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                const SizedBox(height: 60),
+                const Center(
+                  child: Icon(Icons.history_rounded,
+                      color: Colors.white24, size: 72),
+                ),
+                const SizedBox(height: 14),
+                Center(
+                  child: Text(
+                    'No movements recorded yet.',
+                    style:
+                        TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
+                  ),
+                ),
+              ],
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              itemCount: wh.activity.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, i) => _MovementCard(movement: wh.activity[i]),
+            ),
+    );
+  }
+}
+
+// ─── Shared bits used by the warehouse views ──────────────────────────────
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(40),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: color.withAlpha(80)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: color, size: 16),
+                ),
+                const Spacer(),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                color: Colors.white.withAlpha(150),
+                fontSize: 10,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BarRow extends StatelessWidget {
+  const _BarRow({
+    required this.label,
+    required this.value,
+    required this.maxValue,
+    required this.color,
+    required this.icon,
+    this.subLabel,
+  });
+  final String label;
+  final String? subLabel;
+  final int value;
+  final int maxValue;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = maxValue == 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$value',
+                style: TextStyle(
+                    color: color, fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          if (subLabel != null && subLabel!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 2),
+              child: Text(
+                subLabel!,
+                style:
+                    TextStyle(color: Colors.white.withAlpha(120), fontSize: 10),
+              ),
+            ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: pct.toDouble(),
+              minHeight: 5,
+              backgroundColor: Colors.white.withAlpha(15),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyBlock extends StatelessWidget {
+  const _EmptyBlock({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline_rounded,
+                color: Colors.white.withAlpha(110), size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                    color: Colors.white.withAlpha(150), fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChipBadge extends StatelessWidget {
+  const _FilterChipBadge({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF38BDF8).withAlpha(30),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF38BDF8).withAlpha(80)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+            color: Color(0xFFBAE6FD), fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _MovementCard extends StatelessWidget {
+  const _MovementCard({required this.movement});
+  final WarehouseMovement movement;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _movementColor(movement.type);
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: color.withAlpha(40),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.withAlpha(80)),
+              ),
+              alignment: Alignment.center,
+              child:
+                  Icon(_movementIcon(movement.type), color: color, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_movementLabel(movement.type)} • ${movement.materialName ?? 'Item'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _movementSummary(movement),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(160), fontSize: 11),
+                  ),
+                  if (movement.note != null && movement.note!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '“${movement.note!}”',
+                        style: TextStyle(
+                            color: Colors.white.withAlpha(120), fontSize: 11),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _shortTimeAgo(movement.createdAt),
+              style:
+                  TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _movementSummary(WarehouseMovement m) {
+  final parts = <String>[];
+  if (m.itemSerial != null) parts.add('SN ${m.itemSerial}');
+  if (m.fromStaffName != null) parts.add('from ${m.fromStaffName}');
+  if (m.toStaffName != null) parts.add('to ${m.toStaffName}');
+  if (m.ticketSiteName != null) parts.add('ticket ${m.ticketSiteName}');
+  if (m.actorName != null) parts.add('by ${m.actorName}');
+  return parts.join(' · ');
+}
+
+String _shortTimeAgo(DateTime d) {
+  final diff = DateTime.now().difference(d);
+  if (diff.inSeconds < 60) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+  if (diff.inHours < 24) return '${diff.inHours}h';
+  if (diff.inDays < 7) return '${diff.inDays}d';
+  return '${(diff.inDays / 7).floor()}w';
+}
+
+Color _statusColor(MaterialItemStatus s) {
+  switch (s) {
+    case MaterialItemStatus.inWarehouse:
+      return const Color(0xFF6C63FF);
+    case MaterialItemStatus.assigned:
+      return const Color(0xFFFFA53A);
+    case MaterialItemStatus.used:
+      return const Color(0xFF00D4AA);
+    case MaterialItemStatus.damaged:
+      return const Color(0xFFFF4757);
+    case MaterialItemStatus.lost:
+      return const Color(0xFF94A3B8);
+    case MaterialItemStatus.retired:
+      return const Color(0xFF64748B);
+  }
+}
+
+IconData _statusIcon(MaterialItemStatus s) {
+  switch (s) {
+    case MaterialItemStatus.inWarehouse:
+      return Icons.warehouse_rounded;
+    case MaterialItemStatus.assigned:
+      return Icons.person_pin_circle_rounded;
+    case MaterialItemStatus.used:
+      return Icons.task_alt_rounded;
+    case MaterialItemStatus.damaged:
+      return Icons.report_problem_rounded;
+    case MaterialItemStatus.lost:
+      return Icons.help_outline_rounded;
+    case MaterialItemStatus.retired:
+      return Icons.archive_rounded;
+  }
+}
+
+Color _movementColor(String type) {
+  switch (type) {
+    case 'STOCKED':
+      return const Color(0xFF38BDF8);
+    case 'ASSIGNED':
+    case 'TRANSFERRED':
+      return const Color(0xFFFFA53A);
+    case 'RETURNED':
+      return const Color(0xFF6C63FF);
+    case 'USED':
+      return const Color(0xFF00D4AA);
+    case 'DAMAGED':
+      return const Color(0xFFFF4757);
+    case 'LOST':
+      return const Color(0xFF94A3B8);
+    case 'ADJUSTED':
+    default:
+      return const Color(0xFF8B83FF);
+  }
+}
+
+IconData _movementIcon(String type) {
+  switch (type) {
+    case 'STOCKED':
+      return Icons.inventory_2_rounded;
+    case 'ASSIGNED':
+      return Icons.person_add_alt_1_rounded;
+    case 'TRANSFERRED':
+      return Icons.swap_horiz_rounded;
+    case 'RETURNED':
+      return Icons.assignment_return_rounded;
+    case 'USED':
+      return Icons.task_alt_rounded;
+    case 'DAMAGED':
+      return Icons.report_problem_rounded;
+    case 'LOST':
+      return Icons.help_outline_rounded;
+    case 'ADJUSTED':
+    default:
+      return Icons.tune_rounded;
+  }
+}
+
+String _movementLabel(String type) {
+  switch (type) {
+    case 'STOCKED':
+      return 'Stocked';
+    case 'ASSIGNED':
+      return 'Assigned';
+    case 'TRANSFERRED':
+      return 'Transferred';
+    case 'RETURNED':
+      return 'Returned';
+    case 'USED':
+      return 'Used on ticket';
+    case 'DAMAGED':
+      return 'Damaged';
+    case 'LOST':
+      return 'Lost';
+    case 'ADJUSTED':
+    default:
+      return 'Adjusted';
+  }
+}
+
+Color? _parseHex(String? input) {
+  if (input == null) return null;
+  var s = input.trim();
+  if (s.isEmpty) return null;
+  if (s.startsWith('#')) s = s.substring(1);
+  if (s.length == 6) s = 'FF$s';
+  if (s.length != 8) return null;
+  final v = int.tryParse(s, radix: 16);
+  if (v == null) return null;
+  return Color(v);
+}
+
+Future<bool?> _confirm(BuildContext context, String title, String body) {
+  return showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF12122A),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      content: Text(body, style: TextStyle(color: Colors.white.withAlpha(180))),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Confirm',
+              style: TextStyle(color: Color(0xFFFF4757))),
+        ),
+      ],
+    ),
+  );
+}
+
+// ─── Sheets: Material editor / Stock items / Item actions / Filters ───────
+
+class _MaterialEditorSheet extends StatefulWidget {
+  const _MaterialEditorSheet({this.existing});
+  final WarehouseMaterial? existing;
+
+  @override
+  State<_MaterialEditorSheet> createState() => _MaterialEditorSheetState();
+}
+
+class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
+  final _name = TextEditingController();
+  final _description = TextEditingController();
+  final _category = TextEditingController();
+  final _unit = TextEditingController();
+  MaterialTracking _tracking = MaterialTracking.serial;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      _name.text = e.name;
+      _description.text = e.description ?? '';
+      _category.text = e.category ?? '';
+      _unit.text = e.unit ?? '';
+      _tracking = e.tracking;
+    }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    _category.dispose();
+    _unit.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    final ok = widget.existing == null
+        ? await wh.createMaterial(
+            name: name,
+            description: _description.text,
+            category: _category.text,
+            unit: _unit.text,
+            tracking: materialTrackingApi(_tracking),
+          )
+        : await wh.updateMaterial(
+            widget.existing!.id,
+            name: name,
+            description: _description.text,
+            category: _category.text,
+            unit: _unit.text,
+            tracking: materialTrackingApi(_tracking),
+          );
+    if (ok && mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final isEdit = widget.existing != null;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A0A1F),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  isEdit ? 'Edit material' : 'Add material',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 18),
+                _DarkField(
+                  controller: _name,
+                  label: 'Name *',
+                  hint: 'Cat6 Cable',
+                  icon: Icons.category_rounded,
+                ),
+                const SizedBox(height: 12),
+                _DarkField(
+                  controller: _description,
+                  label: 'Description',
+                  hint: 'Optional notes for your team',
+                  icon: Icons.notes_rounded,
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DarkField(
+                        controller: _category,
+                        label: 'Category',
+                        hint: 'Cable, Tool, …',
+                        icon: Icons.label_outline_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _DarkField(
+                        controller: _unit,
+                        label: 'Unit',
+                        hint: 'pcs / m / kg',
+                        icon: Icons.straighten_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                const _SectionTitle('Tracking *'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _tracking = MaterialTracking.serial),
+                      child: _ChipBox(
+                        label: 'Serial-numbered',
+                        selected: _tracking == MaterialTracking.serial,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _tracking = MaterialTracking.bulk),
+                      child: _ChipBox(
+                        label: 'Bulk (by quantity)',
+                        selected: _tracking == MaterialTracking.bulk,
+                        color: const Color(0xFFFFA53A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _tracking == MaterialTracking.serial
+                      ? 'Each unit has a unique serial. You will type or scan a serial per item.'
+                      : 'Tracked by quantity only — useful for cable on a reel, screws, etc.',
+                  style: TextStyle(
+                      color: Colors.white.withAlpha(140), fontSize: 11.5),
+                ),
+                const SizedBox(height: 22),
+                _GradientButton(
+                  onPressed: wh.submitting ? null : _submit,
+                  label: wh.submitting
+                      ? 'Saving…'
+                      : (isEdit ? 'Save changes' : 'Add material'),
+                  icon: Icons.save_rounded,
+                  stretch: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StockItemsSheet extends StatefulWidget {
+  const _StockItemsSheet();
+
+  @override
+  State<_StockItemsSheet> createState() => _StockItemsSheetState();
+}
+
+class _StockItemsSheetState extends State<_StockItemsSheet> {
+  final _serialsCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  final _quantityCtrl = TextEditingController(text: '1');
+  String? _materialId;
+  String? _province;
+
+  @override
+  void dispose() {
+    _serialsCtrl.dispose();
+    _notesCtrl.dispose();
+    _quantityCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    if (_materialId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Pick a material first.'),
+        backgroundColor: Color(0xFFFF4757),
+      ));
+      return;
+    }
+    if (_province == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Pick a province.'),
+        backgroundColor: Color(0xFFFF4757),
+      ));
+      return;
+    }
+    final material = wh.materials.firstWhere((m) => m.id == _materialId);
+    final isBulk = material.tracking == MaterialTracking.bulk;
+    final rawSerials = _serialsCtrl.text;
+    final serials = rawSerials
+        .split(RegExp(r'[\r\n,]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (!isBulk && serials.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'Enter at least one serial number. One per line, or comma-separated.'),
+        backgroundColor: Color(0xFFFF4757),
+      ));
+      return;
+    }
+    final qty = int.tryParse(_quantityCtrl.text.trim()) ?? 1;
+    final created = await wh.stockItems(
+      materialId: _materialId!,
+      province: _province!,
+      serialNumbers: serials,
+      quantity: isBulk ? qty : null,
+      notes: _notesCtrl.text,
+    );
+    if (created != null && created > 0 && mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final selectedMaterial = _materialId == null
+        ? null
+        : wh.materials.cast<WarehouseMaterial?>().firstWhere(
+              (m) => m?.id == _materialId,
+              orElse: () => null,
+            );
+    final isBulk = selectedMaterial?.tracking == MaterialTracking.bulk;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A0A1F),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Stock items',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 18),
+                const _SectionTitle('Material *'),
+                const SizedBox(height: 8),
+                if (wh.materials.isEmpty)
+                  Text(
+                    'No materials yet. Open the “Materials” tab to add one.',
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(160), fontSize: 12),
+                  )
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: wh.materials.map((m) {
+                      final selected = m.id == _materialId;
+                      return GestureDetector(
+                        onTap: () => setState(() => _materialId = m.id),
+                        child: _ChipBox(
+                          label: m.name,
+                          selected: selected,
+                          color: _parseHex(m.color) ?? const Color(0xFF6C63FF),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                const SizedBox(height: 14),
+                const _SectionTitle('Province *'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: iraqProvinces.map((p) {
+                    final selected = _province == p;
+                    return GestureDetector(
+                      onTap: () => setState(() => _province = p),
+                      child: _ChipBox(
+                        label: p,
+                        selected: selected,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                if (isBulk)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DarkField(
+                          controller: _quantityCtrl,
+                          label: 'Quantity',
+                          hint: '1',
+                          icon: Icons.numbers_rounded,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DarkField(
+                          controller: _serialsCtrl,
+                          label: 'Lot / SKU (optional)',
+                          hint: 'auto-generated if empty',
+                          icon: Icons.qr_code_2_rounded,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  _DarkField(
+                    controller: _serialsCtrl,
+                    label: 'Serial numbers *',
+                    hint: 'One per line, or comma-separated',
+                    icon: Icons.qr_code_2_rounded,
+                    maxLines: 4,
+                  ),
+                const SizedBox(height: 12),
+                _DarkField(
+                  controller: _notesCtrl,
+                  label: 'Notes',
+                  hint: 'e.g. received from supplier #123',
+                  icon: Icons.notes_rounded,
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 22),
+                _GradientButton(
+                  onPressed: wh.submitting ? null : _submit,
+                  label: wh.submitting ? 'Saving…' : 'Add to stock',
+                  icon: Icons.inventory_2_rounded,
+                  stretch: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InventoryFiltersSheet extends StatefulWidget {
+  const _InventoryFiltersSheet();
+
+  @override
+  State<_InventoryFiltersSheet> createState() => _InventoryFiltersSheetState();
+}
+
+class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
+  String? _province;
+  String? _status;
+  String? _materialId;
+  bool _mineOnly = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    _province = wh.filterProvince;
+    _status = wh.filterStatus;
+    _materialId = wh.filterMaterialId;
+    _mineOnly = wh.mineOnly;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A0A1F),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Filter items',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Switch(
+                      value: _mineOnly,
+                      activeThumbColor: const Color(0xFF6C63FF),
+                      onChanged: (v) => setState(() => _mineOnly = v),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Show only items currently assigned to me',
+                        style: TextStyle(
+                            color: Colors.white.withAlpha(200), fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const _SectionTitle('Status'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: MaterialItemStatus.values.map((s) {
+                    final code = materialItemStatusApi(s);
+                    final selected = _status == code;
+                    return GestureDetector(
+                      onTap: () =>
+                          setState(() => _status = selected ? null : code),
+                      child: _ChipBox(
+                        label: materialItemStatusLabel(s),
+                        selected: selected,
+                        color: _statusColor(s),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                const _SectionTitle('Province'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: iraqProvinces.map((p) {
+                    final selected = _province == p;
+                    return GestureDetector(
+                      onTap: () =>
+                          setState(() => _province = selected ? null : p),
+                      child: _ChipBox(
+                        label: p,
+                        selected: selected,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                const _SectionTitle('Material'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _materialId = null),
+                      child: _ChipBox(
+                        label: 'Any',
+                        selected: _materialId == null,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                    ...wh.materials.map((m) {
+                      final selected = _materialId == m.id;
+                      return GestureDetector(
+                        onTap: () => setState(() => _materialId = m.id),
+                        child: _ChipBox(
+                          label: m.name,
+                          selected: selected,
+                          color:
+                              _parseHex(m.color) ?? const Color(0xFF6C63FF),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                _GradientButton(
+                  onPressed: wh.submitting
+                      ? null
+                      : () {
+                          wh.setFilters(
+                            province: _province,
+                            status: _status,
+                            materialId: _materialId,
+                            mineOnly: _mineOnly,
+                          );
+                          wh.refreshItems();
+                          Navigator.pop(context);
+                        },
+                  label: 'Apply filters',
+                  icon: Icons.filter_alt_rounded,
+                  stretch: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ItemActionsSheet extends StatelessWidget {
+  const _ItemActionsSheet({required this.item, required this.canManage});
+  final WarehouseItem item;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final pc = context.watch<PrivateCompanyProvider>();
+    final isHolder = item.assignedToId != null &&
+        pc.workspace?.staff.any((s) => s.id == item.assignedToId) == true;
+    final canAssign = canManage &&
+        (item.status == MaterialItemStatus.inWarehouse ||
+            item.status == MaterialItemStatus.assigned);
+    final canReturn = item.status == MaterialItemStatus.assigned;
+    final canUse = item.status == MaterialItemStatus.assigned ||
+        (canManage && item.status == MaterialItemStatus.inWarehouse);
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0A1F),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                item.materialName ?? 'Item',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'SN: ${item.serialNumber}',
+                style:
+                    TextStyle(color: Colors.white.withAlpha(160), fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _StaffBadge(
+                    label: materialItemStatusLabel(item.status),
+                    color: _statusColor(item.status),
+                  ),
+                  if (item.province.isNotEmpty)
+                    _StaffBadge(
+                      label: item.province,
+                      color: const Color(0xFF38BDF8),
+                    ),
+                  if (item.assignedToName != null)
+                    _StaffBadge(
+                      label: 'Held by ${item.assignedToName!}',
+                      color: const Color(0xFFFFA53A),
+                    ),
+                  if (item.usedTicketSiteName != null)
+                    _StaffBadge(
+                      label: 'Used on ${item.usedTicketSiteName!}',
+                      color: const Color(0xFF00D4AA),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if (canAssign)
+                _ActionTile(
+                  icon: Icons.person_add_alt_1_rounded,
+                  label: isHolder ? 'Transfer to another staff' : 'Assign to staff',
+                  color: const Color(0xFFFFA53A),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final staffId =
+                        await _pickStaff(context, currentHolderId: item.assignedToId);
+                    if (staffId == null) return;
+                    if (isHolder) {
+                      await wh.transferItem(item.id, staffId);
+                    } else {
+                      await wh.assignItem(item.id, staffId);
+                    }
+                  },
+                ),
+              if (canReturn)
+                _ActionTile(
+                  icon: Icons.assignment_return_rounded,
+                  label: 'Return to warehouse',
+                  color: const Color(0xFF6C63FF),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await wh.returnItem(item.id);
+                  },
+                ),
+              if (canUse)
+                _ActionTile(
+                  icon: Icons.task_alt_rounded,
+                  label: 'Record use on a ticket',
+                  color: const Color(0xFF00D4AA),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final res = await _pickTicket(context);
+                    if (res == null) return;
+                    await wh.useOnTicket(item.id, res.$1, note: res.$2);
+                  },
+                ),
+              if (canManage) ...[
+                _ActionTile(
+                  icon: Icons.report_problem_rounded,
+                  label: 'Mark as damaged',
+                  color: const Color(0xFFFF4757),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final note = await _promptNote(context, 'Damaged — note (optional)');
+                    await wh.markDamaged(item.id, note: note);
+                  },
+                ),
+                _ActionTile(
+                  icon: Icons.help_outline_rounded,
+                  label: 'Mark as lost',
+                  color: const Color(0xFF94A3B8),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final note = await _promptNote(context, 'Lost — note (optional)');
+                    await wh.markLost(item.id, note: note);
+                  },
+                ),
+                _ActionTile(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete / Retire',
+                  color: const Color(0xFFFF4757),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final ok = await _confirm(context, 'Remove item?',
+                        'If it has been used on a ticket it will be retired so the audit trail is preserved.');
+                    if (ok == true) await wh.deleteItem(item.id);
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withAlpha(20),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withAlpha(60)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  color: color, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<String?> _pickStaff(BuildContext context,
+    {String? currentHolderId}) async {
+  final pc = context.read<PrivateCompanyProvider>();
+  final staff = pc.workspace?.staff ?? const [];
+  if (staff.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('No staff available in this workspace.'),
+    ));
+    return null;
+  }
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0A1F),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Choose a staff member',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              for (final s in staff)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: InkWell(
+                    onTap: s.id == currentHolderId
+                        ? null
+                        : () => Navigator.pop(context, s.id),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF12122A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: s.id == currentHolderId
+                                ? const Color(0xFFFFA53A).withAlpha(80)
+                                : Colors.white10),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: const Color(0xFF6C63FF).withAlpha(60),
+                            child: Text(
+                              (s.name?.isNotEmpty == true
+                                      ? s.name!.substring(0, 1)
+                                      : s.username.substring(0, 1))
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                  color: Color(0xFF8B83FF),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  s.name?.isNotEmpty == true
+                                      ? s.name!
+                                      : s.username,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  [
+                                    s.role,
+                                    if (s.specialization != null)
+                                      s.specialization!,
+                                    if (s.province != null) s.province!,
+                                  ].join(' • '),
+                                  style: TextStyle(
+                                      color: Colors.white.withAlpha(150),
+                                      fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (s.id == currentHolderId)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 8),
+                              child: Icon(Icons.check_circle_rounded,
+                                  color: Color(0xFFFFA53A), size: 16),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<(String, String?)?> _pickTicket(BuildContext context) async {
+  // Lightweight ticket-id input — the full ticket picker would require a
+  // tickets list fetch which is outside the warehouse provider's scope. The
+  // user can paste / type a ticket id (or the share-code). Keeps the
+  // dependency surface small while still being functional.
+  final idCtrl = TextEditingController();
+  final noteCtrl = TextEditingController();
+  return showModalBottomSheet<(String, String?)>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A0A1F),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Record on ticket',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Paste the ticket ID this item was used on. The system will verify it belongs to your workspace.',
+                  style: TextStyle(
+                      color: Colors.white.withAlpha(150), fontSize: 12),
+                ),
+                const SizedBox(height: 14),
+                _DarkField(
+                  controller: idCtrl,
+                  label: 'Ticket ID *',
+                  hint: 'cuid…',
+                  icon: Icons.confirmation_number_rounded,
+                ),
+                const SizedBox(height: 12),
+                _DarkField(
+                  controller: noteCtrl,
+                  label: 'Note',
+                  hint: 'e.g. installed during maintenance visit',
+                  icon: Icons.notes_rounded,
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 18),
+                _GradientButton(
+                  onPressed: () {
+                    final id = idCtrl.text.trim();
+                    if (id.isEmpty) return;
+                    Navigator.pop(
+                      context,
+                      (id, noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim()),
+                    );
+                  },
+                  label: 'Confirm',
+                  icon: Icons.check_rounded,
+                  stretch: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<String?> _promptNote(BuildContext context, String title) async {
+  final ctrl = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF12122A),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        style: const TextStyle(color: Colors.white),
+        maxLines: 3,
+        decoration: InputDecoration(
+          hintText: 'Optional context',
+          hintStyle: TextStyle(color: Colors.white.withAlpha(80)),
+          filled: true,
+          fillColor: Colors.white10,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+          child: const Text('Confirm',
+              style: TextStyle(color: Color(0xFF6C63FF))),
+        ),
+      ],
+    ),
+  );
 }

@@ -17,6 +17,7 @@ import 'providers/conflicts_provider.dart';
 import 'providers/registration_request_provider.dart';
 import 'providers/provisor_techniques_provider.dart';
 import 'providers/private_company_provider.dart';
+import 'providers/private_company_warehouse_provider.dart';
 import 'config/api_config.dart';
 
 void main() async {
@@ -95,6 +96,8 @@ void main() async {
   final conflictsProvider = ConflictsProvider(apiService);
   final registrationRequestProvider = RegistrationRequestProvider(apiService);
   final privateCompanyProvider = PrivateCompanyProvider(apiService);
+  final privateCompanyWarehouseProvider =
+      PrivateCompanyWarehouseProvider(apiService);
 
   authProvider.addListener(() {
     privateCompanyProvider.setCurrentRequesterId(authProvider.user?.id);
@@ -102,6 +105,17 @@ void main() async {
       privateCompanyProvider.refresh();
     } else {
       privateCompanyProvider.reset();
+      privateCompanyWarehouseProvider.reset();
+    }
+  });
+
+  // Keep warehouse data fresh once the workspace is approved.
+  privateCompanyProvider.addListener(() {
+    if (privateCompanyProvider.isApproved &&
+        authProvider.isLoggedIn &&
+        privateCompanyWarehouseProvider.dashboard == null &&
+        !privateCompanyWarehouseProvider.loading) {
+      privateCompanyWarehouseProvider.refreshAll();
     }
   });
 
@@ -118,6 +132,7 @@ void main() async {
         ChangeNotifierProvider.value(value: registrationRequestProvider),
         ChangeNotifierProvider.value(value: techniquesProvider),
         ChangeNotifierProvider.value(value: privateCompanyProvider),
+        ChangeNotifierProvider.value(value: privateCompanyWarehouseProvider),
       ],
       child: const ProvisrApp(),
     ),

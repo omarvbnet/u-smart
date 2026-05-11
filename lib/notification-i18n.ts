@@ -19,7 +19,9 @@ export type NotificationCopyKey =
   | 'site_shared_received'
   | 'conflict_resolved'
   | 'conflict_reinspection'
-  | 'workspace_announcement';
+  | 'workspace_announcement'
+  | 'material_assigned'
+  | 'material_used';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -455,6 +457,42 @@ const TEMPLATES: Record<
       body: v.siteName
         ? `بەڕێوەبەر "${v.siteName}"ی نێردەوە بۆ دووبارە پشکنین. تیکەتەکە ئێستا لە کاردایە.`
         : 'بەڕێوەبەر ئەم تیکەتە نێردەوە بۆ دووبارە پشکنین. تیکەتەکە ئێستا لە کاردایە.',
+    }),
+  },
+  material_assigned: {
+    en: (v) => ({
+      title: 'Material assigned to you',
+      body: `${v.materialName} — S/N ${v.serialNumber} (${v.province}).`,
+    }),
+    ar: (v) => ({
+      title: 'تم تعيين مادة لك',
+      body: `${v.materialName} — الرقم ${v.serialNumber} (${v.province}).`,
+    }),
+    tr: (v) => ({
+      title: 'Size malzeme atandı',
+      body: `${v.materialName} — Seri no ${v.serialNumber} (${v.province}).`,
+    }),
+    ku: (v) => ({
+      title: 'کەرەستەیەک بۆ تۆ دیاریکرا',
+      body: `${v.materialName} — ژمارەی زنجیرەیی ${v.serialNumber} (${v.province}).`,
+    }),
+  },
+  material_used: {
+    en: (v) => ({
+      title: 'Material used on ticket',
+      body: `${v.materialName} (S/N ${v.serialNumber}) recorded on: ${v.ticketLabel}.`,
+    }),
+    ar: (v) => ({
+      title: 'استخدام مادة على تذكرة',
+      body: `${v.materialName} (رقم ${v.serialNumber}) سُجّل على: ${v.ticketLabel}.`,
+    }),
+    tr: (v) => ({
+      title: 'Malzeme talepte kullanıldı',
+      body: `${v.materialName} (Seri ${v.serialNumber}) şu talebe yazıldı: ${v.ticketLabel}.`,
+    }),
+    ku: (v) => ({
+      title: 'کەرەستە لەسەر تیکەت بەکارهێنرا',
+      body: `${v.materialName} (زنجیرە ${v.serialNumber}) تۆمارکرا لە: ${v.ticketLabel}.`,
     }),
   },
   workspace_announcement: {

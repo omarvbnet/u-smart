@@ -19,9 +19,23 @@ export type PrivateCompanyMembership = {
   isActive: boolean;
 };
 
-const STAFF_ROLES = new Set(['MANAGER', 'COORDINATOR', 'ENGINEER', 'TECHNICIAN', 'WORKER']);
+const STAFF_ROLES = new Set([
+  'MANAGER',
+  'COORDINATOR',
+  'ENGINEER',
+  'TECHNICIAN',
+  'WORKER',
+  'WAREHOUSE_KEEPER',
+]);
 
-export const PRIVATE_COMPANY_STAFF_ROLES = ['MANAGER', 'COORDINATOR', 'ENGINEER', 'TECHNICIAN', 'WORKER'] as const;
+export const PRIVATE_COMPANY_STAFF_ROLES = [
+  'MANAGER',
+  'COORDINATOR',
+  'ENGINEER',
+  'TECHNICIAN',
+  'WORKER',
+  'WAREHOUSE_KEEPER',
+] as const;
 export type PrivateCompanyStaffRole = (typeof PRIVATE_COMPANY_STAFF_ROLES)[number];
 
 export const CAN_CREATE_CHECKLIST_ROLES = new Set([

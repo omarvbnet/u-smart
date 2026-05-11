@@ -136,6 +136,8 @@ class PrivateCompanyStaff {
     this.specialization,
     this.status = 'ACTIVE',
     this.departmentId,
+    this.province,
+    this.provinceFilterActive = true,
     this.createdAt,
   });
 
@@ -148,6 +150,8 @@ class PrivateCompanyStaff {
   final String? specialization;
   final String status;
   final String? departmentId;
+  final String? province;
+  final bool provinceFilterActive;
   final DateTime? createdAt;
 
   factory PrivateCompanyStaff.fromJson(Map<String, dynamic> json) {
@@ -161,6 +165,12 @@ class PrivateCompanyStaff {
       specialization: json['specialization'] as String?,
       status: json['status'] as String? ?? 'ACTIVE',
       departmentId: json['privateCompanyDepartmentId'] as String?,
+      province: (json['province'] as String?)?.trim().isEmpty == true
+          ? null
+          : json['province'] as String?,
+      provinceFilterActive: json['provinceFilterActive'] is bool
+          ? json['provinceFilterActive'] as bool
+          : true,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,

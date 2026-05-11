@@ -71,6 +71,13 @@ class PrivateCompanyProvider extends ChangeNotifier {
   /// Only the workspace owner can broadcast workspace announcements.
   bool get canBroadcastNotifications => isOwner;
 
+  /// Owner or [WAREHOUSE_KEEPER] — can stock inventory, import Excel, assign items.
+  bool get canManageWarehouse {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    return _resolvedRole == 'WAREHOUSE_KEEPER';
+  }
+
   /// True for managers/coordinators (non-owner) — they are scoped to their own
   /// department and may only grant the ENGINEER / TECHNICIAN / WORKER roles.
   bool get isDepartmentManager {
@@ -314,6 +321,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     required String role,
     String? departmentId,
     String? specialization,
+    required String province,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -329,6 +337,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'departmentId': departmentId,
         if (specialization != null && specialization.isNotEmpty)
           'specialization': specialization,
+        'province': province,
       });
       if (res['success'] == true) {
         final cred = res['credentials'] as Map<String, dynamic>?;
@@ -358,6 +367,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? specialization,
     String? status,
     String? name,
+    String? province,
+    bool? provinceFilterActive,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -369,6 +380,10 @@ class PrivateCompanyProvider extends ChangeNotifier {
         if (specialization != null) 'specialization': specialization,
         if (status != null) 'status': status,
         if (name != null) 'name': name,
+        if (province != null && province.trim().isNotEmpty)
+          'province': province.trim(),
+        if (provinceFilterActive != null)
+          'provinceFilterActive': provinceFilterActive,
       });
       if (res['success'] == true) {
         await refresh();
@@ -525,6 +540,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String mode = 'all',
     List<String> departmentIds = const [],
     List<String> specializations = const [],
+    List<String> provinces = const [],
     bool includeOwner = false,
   }) async {
     _submitting = true;
@@ -536,6 +552,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
         'mode': mode,
         if (departmentIds.isNotEmpty) 'departmentIds': departmentIds,
         if (specializations.isNotEmpty) 'specializations': specializations,
+        if (provinces.isNotEmpty) 'provinces': provinces,
         'includeOwner': includeOwner,
       });
       if (res['success'] == true) {

@@ -15,6 +15,41 @@ const VALID_SPECIALIZATIONS = new Set([
   'PROGRAMMER',
 ]);
 
+const IRAQ_PROVINCES = [
+  'Al-Anbar',
+  'Babil',
+  'Baghdad',
+  'Basra',
+  'Dhi Qar',
+  'Al-Qadisiyyah',
+  'Diyala',
+  'Duhok',
+  'Erbil',
+  'Halabja',
+  'Karbala',
+  'Kirkuk',
+  'Maysan',
+  'Muthanna',
+  'Najaf',
+  'Ninawa',
+  'Salah Al-Din',
+  'Sulaymaniyah',
+  'Wasit',
+];
+
+function normalizeProvinceList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const r of raw) {
+    if (typeof r !== 'string') continue;
+    const trimmed = r.trim();
+    if (!trimmed) continue;
+    const hit = IRAQ_PROVINCES.find((p) => p.toLowerCase() === trimmed.toLowerCase());
+    if (hit) out.push(hit);
+  }
+  return Array.from(new Set(out));
+}
+
 type AudienceMode = 'all' | 'departments' | 'specializations' | 'both';
 
 function normalizeMode(raw: unknown): AudienceMode {
@@ -70,6 +105,10 @@ export async function POST(req: NextRequest) {
     const departmentIds = asStringArray(body?.departmentIds);
     const specializationsRaw = asStringArray(body?.specializations).map((s) => s.toUpperCase());
     const specializations = specializationsRaw.filter((s) => VALID_SPECIALIZATIONS.has(s));
+    // Optional province filter — applied on top of any audience mode so the
+    // owner can target, say, "engineers in Baghdad" or "Al-Anbar workers in
+    // a specific department".
+    const provinces = normalizeProvinceList(body?.provinces);
     const includeOwner = body?.includeOwner === true;
 
     if (!message) {
@@ -113,6 +152,16 @@ export async function POST(req: NextRequest) {
         { privateCompanyDepartmentId: { in: departmentIds } },
         { specialization: { in: specializations } },
       ];
+    }
+    if (provinces.length > 0) {
+      // Compose with whatever audience constraint is already in place. Use AND
+      // so the province filter narrows (not widens) the recipient set.
+      const provinceFilter = { province: { in: provinces } };
+      if (Array.isArray(filters.AND)) {
+        (filters.AND as unknown[]).push(provinceFilter);
+      } else {
+        filters.AND = [provinceFilter];
+      }
     }
 
     const recipients: Array<{ id: string }> = await prisma.ticketRequester.findMany({

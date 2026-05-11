@@ -15,6 +15,39 @@ const prisma = _prisma as any;
 
 const VALID_SPECIALIZATIONS = ['ELECTRICAL', 'MECHANICAL', 'CIVIL', 'TELECOM', 'PROGRAMMER'] as const;
 
+const IRAQ_PROVINCES = [
+  'Al-Anbar',
+  'Babil',
+  'Baghdad',
+  'Basra',
+  'Dhi Qar',
+  'Al-Qadisiyyah',
+  'Diyala',
+  'Duhok',
+  'Erbil',
+  'Halabja',
+  'Karbala',
+  'Kirkuk',
+  'Maysan',
+  'Muthanna',
+  'Najaf',
+  'Ninawa',
+  'Salah Al-Din',
+  'Sulaymaniyah',
+  'Wasit',
+] as const;
+
+const IRAQ_PROVINCE_SET = new Set<string>(IRAQ_PROVINCES);
+
+function normalizeProvinceOrNull(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Case-insensitive lookup so the client can send any casing.
+  const hit = IRAQ_PROVINCES.find((p) => p.toLowerCase() === trimmed.toLowerCase());
+  return hit ?? null;
+}
+
 function buildUsernameBase(firstName: string): string {
   const cleaned = firstName.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 16);
   return cleaned || 'staff';
@@ -148,6 +181,8 @@ export async function GET(req: NextRequest) {
           role: true,
           specialization: true,
           status: true,
+          province: true,
+          provinceFilterActive: true,
           privateCompanyDepartmentId: true,
           createdAt: true,
         },
@@ -177,12 +212,24 @@ export async function POST(req: NextRequest) {
   const specialization = VALID_SPECIALIZATIONS.includes(specRaw as (typeof VALID_SPECIALIZATIONS)[number])
     ? specRaw
     : null;
+  // Province is REQUIRED on every workspace staff member so ticket and
+  // announcement notifications can be routed by governorate.
+  const province = normalizeProvinceOrNull(body?.province);
 
   if (!firstName) {
     return NextResponse.json({ success: false, message: 'First name is required.' }, { status: 400 });
   }
   if (!phone && !email) {
     return NextResponse.json({ success: false, message: 'A phone number or email is required.' }, { status: 400 });
+  }
+  if (!province) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: `Province is required and must be one of ${IRAQ_PROVINCES.join(', ')}.`,
+      },
+      { status: 400 }
+    );
   }
   const role = (PRIVATE_COMPANY_STAFF_ROLES as readonly string[]).includes(roleRaw) ? roleRaw : '';
   if (!role) {
@@ -260,6 +307,8 @@ export async function POST(req: NextRequest) {
       phone: phone || `+0000${Math.random().toString().slice(2, 9)}`,
       role,
       specialization,
+      province,
+      provinceFilterActive: true,
       privateCompanyId: guard.companyId,
       privateCompanyDepartmentId: effectiveDepartmentId || null,
       status: 'ACTIVE',
@@ -278,6 +327,8 @@ export async function POST(req: NextRequest) {
       role: true,
       specialization: true,
       status: true,
+      province: true,
+      provinceFilterActive: true,
       privateCompanyDepartmentId: true,
       createdAt: true,
     },
@@ -380,7 +431,11 @@ export async function PATCH(req: NextRequest) {
         data.role = r;
       } else {
         return NextResponse.json(
-          { success: false, message: 'Only the owner can promote a staff member to MANAGER or COORDINATOR.' },
+          {
+            success: false,
+            message:
+              'Only the workspace owner can assign the warehouse keeper role or promote to manager or coordinator.',
+          },
           { status: 403 }
         );
       }
@@ -423,6 +478,22 @@ export async function PATCH(req: NextRequest) {
     if (['ACTIVE', 'SUSPENDED', 'BLOCKED'].includes(s)) data.status = s;
   }
   if (typeof body?.name === 'string' && body.name.trim()) data.name = body.name.trim();
+  if (body?.province !== undefined) {
+    const p = normalizeProvinceOrNull(body.province);
+    if (!p) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Province must be one of ${IRAQ_PROVINCES.join(', ')}.`,
+        },
+        { status: 400 }
+      );
+    }
+    data.province = p;
+  }
+  if (body?.provinceFilterActive !== undefined) {
+    data.provinceFilterActive = body.provinceFilterActive === true;
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
   }
@@ -438,6 +509,8 @@ export async function PATCH(req: NextRequest) {
       role: true,
       specialization: true,
       status: true,
+      province: true,
+      provinceFilterActive: true,
       privateCompanyDepartmentId: true,
     },
   });
@@ -476,7 +549,11 @@ export async function DELETE(req: NextRequest) {
     const targetRole = String(target.role ?? '').toUpperCase();
     if (!MANAGER_CAN_GRANT_STAFF_ROLES.has(targetRole)) {
       return NextResponse.json(
-        { success: false, message: 'Only the owner can remove a manager or coordinator.' },
+        {
+          success: false,
+          message:
+            'Only the workspace owner can remove a manager, coordinator, or warehouse keeper.',
+        },
         { status: 403 }
       );
     }

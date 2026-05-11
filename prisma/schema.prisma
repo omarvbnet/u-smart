@@ -278,6 +278,10 @@ model VisitorRequest {
   updatedAt                      DateTime                 @updatedAt
   CoordinatorTicketCharge        CoordinatorTicketCharge?
 
+  // ── Private company warehouse (materials consumed on this ticket) ────
+  usedMaterialItems              PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemUsedTicket")
+  materialMovements              PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementTicket")
+
   @@map("visitor_requests")
 }
 
@@ -362,6 +366,14 @@ model TicketRequester {
   privateCompanyDepartment   PrivateCompanyDepartment? @relation("PrivateCompanyDepartmentMember", fields: [privateCompanyDepartmentId], references: [id], onDelete: SetNull)
   /// Created checklists inside their workspace.
   privateCompanyChecklistsCreated PrivateCompanyChecklist[] @relation("PrivateCompanyChecklistCreator")
+
+  // ── Private company warehouse ─────────────────────────────────────────
+  assignedMaterialItems          PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemAssignee")
+  materialMovementsFrom          PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementFrom")
+  materialMovementsTo            PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementTo")
+  materialMovementsActed         PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementActor")
+  materialsCreated               PrivateCompanyMaterial[]         @relation("PrivateCompanyMaterialCreator")
+  materialItemsStocked           PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemStocker")
 
   @@map("ticket_requesters")
 }
@@ -517,6 +529,7 @@ enum RequesterRole {
   // Roles below are used by the private-company workspace feature (mobile app)
   MANAGER
   COORDINATOR
+  WAREHOUSE_KEEPER // private workspace: sole role that can mutate warehouse stock
 }
 
 enum RequesterSpecialization {
@@ -1326,6 +1339,9 @@ model PrivateCompany {
   staff            TicketRequester[]          @relation("PrivateCompanyStaff")
   checklists       PrivateCompanyChecklist[]
   scopedTickets    VisitorRequest[]           @relation("PrivateCompanyScopedTickets")
+  materials        PrivateCompanyMaterial[]         @relation("PrivateCompanyMaterials")
+  materialItems    PrivateCompanyMaterialItem[]    @relation("PrivateCompanyMaterialItems")
+  materialMovements PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovements")
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
@@ -1369,4 +1385,113 @@ model PrivateCompanyChecklist {
   @@index([companyId])
   @@index([departmentId])
   @@map("private_company_checklists")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Private company warehouse: track materials, serial-numbered inventory,
+// assignments to staff, and consumption on tickets — all scoped to one
+// private workspace.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PrivateCompanyMaterialTracking {
+  SERIAL // each unit has a unique serial number
+  BULK   // tracked only by quantity (cable on a reel, screws, etc.)
+}
+
+enum PrivateCompanyMaterialItemStatus {
+  IN_WAREHOUSE
+  ASSIGNED // currently held by a staff member
+  USED     // consumed on a ticket
+  DAMAGED
+  LOST
+  RETIRED
+}
+
+enum PrivateCompanyMaterialMovementType {
+  STOCKED     // added to warehouse
+  ASSIGNED    // given to a staff member
+  RETURNED    // staff returned it to warehouse
+  USED        // consumed on a ticket
+  TRANSFERRED // staff -> staff
+  DAMAGED
+  LOST
+  ADJUSTED    // metadata/status edit
+}
+
+model PrivateCompanyMaterial {
+  id          String                          @id @default(cuid())
+  companyId   String
+  company     PrivateCompany                  @relation("PrivateCompanyMaterials", fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  category    String? // free-form ("Cable", "Tool", "Spare part")
+  unit        String? // "pcs", "m", "kg", "set"
+  iconKey     String? // material icon key (UI)
+  color       String? // accent hex (UI)
+  tracking    PrivateCompanyMaterialTracking  @default(SERIAL)
+  createdById String?
+  createdBy   TicketRequester?                @relation("PrivateCompanyMaterialCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  items       PrivateCompanyMaterialItem[]
+  createdAt   DateTime                        @default(now())
+  updatedAt   DateTime                        @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("private_company_materials")
+}
+
+model PrivateCompanyMaterialItem {
+  id           String                            @id @default(cuid())
+  companyId    String
+  company      PrivateCompany                    @relation("PrivateCompanyMaterialItems", fields: [companyId], references: [id], onDelete: Cascade)
+  materialId   String
+  material     PrivateCompanyMaterial            @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  serialNumber String // unique within the workspace; for BULK use a generated lot/SKU code
+  province     String // Iraq governorate where the unit physically lives
+  status       PrivateCompanyMaterialItemStatus  @default(IN_WAREHOUSE)
+  quantity     Int                               @default(1) // > 1 only for BULK materials
+  notes        String?
+  assignedToId String?
+  assignedTo   TicketRequester?                  @relation("PrivateCompanyMaterialItemAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  usedTicketId String?
+  usedTicket   VisitorRequest?                   @relation("PrivateCompanyMaterialItemUsedTicket", fields: [usedTicketId], references: [id], onDelete: SetNull)
+  usedAt       DateTime?
+  createdById  String?
+  createdBy    TicketRequester?                  @relation("PrivateCompanyMaterialItemStocker", fields: [createdById], references: [id], onDelete: SetNull)
+  movements    PrivateCompanyMaterialMovement[]
+  createdAt    DateTime                          @default(now())
+  updatedAt    DateTime                          @updatedAt
+
+  @@unique([companyId, serialNumber])
+  @@index([companyId, status])
+  @@index([companyId, province])
+  @@index([materialId])
+  @@index([assignedToId])
+  @@index([usedTicketId])
+  @@map("private_company_material_items")
+}
+
+model PrivateCompanyMaterialMovement {
+  id          String                              @id @default(cuid())
+  companyId   String
+  company     PrivateCompany                      @relation("PrivateCompanyMaterialMovements", fields: [companyId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        PrivateCompanyMaterialItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type        PrivateCompanyMaterialMovementType
+  fromStaffId String?
+  fromStaff   TicketRequester?                    @relation("PrivateCompanyMaterialMovementFrom", fields: [fromStaffId], references: [id], onDelete: SetNull)
+  toStaffId   String?
+  toStaff     TicketRequester?                    @relation("PrivateCompanyMaterialMovementTo", fields: [toStaffId], references: [id], onDelete: SetNull)
+  ticketId    String?
+  ticket      VisitorRequest?                     @relation("PrivateCompanyMaterialMovementTicket", fields: [ticketId], references: [id], onDelete: SetNull)
+  quantity    Int                                 @default(1)
+  note        String?
+  actorId     String
+  actor       TicketRequester                     @relation("PrivateCompanyMaterialMovementActor", fields: [actorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                            @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([itemId])
+  @@index([ticketId])
+  @@map("private_company_material_movements")
 }
