@@ -10,10 +10,18 @@ const prisma = _prisma as any;
 /**
  * Only the workspace owner (COMPANY) and dedicated warehouse keepers may
  * create catalog entries, stock serials, import Excel, assign/transfer items,
- * or mark damaged/lost. Everyone else in the workspace has read-only access
- * to dashboards, inventory lists, and the movement log for tracking.
+ * or mark damaged/lost. Managers, coordinators, and keepers may browse the
+ * full workspace inventory; field roles (engineer / technician / worker, etc.)
+ * only see units assigned to them and related movement rows.
  */
 export const CAN_MUTATE_WAREHOUSE_ROLES = new Set(['COMPANY', 'WAREHOUSE_KEEPER']);
+
+/** Roles that may list and aggregate all warehouse items and catalog rows. */
+export const CAN_VIEW_ALL_WAREHOUSE_INVENTORY_ROLES = new Set([
+  'MANAGER',
+  'COORDINATOR',
+  'WAREHOUSE_KEEPER',
+]);
 
 /**
  * Roles that can record material consumption against a maintenance ticket
@@ -72,6 +80,8 @@ export type WarehouseGuardSuccess = {
   canMutateWarehouse: boolean;
   /** Read-only: everyone in an active workspace can browse inventory & logs. */
   canViewWarehouse: boolean;
+  /** Full catalog + stock; false = only items assigned to this requester. */
+  canViewAllWarehouseInventory: boolean;
   canUseOnTicket: boolean;
   /**
    * @deprecated Use canMutateWarehouse — kept for gradual migration in routes.
@@ -133,6 +143,8 @@ export async function warehouseGuard(
 
   const canMutateWarehouse = isOwner || CAN_MUTATE_WAREHOUSE_ROLES.has(actorRole);
   const canViewWarehouse = true;
+  const canViewAllWarehouseInventory =
+    isOwner || CAN_VIEW_ALL_WAREHOUSE_INVENTORY_ROLES.has(actorRole);
   const canUseOnTicket = isOwner || CAN_USE_MATERIALS_ON_TICKET_ROLES.has(actorRole);
 
   if (requireMutate && !canMutateWarehouse) {
@@ -151,6 +163,7 @@ export async function warehouseGuard(
     actorDepartmentId,
     canMutateWarehouse,
     canViewWarehouse,
+    canViewAllWarehouseInventory,
     canUseOnTicket,
     canManage: canMutateWarehouse,
   };

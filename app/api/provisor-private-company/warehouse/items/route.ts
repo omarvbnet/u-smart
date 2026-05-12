@@ -33,18 +33,18 @@ const ITEM_INCLUDE = {
 /**
  * GET /api/provisor-private-company/warehouse/items
  *
- * Returns the full stock list for the workspace. Every approved member can
- * browse inventory (read-only); use `mine=1` to list only units assigned to
- * the current user.
+ * Returns stock for the workspace. Owners, managers, coordinators, and
+ * warehouse keepers see the full list (optional filters below). Other roles
+ * always receive only rows assigned to them — query params cannot widen scope.
  *
- * Query string filters:
+ * Query string filters (full-view roles only for `assignedToId` / `mine`):
  *   ?province=Baghdad
  *   ?status=ASSIGNED
  *   ?materialId=...
  *   ?assignedToId=...
  *   ?ticketId=...
  *   ?q=<serial-prefix-or-substring>
- *   ?mine=1   (engineers/technicians/workers: show only items assigned to me)
+ *   ?mine=1   (full-view only: list units assigned to the current user)
  */
 export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
@@ -58,8 +58,6 @@ export async function GET(req: NextRequest) {
   if (province) where.province = province;
   const materialId = searchParams.get('materialId');
   if (materialId) where.materialId = materialId;
-  const assignedToId = searchParams.get('assignedToId');
-  if (assignedToId) where.assignedToId = assignedToId;
   const ticketId = searchParams.get('ticketId');
   if (ticketId) where.usedTicketId = ticketId;
   const q = (searchParams.get('q') ?? '').trim();
@@ -70,10 +68,13 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  // Optional ?mine=1 narrows the list to units currently assigned to the
-  // caller (e.g. field staff checking their own kit). Omit the param to browse
-  // the full workspace inventory read-only (all roles).
-  if (searchParams.get('mine') === '1') {
+  if (guard.canViewAllWarehouseInventory) {
+    const assignedToId = searchParams.get('assignedToId');
+    if (assignedToId) where.assignedToId = assignedToId;
+    if (searchParams.get('mine') === '1') {
+      where.assignedToId = guard.requesterId;
+    }
+  } else {
     where.assignedToId = guard.requesterId;
   }
 
@@ -83,7 +84,8 @@ export async function GET(req: NextRequest) {
     include: ITEM_INCLUDE,
     take: 500,
   });
-  return NextResponse.json({ success: true, items });
+  const inventoryScope = guard.canViewAllWarehouseInventory ? 'all' : 'assigned';
+  return NextResponse.json({ success: true, inventoryScope, items });
 }
 
 /**

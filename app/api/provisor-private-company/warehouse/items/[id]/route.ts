@@ -126,7 +126,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     include: ITEM_INCLUDE,
   });
   if (!item) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
-  return NextResponse.json({ success: true, item });
+  if (
+    !guard.canViewAllWarehouseInventory &&
+    item.assignedToId !== guard.requesterId
+  ) {
+    return NextResponse.json({ success: false, message: 'Forbidden.' }, { status: 403 });
+  }
+  const inventoryScope = guard.canViewAllWarehouseInventory ? 'all' : 'assigned';
+  return NextResponse.json({ success: true, inventoryScope, item });
 }
 
 type Action = 'assign' | 'transfer' | 'return' | 'use' | 'damage' | 'lose';

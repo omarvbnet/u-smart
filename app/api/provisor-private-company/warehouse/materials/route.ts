@@ -11,28 +11,64 @@ function normalizeName(raw: unknown): string {
   return typeof raw === 'string' ? raw.trim() : '';
 }
 
-/** GET — list every material in the workspace catalog, with item counts. */
+const MATERIAL_LIST_SELECT = {
+  id: true,
+  name: true,
+  description: true,
+  category: true,
+  unit: true,
+  iconKey: true,
+  color: true,
+  tracking: true,
+  createdAt: true,
+} as const;
+
+/** GET — catalog with item counts (full workspace or only the caller's assignments). */
 export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
+  const companyId = guard.companyId;
+  const inventoryScope = guard.canViewAllWarehouseInventory ? 'all' : 'assigned';
+
+  if (!guard.canViewAllWarehouseInventory) {
+    const counts: Array<{ materialId: string; _count: { _all: number } }> =
+      await prisma.privateCompanyMaterialItem.groupBy({
+        by: ['materialId'],
+        where: { companyId, assignedToId: guard.requesterId },
+        _count: { _all: true },
+      });
+    if (counts.length === 0) {
+      return NextResponse.json({ success: true, inventoryScope, materials: [] });
+    }
+    const countByMat = new Map<string, number>(
+      counts.map((c) => [c.materialId, c._count._all])
+    );
+    const materials = await prisma.privateCompanyMaterial.findMany({
+      where: { companyId, id: { in: [...countByMat.keys()] } },
+      orderBy: [{ name: 'asc' }],
+      select: MATERIAL_LIST_SELECT,
+    });
+    return NextResponse.json({
+      success: true,
+      inventoryScope,
+      materials: materials.map((m: Record<string, unknown>) => ({
+        ...m,
+        itemCount: countByMat.get(m.id as string) ?? 0,
+      })),
+    });
+  }
+
   const materials = await prisma.privateCompanyMaterial.findMany({
-    where: { companyId: guard.companyId },
+    where: { companyId },
     orderBy: [{ name: 'asc' }],
     select: {
-      id: true,
-      name: true,
-      description: true,
-      category: true,
-      unit: true,
-      iconKey: true,
-      color: true,
-      tracking: true,
-      createdAt: true,
+      ...MATERIAL_LIST_SELECT,
       _count: { select: { items: true } },
     },
   });
   return NextResponse.json({
     success: true,
+    inventoryScope,
     materials: materials.map((m: { _count: { items: number } } & Record<string, unknown>) => ({
       ...m,
       itemCount: m._count.items,

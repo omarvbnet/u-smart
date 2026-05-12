@@ -197,7 +197,11 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** POST — owner / manager / coordinator creates a staff requester account. */
+/** POST — owner / manager / coordinator creates a staff requester account.
+ *  The workspace owner may assign any [PRIVATE_COMPANY_STAFF_ROLES] value and
+ *  may create multiple managers, coordinators, or warehouse keepers (each
+ *  account is a distinct staff login). Managers/coordinators are limited to
+ *  execution roles for their own department. */
 export async function POST(req: NextRequest) {
   const guard = await managerGuard(req);
   if (!guard.ok) return guard.response;

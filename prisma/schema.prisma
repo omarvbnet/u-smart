@@ -374,6 +374,8 @@ model TicketRequester {
   materialMovementsActed         PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementActor")
   materialsCreated               PrivateCompanyMaterial[]         @relation("PrivateCompanyMaterialCreator")
   materialItemsStocked           PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemStocker")
+  materialRequestsSubmitted      PrivateCompanyMaterialRequest[]  @relation("MaterialRequestRequester")
+  materialRequestsResponded      PrivateCompanyMaterialRequest[]  @relation("MaterialRequestResponder")
 
   @@map("ticket_requesters")
 }
@@ -1342,6 +1344,7 @@ model PrivateCompany {
   materials        PrivateCompanyMaterial[]         @relation("PrivateCompanyMaterials")
   materialItems    PrivateCompanyMaterialItem[]    @relation("PrivateCompanyMaterialItems")
   materialMovements PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovements")
+  materialRequests PrivateCompanyMaterialRequest[]  @relation("PrivateCompanyMaterialRequests")
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
@@ -1418,6 +1421,20 @@ enum PrivateCompanyMaterialMovementType {
   ADJUSTED    // metadata/status edit
 }
 
+enum PrivateCompanyMaterialRequestKind {
+  INVENTORY_MATERIAL // catalog material (may still be out of stock)
+  CUSTOM_UNAVAILABLE // not in catalog — describe what is needed
+}
+
+enum PrivateCompanyMaterialRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  AWAITING_RECEIPT // keeper dispatched; requester must confirm receipt
+  FULFILLED
+  CANCELLED
+}
+
 model PrivateCompanyMaterial {
   id          String                          @id @default(cuid())
   companyId   String
@@ -1432,6 +1449,7 @@ model PrivateCompanyMaterial {
   createdById String?
   createdBy   TicketRequester?                @relation("PrivateCompanyMaterialCreator", fields: [createdById], references: [id], onDelete: SetNull)
   items       PrivateCompanyMaterialItem[]
+  requests    PrivateCompanyMaterialRequest[] @relation("PrivateCompanyMaterialRequestMaterial")
   createdAt   DateTime                        @default(now())
   updatedAt   DateTime                        @updatedAt
 
@@ -1494,4 +1512,35 @@ model PrivateCompanyMaterialMovement {
   @@index([itemId])
   @@index([ticketId])
   @@map("private_company_material_movements")
+}
+
+/// Staff-submitted material need (in-catalog or custom). Warehouse keepers respond.
+model PrivateCompanyMaterialRequest {
+  id                 String                            @id @default(cuid())
+  companyId          String
+  company            PrivateCompany                    @relation("PrivateCompanyMaterialRequests", fields: [companyId], references: [id], onDelete: Cascade)
+  requesterId        String
+  requester          TicketRequester                   @relation("MaterialRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  kind               PrivateCompanyMaterialRequestKind
+  materialId       String?
+  material           PrivateCompanyMaterial?           @relation("PrivateCompanyMaterialRequestMaterial", fields: [materialId], references: [id], onDelete: SetNull)
+  customTitle        String?
+  customDescription  String?
+  quantity           Int                               @default(1)
+  province           String?
+  notes              String?
+  status             PrivateCompanyMaterialRequestStatus @default(PENDING)
+  responderId        String?
+  responder          TicketRequester?                  @relation("MaterialRequestResponder", fields: [responderId], references: [id], onDelete: SetNull)
+  responseNote       String?
+  fulfilledItemId    String? // optional unit id the keeper linked when fulfilling
+  receivedAt         DateTime? // set when requester confirms receipt
+  receivedNote       String?
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+
+  @@index([companyId, status])
+  @@index([requesterId])
+  @@index([materialId])
+  @@map("private_company_material_requests")
 }

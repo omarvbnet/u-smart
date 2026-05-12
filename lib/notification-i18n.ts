@@ -21,7 +21,9 @@ export type NotificationCopyKey =
   | 'conflict_reinspection'
   | 'workspace_announcement'
   | 'material_assigned'
-  | 'material_used';
+  | 'material_used'
+  | 'material_request_created'
+  | 'material_request_updated';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -79,6 +81,41 @@ const RESULT_LABEL: Record<AppNotificationLocale, Record<string, string>> = {
     accepted_with_comments: ' بە لێدووانەوە قبووڵ کرا',
     not_accepted: ' قبووڵ نەکراوە',
     ncr: 'NCR',
+  },
+};
+
+const MATERIAL_REQUEST_STATUS_LABEL: Record<AppNotificationLocale, Record<string, string>> = {
+  en: {
+    PENDING: 'Pending',
+    ACCEPTED: 'Accepted',
+    REJECTED: 'Rejected',
+    AWAITING_RECEIPT: 'Awaiting your confirmation',
+    FULFILLED: 'Fulfilled',
+    CANCELLED: 'Cancelled',
+  },
+  ar: {
+    PENDING: 'قيد الانتظار',
+    ACCEPTED: 'مقبول',
+    REJECTED: 'مرفوض',
+    AWAITING_RECEIPT: 'بانتظار تأكيد الاستلام',
+    FULFILLED: 'مكتمل',
+    CANCELLED: 'ملغى',
+  },
+  tr: {
+    PENDING: 'Beklemede',
+    ACCEPTED: 'Kabul edildi',
+    REJECTED: 'Reddedildi',
+    AWAITING_RECEIPT: 'Teslim onayı bekleniyor',
+    FULFILLED: 'Karşılandı',
+    CANCELLED: 'İptal edildi',
+  },
+  ku: {
+    PENDING: 'چاوەڕوان',
+    ACCEPTED: 'قبووڵ کرا',
+    REJECTED: 'ڕەتکرایەوە',
+    AWAITING_RECEIPT: 'چاوەڕوانی پشتڕاستکردنەوەی وەرگرتن',
+    FULFILLED: 'جێبەجێ کرا',
+    CANCELLED: 'هەڵوەشێنرایەوە',
   },
 };
 
@@ -493,6 +530,50 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: 'کەرەستە لەسەر تیکەت بەکارهێنرا',
       body: `${v.materialName} (زنجیرە ${v.serialNumber}) تۆمارکرا لە: ${v.ticketLabel}.`,
+    }),
+  },
+  material_request_created: {
+    en: (v) => ({
+      title: 'New material request',
+      body: v.summary
+        ? `${v.requesterLabel}: ${v.summary}`
+        : `${v.requesterLabel} submitted a material request.`,
+    }),
+    ar: (v) => ({
+      title: 'طلب مواد جديد',
+      body: v.summary
+        ? `${v.requesterLabel}: ${v.summary}`
+        : `${v.requesterLabel} أرسل طلب مواد.`,
+    }),
+    tr: (v) => ({
+      title: 'Yeni malzeme talebi',
+      body: v.summary
+        ? `${v.requesterLabel}: ${v.summary}`
+        : `${v.requesterLabel} malzeme talebi gönderdi.`,
+    }),
+    ku: (v) => ({
+      title: 'داواکاری کەرەستەی نوێ',
+      body: v.summary
+        ? `${v.requesterLabel}: ${v.summary}`
+        : `${v.requesterLabel} داواکاری کەرەستەی نارد.`,
+    }),
+  },
+  material_request_updated: {
+    en: (v) => ({
+      title: 'Your material request was updated',
+      body: `Status: ${MATERIAL_REQUEST_STATUS_LABEL.en[v.status] ?? v.status}.`,
+    }),
+    ar: (v) => ({
+      title: 'تم تحديث طلب المواد',
+      body: `الحالة: ${MATERIAL_REQUEST_STATUS_LABEL.ar[v.status] ?? v.status}.`,
+    }),
+    tr: (v) => ({
+      title: 'Malzeme talebiniz güncellendi',
+      body: `Durum: ${MATERIAL_REQUEST_STATUS_LABEL.tr[v.status] ?? v.status}.`,
+    }),
+    ku: (v) => ({
+      title: 'داواکاری کەرەستەکەت نوێکرایەوە',
+      body: `دۆخ: ${MATERIAL_REQUEST_STATUS_LABEL.ku[v.status] ?? v.status}.`,
     }),
   },
   workspace_announcement: {

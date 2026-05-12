@@ -11,6 +11,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   PrivateCompanyMembership _membership = PrivateCompanyMembership();
   PrivateCompanyWorkspace? _workspace;
+  PrivateCompanyKpiSnapshot? _kpiSnapshot;
+  bool _kpiLoading = false;
   bool _loading = false;
   String? _error;
   String? _lastSuccess;
@@ -18,12 +20,17 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   PrivateCompanyMembership get membership => _membership;
   PrivateCompanyWorkspace? get workspace => _workspace;
+  PrivateCompanyKpiSnapshot? get kpiSnapshot => _kpiSnapshot;
+  bool get kpiLoading => _kpiLoading;
   bool get loading => _loading;
   bool get submitting => _submitting;
   String? get error => _error;
   String? get lastSuccess => _lastSuccess;
 
   bool get hasWorkspace => _workspace != null;
+  /// All approved workspace members can open the Performance tab (scoped by role server-side).
+  bool get canViewKpis => hasWorkspace && isApproved && (isOwner || isStaff);
+
   bool get isOwner => _membership.isOwner;
   bool get isStaff => _membership.isStaff;
   bool get isApproved => _workspace?.isApproved ?? false;
@@ -76,6 +83,17 @@ class PrivateCompanyProvider extends ChangeNotifier {
     if (isOwner) return true;
     if (!isStaff) return false;
     return _resolvedRole == 'WAREHOUSE_KEEPER';
+  }
+
+  /// Field / execution staff: warehouse APIs only return items assigned to this user.
+  /// Owners, managers, coordinators, and warehouse keepers get full inventory.
+  bool get seesOnlyAssignedWarehouseInventory {
+    if (isOwner || !isStaff) return false;
+    final role = _resolvedRole;
+    if (role == null) return true;
+    return role != 'MANAGER' &&
+        role != 'COORDINATOR' &&
+        role != 'WAREHOUSE_KEEPER';
   }
 
   /// True for managers/coordinators (non-owner) — they are scoped to their own
@@ -135,6 +153,27 @@ class PrivateCompanyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> fetchKpis({int days = 365}) async {
+    if (!canViewKpis) return;
+    _kpiLoading = true;
+    notifyListeners();
+    try {
+      final d = days.clamp(7, 730);
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyKpis,
+        query: {'days': '$d'},
+      );
+      if (res != null && res['success'] == true) {
+        _kpiSnapshot = PrivateCompanyKpiSnapshot.fromJson(res);
+      }
+    } catch (_) {
+      /* keep previous snapshot */
+    } finally {
+      _kpiLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> refresh() async {
     _loading = true;
     notifyListeners();
@@ -143,6 +182,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
       if (data == null || data['success'] != true) {
         _workspace = null;
         _membership = PrivateCompanyMembership();
+        _kpiSnapshot = null;
         return;
       }
       final mship = data['membership'];
@@ -157,6 +197,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     } catch (e) {
       _workspace = null;
       _membership = PrivateCompanyMembership();
+      _kpiSnapshot = null;
     } finally {
       _loading = false;
       notifyListeners();

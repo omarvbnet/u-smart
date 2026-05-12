@@ -199,8 +199,6 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
-				C4D5812F9342A68123E00AB1 /* Strip Mach-O before Pods embed */,
-				A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */,
 				AF742416BEA00582444DD409 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
@@ -287,7 +285,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export COPYFILE_DISABLE=1\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin\nFL_IOS=\"${PROJECT_DIR}/../build/ios/${CONFIGURATION}-iphoneos\"\n/usr/sbin/dot_clean -m \"${FL_IOS}\" 2>/dev/null || true\nxattr -cr \"${FL_IOS}\" 2>/dev/null || true\nFF=\"${TARGET_BUILD_DIR}/Flutter.framework/Flutter\"\nif [ -f \"$FF\" ]; then FE=$(mktemp /tmp/flutter_fl_bin.XXXXXXXX) && /usr/bin/ditto --norsrc \"$FF\" \"$FE\" && chmod +x \"$FE\" && /bin/mv \"$FE\" \"$FF\"; fi\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nif [ -f \"$FF\" ] && [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${CODE_SIGNING_REQUIRED:-}\" != \"NO\" ]; then /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --preserve-metadata=identifier,entitlements,flags --timestamp=none \"$FF\"; fi\nxattr -cr \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Frameworks\" 2>/dev/null || true\n";
+			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin\n";
 		};
 		3C82250DDCDB1F69158C5F70 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -326,21 +324,6 @@
 			shellPath = /bin/sh;
 			shellScript = "/bin/bash \"${PROJECT_DIR}/flutter_build_runner.sh\"\n";
 		};
-		A1B2C3D4E5F6012345678ABC /* Clear xattrs before Code Sign */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Clear xattrs before Code Sign";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "export COPYFILE_DISABLE=1\nFL_IOS=\"${PROJECT_DIR}/../build/ios/${CONFIGURATION}-iphoneos\"\nAPPB=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\n/usr/sbin/dot_clean -m \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\n/usr/sbin/dot_clean -m \"${FL_IOS}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${FL_IOS}\" 2>/dev/null || true\nxattr -cr \"${APPB}\" 2>/dev/null || true\nfind \"${TARGET_BUILD_DIR}\" -maxdepth 3 -path '*.framework/*' ! -path '*.framework/*/*/*' -type f -print0 2>/dev/null | while IFS= read -r -d '' EF\ndo\n  /usr/bin/file \"$EF\" 2>/dev/null | /usr/bin/grep -q Mach-O || continue\n  TE=$(mktemp /tmp/flutter_ef_strip.XXXXXXXX)\n  /usr/bin/ditto --norsrc \"$EF\" \"$TE\" && chmod +x \"$TE\" && /bin/mv \"$TE\" \"$EF\"\ndone\nxattr -cr \"${TARGET_BUILD_DIR}\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/App.framework/App\" 2>/dev/null || true\nxattr -cr \"${TARGET_BUILD_DIR}/Flutter.framework\" 2>/dev/null || true\nxattr -cr \"${APPB}/Frameworks\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_APPLICATION_PATH}/${FLUTTER_BUILD_DIR}/ios\" 2>/dev/null || true\nxattr -cr \"${FLUTTER_ROOT}/bin/cache/artifacts/engine/ios/.symlinks/plugins\" 2>/dev/null || true\nif [ -d \"${APPB}/Frameworks\" ]; then\n  find \"${APPB}/Frameworks\" -type f -print0 2>/dev/null | while IFS= read -r -d '' MF\n  do\n    /usr/bin/file \"$MF\" 2>/dev/null | /usr/bin/grep -q Mach-O || continue\n    T=$(mktemp /tmp/flutter_fw_strip.XXXXXXXX)\n    /usr/bin/ditto --norsrc \"$MF\" \"$T\" && chmod +x \"$T\" && /bin/mv \"$T\" \"$MF\"\n  done\nfi\nif [ -f \"${APPB}/Runner\" ]; then\n  MF=\"${APPB}/Runner\"\n  T=$(mktemp /tmp/flutter_fw_strip.XXXXXXXX)\n  /usr/bin/ditto --norsrc \"$MF\" \"$T\" && chmod +x \"$T\" && /bin/mv \"$T\" \"$MF\"\nfi\nxattr -cr \"${APPB}\" 2>/dev/null || true\n";
-			showEnvVarsInLog = 0;
-		};
 		AF742416BEA00582444DD409 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -356,21 +339,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		C4D5812F9342A68123E00AB1 /* Strip Mach-O before Pods embed */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Strip Mach-O before Pods embed";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "/bin/bash \"${PROJECT_DIR}/strip_ios_build_products.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		F7DD2031C17C2DCBD962315E /* [CP] Check Pods Manifest.lock */ = {

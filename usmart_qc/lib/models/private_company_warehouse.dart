@@ -343,3 +343,178 @@ class WarehouseDashboard {
     );
   }
 }
+
+/// Staff row returned by warehouse keeper search (username / phone / name).
+class WarehouseStaffSearchResult {
+  WarehouseStaffSearchResult({
+    required this.id,
+    required this.username,
+    this.name,
+    required this.phone,
+    this.role,
+    this.province,
+    this.isOwner = false,
+  });
+
+  final String id;
+  final String username;
+  final String? name;
+  final String phone;
+  final String? role;
+  final String? province;
+  final bool isOwner;
+
+  factory WarehouseStaffSearchResult.fromJson(Map<String, dynamic> json) {
+    return WarehouseStaffSearchResult(
+      id: json['id'] as String,
+      username: json['username'] as String? ?? '',
+      name: json['name'] as String?,
+      phone: json['phone'] as String? ?? '',
+      role: json['role'] as String?,
+      province: json['province'] as String?,
+      isOwner: json['isOwner'] == true,
+    );
+  }
+}
+
+enum MaterialRequestKind { inventory, custom }
+
+MaterialRequestKind materialRequestKindFromApi(String? raw) {
+  switch ((raw ?? '').toUpperCase()) {
+    case 'CUSTOM_UNAVAILABLE':
+      return MaterialRequestKind.custom;
+    case 'INVENTORY_MATERIAL':
+    default:
+      return MaterialRequestKind.inventory;
+  }
+}
+
+enum MaterialRequestStatus {
+  pending,
+  accepted,
+  rejected,
+  awaitingReceipt,
+  fulfilled,
+  cancelled,
+}
+
+MaterialRequestStatus materialRequestStatusFromApi(String? raw) {
+  switch ((raw ?? '').toUpperCase()) {
+    case 'ACCEPTED':
+      return MaterialRequestStatus.accepted;
+    case 'REJECTED':
+      return MaterialRequestStatus.rejected;
+    case 'AWAITING_RECEIPT':
+      return MaterialRequestStatus.awaitingReceipt;
+    case 'FULFILLED':
+      return MaterialRequestStatus.fulfilled;
+    case 'CANCELLED':
+      return MaterialRequestStatus.cancelled;
+    case 'PENDING':
+    default:
+      return MaterialRequestStatus.pending;
+  }
+}
+
+String materialRequestStatusLabel(MaterialRequestStatus s) {
+  switch (s) {
+    case MaterialRequestStatus.pending:
+      return 'Pending';
+    case MaterialRequestStatus.accepted:
+      return 'Accepted';
+    case MaterialRequestStatus.rejected:
+      return 'Rejected';
+    case MaterialRequestStatus.awaitingReceipt:
+      return 'Dispatched — confirm receipt';
+    case MaterialRequestStatus.fulfilled:
+      return 'Received (closed)';
+    case MaterialRequestStatus.cancelled:
+      return 'Cancelled';
+  }
+}
+
+class MaterialRequest {
+  MaterialRequest({
+    required this.id,
+    required this.kind,
+    required this.status,
+    required this.quantity,
+    this.province,
+    this.notes,
+    this.customTitle,
+    this.customDescription,
+    this.materialId,
+    this.materialName,
+    this.materialUnit,
+    required this.requesterId,
+    this.requesterName,
+    this.requesterUsername,
+    this.requesterPhone,
+    this.responseNote,
+    this.fulfilledItemId,
+    this.receivedAt,
+    this.receivedNote,
+    this.createdAt,
+  });
+
+  final String id;
+  final MaterialRequestKind kind;
+  final MaterialRequestStatus status;
+  final int quantity;
+  final String? province;
+  final String? notes;
+  final String? customTitle;
+  final String? customDescription;
+  final String? materialId;
+  final String? materialName;
+  final String? materialUnit;
+  final String requesterId;
+  final String? requesterName;
+  final String? requesterUsername;
+  final String? requesterPhone;
+  final String? responseNote;
+  final String? fulfilledItemId;
+  final DateTime? receivedAt;
+  final String? receivedNote;
+  final DateTime? createdAt;
+
+  String get summaryLine {
+    if (kind == MaterialRequestKind.custom) {
+      final t = customTitle?.trim().isNotEmpty == true ? customTitle!.trim() : 'Custom item';
+      return '$t × $quantity';
+    }
+    final n = materialName?.trim().isNotEmpty == true ? materialName!.trim() : 'Material';
+    return '$n × $quantity';
+  }
+
+  factory MaterialRequest.fromJson(Map<String, dynamic> json) {
+    final requester = json['requester'] as Map<String, dynamic>?;
+    final material = json['material'] as Map<String, dynamic>?;
+    return MaterialRequest(
+      id: json['id'] as String,
+      kind: materialRequestKindFromApi(json['kind'] as String?),
+      status: materialRequestStatusFromApi(json['status'] as String?),
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      province: json['province'] as String?,
+      notes: json['notes'] as String?,
+      customTitle: json['customTitle'] as String?,
+      customDescription: json['customDescription'] as String?,
+      materialId: json['materialId'] as String? ?? material?['id'] as String?,
+      materialName: material?['name'] as String?,
+      materialUnit: material?['unit'] as String?,
+      requesterId: json['requesterId'] as String? ?? requester?['id'] as String? ?? '',
+      requesterName: requester?['name'] as String?,
+      requesterUsername: requester?['username'] as String?,
+      requesterPhone: requester?['phone'] as String?,
+      responseNote: json['responseNote'] as String?,
+      fulfilledItemId: json['fulfilledItemId'] as String?,
+      receivedAt: json['receivedAt'] != null
+          ? DateTime.tryParse(json['receivedAt'].toString())
+          : null,
+      receivedNote: json['receivedNote'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+    );
+  }
+}

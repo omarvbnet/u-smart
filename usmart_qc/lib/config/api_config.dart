@@ -101,6 +101,7 @@ class ApiConfig {
   static const String privateCompanyStaff = '/api/provisor-private-company/staff';
   static const String privateCompanyChecklists = '/api/provisor-private-company/checklists';
   static const String privateCompanyNotifications = '/api/provisor-private-company/notifications';
+  static const String privateCompanyKpis = '/api/provisor-private-company/kpis';
 
   // ── Private Company warehouse / materials ────────────────────────────────
   static const String privateCompanyWarehouseMaterials =
@@ -115,6 +116,12 @@ class ApiConfig {
       '/api/provisor-private-company/warehouse/dashboard';
   static const String privateCompanyWarehouseActivity =
       '/api/provisor-private-company/warehouse/activity';
+  static const String privateCompanyWarehouseStaffSearch =
+      '/api/provisor-private-company/warehouse/staff-search';
+  static const String privateCompanyWarehouseRequests =
+      '/api/provisor-private-company/warehouse/requests';
+  static String privateCompanyWarehouseRequestDetail(String id) =>
+      '/api/provisor-private-company/warehouse/requests/$id';
 
   static String publicTicketPage(String id) => '/en/ticket/$id';
 }

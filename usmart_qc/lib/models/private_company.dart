@@ -390,3 +390,119 @@ class PrivateCompanyMembership {
 
   bool get hasNoMembership => !isOwner && !isStaff;
 }
+
+/// Aggregated KPIs for one department (owner workspace view).
+class PrivateCompanyDepartmentKpi {
+  PrivateCompanyDepartmentKpi({
+    required this.departmentId,
+    required this.departmentName,
+    required this.ticketsAssigned,
+    required this.completedTickets,
+    required this.totalTaskHours,
+    this.avgTaskHours,
+    required this.totalArrivalHours,
+    this.avgArrivalHours,
+  });
+
+  final String? departmentId;
+  final String departmentName;
+  final int ticketsAssigned;
+  final int completedTickets;
+  final double totalTaskHours;
+  final double? avgTaskHours;
+  final double totalArrivalHours;
+  final double? avgArrivalHours;
+
+  factory PrivateCompanyDepartmentKpi.fromJson(Map<String, dynamic> json) {
+    return PrivateCompanyDepartmentKpi(
+      departmentId: json['departmentId'] as String?,
+      departmentName: json['departmentName'] as String? ?? '—',
+      ticketsAssigned: (json['ticketsAssigned'] as num?)?.toInt() ?? 0,
+      completedTickets: (json['completedTickets'] as num?)?.toInt() ?? 0,
+      totalTaskHours: (json['totalTaskHours'] as num?)?.toDouble() ?? 0,
+      avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
+      totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,
+      avgArrivalHours: (json['avgArrivalHours'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// KPI row for one staff member (assigned private-company tickets).
+class PrivateCompanyStaffKpi {
+  PrivateCompanyStaffKpi({
+    required this.staffId,
+    required this.name,
+    required this.username,
+    required this.role,
+    this.departmentId,
+    this.departmentName,
+    required this.ticketsAssigned,
+    required this.completedTickets,
+    required this.totalTaskHours,
+    this.avgTaskHours,
+    required this.totalArrivalHours,
+    this.avgArrivalHours,
+  });
+
+  final String staffId;
+  final String name;
+  final String username;
+  final String role;
+  final String? departmentId;
+  final String? departmentName;
+  final int ticketsAssigned;
+  final int completedTickets;
+  final double totalTaskHours;
+  final double? avgTaskHours;
+  final double totalArrivalHours;
+  final double? avgArrivalHours;
+
+  factory PrivateCompanyStaffKpi.fromJson(Map<String, dynamic> json) {
+    return PrivateCompanyStaffKpi(
+      staffId: json['staffId'] as String,
+      name: json['name'] as String? ?? '',
+      username: json['username'] as String? ?? '',
+      role: (json['role'] as String? ?? '').toUpperCase(),
+      departmentId: json['departmentId'] as String?,
+      departmentName: json['departmentName'] as String?,
+      ticketsAssigned: (json['ticketsAssigned'] as num?)?.toInt() ?? 0,
+      completedTickets: (json['completedTickets'] as num?)?.toInt() ?? 0,
+      totalTaskHours: (json['totalTaskHours'] as num?)?.toDouble() ?? 0,
+      avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
+      totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,
+      avgArrivalHours: (json['avgArrivalHours'] as num?)?.toDouble(),
+    );
+  }
+}
+
+class PrivateCompanyKpiSnapshot {
+  PrivateCompanyKpiSnapshot({
+    required this.scope,
+    required this.days,
+    required this.ticketSampleSize,
+    this.byDepartment = const [],
+    this.byStaff = const [],
+  });
+
+  final String scope;
+  final int days;
+  final int ticketSampleSize;
+  final List<PrivateCompanyDepartmentKpi> byDepartment;
+  final List<PrivateCompanyStaffKpi> byStaff;
+
+  factory PrivateCompanyKpiSnapshot.fromJson(Map<String, dynamic> json) {
+    return PrivateCompanyKpiSnapshot(
+      scope: json['scope'] as String? ?? 'self',
+      days: (json['days'] as num?)?.toInt() ?? 365,
+      ticketSampleSize: (json['ticketSampleSize'] as num?)?.toInt() ?? 0,
+      byDepartment: ((json['byDepartment'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PrivateCompanyDepartmentKpi.fromJson)
+          .toList(),
+      byStaff: ((json['byStaff'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PrivateCompanyStaffKpi.fromJson)
+          .toList(),
+    );
+  }
+}

@@ -19,22 +19,38 @@ const VALID_TYPES = new Set([
 /**
  * GET /api/provisor-private-company/warehouse/activity
  *
- * Paginated movement log (full audit trail for every workspace member).
- * Supports filtering by type,
- * itemId, and ticketId.
+ * Paginated movement log. Full-view roles see the workspace audit trail;
+ * field roles see movements on their assigned items and rows where they
+ * appear as actor / from / to staff.
  */
 export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
   const { searchParams } = new URL(req.url);
-  const where: Record<string, unknown> = { companyId: guard.companyId };
+  const companyId = guard.companyId;
+  const inventoryScope = guard.canViewAllWarehouseInventory ? 'all' : 'assigned';
+
+  const clauses: Array<Record<string, unknown>> = [{ companyId }];
+  if (!guard.canViewAllWarehouseInventory) {
+    clauses.push({
+      OR: [
+        { item: { assignedToId: guard.requesterId } },
+        { fromStaffId: guard.requesterId },
+        { toStaffId: guard.requesterId },
+        { actorId: guard.requesterId },
+      ],
+    });
+  }
 
   const type = searchParams.get('type');
-  if (type && VALID_TYPES.has(type)) where.type = type;
+  if (type && VALID_TYPES.has(type)) clauses.push({ type });
   const itemId = searchParams.get('itemId');
-  if (itemId) where.itemId = itemId;
+  if (itemId) clauses.push({ itemId });
   const ticketId = searchParams.get('ticketId');
-  if (ticketId) where.ticketId = ticketId;
+  if (ticketId) clauses.push({ ticketId });
+
+  const where =
+    clauses.length === 1 ? clauses[0]! : { AND: clauses };
 
   const limit = Math.max(
     1,
@@ -60,5 +76,5 @@ export async function GET(req: NextRequest) {
       ticket: { select: { id: true, technique: true, siteName: true, province: true } },
     },
   });
-  return NextResponse.json({ success: true, movements });
+  return NextResponse.json({ success: true, inventoryScope, movements });
 }

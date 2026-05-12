@@ -16,20 +16,24 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
   List<WarehouseMaterial> _materials = const [];
   List<WarehouseItem> _items = const [];
   List<WarehouseMovement> _activity = const [];
+  List<MaterialRequest> _materialRequests = const [];
 
   WarehouseDashboard? get dashboard => _dashboard;
   List<WarehouseMaterial> get materials => _materials;
   List<WarehouseItem> get items => _items;
   List<WarehouseMovement> get activity => _activity;
+  List<MaterialRequest> get materialRequests => _materialRequests;
 
   // ── UI flags ───────────────────────────────────────────────────────────
   bool _loading = false;
   bool _submitting = false;
+  bool _requestsLoading = false;
   String? _error;
   String? _lastSuccess;
 
   bool get loading => _loading;
   bool get submitting => _submitting;
+  bool get requestsLoading => _requestsLoading;
   String? get error => _error;
   String? get lastSuccess => _lastSuccess;
 
@@ -509,11 +513,138 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
           body: {if (note != null) 'note': note},
           successMessage: 'Marked lost.');
 
+  /// Units currently in the warehouse for this catalog material (uses the
+  /// in-memory items list, so it matches the active Inventory filters).
+  int countInWarehouseForMaterial(String materialId) {
+    return items
+        .where(
+          (i) =>
+              i.materialId == materialId &&
+              i.status == MaterialItemStatus.inWarehouse,
+        )
+        .fold<int>(0, (sum, i) => sum + i.quantity);
+  }
+
+  Future<List<WarehouseStaffSearchResult>> searchStaff(String q) async {
+    final t = q.trim();
+    if (t.length < 2) return const [];
+    try {
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseStaffSearch,
+        query: {'q': t},
+      );
+      if (res != null && res['success'] == true) {
+        return ((res['staff'] as List?) ?? const [])
+            .map((e) => WarehouseStaffSearchResult.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      return const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> refreshMaterialRequests(String scope) async {
+    _requestsLoading = true;
+    notifyListeners();
+    try {
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseRequests,
+        query: {'scope': scope},
+      );
+      if (res != null && res['success'] == true) {
+        _materialRequests = ((res['requests'] as List?) ?? const [])
+            .map((e) => MaterialRequest.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {
+      /* non-fatal */
+    } finally {
+      _requestsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> createMaterialRequest({
+    required String kind,
+    String? materialId,
+    String? customTitle,
+    String? customDescription,
+    int quantity = 1,
+    String? province,
+    String? notes,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final body = <String, dynamic>{
+        'kind': kind,
+        'quantity': quantity,
+        if (province != null && province.trim().isNotEmpty) 'province': province.trim(),
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        if (materialId != null) 'materialId': materialId,
+        if (customTitle != null) 'customTitle': customTitle,
+        if (customDescription != null) 'customDescription': customDescription,
+      };
+      final res = await _api.post(ApiConfig.privateCompanyWarehouseRequests, body: body);
+      if (res['success'] == true) {
+        _setSuccess(res['message']?.toString() ?? 'Request submitted.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Could not submit request.');
+      return false;
+    } catch (_) {
+      _setError('Network error while submitting request.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> patchMaterialRequest(
+    String id, {
+    required String action,
+    String? responseNote,
+    String? fulfilledItemId,
+    String? receivedNote,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(
+        ApiConfig.privateCompanyWarehouseRequestDetail(id),
+        body: {
+          'action': action,
+          if (responseNote != null && responseNote.trim().isNotEmpty)
+            'responseNote': responseNote.trim(),
+          if (fulfilledItemId != null && fulfilledItemId.trim().isNotEmpty)
+            'fulfilledItemId': fulfilledItemId.trim(),
+          if (receivedNote != null && receivedNote.trim().isNotEmpty)
+            'receivedNote': receivedNote.trim(),
+        },
+      );
+      if (res['success'] == true) {
+        _setSuccess(res['message']?.toString() ?? 'Request updated.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Update failed.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   void reset() {
     _dashboard = null;
     _materials = const [];
     _items = const [];
     _activity = const [];
+    _materialRequests = const [];
     resetFilters();
     _error = null;
     _lastSuccess = null;

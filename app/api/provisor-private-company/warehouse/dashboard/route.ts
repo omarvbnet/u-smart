@@ -20,11 +20,15 @@ export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
   const companyId = guard.companyId;
+  const inventoryScope = guard.canViewAllWarehouseInventory ? 'all' : 'assigned';
+  const itemWhere = guard.canViewAllWarehouseInventory
+    ? { companyId }
+    : { companyId, assignedToId: guard.requesterId };
 
   // Status totals (single grouped query is more efficient than N counts).
   const statusRows: Array<{ status: string; _count: { _all: number } }> = await prisma.privateCompanyMaterialItem.groupBy({
     by: ['status'],
-    where: { companyId },
+    where: itemWhere,
     _count: { _all: true },
   });
   const byStatus: Record<string, number> = {
@@ -43,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   const provinceRows: Array<{ province: string; _count: { _all: number } }> = await prisma.privateCompanyMaterialItem.groupBy({
     by: ['province'],
-    where: { companyId },
+    where: itemWhere,
     _count: { _all: true },
     orderBy: { _count: { id: 'desc' } },
   });
@@ -51,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   const materialRows: Array<{ materialId: string; _count: { _all: number } }> = await prisma.privateCompanyMaterialItem.groupBy({
     by: ['materialId'],
-    where: { companyId },
+    where: itemWhere,
     _count: { _all: true },
     orderBy: { _count: { id: 'desc' } },
     take: 12,
@@ -73,7 +77,7 @@ export async function GET(req: NextRequest) {
   // Currently held by staff (only items in ASSIGNED status).
   const heldRows: Array<{ assignedToId: string | null; _count: { _all: number } }> = await prisma.privateCompanyMaterialItem.groupBy({
     by: ['assignedToId'],
-    where: { companyId, status: 'ASSIGNED', assignedToId: { not: null } },
+    where: { ...itemWhere, status: 'ASSIGNED', assignedToId: { not: null } },
     _count: { _all: true },
     orderBy: { _count: { id: 'desc' } },
     take: 12,
@@ -96,7 +100,7 @@ export async function GET(req: NextRequest) {
   // Tickets with the most consumed items (top 6).
   const ticketUsageRows: Array<{ usedTicketId: string | null; _count: { _all: number } }> = await prisma.privateCompanyMaterialItem.groupBy({
     by: ['usedTicketId'],
-    where: { companyId, status: 'USED', usedTicketId: { not: null } },
+    where: { ...itemWhere, status: 'USED', usedTicketId: { not: null } },
     _count: { _all: true },
     orderBy: { _count: { id: 'desc' } },
     take: 6,
@@ -119,9 +123,25 @@ export async function GET(req: NextRequest) {
     used: r._count._all,
   }));
 
+  const movementWhere = guard.canViewAllWarehouseInventory
+    ? { companyId }
+    : {
+        AND: [
+          { companyId },
+          {
+            OR: [
+              { item: { assignedToId: guard.requesterId } },
+              { fromStaffId: guard.requesterId },
+              { toStaffId: guard.requesterId },
+              { actorId: guard.requesterId },
+            ],
+          },
+        ],
+      };
+
   // Recent activity feed (10 most recent movements).
   const movements = await prisma.privateCompanyMaterialMovement.findMany({
-    where: { companyId },
+    where: movementWhere,
     orderBy: { createdAt: 'desc' },
     take: 10,
     include: {
@@ -133,11 +153,18 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Materials catalog size
-  const materialsCount = await prisma.privateCompanyMaterial.count({ where: { companyId } });
+  const materialsCount = guard.canViewAllWarehouseInventory
+    ? await prisma.privateCompanyMaterial.count({ where: { companyId } })
+    : await prisma.privateCompanyMaterial.count({
+        where: {
+          companyId,
+          items: { some: { assignedToId: guard.requesterId } },
+        },
+      });
 
   return NextResponse.json({
     success: true,
+    inventoryScope,
     summary: {
       total,
       byStatus,
