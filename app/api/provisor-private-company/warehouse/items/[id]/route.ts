@@ -252,13 +252,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         );
       }
 
+      const companyId = guard.companyId;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async function uniqueSplitSerial(tx: any): Promise<string> {
         for (let n = 0; n < 8; n++) {
           const suffix = randomBytes(3).toString('hex');
           const sn = `${item.serialNumber}#${suffix}`;
           const clash = await tx.privateCompanyMaterialItem.findFirst({
-            where: { companyId: guard.companyId, serialNumber: sn },
+            where: { companyId, serialNumber: sn },
             select: { id: true },
           });
           if (!clash) return sn;
@@ -294,7 +296,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         return NextResponse.json({ success: true, item: updated });
       }
 
-      const resultItem = await prisma.$transaction(async (tx) => {
+      const resultItem = await prisma.$transaction(async (tx: any) => {
         await tx.privateCompanyMaterialItem.update({
           where: { id },
           data: { quantity: lineQty - moveQty },
