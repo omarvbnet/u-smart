@@ -147,6 +147,8 @@ export async function POST(req: NextRequest) {
         provinceFilterActive: !!province,
         serviceSlug: 'quality-control-supervision',
         role: 'ENGINEER',
+        verificationStatus: 'APPROVED',
+        verifiedAt: new Date(),
       },
       select: {
         id: true,

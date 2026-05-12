@@ -119,6 +119,11 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const qcFieldRoles = new Set(['ENGINEER', 'TECHNICIAN', 'WORKER']);
+    const verificationExtras = qcFieldRoles.has(role)
+      ? { verificationStatus: 'APPROVED' as const, verifiedAt: new Date() }
+      : {};
+
     const requester = await prisma.ticketRequester.create({
       data: {
         username,
@@ -129,6 +134,7 @@ export async function POST(req: NextRequest) {
         company,
         role,
         serviceSlug: serviceSlug as (typeof SERVICE_SLUGS)[number],
+        ...verificationExtras,
       },
       select: {
         id: true,

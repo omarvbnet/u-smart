@@ -694,6 +694,30 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return l10n.t('inspection_hours', {'h': h.toStringAsFixed(1)});
   }
 
+  Future<void> _openWazeToSite(
+    double lat,
+    double lng,
+    AppLocalizations l10n,
+  ) async {
+    final uri = Uri.parse(
+      'https://waze.com/ul?ll=${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}&navigate=yes',
+    );
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.t('site_navigate_failed'))),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.t('site_navigate_failed'))),
+        );
+      }
+    }
+  }
+
   List<Widget> _buildContent() {
     final t = _ticket!;
     final l10n = AppLocalizations.of(context);
@@ -758,9 +782,63 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           _row(l10n.t('inspection_time'), _formatInspectionHoursDisplay(t.inspectionHours!, l10n)),
         if (siteUpdated != null)
           _row(l10n.t('site_last_updated'), _formatDateShort(siteUpdated)),
-        if (_siteCoordinates != null)
-          _row(l10n.t('site_coordinates'),
-              '${_siteCoordinates!.lat.toStringAsFixed(6)}, ${_siteCoordinates!.lng.toStringAsFixed(6)}'),
+        if (_siteCoordinates != null) ...[
+          if (isMyTicket && (isEngineer || _isTechnician))
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      l10n.t('site_coordinates'),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(80),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _openWazeToSite(
+                        _siteCoordinates!.lat,
+                        _siteCoordinates!.lng,
+                        l10n,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${_siteCoordinates!.lat.toStringAsFixed(6)}, ${_siteCoordinates!.lng.toStringAsFixed(6)}',
+                              style: const TextStyle(
+                                color: Color(0xFF00D4AA),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF00D4AA),
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.navigation_rounded,
+                            color: Color(0xFF00D4AA),
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            _row(
+              l10n.t('site_coordinates'),
+              '${_siteCoordinates!.lat.toStringAsFixed(6)}, ${_siteCoordinates!.lng.toStringAsFixed(6)}',
+            ),
+        ],
       ]),
 
       // Requester / POC

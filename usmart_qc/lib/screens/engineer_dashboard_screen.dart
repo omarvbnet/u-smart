@@ -25,6 +25,7 @@ import 'filtered_tickets_screen.dart';
 import 'conflicts_screen.dart';
 import '../widgets/update_password_sheet.dart';
 import '../widgets/site_share_dialog.dart';
+import '../widgets/site_bulk_import_menu.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -1591,6 +1592,7 @@ class _EngineerSitesTab extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SiteBulkImportMenu(),
                     ],
                   ),
                 ),

@@ -4,8 +4,9 @@ import 'create_ticket_screen.dart';
 import 'create_maintenance_ticket_screen.dart';
 
 /// Shows ticket type options: Supervision & QC, and Maintenance.
-/// Available to Company, Engineer, and Technician. Call from FAB on tickets tab.
-void showNewTicketTypePicker(BuildContext context) {
+/// When [maintenanceOnly] is true (e.g. private-workspace technician), only
+/// maintenance is offered.
+void showNewTicketTypePicker(BuildContext context, {bool maintenanceOnly = false}) {
   final l10n = AppLocalizations.of(context);
 
   showModalBottomSheet<void>(
@@ -32,20 +33,22 @@ void showNewTicketTypePicker(BuildContext context) {
                 ),
               ),
               const SizedBox(height: 16),
-              _OptionTile(
-                icon: Icons.verified_outlined,
-                label: l10n.t('ticket_type_supervision_qc'),
-                hint: l10n.t('ticket_type_supervision_qc_hint'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CreateTicketScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
+              if (!maintenanceOnly) ...[
+                _OptionTile(
+                  icon: Icons.verified_outlined,
+                  label: l10n.t('ticket_type_supervision_qc'),
+                  hint: l10n.t('ticket_type_supervision_qc_hint'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CreateTicketScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               _OptionTile(
                 icon: Icons.build_circle_outlined,
                 label: l10n.t('ticket_type_maintenance'),

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { sendPrivateWorkspaceCredentialsEmail } from '@/lib/email';
 import {
   CAN_MANAGE_STAFF_ROLES,
   getPrivateCompanyMembership,
@@ -338,6 +339,23 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  const companyNameRow = await prisma.privateCompany.findUnique({
+    where: { id: guard.companyId },
+    select: { name: true },
+  });
+  const workspaceName = (companyNameRow?.name as string | undefined)?.trim() || 'Your workspace';
+  const emailTo = typeof created.email === 'string' ? created.email.trim() : '';
+  if (emailTo.includes('@')) {
+    void sendPrivateWorkspaceCredentialsEmail({
+      to: emailTo,
+      recipientName: typeof created.name === 'string' ? created.name : null,
+      workspaceName,
+      username: created.username,
+      temporaryPassword,
+      isPasswordReset: false,
+    }).catch((e: unknown) => console.error('Private workspace staff welcome email:', e));
+  }
+
   return NextResponse.json({
     success: true,
     user: created,
@@ -412,6 +430,22 @@ export async function PATCH(req: NextRequest) {
         privateCompanyDepartmentId: true,
       },
     });
+    const companyNameRow = await prisma.privateCompany.findUnique({
+      where: { id: guard.companyId },
+      select: { name: true },
+    });
+    const workspaceName = (companyNameRow?.name as string | undefined)?.trim() || 'Your workspace';
+    const emailTo = typeof updated.email === 'string' ? updated.email.trim() : '';
+    if (emailTo.includes('@')) {
+      void sendPrivateWorkspaceCredentialsEmail({
+        to: emailTo,
+        recipientName: typeof updated.name === 'string' ? updated.name : null,
+        workspaceName,
+        username: updated.username,
+        temporaryPassword,
+        isPasswordReset: true,
+      }).catch((e: unknown) => console.error('Private workspace staff reset email:', e));
+    }
     return NextResponse.json({
       success: true,
       user: updated,

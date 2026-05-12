@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
+import '../providers/private_company_provider.dart';
 import 'attachment_viewer_screen.dart';
 
 /// Maintenance types. Values must match backend MAINTENANCE_TECHNIQUES.
@@ -39,6 +40,8 @@ class _CreateMaintenanceTicketScreenState
   bool _submitting = false;
   bool _uploading = false;
   final List<String> _beforePhotoUrls = [];
+  /// Same semantics as [CreateTicketScreen]: private workspace vs global pool.
+  String _assignmentScope = 'PRIVATE_COMPANY';
 
   @override
   void initState() {
@@ -51,6 +54,13 @@ class _CreateMaintenanceTicketScreenState
       if (slugs.isNotEmpty && !slugs.contains(_maintenanceType)) {
         setState(() => _maintenanceType = slugs.first);
       }
+      final pc = context.read<PrivateCompanyProvider>();
+      if (pc.workspace == null && (pc.membership.isOwner || pc.membership.isStaff)) {
+        await pc.refresh();
+      }
+      if (!mounted) return;
+      final inWs = pc.isApproved && (pc.isOwner || pc.isStaff);
+      if (inWs) setState(() => _assignmentScope = 'PRIVATE_COMPANY');
     });
   }
 
@@ -96,6 +106,11 @@ class _CreateMaintenanceTicketScreenState
         ? _maintenanceType
         : validIds.first;
     final designSpecs = _designSpecsCtrl.text.trim();
+    final pc = context.read<PrivateCompanyProvider>();
+    final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
+    final String? scopeForApi = inWorkspace
+        ? (_assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : 'GLOBAL')
+        : null;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
@@ -104,6 +119,7 @@ class _CreateMaintenanceTicketScreenState
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       maintenanceReason: reason,
       beforeImageUrls: _beforePhotoUrls.isEmpty ? null : List.from(_beforePhotoUrls),
+      assignmentScope: scopeForApi,
     );
 
     if (!mounted) return;
@@ -377,6 +393,8 @@ class _CreateMaintenanceTicketScreenState
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 16),
+          _buildAssignmentScopePicker(l10n),
+          const SizedBox(height: 16),
           _buildDesignSpecsField(l10n),
           const SizedBox(height: 16),
           _buildAttachmentsSection(l10n),
@@ -423,6 +441,106 @@ class _CreateMaintenanceTicketScreenState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAssignmentScopePicker(AppLocalizations l10n) {
+    return Consumer<PrivateCompanyProvider>(
+      builder: (context, pc, _) {
+        final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
+        if (!inWorkspace) return const SizedBox.shrink();
+        final isPrivate = _assignmentScope == 'PRIVATE_COMPANY';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.t('ticket_assignment_scope').toUpperCase(),
+              style: TextStyle(
+                color: Colors.white.withAlpha(80),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withAlpha(10)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () =>
+                          setState(() => _assignmentScope = 'PRIVATE_COMPANY'),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: isPrivate
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFF6C63FF),
+                                    Color(0xFF00D4AA),
+                                  ],
+                                )
+                              : null,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          l10n.t('scope_private_company'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight:
+                                isPrivate ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _assignmentScope = 'GLOBAL'),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: !isPrivate
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFF6C63FF),
+                                    Color(0xFF00D4AA),
+                                  ],
+                                )
+                              : null,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          l10n.t('scope_global'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight:
+                                !isPrivate ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

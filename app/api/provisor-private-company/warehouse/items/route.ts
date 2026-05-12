@@ -43,7 +43,7 @@ const ITEM_INCLUDE = {
  *   ?materialId=...
  *   ?assignedToId=...
  *   ?ticketId=...
- *   ?q=<serial-prefix-or-substring>
+ *   ?q=<serial, note, or material name substring>
  *   ?mine=1   (full-view only: list units assigned to the current user)
  */
 export async function GET(req: NextRequest) {
@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
     where.OR = [
       { serialNumber: { contains: q, mode: 'insensitive' } },
       { notes: { contains: q, mode: 'insensitive' } },
+      { material: { name: { contains: q, mode: 'insensitive' } } },
     ];
   }
 

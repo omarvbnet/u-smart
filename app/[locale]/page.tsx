@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, PerspectiveCamera, Icosahedron, MeshDistortMaterial } from "@react-three/drei";
 import { motion, useInView, useScroll, useTransform, AnimatePresence } from "framer-motion";
@@ -36,11 +36,20 @@ function EnhancedTechHero() {
     meshRef.current.scale.set(pulse, pulse, pulse);
   });
 
+  const lights = useMemo(() => {
+    const amb = new THREE.AmbientLight(0xffffff, 0.3);
+    const p1 = new THREE.PointLight(0x3b82f6, 0.6);
+    p1.position.set(5, 5, 5);
+    const p2 = new THREE.PointLight(0x8b5cf6, 0.3);
+    p2.position.set(-5, -5, 5);
+    return { amb, p1, p2 };
+  }, []);
+
   return (
     <group>
-      <ambientLight intensity={0.3} />
-      <pointLight position={[5, 5, 5]} intensity={0.6} color="#3b82f6" />
-      <pointLight position={[-5, -5, 5]} intensity={0.3} color="#8b5cf6" />
+      <primitive object={lights.amb} />
+      <primitive object={lights.p1} />
+      <primitive object={lights.p2} />
       
       <Float speed={1.2} rotationIntensity={0.5} floatIntensity={0.8}>
         <Icosahedron ref={meshRef} args={[1.8, 2]}>

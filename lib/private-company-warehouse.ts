@@ -191,8 +191,12 @@ export async function logMovement(args: {
   quantity?: number;
   note?: string | null;
   actorId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx?: any;
 }) {
-  return prisma.privateCompanyMaterialMovement.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = args.tx ?? prisma;
+  return db.privateCompanyMaterialMovement.create({
     data: {
       companyId: args.companyId,
       itemId: args.itemId,

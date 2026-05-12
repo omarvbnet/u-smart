@@ -894,3 +894,108 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/**
+ * Branded credential email for private-workspace staff (new account or password reset).
+ * Sends only when `to` is a non-empty email and SMTP is configured.
+ */
+export async function sendPrivateWorkspaceCredentialsEmail(args: {
+  to: string;
+  recipientName: string | null;
+  workspaceName: string;
+  username: string;
+  temporaryPassword: string;
+  isPasswordReset: boolean;
+}): Promise<boolean> {
+  const to = args.to.trim();
+  if (!to || !to.includes('@')) return false;
+
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const siteUrl = raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+  const logoUrl = process.env.NEXT_PUBLIC_EMAIL_LOGO_URL?.trim();
+  const name = args.recipientName?.trim() || 'there';
+  const subject = args.isPasswordReset
+    ? 'Provisor — your workspace sign-in was reset'
+    : 'Welcome to your Provisor private workspace';
+
+  const intro = args.isPasswordReset
+    ? 'Your workspace administrator reset your password. Use the new temporary password below to sign in to the Provisor mobile app.'
+    : 'Your workspace administrator created an account for you on Provisor. Use the credentials below to sign in to the Provisor mobile app.';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:28px 32px;text-align:center;">
+            ${
+              logoUrl
+                ? `<img src="${escapeHtml(logoUrl)}" alt="U-SMART Provisor" width="180" style="display:block;margin:0 auto;max-width:100%;height:auto;" />
+            <div style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Private workspace</div>`
+                : `<div style="font-size:26px;font-weight:800;color:#f59e0b;letter-spacing:0.5px;">U-SMART</div>
+            <div style="margin-top:6px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Private workspace</div>`
+            }
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 32px 24px;">
+            <p style="margin:0 0 12px;font-size:18px;font-weight:600;color:#0f172a;">Hello ${escapeHtml(name)},</p>
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#475569;">${intro}</p>
+            <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Workspace</p>
+            <p style="margin:0 0 20px;font-size:15px;color:#0f172a;font-weight:600;">${escapeHtml(args.workspaceName)}</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+              <tr style="background:#f8fafc;">
+                <td style="padding:12px 16px;font-size:13px;color:#64748b;width:38%;">Username</td>
+                <td style="padding:12px 16px;font-size:15px;font-weight:600;color:#0f172a;font-family:Consolas,monospace;">${escapeHtml(args.username)}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;">Temporary password</td>
+                <td style="padding:12px 16px;font-size:15px;font-weight:700;color:#b45309;font-family:Consolas,monospace;border-top:1px solid #e2e8f0;">${escapeHtml(args.temporaryPassword)}</td>
+              </tr>
+            </table>
+            <div style="margin-top:22px;padding:14px 16px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#9a3412;">Important — security</p>
+              <ul style="margin:0;padding-left:18px;color:#7c2d12;font-size:13px;line-height:1.55;">
+                <li>Do not forward this email or share your password in chat, screenshots, or social media.</li>
+                <li>Anyone with these credentials can access your workspace account until you change the password.</li>
+                <li>You will be asked to choose a new password after your first successful sign-in.</li>
+              </ul>
+            </div>
+            <p style="margin:24px 0 0;font-size:14px;color:#475569;">Open the <strong>Provisor</strong> app, choose <strong>Private role sign-in</strong>, and enter your username and temporary password.</p>
+            <p style="margin:16px 0 0;font-size:13px;color:#64748b;">If you did not expect this message, contact your workspace owner immediately.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+            <a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:12px 22px;background:#f59e0b;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">Visit website</a>
+            <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} U-SMART · Provisor</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const text = [
+    `Hello ${name},`,
+    '',
+    intro,
+    '',
+    `Workspace: ${args.workspaceName}`,
+    `Username: ${args.username}`,
+    `Temporary password: ${args.temporaryPassword}`,
+    '',
+    'Security: Do not share this email or your password. Change it after first sign-in.',
+    '',
+    `Website: ${siteUrl}`,
+    '',
+    '© U-SMART Provisor',
+  ].join('\n');
+
+  return sendEmail({ to, subject, html, text });
+}

@@ -479,14 +479,22 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> assignItem(String id, String toStaffId, {String? note}) =>
+  Future<bool> assignItem(String id, String toStaffId, {String? note, int? quantity}) =>
       _itemAction(id, 'assign',
-          body: {'toStaffId': toStaffId, if (note != null) 'note': note},
+          body: {
+            'toStaffId': toStaffId,
+            if (note != null) 'note': note,
+            if (quantity != null) 'quantity': quantity,
+          },
           successMessage: 'Item assigned.');
 
-  Future<bool> transferItem(String id, String toStaffId, {String? note}) =>
+  Future<bool> transferItem(String id, String toStaffId, {String? note, int? quantity}) =>
       _itemAction(id, 'transfer',
-          body: {'toStaffId': toStaffId, if (note != null) 'note': note},
+          body: {
+            'toStaffId': toStaffId,
+            if (note != null) 'note': note,
+            if (quantity != null) 'quantity': quantity,
+          },
           successMessage: 'Item transferred.');
 
   Future<bool> returnItem(String id, {String? note}) =>

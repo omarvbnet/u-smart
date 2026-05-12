@@ -481,6 +481,43 @@ const Map<String, String> _en = {
   'site_remove_share_confirm':
       'Stop showing "{{name}}" in your shared sites?',
   'site_remove_share_done': 'Removed from your list',
+  'site_import_menu': 'Import sites',
+  'site_import_json': 'JSON file',
+  'site_import_excel': 'Excel (.xlsx)',
+  'site_import_parse_error': 'Could not read file',
+  'site_import_done': 'Imported {{created}} sites ({{skipped}} skipped)',
+  'site_import_failed': 'Import failed',
+  'site_navigate_failed': 'Could not open navigation app',
+  'pc_ws_export_data': 'Export workspace (JSON)',
+  'pc_ws_export_failed': 'Export failed',
+  'pc_ws_export_shared': 'Export ready — pick an app to save or share',
+  // Private company workspace (hub)
+  'pc_ws_tab_overview': 'Overview',
+  'pc_ws_tab_departments': 'Departments',
+  'pc_ws_tab_staff': 'Staff',
+  'pc_ws_tab_checklists': 'Checklists',
+  'pc_ws_tab_performance': 'Performance',
+  'pc_ws_tab_warehouse': 'Warehouse',
+  'pc_ws_screen_title': 'Private workspace',
+  'pc_ws_owner_badge': 'OWNER',
+  'pc_ws_warehouse_assigned_only_hint':
+      'You only see warehouse data for materials assigned to you. Managers, coordinators, warehouse keepers, and the owner see the full workspace.',
+  'pc_status_pending': 'Pending review',
+  'pc_status_approved': 'Approved',
+  'pc_status_rejected': 'Rejected',
+  'pc_status_suspended': 'Suspended',
+  'pc_status_unknown': 'Unknown',
+  'pc_ws_status_pending_body':
+      'Your workspace request is in admin review. You will be notified by push notification once it is approved.',
+  'pc_ws_status_rejected_body':
+      'Your request was rejected. Please contact the admin or apply again with corrected information.',
+  'pc_ws_status_suspended_body':
+      'Your workspace has been suspended by the admin. Reach out to support to reactivate it.',
+  'pc_ws_request_submitted': 'Workspace request submitted for review.',
+  'pc_ws_description': 'Description',
+  'tooltip_company_hub': 'Company hub',
+  'tooltip_private_workspace': 'Private workspace',
+  'tooltip_ticket_filters': 'Filters',
 };
 
 // ─── Arabic ───
@@ -949,6 +986,42 @@ const Map<String, String> _ar = {
   'site_remove_share_title': 'إزالة الموقع المشترك؟',
   'site_remove_share_confirm': 'إيقاف إظهار "{{name}}" ضمن المواقع المشتركة؟',
   'site_remove_share_done': 'تمت الإزالة من قائمتك',
+  'site_import_menu': 'استيراد المواقع',
+  'site_import_json': 'ملف JSON',
+  'site_import_excel': 'Excel (.xlsx)',
+  'site_import_parse_error': 'تعذر قراءة الملف',
+  'site_import_done': 'تم استيراد {{created}} موقعاً (تم تخطي {{skipped}})',
+  'site_import_failed': 'فشل الاستيراد',
+  'site_navigate_failed': 'تعذر فتح تطبيق الملاحة',
+  'pc_ws_export_data': 'تصدير مساحة العمل (JSON)',
+  'pc_ws_export_failed': 'فشل التصدير',
+  'pc_ws_export_shared': 'التصدير جاهز — اختر تطبيقاً للحفظ أو المشاركة',
+  'pc_ws_tab_overview': 'نظرة عامة',
+  'pc_ws_tab_departments': 'الأقسام',
+  'pc_ws_tab_staff': 'الموظفون',
+  'pc_ws_tab_checklists': 'قوائم التحقق',
+  'pc_ws_tab_performance': 'الأداء',
+  'pc_ws_tab_warehouse': 'المستودع',
+  'pc_ws_screen_title': 'مساحة العمل الخاصة',
+  'pc_ws_owner_badge': 'المالك',
+  'pc_ws_warehouse_assigned_only_hint':
+      'تعرض لك بيانات المستودع للمواد المعيّنة لك فقط. المديرون والمنسّقون وأمناء المستودع ومالك مساحة العمل يرون كامل المساحة.',
+  'pc_status_pending': 'قيد المراجعة',
+  'pc_status_approved': 'مقبول',
+  'pc_status_rejected': 'مرفوض',
+  'pc_status_suspended': 'معلّق',
+  'pc_status_unknown': 'غير معروف',
+  'pc_ws_status_pending_body':
+      'طلب مساحة العمل قيد مراجعة الإدارة. ستصلك إشعار دفع عند الموافقة.',
+  'pc_ws_status_rejected_body':
+      'تم رفض الطلب. تواصل مع الإدارة أو أعد التقديم بمعلومات صحيحة.',
+  'pc_ws_status_suspended_body':
+      'تم تعليق مساحة العمل. تواصل مع الدعم لإعادة التفعيل.',
+  'pc_ws_request_submitted': 'تم إرسال طلب مساحة العمل للمراجعة.',
+  'pc_ws_description': 'الوصف',
+  'tooltip_company_hub': 'مركز الشركة',
+  'tooltip_private_workspace': 'مساحة العمل الخاصة',
+  'tooltip_ticket_filters': 'عوامل التصفية',
 };
 
 // ─── Kurdish ───
@@ -1420,6 +1493,42 @@ const Map<String, String> _ku = {
   'site_remove_share_confirm':
       'نیشاندانی "{{name}}" وەک شوێنی هاوبەش ڕابگیرێت؟',
   'site_remove_share_done': 'لە لیستەکەت لابرا',
+  'site_import_menu': 'هاوردەکردنی شوێنەکان',
+  'site_import_json': 'پەڕگەی JSON',
+  'site_import_excel': 'Excel (.xlsx)',
+  'site_import_parse_error': 'نەتوانرا پەڕگەکە بخوێنرێتەوە',
+  'site_import_done': '{{created}} شوێن هاوردە کرا ({{skipped}} پشتگوێخرا)',
+  'site_import_failed': 'هاوردەکردن سەرکەوتوو نەبوو',
+  'site_navigate_failed': 'نەتوانرا ئەپەکەی ڕێنیشاندەر بکرێتەوە',
+  'pc_ws_export_data': 'هەناردەکردنی شوێنی کار (JSON)',
+  'pc_ws_export_failed': 'هەناردەکردن سەرکەوتوو نەبوو',
+  'pc_ws_export_shared': 'هەناردەکردن ئامادەیە — ئەپێک هەڵبژێرە بۆ پاشەکەوت یان هاوبەشکردن',
+  'pc_ws_tab_overview': 'پێشبینین',
+  'pc_ws_tab_departments': 'بەشەکان',
+  'pc_ws_tab_staff': 'کارمەندان',
+  'pc_ws_tab_checklists': 'لیستی پشکنین',
+  'pc_ws_tab_performance': 'ئەداء',
+  'pc_ws_tab_warehouse': 'کۆگا',
+  'pc_ws_screen_title': 'شوێنی کارکردنی تایبەت',
+  'pc_ws_owner_badge': 'خاوەن',
+  'pc_ws_warehouse_assigned_only_hint':
+      'تەنها زانیاری کۆگا بۆ ئەو کەرەستانە دەبینیت کە بۆ تۆ دیاریکراون. بەڕێوەبەر و هەماهەنگکەر و پارێزەری کۆگا و خاوەنی workspace هەمووی دەبینن.',
+  'pc_status_pending': 'چاوەڕوانی پێداچوونەوە',
+  'pc_status_approved': 'پەسەندکراو',
+  'pc_status_rejected': 'ڕەتکراوەتەوە',
+  'pc_status_suspended': 'ڕاگیراو',
+  'pc_status_unknown': 'نەناسراو',
+  'pc_ws_status_pending_body':
+      'داواکاری workspace لە پێداچوونی ئەدمیندایە. دوای پەسەندکردن ئاگادارت دەکرێتەوە.',
+  'pc_ws_status_rejected_body':
+      'داواکاری ڕەتکرایەوە. پەیوەندی بە ئەدمینەوە بگرە یان دووبارە داوا بکەوە.',
+  'pc_ws_status_suspended_body':
+      'workspace ڕاگیراوە. پەیوەندی بە پشتگیریەوە بگرە بۆ چالاککردنەوە.',
+  'pc_ws_request_submitted': 'داواکاری workspace نێردرا بۆ پێداچوونەوە.',
+  'pc_ws_description': 'وەسف',
+  'tooltip_company_hub': 'ناوەندی کۆمپانیا',
+  'tooltip_private_workspace': 'workspace تایبەت',
+  'tooltip_ticket_filters': 'فلتەرەکان',
 };
 
 // ─── Turkish ───
@@ -1892,4 +2001,40 @@ const Map<String, String> _tr = {
   'site_remove_share_confirm':
       '"{{name}}" paylaşılan sitelerde gösterilmesin mi?',
   'site_remove_share_done': 'Listenden kaldırıldı',
+  'site_import_menu': 'Siteleri içe aktar',
+  'site_import_json': 'JSON dosyası',
+  'site_import_excel': 'Excel (.xlsx)',
+  'site_import_parse_error': 'Dosya okunamadı',
+  'site_import_done': '{{created}} site içe aktarıldı ({{skipped}} atlandı)',
+  'site_import_failed': 'İçe aktarma başarısız',
+  'site_navigate_failed': 'Navigasyon uygulaması açılamadı',
+  'pc_ws_export_data': 'Çalışma alanını dışa aktar (JSON)',
+  'pc_ws_export_failed': 'Dışa aktarma başarısız',
+  'pc_ws_export_shared': 'Dışa aktarma hazır — kaydetmek veya paylaşmak için bir uygulama seçin',
+  'pc_ws_tab_overview': 'Genel bakış',
+  'pc_ws_tab_departments': 'Departmanlar',
+  'pc_ws_tab_staff': 'Personel',
+  'pc_ws_tab_checklists': 'Kontrol listeleri',
+  'pc_ws_tab_performance': 'Performans',
+  'pc_ws_tab_warehouse': 'Depo',
+  'pc_ws_screen_title': 'Özel çalışma alanı',
+  'pc_ws_owner_badge': 'SAHİP',
+  'pc_ws_warehouse_assigned_only_hint':
+      'Yalnızca size atanmış malzemelere ait depo verilerini görürsünüz. Yöneticiler, koordinatörler, depo sorumluları ve çalışma alanı sahibi tüm alanı görür.',
+  'pc_status_pending': 'İncelemede',
+  'pc_status_approved': 'Onaylandı',
+  'pc_status_rejected': 'Reddedildi',
+  'pc_status_suspended': 'Askıya alındı',
+  'pc_status_unknown': 'Bilinmiyor',
+  'pc_ws_status_pending_body':
+      'Çalışma alanı talebiniz yönetici incelemesinde. Onaylandığında anlık bildirim alırsınız.',
+  'pc_ws_status_rejected_body':
+      'Talebiniz reddedildi. Yöneticiyle iletişime geçin veya düzeltilmiş bilgilerle yeniden başvurun.',
+  'pc_ws_status_suspended_body':
+      'Çalışma alanınız askıya alındı. Yeniden etkinleştirmek için destekle iletişime geçin.',
+  'pc_ws_request_submitted': 'Çalışma alanı talebi inceleme için gönderildi.',
+  'pc_ws_description': 'Açıklama',
+  'tooltip_company_hub': 'Şirket merkezi',
+  'tooltip_private_workspace': 'Özel çalışma alanı',
+  'tooltip_ticket_filters': 'Filtreler',
 };

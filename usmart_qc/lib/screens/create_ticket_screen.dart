@@ -31,8 +31,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _uploading = false;
   final List<String> _attachmentUrls = [];
   String? _selectedChecklistId;
-  /// 'PRIVATE_COMPANY' = restrict to my workspace staff, null/'GLOBAL' = open to all engineers
-  String _assignmentScope = 'GLOBAL';
+  /// 'PRIVATE_COMPANY' = restrict to my workspace staff, 'GLOBAL' = open to all engineers
+  String _assignmentScope = 'PRIVATE_COMPANY';
 
   @override
   void initState() {
@@ -48,6 +48,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       final pc = context.read<PrivateCompanyProvider>();
       if (pc.workspace == null && (pc.membership.isOwner || pc.membership.isStaff)) {
         await pc.refresh();
+      }
+      if (!mounted) return;
+      final inWs = pc.isApproved && (pc.isOwner || pc.isStaff);
+      if (inWs) {
+        setState(() => _assignmentScope = 'PRIVATE_COMPANY');
       }
     });
   }
@@ -83,8 +88,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     final designSpecs = _designSpecsCtrl.text.trim();
     final pc = context.read<PrivateCompanyProvider>();
     final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
-    final scopeForApi =
-        inWorkspace && _assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : null;
+    final String? scopeForApi = inWorkspace
+        ? (_assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : 'GLOBAL')
+        : null;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,

@@ -1,16 +1,53 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../constants/iraq_provinces.dart';
 import '../models/private_company.dart';
 import '../models/private_company_warehouse.dart';
 import '../providers/auth_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
+import '../l10n/app_localizations.dart';
+
+String _pcStatusLabel(PrivateCompanyStatus s, AppLocalizations l10n) {
+  switch (s) {
+    case PrivateCompanyStatus.pending:
+      return l10n.t('pc_status_pending');
+    case PrivateCompanyStatus.approved:
+      return l10n.t('pc_status_approved');
+    case PrivateCompanyStatus.rejected:
+      return l10n.t('pc_status_rejected');
+    case PrivateCompanyStatus.suspended:
+      return l10n.t('pc_status_suspended');
+    case PrivateCompanyStatus.unknown:
+      return l10n.t('pc_status_unknown');
+  }
+}
+
+String _pcStatusDescription(
+  PrivateCompanyStatus status,
+  PrivateCompanyWorkspace ws,
+  AppLocalizations l10n,
+) {
+  switch (status) {
+    case PrivateCompanyStatus.pending:
+      return l10n.t('pc_ws_status_pending_body');
+    case PrivateCompanyStatus.rejected:
+      return l10n.t('pc_ws_status_rejected_body');
+    case PrivateCompanyStatus.suspended:
+      return l10n.t('pc_ws_status_suspended_body');
+    case PrivateCompanyStatus.approved:
+    case PrivateCompanyStatus.unknown:
+      return ws.description ?? '';
+  }
+}
 
 /// Single entry-point for the Private Company workspace feature on mobile.
 /// Renders one of three states:
@@ -124,7 +161,7 @@ class _NotRequestedViewState extends State<_NotRequestedView> {
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Workspace request submitted for review.'),
+          content: Text(AppLocalizations.of(context).t('pc_ws_request_submitted')),
           backgroundColor: const Color(0xFF00D4AA),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -297,6 +334,7 @@ class _RequestPendingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = workspace.status;
+    final l10n = AppLocalizations.of(context);
     return CustomScrollView(
       slivers: [
         SliverAppBar(
@@ -304,11 +342,11 @@ class _RequestPendingView extends StatelessWidget {
           elevation: 0,
           pinned: false,
           floating: true,
-          title: const _Title('Private Workspace'),
+          title: _Title(l10n.t('pc_ws_screen_title')),
           centerTitle: false,
           actions: [
             IconButton(
-              tooltip: 'Refresh',
+              tooltip: MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
               icon: const Icon(Icons.refresh_rounded, color: Color(0xFF8B83FF)),
               onPressed: () => context.read<PrivateCompanyProvider>().refresh(),
             ),
@@ -321,7 +359,7 @@ class _RequestPendingView extends StatelessWidget {
               _StatusHeroCard(
                 status: status,
                 title: workspace.name,
-                description: _statusDescription(status, workspace),
+                description: _pcStatusDescription(status, workspace, l10n),
               ),
               const SizedBox(height: 18),
               if (workspace.rejectionReason != null && status == PrivateCompanyStatus.rejected)
@@ -351,9 +389,9 @@ class _RequestPendingView extends StatelessWidget {
                     ),
                     if (workspace.description != null && workspace.description!.isNotEmpty) ...[
                       const SizedBox(height: 14),
-                      const Text(
-                        'Description',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      Text(
+                        l10n.t('pc_ws_description'),
+                        style: const TextStyle(color: Colors.white54, fontSize: 12),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -369,20 +407,6 @@ class _RequestPendingView extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  String _statusDescription(PrivateCompanyStatus status, PrivateCompanyWorkspace ws) {
-    switch (status) {
-      case PrivateCompanyStatus.pending:
-        return 'Your workspace request is in admin review. You will be notified by push notification once it is approved.';
-      case PrivateCompanyStatus.rejected:
-        return 'Your request was rejected. Please contact the admin or apply again with corrected information.';
-      case PrivateCompanyStatus.suspended:
-        return 'Your workspace has been suspended by the admin. Reach out to support to reactivate it.';
-      case PrivateCompanyStatus.approved:
-      case PrivateCompanyStatus.unknown:
-        return ws.description ?? '';
-    }
   }
 }
 
@@ -423,6 +447,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
     final ws = widget.workspace;
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
         _WorkspaceHeader(workspace: ws),
@@ -465,13 +490,13 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                 const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             isScrollable: true,
             tabAlignment: TabAlignment.start,
-            tabs: const [
-              Tab(icon: Icon(Icons.dashboard_rounded, size: 18), text: 'Overview'),
-              Tab(icon: Icon(Icons.account_tree_rounded, size: 18), text: 'Departments'),
-              Tab(icon: Icon(Icons.groups_rounded, size: 18), text: 'Staff'),
-              Tab(icon: Icon(Icons.checklist_rounded, size: 18), text: 'Checklists'),
-              Tab(icon: Icon(Icons.speed_rounded, size: 18), text: 'Performance'),
-              Tab(icon: Icon(Icons.inventory_2_rounded, size: 18), text: 'Warehouse'),
+            tabs: [
+              Tab(icon: const Icon(Icons.dashboard_rounded, size: 18), text: l10n.t('pc_ws_tab_overview')),
+              Tab(icon: const Icon(Icons.account_tree_rounded, size: 18), text: l10n.t('pc_ws_tab_departments')),
+              Tab(icon: const Icon(Icons.groups_rounded, size: 18), text: l10n.t('pc_ws_tab_staff')),
+              Tab(icon: const Icon(Icons.checklist_rounded, size: 18), text: l10n.t('pc_ws_tab_checklists')),
+              Tab(icon: const Icon(Icons.speed_rounded, size: 18), text: l10n.t('pc_ws_tab_performance')),
+              Tab(icon: const Icon(Icons.inventory_2_rounded, size: 18), text: l10n.t('pc_ws_tab_warehouse')),
             ],
           ),
         ),
@@ -502,6 +527,7 @@ class _WorkspaceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Row(
@@ -563,7 +589,7 @@ class _WorkspaceHeader extends StatelessWidget {
                           Icon(workspace.status.icon, size: 12, color: workspace.status.color),
                           const SizedBox(width: 4),
                           Text(
-                            workspace.status.label,
+                            _pcStatusLabel(workspace.status, l10n),
                             style: TextStyle(
                               color: workspace.status.color,
                               fontSize: 10,
@@ -581,9 +607,9 @@ class _WorkspaceHeader extends StatelessWidget {
                           color: const Color(0xFFFBBF24).withAlpha(35),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'OWNER',
-                          style: TextStyle(
+                        child: Text(
+                          l10n.t('pc_ws_owner_badge'),
+                          style: const TextStyle(
                               color: Color(0xFFFBBF24),
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -596,8 +622,54 @@ class _WorkspaceHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (pc.canExportWorkspaceData)
+            IconButton(
+              tooltip: l10n.t('pc_ws_export_data'),
+              icon: const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
+              onPressed: () async {
+                final prov = context.read<PrivateCompanyProvider>();
+                final bytes = await prov.downloadWorkspaceExport(days: 365);
+                if (!context.mounted) return;
+                if (bytes == null || bytes.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.t('pc_ws_export_failed')),
+                      backgroundColor: const Color(0xFFFF4757),
+                    ),
+                  );
+                  return;
+                }
+                try {
+                  final dir = await getTemporaryDirectory();
+                  final path =
+                      '${dir.path}/workspace-export-${DateTime.now().millisecondsSinceEpoch}.json';
+                  await File(path).writeAsBytes(bytes);
+                  await Share.shareXFiles(
+                    [XFile(path)],
+                    subject: l10n.t('pc_ws_export_data'),
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(l10n.t('pc_ws_export_shared')),
+                        backgroundColor: const Color(0xFF00D4AA),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${l10n.t('pc_ws_export_failed')}: $e'),
+                        backgroundColor: const Color(0xFFFF4757),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
             icon: pc.loading
                 ? const SizedBox(
                     width: 16,
@@ -3023,6 +3095,7 @@ class _StatusHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = status.color;
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -3042,7 +3115,7 @@ class _StatusHeroCard extends StatelessWidget {
               Icon(status.icon, color: color, size: 28),
               const SizedBox(width: 10),
               Text(
-                status.label,
+                _pcStatusLabel(status, l10n),
                 style: TextStyle(
                   color: color,
                   fontSize: 14,
@@ -3994,6 +4067,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
     final pc = context.watch<PrivateCompanyProvider>();
     final canManage = pc.canManageWarehouse;
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
         if (wh.error != null)
@@ -4021,22 +4095,21 @@ class _WarehouseTabState extends State<_WarehouseTab>
                   color: const Color(0xFF38BDF8).withAlpha(90),
                 ),
               ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.info_outline_rounded,
                       color: Color(0xFF38BDF8),
                       size: 20,
                     ),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'You only see warehouse data for materials assigned to you. '
-                        'Managers, coordinators, warehouse keepers, and the owner see the full workspace.',
-                        style: TextStyle(
+                        l10n.t('pc_ws_warehouse_assigned_only_hint'),
+                        style: const TextStyle(
                           fontSize: 12,
                           height: 1.35,
                           color: Colors.white70,
@@ -4384,7 +4457,7 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: 'Search by serial or note',
+                    hintText: 'Search serial, note, or material',
                     hintStyle:
                         TextStyle(color: Colors.white.withAlpha(80), fontSize: 13),
                     prefixIcon: const Icon(Icons.search_rounded,
@@ -6500,6 +6573,7 @@ class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
   String? _status;
   String? _materialId;
   bool _mineOnly = false;
+  String _materialSearch = '';
 
   @override
   void initState() {
@@ -6608,6 +6682,25 @@ class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
                 const SizedBox(height: 14),
                 const _SectionTitle('Material'),
                 const SizedBox(height: 8),
+                TextField(
+                  onChanged: (v) => setState(() => _materialSearch = v),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Search materials…',
+                    hintStyle:
+                        TextStyle(color: Colors.white.withAlpha(80), fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        color: Color(0xFF8B83FF), size: 18),
+                    filled: true,
+                    fillColor: const Color(0xFF12122A),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -6620,18 +6713,26 @@ class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
                         color: const Color(0xFF6B7280),
                       ),
                     ),
-                    ...wh.materials.map((m) {
-                      final selected = _materialId == m.id;
-                      return GestureDetector(
-                        onTap: () => setState(() => _materialId = m.id),
-                        child: _ChipBox(
-                          label: m.name,
-                          selected: selected,
-                          color:
-                              _parseHex(m.color) ?? const Color(0xFF6C63FF),
-                        ),
-                      );
-                    }),
+                    ...() {
+                      final q = _materialSearch.trim().toLowerCase();
+                      final mats = q.isEmpty
+                          ? wh.materials
+                          : wh.materials
+                              .where((m) => m.name.toLowerCase().contains(q))
+                              .toList();
+                      return mats.map((m) {
+                        final selected = _materialId == m.id;
+                        return GestureDetector(
+                          onTap: () => setState(() => _materialId = m.id),
+                          child: _ChipBox(
+                            label: m.name,
+                            selected: selected,
+                            color: _parseHex(m.color) ??
+                                const Color(0xFF6C63FF),
+                          ),
+                        );
+                      }).toList();
+                    }(),
                   ],
                 ),
                 const SizedBox(height: 22),
@@ -6720,6 +6821,17 @@ class _ItemActionsSheet extends StatelessWidget {
                 style:
                     TextStyle(color: Colors.white.withAlpha(160), fontSize: 12),
               ),
+              if (item.quantity > 1) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Quantity on this line: ${item.quantity}${item.materialUnit != null && item.materialUnit!.trim().isNotEmpty ? ' ${item.materialUnit}' : ''}',
+                  style: TextStyle(
+                    color: const Color(0xFF00D4AA).withAlpha(220),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: 4),
               Wrap(
                 spacing: 6,
@@ -6754,16 +6866,23 @@ class _ItemActionsSheet extends StatelessWidget {
                   color: const Color(0xFFFFA53A),
                   onTap: () async {
                     Navigator.pop(context);
+                    final moveQty =
+                        await _promptWarehouseMoveQuantity(anchorContext, item);
+                    if (moveQty == null) return;
+                    if (!anchorContext.mounted) return;
                     final staffId = await _pickStaff(
                       anchorContext,
                       currentHolderId: item.assignedToId,
                       useApiSearch: canManage,
                     );
                     if (staffId == null) return;
+                    if (!anchorContext.mounted) return;
                     if (isHolder) {
-                      await wh.transferItem(item.id, staffId);
+                      await wh.transferItem(item.id, staffId,
+                          quantity: item.quantity > 1 ? moveQty : null);
                     } else {
-                      await wh.assignItem(item.id, staffId);
+                      await wh.assignItem(item.id, staffId,
+                          quantity: item.quantity > 1 ? moveQty : null);
                     }
                   },
                 ),
@@ -7135,6 +7254,86 @@ class _StaffPickSearchSheetState extends State<_StaffPickSearchSheet> {
       ),
     );
   }
+}
+
+/// How many units to assign/transfer when the inventory line has quantity > 1.
+Future<int?> _promptWarehouseMoveQuantity(
+  BuildContext context,
+  WarehouseItem item,
+) async {
+  if (item.quantity <= 1) return 1;
+  final ctrl = TextEditingController(text: '${item.quantity}');
+  final unit =
+      item.materialUnit != null && item.materialUnit!.trim().isNotEmpty
+          ? ' ${item.materialUnit!.trim()}'
+          : '';
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF12122A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: const Text(
+        'Quantity to assign',
+        style: TextStyle(
+            color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This line has ${item.quantity}$unit. Enter how many to move to the selected staff (1–${item.quantity}). The rest stays on this line.',
+            style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              labelText: 'Quantity',
+              labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withAlpha(40)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text('Cancel', style: TextStyle(color: Colors.white.withAlpha(120))),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF6C63FF),
+          ),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return null;
+  final n = int.tryParse(ctrl.text.trim());
+  if (n == null || n < 1 || n > item.quantity) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Enter a whole number from 1 to ${item.quantity}.'),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+    }
+    return null;
+  }
+  return n;
 }
 
 Future<String?> _pickStaff(

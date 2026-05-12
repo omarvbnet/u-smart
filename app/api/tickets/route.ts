@@ -72,15 +72,23 @@ async function notifyRoleNewTicket(
   province: string,
   siteName: string,
   role: 'ENGINEER' | 'TECHNICIAN',
-  _roleLabel: string
+  _roleLabel: string,
+  opts?: { directoryOnly?: boolean }
 ) {
   try {
+    const where: Record<string, unknown> = {
+      role,
+      status: 'ACTIVE',
+      serviceSlug: 'quality-control-supervision',
+    };
+    if (opts?.directoryOnly) {
+      // Private workspace chose "all system staff": only notify platform accounts
+      // that are vetted (APPROVED) and not tied to another workspace as staff.
+      where.privateCompanyId = null;
+      where.verificationStatus = 'APPROVED';
+    }
     const recipients = await prisma.ticketRequester.findMany({
-      where: {
-        role,
-        status: 'ACTIVE',
-        serviceSlug: 'quality-control-supervision',
-      },
+      where,
       select: { id: true, province: true, provinceFilterActive: true },
     });
     const roleKind = role === 'TECHNICIAN' ? 'maintenance' : 'qc';
@@ -109,12 +117,22 @@ async function notifyRoleNewTicket(
   }
 }
 
-async function notifyEngineersNewTicket(ticketId: string, province: string, siteName: string) {
-  await notifyRoleNewTicket(ticketId, province, siteName, 'ENGINEER', 'QC');
+async function notifyEngineersNewTicket(
+  ticketId: string,
+  province: string,
+  siteName: string,
+  opts?: { directoryOnly?: boolean }
+) {
+  await notifyRoleNewTicket(ticketId, province, siteName, 'ENGINEER', 'QC', opts);
 }
 
-async function notifyTechniciansNewTicket(ticketId: string, province: string, siteName: string) {
-  await notifyRoleNewTicket(ticketId, province, siteName, 'TECHNICIAN', 'maintenance');
+async function notifyTechniciansNewTicket(
+  ticketId: string,
+  province: string,
+  siteName: string,
+  opts?: { directoryOnly?: boolean }
+) {
+  await notifyRoleNewTicket(ticketId, province, siteName, 'TECHNICIAN', 'maintenance', opts);
 }
 
 /**
@@ -312,7 +330,7 @@ export async function POST(req: NextRequest) {
         inPrivateWorkspace = false;
       }
       const allowedRoles = ['COMPANY', 'PERSONAL'];
-      const allowedPrivateStaff = ['MANAGER', 'COORDINATOR', 'ENGINEER'];
+      const allowedPrivateStaff = ['MANAGER', 'COORDINATOR', 'ENGINEER', 'TECHNICIAN'];
       const allowed =
         (requesterRole && allowedRoles.includes(requesterRole)) ||
         (inPrivateWorkspace &&
@@ -323,7 +341,7 @@ export async function POST(req: NextRequest) {
           {
             success: false,
             message:
-              'Only company / personal accounts (or workspace managers, coordinators, and engineers) can create maintenance tickets.',
+              'Only company / personal accounts (or approved workspace managers, coordinators, engineers, and technicians) can create maintenance tickets.',
           },
           { status: 403 }
         );
@@ -369,6 +387,8 @@ export async function POST(req: NextRequest) {
     let assigneeCoordinatorUserId: string | null = null;
     let assignmentScope: string | null = null;
     let privateCompanyIdForTicket: string | null = null;
+    /** When set, the creator belongs to an approved private workspace (owner or staff). */
+    let creatorPrivateWorkspaceId: string | null = null;
     let resubmitToRequester = false;
     let autoTaskCategory: 'QUALITY' | 'SUPERVISION' | 'MAINTENANCE' | null = null;
     let autoRoleScope: 'QUALITY_ENGINEER' | 'SUPERVISION_ENGINEER' | 'TECHNICIAN' | null = null;
@@ -506,12 +526,18 @@ export async function POST(req: NextRequest) {
               ?.privateCompanyOwned?.status === 'APPROVED'
               ? (me as { privateCompanyOwned?: { id: string } | null })?.privateCompanyOwned?.id ?? null
               : (me as { privateCompanyId?: string | null })?.privateCompanyId ?? null;
+          creatorPrivateWorkspaceId = myWorkspaceId;
           const requestedScopeRaw =
             typeof body.assignmentScope === 'string' ? body.assignmentScope.trim().toUpperCase() : '';
           const wantsPrivate =
             requestedScopeRaw === 'PRIVATE_COMPANY' ||
             requestedScopeRaw === 'PRIVATE_COMPANY_STAFF';
-          if (myWorkspaceId && wantsPrivate) {
+          const wantsGlobal =
+            requestedScopeRaw === 'GLOBAL' ||
+            requestedScopeRaw === 'USMART_STAFF' ||
+            requestedScopeRaw === 'ALL' ||
+            requestedScopeRaw === 'OPEN';
+          if (myWorkspaceId && !wantsGlobal && (wantsPrivate || requestedScopeRaw === '')) {
             assignmentScope = 'PRIVATE_COMPANY_STAFF';
             privateCompanyIdForTicket = myWorkspaceId;
           }
@@ -888,6 +914,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (serviceSlug === 'quality-control-supervision') {
+      const notifyOpenPoolDirectoryOnly =
+        !!creatorPrivateWorkspaceId &&
+        assignmentScope !== 'PRIVATE_COMPANY_STAFF' &&
+        !privateCompanyIdForTicket;
       if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket) {
         notifyPrivateCompanyMembersNewTicket(
           ticket.id,
@@ -897,9 +927,13 @@ export async function POST(req: NextRequest) {
           siteName
         ).catch(() => {});
       } else if (MAINTENANCE_TECHNIQUES.includes(technique)) {
-        notifyTechniciansNewTicket(ticket.id, province, siteName).catch(() => {});
+        notifyTechniciansNewTicket(ticket.id, province, siteName, {
+          directoryOnly: notifyOpenPoolDirectoryOnly,
+        }).catch(() => {});
       } else {
-        notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
+        notifyEngineersNewTicket(ticket.id, province, siteName, {
+          directoryOnly: notifyOpenPoolDirectoryOnly,
+        }).catch(() => {});
       }
     }
 

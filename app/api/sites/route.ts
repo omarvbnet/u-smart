@@ -143,7 +143,13 @@ export async function GET(req: NextRequest) {
     if (doExport) {
       const exportData = {
         success: true,
-        sites: (sites as { siteId: string; location: string; province: string }[]).map((s) => ({ siteId: s.siteId, location: s.location, province: s.province })),
+        sites: (sites as SiteRow[]).map((s) => ({
+          siteId: s.siteId,
+          location: s.location,
+          province: s.province,
+          latitude: s.latitude ?? null,
+          longitude: s.longitude ?? null,
+        })),
         exportedAt: new Date().toISOString(),
       };
       return new NextResponse(JSON.stringify(exportData, null, 2), {
@@ -257,7 +263,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Bulk import: body.sites = [{ siteId, location, province }, ...]
+    // Bulk import: body.sites = [{ siteId or name, latitude, longitude }, ...]
+    // Optional: location, province (defaults: "lat, lng" and "—").
     const sitesToImport = body.sites;
     if (Array.isArray(sitesToImport) && sitesToImport.length > 0) {
       const siteDelegate = getSiteDelegate();
@@ -267,16 +274,37 @@ export async function POST(req: NextRequest) {
           { status: 503 }
         );
       }
+      const parseCoord = (v: unknown): number | null => {
+        if (typeof v === 'number' && Number.isFinite(v)) return v;
+        if (typeof v === 'string') {
+          const t = v.trim().replace(',', '.');
+          const n = Number(t);
+          return Number.isFinite(n) ? n : null;
+        }
+        return null;
+      };
       const created: { siteId: string; location: string; province: string }[] = [];
       const skipped: { siteId: string; reason: string }[] = [];
       for (const item of sitesToImport) {
-        const siteId = typeof item.siteId === 'string' ? item.siteId.trim() : '';
-        const location = typeof item.location === 'string' ? item.location.trim() : '';
-        const province = typeof item.province === 'string' ? item.province.trim() : '';
-        if (!siteId || !location || !province) {
-          skipped.push({ siteId: siteId || '(empty)', reason: 'Missing siteId, location or province' });
+        const rawId =
+          (typeof item.siteId === 'string' && item.siteId.trim()) ||
+          (typeof item.name === 'string' && item.name.trim()) ||
+          '';
+        const siteId = rawId;
+        const lat = parseCoord(item.latitude ?? item.lat);
+        const lng = parseCoord(item.longitude ?? item.lng ?? item.lon);
+        if (!siteId) {
+          skipped.push({ siteId: '(empty)', reason: 'Missing siteId or name' });
           continue;
         }
+        if (lat == null || lng == null) {
+          skipped.push({ siteId, reason: 'Missing or invalid latitude/longitude' });
+          continue;
+        }
+        let location = typeof item.location === 'string' ? item.location.trim() : '';
+        if (!location) location = `${lat}, ${lng}`;
+        let province = typeof item.province === 'string' ? item.province.trim() : '';
+        if (!province) province = '—';
         const existing = await siteDelegate.findUnique({
           where: {
             requesterId_siteId: { requesterId: payload.requesterId, siteId },
@@ -287,7 +315,14 @@ export async function POST(req: NextRequest) {
           continue;
         }
         await siteDelegate.create({
-          data: { siteId, location, province, requesterId: payload.requesterId },
+          data: {
+            siteId,
+            location,
+            province,
+            latitude: lat,
+            longitude: lng,
+            requesterId: payload.requesterId,
+          },
         });
         created.push({ siteId, location, province });
       }

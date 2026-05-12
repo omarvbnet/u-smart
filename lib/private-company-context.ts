@@ -65,6 +65,7 @@ export const CAN_CREATE_TICKETS_ROLES = new Set([
   'MANAGER',
   'COORDINATOR',
   'ENGINEER',
+  'TECHNICIAN',
 ]);
 
 export function isStaffRole(role: string | null | undefined): boolean {

@@ -29,6 +29,7 @@ import 'private_company_hub_screen.dart';
 import '../providers/private_company_provider.dart';
 import '../widgets/update_password_sheet.dart';
 import '../widgets/site_share_dialog.dart';
+import '../widgets/site_bulk_import_menu.dart';
 import '../config/api_config.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -81,10 +82,14 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final auth = context.read<AuthProvider>();
+    final pc = context.watch<PrivateCompanyProvider>();
     final isTechnician = auth.isTechnician;
     final isWorker = auth.isWorker;
     final showCompanyTab = auth.canAccessCompanyHub;
-    final readOnlyRole = isTechnician || isWorker; // no create ticket via FAB
+    final inApprovedPrivateWorkspace =
+        pc.workspace != null && pc.isApproved && (pc.isOwner || pc.isStaff);
+    final readOnlyRole =
+        isWorker || (isTechnician && !inApprovedPrivateWorkspace);
     final technicianWithSites = isTechnician && !isWorker;
 
     // Tab order depends on role
@@ -200,7 +205,12 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               child: FloatingActionButton(
                 heroTag: 'fab_new_ticket',
                 onPressed: () {
-                  showNewTicketTypePicker(context);
+                  final maintenanceOnly =
+                      auth.isTechnician && inApprovedPrivateWorkspace;
+                  showNewTicketTypePicker(
+                    context,
+                    maintenanceOnly: maintenanceOnly,
+                  );
                 },
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -406,7 +416,7 @@ class _TicketsTabState extends State<_TicketsTab> {
                       _showFilters ? Icons.tune_rounded : Icons.tune_outlined,
                       color: const Color(0xFF8B83FF),
                     ),
-                    tooltip: 'Filters',
+                    tooltip: l10n.t('tooltip_ticket_filters'),
                   ),
                   Consumer<AuthProvider>(
                     builder: (context, auth, _) {
@@ -420,7 +430,7 @@ class _TicketsTabState extends State<_TicketsTab> {
                           ),
                         ),
                         icon: const Icon(Icons.business_center_outlined, color: Color(0xFF8B83FF)),
-                        tooltip: 'Company hub',
+                        tooltip: l10n.t('tooltip_company_hub'),
                       );
                     },
                   ),
@@ -460,7 +470,7 @@ class _TicketsTabState extends State<_TicketsTab> {
                                   color: Colors.white,
                                 ),
                               ),
-                              tooltip: 'Private workspace',
+                              tooltip: l10n.t('tooltip_private_workspace'),
                             ),
                             if (pendingDot)
                               Positioned(
@@ -1078,6 +1088,7 @@ class _SitesTab extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (allowCreateSite) const SiteBulkImportMenu(),
                     ],
                   ),
                 ),

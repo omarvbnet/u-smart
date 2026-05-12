@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
@@ -146,7 +147,10 @@ type Action = 'assign' | 'transfer' | 'return' | 'use' | 'damage' | 'lose';
  *     toStaffId?: string,           // for assign/transfer
  *     ticketId?: string,            // for use
  *     note?: string,                // optional note recorded in the movement
- *     quantity?: number,            // BULK only — defaults to 1
+ *     quantity?: number,            // How many units this action moves (defaults to full line).
+ *                                   If less than the line quantity for assign/transfer, the line
+ *                                   is split: remainder stays on the source row, a new row holds
+ *                                   the amount going to the recipient.
  *   }
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -162,7 +166,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     );
   }
   const note = typeof body?.note === 'string' ? body.note.trim() || null : null;
-  const quantity =
+  const bodyQuantity =
     typeof body?.quantity === 'number' && body.quantity > 0
       ? Math.floor(body.quantity)
       : undefined;
@@ -238,31 +242,107 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         );
       }
       const fromStaffId = item.assignedToId;
-      const updated = await prisma.privateCompanyMaterialItem.update({
-        where: { id },
-        data: { assignedToId: toStaffId, status: 'ASSIGNED' },
-        include: ITEM_INCLUDE,
+      const lineQty = Math.max(1, Math.floor(Number(item.quantity)) || 1);
+      const requested = bodyQuantity !== undefined ? bodyQuantity : lineQty;
+      const moveQty = Math.min(Math.max(requested, 1), lineQty);
+      if (moveQty < 1 || moveQty > lineQty) {
+        return NextResponse.json(
+          { success: false, message: 'Invalid quantity for this line.' },
+          { status: 400 }
+        );
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async function uniqueSplitSerial(tx: any): Promise<string> {
+        for (let n = 0; n < 8; n++) {
+          const suffix = randomBytes(3).toString('hex');
+          const sn = `${item.serialNumber}#${suffix}`;
+          const clash = await tx.privateCompanyMaterialItem.findFirst({
+            where: { companyId: guard.companyId, serialNumber: sn },
+            select: { id: true },
+          });
+          if (!clash) return sn;
+        }
+        return `${item.serialNumber}#${randomBytes(8).toString('hex')}`;
+      }
+
+      if (moveQty === lineQty) {
+        const updated = await prisma.privateCompanyMaterialItem.update({
+          where: { id },
+          data: { assignedToId: toStaffId, status: 'ASSIGNED' },
+          include: ITEM_INCLUDE,
+        });
+        await logMovement({
+          companyId: guard.companyId,
+          itemId: id,
+          type: action === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
+          fromStaffId,
+          toStaffId,
+          actorId: guard.requesterId,
+          quantity: moveQty,
+          note,
+        });
+        const matName = updated.material?.name ?? item.material.name;
+        await notifyMaterialAssigned({
+          requesterId: toStaffId,
+          companyId: guard.companyId,
+          itemId: id,
+          materialName: matName,
+          serialNumber: updated.serialNumber,
+          province: updated.province,
+        });
+        return NextResponse.json({ success: true, item: updated });
+      }
+
+      const resultItem = await prisma.$transaction(async (tx) => {
+        await tx.privateCompanyMaterialItem.update({
+          where: { id },
+          data: { quantity: lineQty - moveQty },
+        });
+        const newSerial = await uniqueSplitSerial(tx);
+        const created = await tx.privateCompanyMaterialItem.create({
+          data: {
+            companyId: item.companyId,
+            materialId: item.materialId,
+            serialNumber: newSerial,
+            province: item.province,
+            status: 'ASSIGNED',
+            quantity: moveQty,
+            notes: item.notes ?? null,
+            assignedToId: toStaffId,
+            createdById: guard.requesterId,
+          },
+          include: ITEM_INCLUDE,
+        });
+        await logMovement({
+          companyId: guard.companyId,
+          itemId: created.id,
+          type: action === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
+          fromStaffId,
+          toStaffId,
+          actorId: guard.requesterId,
+          quantity: moveQty,
+          note,
+          tx,
+        });
+        return created;
       });
-      await logMovement({
-        companyId: guard.companyId,
-        itemId: id,
-        type: action === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
-        fromStaffId,
-        toStaffId,
-        actorId: guard.requesterId,
-        quantity,
-        note,
-      });
-      const matName = updated.material?.name ?? item.material.name;
+
+      const matName = resultItem.material?.name ?? item.material.name;
       await notifyMaterialAssigned({
         requesterId: toStaffId,
         companyId: guard.companyId,
-        itemId: id,
+        itemId: resultItem.id,
         materialName: matName,
-        serialNumber: updated.serialNumber,
-        province: updated.province,
+        serialNumber: resultItem.serialNumber,
+        province: resultItem.province,
       });
-      return NextResponse.json({ success: true, item: updated });
+      return NextResponse.json({
+        success: true,
+        item: resultItem,
+        splitFromItemId: id,
+        remainderQuantity: lineQty - moveQty,
+      });
     }
     case 'return': {
       const fromStaffId = item.assignedToId;
@@ -278,7 +358,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         fromStaffId,
         toStaffId: null,
         actorId: guard.requesterId,
-        quantity,
+        quantity: bodyQuantity,
         note,
       });
       return NextResponse.json({ success: true, item: updated });
@@ -331,7 +411,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         fromStaffId: previousHolderId,
         ticketId,
         actorId: guard.requesterId,
-        quantity,
+        quantity: bodyQuantity,
         note,
       });
       const ticketLabel =
@@ -362,7 +442,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         type: action === 'damage' ? 'DAMAGED' : 'LOST',
         fromStaffId: item.assignedToId,
         actorId: guard.requesterId,
-        quantity,
+        quantity: bodyQuantity,
         note,
       });
       return NextResponse.json({ success: true, item: updated });

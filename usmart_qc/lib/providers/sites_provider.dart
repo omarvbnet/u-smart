@@ -92,6 +92,18 @@ class SitesProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Bulk import (POST `/api/sites` with `{ sites: [...] }`). Each row needs
+  /// `siteId` (or `name` in source maps), `latitude`, `longitude`; optional `location`, `province`.
+  Future<Map<String, dynamic>?> bulkImportSites(
+      List<Map<String, dynamic>> sites) async {
+    try {
+      final data = await _api.post(ApiConfig.sites, body: {'sites': sites});
+      return data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Shares an owned site with another requester by username or email (server validates).
   Future<String?> shareSite(String siteDbId, String usernameOrEmail,
       {bool includeTickets = true}) async {

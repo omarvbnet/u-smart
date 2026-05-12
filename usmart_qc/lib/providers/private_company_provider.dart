@@ -78,6 +78,16 @@ class PrivateCompanyProvider extends ChangeNotifier {
   /// Only the workspace owner can broadcast workspace announcements.
   bool get canBroadcastNotifications => isOwner;
 
+  /// Owner: full workspace export. Manager / coordinator: department-scoped export.
+  bool get canExportWorkspaceData {
+    if (!hasWorkspace || !isApproved) return false;
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole;
+    if (role != 'MANAGER' && role != 'COORDINATOR') return false;
+    return myDepartmentId != null && myDepartmentId!.isNotEmpty;
+  }
+
   /// Owner or [WAREHOUSE_KEEPER] — can stock inventory, import Excel, assign items.
   bool get canManageWarehouse {
     if (isOwner) return true;
@@ -151,6 +161,15 @@ class PrivateCompanyProvider extends ChangeNotifier {
     _error = null;
     _lastSuccess = null;
     notifyListeners();
+  }
+
+  Future<List<int>?> downloadWorkspaceExport({int days = 365}) async {
+    if (!canExportWorkspaceData) return null;
+    final d = days.clamp(7, 730);
+    return _api.getBytes(
+      ApiConfig.privateCompanyExport,
+      query: {'days': '$d'},
+    );
   }
 
   Future<void> fetchKpis({int days = 365}) async {
