@@ -90,7 +90,12 @@ export async function POST(
     parsed.resubmitReason = reason;
     await prisma.visitorRequest.update({
       where: { id },
-      data: { company: JSON.stringify(parsed) },
+      data: {
+        company: JSON.stringify(parsed),
+        workflowState: 'RESUBMITTED',
+        resubmittedAt: new Date(),
+        resubmitReason: reason,
+      },
     });
     return NextResponse.json({ success: true, message: 'Ticket resubmitted for edits.' });
   } catch (err) {

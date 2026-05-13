@@ -80,6 +80,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       // Load comments & evidence for both company and engineer (both can view/reply/upload)
       _loadCommentsAndEvidence();
       if (_isEngineer) _loadChecklists();
+      context.read<SitesProvider>().fetchSites();
     }
   }
 
@@ -658,6 +659,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     try {
       for (final s in context.read<SitesProvider>().sites) {
         if (s.siteId == t!.siteName) return s.updatedAt;
+        if (t.siteName!.trim().isNotEmpty &&
+            s.location.trim() == t.siteName!.trim()) {
+          return s.updatedAt;
+        }
       }
     } catch (_) {}
     return null;
@@ -669,13 +674,27 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return t.ncrResubmissions.last.action == 'approved';
   }
 
-  /// Site coordinates for ticket's site (from SitesProvider lookup)
-  ({double lat, double lng})? get _siteCoordinates {
+  /// Site coordinates: server-provided first, then SitesProvider (siteId or location match).
+  ({double lat, double lng})? get _effectiveSiteCoordinates {
+    final t = _ticket;
+    if (t == null) return null;
+    if (t.siteLatitude != null && t.siteLongitude != null) {
+      return (lat: t.siteLatitude!, lng: t.siteLongitude!);
+    }
+    return _siteCoordinatesFromProvider;
+  }
+
+  ({double lat, double lng})? get _siteCoordinatesFromProvider {
     final t = _ticket;
     if (t?.siteName == null) return null;
     try {
       for (final s in context.read<SitesProvider>().sites) {
         if (s.siteId == t!.siteName && s.hasCoordinates) {
+          return (lat: s.latitude!, lng: s.longitude!);
+        }
+        if (t.siteName!.trim().isNotEmpty &&
+            s.location.trim() == t.siteName!.trim() &&
+            s.hasCoordinates) {
           return (lat: s.latitude!, lng: s.longitude!);
         }
       }
@@ -699,11 +718,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     double lng,
     AppLocalizations l10n,
   ) async {
-    final uri = Uri.parse(
-      'https://waze.com/ul?ll=${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}&navigate=yes',
-    );
+    final ll = '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
+    final appUri = Uri.parse('waze://?ll=$ll&navigate=yes');
+    final webUri = Uri.parse('https://waze.com/ul?ll=$ll&navigate=yes');
     try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (await canLaunchUrl(appUri)) {
+        final ok = await launchUrl(appUri, mode: LaunchMode.externalApplication);
+        if (ok) return;
+      }
+    } catch (_) {}
+    try {
+      final ok = await launchUrl(webUri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.t('site_navigate_failed'))),
@@ -716,6 +741,86 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         );
       }
     }
+  }
+
+  List<Widget> _attachedChecklistSection(Ticket t, AppLocalizations l10n) {
+    final tid = t.checklistTemplateId;
+    final preview = t.checklistTemplate;
+    if (preview == null && (tid == null || tid.isEmpty)) return [];
+
+    final name = preview?['name'] as String?;
+    final rawItems = preview?['items'];
+
+    return [
+      const SizedBox(height: 16),
+      _glassSection(l10n.t('ticket_attached_checklist'), [
+        if (name != null && name.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              name.trim(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else if (tid != null && tid.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              l10n.t('ticket_checklist_template_unavailable', {'id': tid}),
+              style: TextStyle(
+                color: Colors.white.withAlpha(160),
+                fontSize: 13,
+              ),
+            ),
+          ),
+        if (rawItems is List && rawItems.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              l10n.t('ticket_checklist_items_count', {'count': '${rawItems.length}'}),
+              style: TextStyle(
+                color: Colors.white.withAlpha(100),
+                fontSize: 12,
+              ),
+            ),
+          ),
+          ...rawItems.map((raw) {
+            if (raw is! Map) return const SizedBox.shrink();
+            final m = Map<String, dynamic>.from(raw);
+            final label = m['label'] as String? ?? '';
+            if (label.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.radio_button_unchecked_rounded,
+                    size: 16,
+                    color: Colors.white.withAlpha(120),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(200),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+        ],
+      ]),
+    ];
   }
 
   List<Widget> _buildContent() {
@@ -782,64 +887,59 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           _row(l10n.t('inspection_time'), _formatInspectionHoursDisplay(t.inspectionHours!, l10n)),
         if (siteUpdated != null)
           _row(l10n.t('site_last_updated'), _formatDateShort(siteUpdated)),
-        if (_siteCoordinates != null) ...[
-          if (isMyTicket && (isEngineer || _isTechnician))
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 110,
-                    child: Text(
-                      l10n.t('site_coordinates'),
-                      style: TextStyle(
-                        color: Colors.white.withAlpha(80),
-                        fontSize: 13,
-                      ),
+        if (_effectiveSiteCoordinates != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: Text(
+                    l10n.t('site_coordinates'),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(80),
+                      fontSize: 13,
                     ),
                   ),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _openWazeToSite(
-                        _siteCoordinates!.lat,
-                        _siteCoordinates!.lng,
-                        l10n,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${_siteCoordinates!.lat.toStringAsFixed(6)}, ${_siteCoordinates!.lng.toStringAsFixed(6)}',
-                              style: const TextStyle(
-                                color: Color(0xFF00D4AA),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                decoration: TextDecoration.underline,
-                                decorationColor: Color(0xFF00D4AA),
-                              ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _openWazeToSite(
+                      _effectiveSiteCoordinates!.lat,
+                      _effectiveSiteCoordinates!.lng,
+                      l10n,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${_effectiveSiteCoordinates!.lat.toStringAsFixed(6)}, ${_effectiveSiteCoordinates!.lng.toStringAsFixed(6)}',
+                            style: const TextStyle(
+                              color: Color(0xFF00D4AA),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                              decorationColor: Color(0xFF00D4AA),
                             ),
                           ),
-                          const Icon(
-                            Icons.navigation_rounded,
-                            color: Color(0xFF00D4AA),
-                            size: 20,
-                          ),
-                        ],
-                      ),
+                        ),
+                        const Icon(
+                          Icons.navigation_rounded,
+                          color: Color(0xFF00D4AA),
+                          size: 20,
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            )
-          else
-            _row(
-              l10n.t('site_coordinates'),
-              '${_siteCoordinates!.lat.toStringAsFixed(6)}, ${_siteCoordinates!.lng.toStringAsFixed(6)}',
+                ),
+              ],
             ),
-        ],
+          ),
       ]),
+
+      ..._attachedChecklistSection(t, l10n),
 
       // Requester / POC
       if (t.requesterName != null || t.requesterPhone != null) ...[
@@ -1195,6 +1295,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             templates: _checklists,
             loading: _loadingChecklists,
             onComplete: _completeWithChecklist,
+            initialTemplateId: t.checklistTemplateId,
           ),
         ),
       ],

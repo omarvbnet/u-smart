@@ -24,14 +24,6 @@ const CHECKLIST_EDITOR_ROLES = new Set([
   'COMPANY',
 ]);
 
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-}
-
 async function ensureLegacyRequesterCompany(requesterId: string): Promise<string | null> {
   const requester = await prisma.ticketRequester.findUnique({
     where: { id: requesterId },
@@ -67,25 +59,57 @@ async function ensureLegacyRequesterCompany(requesterId: string): Promise<string
     (typeof requester.name === 'string' && requester.name.trim()) ||
     requester.username ||
     `Company ${requester.id.slice(-6)}`;
-  const slugBase = slugify(companyName) || `company-${requester.id.slice(-6).toLowerCase()}`;
+  /** One slug per requester — avoids collisions and orphan companies on retry. */
+  const deterministicSlug = `lc-${requester.id}`.replace(/[^a-z0-9-]/gi, '-').slice(0, 48);
+
+  const existingBySlug = await prisma.coordinatorCompany.findUnique({
+    where: { slug: deterministicSlug },
+    select: { id: true },
+  });
+  if (existingBySlug?.id) {
+    const hasOwner = await prisma.coordinatorUser.findFirst({
+      where: { companyId: existingBySlug.id },
+      select: { id: true },
+    });
+    if (hasOwner) return existingBySlug.id;
+    const ownerUsername = `owner${requester.id.replace(/[^a-z0-9]/gi, '').slice(0, 10)}${Math.floor(100 + Math.random() * 900)}`;
+    const ownerEmail =
+      (typeof requester.email === 'string' && requester.email.trim().toLowerCase()) ||
+      `${ownerUsername}@legacy-company.local`;
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10);
+    await prisma.coordinatorUser.create({
+      data: {
+        username: ownerUsername,
+        email: ownerEmail,
+        name: requester.name ?? companyName,
+        passwordHash,
+        role: 'COMPANY_OWNER',
+        status: 'ACTIVE',
+        mustChangePassword: true,
+        companyId: existingBySlug.id,
+      },
+      select: { id: true },
+    });
+    return existingBySlug.id;
+  }
 
   let companyId: string | null = null;
-  for (let i = 0; i < 10; i++) {
-    const slug = i === 0 ? slugBase : `${slugBase}-${Math.floor(100 + Math.random() * 900)}`;
-    try {
-      const created = await prisma.coordinatorCompany.create({
-        data: { name: companyName, slug },
-        select: { id: true },
-      });
-      companyId = created.id;
-      break;
-    } catch {
-      // retry on slug collision
-    }
+  try {
+    const created = await prisma.coordinatorCompany.create({
+      data: { name: companyName, slug: deterministicSlug },
+      select: { id: true },
+    });
+    companyId = created.id;
+  } catch {
+    const fallback = await prisma.coordinatorCompany.findUnique({
+      where: { slug: deterministicSlug },
+      select: { id: true },
+    });
+    companyId = fallback?.id ?? null;
   }
   if (!companyId) return null;
 
-  const ownerUsername = `${slugBase.replace(/-/g, '').slice(0, 12) || 'owner'}${Math.floor(100 + Math.random() * 900)}`;
+  const ownerUsername = `owner${requester.id.replace(/[^a-z0-9]/gi, '').slice(0, 10)}${Math.floor(100 + Math.random() * 900)}`;
   const ownerEmail =
     (typeof requester.email === 'string' && requester.email.trim().toLowerCase()) ||
     `${ownerUsername}@legacy-company.local`;

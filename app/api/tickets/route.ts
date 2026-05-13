@@ -12,6 +12,10 @@ import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib
 import { hasPrivilege } from '@/lib/coordinator-access';
 import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
+import {
+  deriveSpecializationTagsFromTechnique,
+  normalizeSpecializationTags,
+} from '@/lib/technique-specialization-tags';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -720,6 +724,10 @@ export async function POST(req: NextRequest) {
     const maintenanceReason = typeof body.maintenanceReason === 'string' ? body.maintenanceReason.trim() : '';
     const beforeImageUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
 
+    const explicitSpecTags = normalizeSpecializationTags(body.specializationTags);
+    const specializationTags =
+      explicitSpecTags.length > 0 ? explicitSpecTags : deriveSpecializationTagsFromTechnique(technique);
+
     const companyPayloadObj: Record<string, unknown> = {
       _ticket: 1,
       siteName,
@@ -781,6 +789,7 @@ export async function POST(req: NextRequest) {
       coordinatorCompanyId?: string;
       createdByCoordinatorUserId?: string;
       assigneeCoordinatorUserId?: string;
+      specializationTags?: string[];
     } = {
       buildingType: 'n/a',
       phone,
@@ -790,6 +799,7 @@ export async function POST(req: NextRequest) {
       company: companyPayload,
       serviceSlug,
       siteName, // so GET /api/sites can count tickets by site
+      specializationTags,
     };
 
     if (payload) {
@@ -844,6 +854,7 @@ export async function POST(req: NextRequest) {
           'assigneeCoordinatorUserId',
           'coordinatorCompanyId',
           'createdByCoordinatorUserId',
+          'specializationTags',
         ]) {
           if (key in fallbackData) {
             droppedKeys.push(key);
@@ -1185,6 +1196,7 @@ export async function GET(req: NextRequest) {
         provinceFilterActive: true,
         privateCompanyId: true,
         privateCompanyOwned: { select: { id: true, status: true } },
+        specialization: true,
       },
     });
     if (!requester) {
@@ -1197,6 +1209,7 @@ export async function GET(req: NextRequest) {
     const requesterRole = (requester as { role?: string }).role ?? 'COMPANY';
     const requesterProvince = (requester as { province?: string | null }).province ?? null;
     const provinceFilterActive = (requester as { provinceFilterActive?: boolean }).provinceFilterActive ?? true;
+    const requesterSpecialization = (requester as { specialization?: string | null }).specialization ?? null;
 
     // Private-company workspace: when the requester is the owner of an APPROVED workspace OR
     // a staff member, their ticket view is widened to every member of that workspace.
@@ -1253,26 +1266,47 @@ export async function GET(req: NextRequest) {
 
     if (requesterRole === 'ENGINEER') {
       // Engineers see ONLY QC tickets (inspection, supervision, etc.). Maintenance tickets are for Technicians and Admin only.
-      const pendingFilter: any = { status: 'PENDING' };
+      const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
       if (provinceFilterActive && requesterProvince) {
         pendingFilter.province = requesterProvince;
+      }
+      const engineerAnd: Record<string, unknown>[] = [
+        {
+          OR: [pendingFilter, { company: { contains: payload.requesterId } }],
+        },
+        privateCompanyTicketScope,
+      ];
+      if (requesterSpecialization) {
+        engineerAnd.push({
+          OR: [{ specializationTags: { equals: [] } }, { specializationTags: { has: requesterSpecialization } }],
+        });
       }
       where = {
         serviceSlug: filterServiceSlug,
         technique: { notIn: MAINTENANCE_TECHNIQUES },
-        AND: [
-          {
-            OR: [pendingFilter, { company: { contains: payload.requesterId } }],
-          },
-          privateCompanyTicketScope,
-        ],
+        AND: engineerAnd,
       };
     } else if (requesterRole === 'TECHNICIAN') {
-      // Technicians see ONLY maintenance tickets
+      // Technicians see ONLY maintenance tickets (province pool matches engineer rules when filter is on).
+      const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
+      if (provinceFilterActive && requesterProvince) {
+        pendingFilter.province = requesterProvince;
+      }
+      const technicianAnd: Record<string, unknown>[] = [
+        {
+          OR: [pendingFilter, { company: { contains: payload.requesterId } }],
+        },
+        privateCompanyTicketScope,
+      ];
+      if (requesterSpecialization) {
+        technicianAnd.push({
+          OR: [{ specializationTags: { equals: [] } }, { specializationTags: { has: requesterSpecialization } }],
+        });
+      }
       where = {
         serviceSlug: filterServiceSlug,
         technique: { in: MAINTENANCE_TECHNIQUES },
-        AND: [privateCompanyTicketScope],
+        AND: technicianAnd,
       };
     } else if (requesterRole === 'WORKER') {
       // Workers see ONLY tickets assigned to them by admin (assignedEngineerId in company JSON)

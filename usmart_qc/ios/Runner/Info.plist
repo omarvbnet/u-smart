@@ -63,6 +63,10 @@
 		</dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>waze</string>
+		</array>
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>

@@ -489,6 +489,10 @@ const Map<String, String> _en = {
   'site_import_done': 'Imported {{created}} sites ({{skipped}} skipped)',
   'site_import_failed': 'Import failed',
   'site_navigate_failed': 'Could not open navigation app',
+  'ticket_attached_checklist': 'Checklist for this ticket',
+  'ticket_checklist_items_count': '{{count}} checklist items',
+  'ticket_checklist_template_unavailable':
+      'Checklist template unavailable (id: {{id}}). It may have been removed.',
   'pc_ws_export_data': 'Export workspace (JSON)',
   'pc_ws_export_failed': 'Export failed',
   'pc_ws_export_shared': 'Export ready — pick an app to save or share',
@@ -1009,6 +1013,10 @@ const Map<String, String> _ar = {
   'site_import_done': 'تم استيراد {{created}} موقعاً (تم تخطي {{skipped}})',
   'site_import_failed': 'فشل الاستيراد',
   'site_navigate_failed': 'تعذر فتح تطبيق الملاحة',
+  'ticket_attached_checklist': 'قائمة التحقق لهذا التذكرة',
+  'ticket_checklist_items_count': '{{count}} عناصر قائمة التحقق',
+  'ticket_checklist_template_unavailable':
+      'قالب قائمة التحقق غير متاح (المعرّف: {{id}}). ربما تمت إزالته.',
   'pc_ws_export_data': 'تصدير مساحة العمل (JSON)',
   'pc_ws_export_failed': 'فشل التصدير',
   'pc_ws_export_shared': 'التصدير جاهز — اختر تطبيقاً للحفظ أو المشاركة',
@@ -1531,6 +1539,10 @@ const Map<String, String> _ku = {
   'site_import_done': '{{created}} شوێن هاوردە کرا ({{skipped}} پشتگوێخرا)',
   'site_import_failed': 'هاوردەکردن سەرکەوتوو نەبوو',
   'site_navigate_failed': 'نەتوانرا ئەپەکەی ڕێنیشاندەر بکرێتەوە',
+  'ticket_attached_checklist': 'لیستی پشکنین بۆ ئەم تیکەتە',
+  'ticket_checklist_items_count': '{{count}} بڕگەی لیستی پشکنین',
+  'ticket_checklist_template_unavailable':
+      'قاڵبی لیستی پشکنین بەردەست نییە (ناسنامە: {{id}}). لەوانەیە سڕاوەتەوە.',
   'pc_ws_export_data': 'هەناردەکردنی شوێنی کار (JSON)',
   'pc_ws_export_failed': 'هەناردەکردن سەرکەوتوو نەبوو',
   'pc_ws_export_shared': 'هەناردەکردن ئامادەیە — ئەپێک هەڵبژێرە بۆ پاشەکەوت یان هاوبەشکردن',
@@ -2054,6 +2066,10 @@ const Map<String, String> _tr = {
   'site_import_done': '{{created}} site içe aktarıldı ({{skipped}} atlandı)',
   'site_import_failed': 'İçe aktarma başarısız',
   'site_navigate_failed': 'Navigasyon uygulaması açılamadı',
+  'ticket_attached_checklist': 'Bu talep için kontrol listesi',
+  'ticket_checklist_items_count': '{{count}} kontrol maddesi',
+  'ticket_checklist_template_unavailable':
+      'Kontrol listesi şablonu bulunamadı (kimlik: {{id}}). Kaldırılmış olabilir.',
   'pc_ws_export_data': 'Çalışma alanını dışa aktar (JSON)',
   'pc_ws_export_failed': 'Dışa aktarma başarısız',
   'pc_ws_export_shared': 'Dışa aktarma hazır — kaydetmek veya paylaşmak için bir uygulama seçin',

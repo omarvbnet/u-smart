@@ -115,6 +115,13 @@ class Ticket {
   final String? resubmitReason;
   /// category of the coordinator task (MAINTENANCE | QUALITY | SUPERVISION)
   final String? taskCategory;
+  /// DB / company JSON: inspection checklist template id for this ticket.
+  final String? checklistTemplateId;
+  /// API-resolved template `{ id, name, items: [{id,label,weight}, ...] }` for display.
+  final Map<String, dynamic>? checklistTemplate;
+  /// Site coordinates from server (Sites table), when available.
+  final double? siteLatitude;
+  final double? siteLongitude;
 
   Ticket({
     required this.id,
@@ -154,6 +161,10 @@ class Ticket {
     this.workflowState,
     this.resubmitReason,
     this.taskCategory,
+    this.checklistTemplateId,
+    this.checklistTemplate,
+    this.siteLatitude,
+    this.siteLongitude,
   });
 
   bool get isPending => status == 'PENDING';
@@ -261,6 +272,12 @@ class Ticket {
       workflowState: json['workflowState'] as String?,
       resubmitReason: json['resubmitReason'] as String?,
       taskCategory: json['taskCategory'] as String?,
+      checklistTemplateId: json['checklistTemplateId'] as String?,
+      checklistTemplate: json['checklistTemplate'] is Map
+          ? Map<String, dynamic>.from(json['checklistTemplate'] as Map)
+          : null,
+      siteLatitude: (json['siteLatitude'] as num?)?.toDouble(),
+      siteLongitude: (json['siteLongitude'] as num?)?.toDouble(),
     );
   }
 

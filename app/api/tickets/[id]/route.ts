@@ -3,6 +3,7 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { viewerHasSharedSiteTicketRead, visitorRequestSiteLogicalId } from '@/lib/site-share-access';
+import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates } from '@/lib/ticket-detail-enrichment';
 
 const prisma = _prisma as any;
 
@@ -60,6 +61,7 @@ export async function GET(
       let siteCoordinator: string | null = null;
       let slaHours: number | null = null;
       let status = row.status ?? 'PENDING';
+      let embeddedChecklistTemplateId: string | null = null;
       try {
         const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
         if (parsed._ticket) {
@@ -67,10 +69,19 @@ export async function GET(
           siteCoordinator = parsed.siteCoordinator ?? null;
           slaHours = parsed.slaHours ?? null;
           if (parsed.status) status = String(parsed.status);
+          if (typeof parsed.checklistTemplateId === 'string' && parsed.checklistTemplateId.trim()) {
+            embeddedChecklistTemplateId = parsed.checklistTemplateId.trim();
+          }
         }
       } catch {
         /* ignore */
       }
+
+      const effectiveTemplateId = row.checklistTemplateId ?? embeddedChecklistTemplateId;
+      const [siteCoords, checklistTpl] = await Promise.all([
+        resolveTicketSiteCoordinates(prisma, siteName, row.requesterId ?? null),
+        resolveInspectionChecklistTemplate(prisma, effectiveTemplateId),
+      ]);
 
       return NextResponse.json({
         success: true,
@@ -87,7 +98,9 @@ export async function GET(
           roleScope: row.roleScope ?? null,
           workflowState: row.workflowState ?? 'OPEN',
           assignmentScope: row.assignmentScope ?? null,
-          checklistTemplateId: row.checklistTemplateId ?? null,
+          checklistTemplateId: checklistTpl.checklistTemplateId ?? row.checklistTemplateId ?? null,
+          checklistTemplate: checklistTpl.checklistTemplate,
+          ...siteCoords,
           assigneeCoordinatorUserId: row.assigneeCoordinatorUserId ?? null,
           coordinatorCompanyId: row.coordinatorCompanyId ?? null,
           resubmitReason: row.resubmitReason ?? null,
@@ -141,6 +154,7 @@ export async function GET(
           createdAt: true,
           completedAt: true,
           requesterId: true,
+          checklistTemplateId: true,
           requester: {
             select: { name: true, phone: true, role: true, username: true },
           },
@@ -167,6 +181,8 @@ export async function GET(
           status: true,
           createdAt: true,
           completedAt: true,
+          requesterId: true,
+          checklistTemplateId: true,
         },
       });
     }
@@ -201,6 +217,7 @@ export async function GET(
               createdAt: true,
               completedAt: true,
               requesterId: true,
+              checklistTemplateId: true,
               requester: {
                 select: { name: true, phone: true, role: true, username: true },
               },
@@ -227,6 +244,8 @@ export async function GET(
               status: true,
               createdAt: true,
               completedAt: true,
+              requesterId: true,
+              checklistTemplateId: true,
             },
           });
         }
@@ -272,12 +291,16 @@ export async function GET(
     let assignedEngineerId: string | null = null;
     let assignedEngineerName: string | null = null;
     let assignedAt: string | null = null;
+    let embeddedChecklistTemplateId: string | null = null;
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
         siteName = parsed.siteName ?? null;
         siteCoordinator = parsed.siteCoordinator ?? null;
         slaHours = parsed.slaHours ?? null;
+        if (typeof parsed.checklistTemplateId === 'string' && parsed.checklistTemplateId.trim()) {
+          embeddedChecklistTemplateId = parsed.checklistTemplateId.trim();
+        }
         if (parsed.status) status = String(parsed.status);
         if (parsed.completedAt) completedAt = String(parsed.completedAt);
         designSpecifications = (parsed.designSpecifications as string) ?? null;
@@ -364,6 +387,17 @@ export async function GET(
       } catch { return null; }
     })();
 
+    const dbChecklistTemplateId =
+      typeof (row as { checklistTemplateId?: string | null }).checklistTemplateId === 'string'
+        ? (row as { checklistTemplateId: string }).checklistTemplateId
+        : null;
+    const effectiveTemplateId = dbChecklistTemplateId ?? embeddedChecklistTemplateId;
+    const siteOwnerId = (row as { requesterId?: string | null }).requesterId ?? null;
+    const [siteCoords, checklistTpl] = await Promise.all([
+      resolveTicketSiteCoordinates(prisma, siteName, siteOwnerId),
+      resolveInspectionChecklistTemplate(prisma, effectiveTemplateId),
+    ]);
+
     return NextResponse.json({
       success: true,
       ticket: {
@@ -404,6 +438,9 @@ export async function GET(
         conflictReportComment,
         conflictReportedAt,
         conflictResolvedAt,
+        checklistTemplateId: checklistTpl.checklistTemplateId ?? effectiveTemplateId,
+        checklistTemplate: checklistTpl.checklistTemplate,
+        ...siteCoords,
       },
     });
   } catch (err) {

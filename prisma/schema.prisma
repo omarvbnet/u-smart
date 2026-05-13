@@ -271,6 +271,7 @@ model VisitorRequest {
   checklistResponse              Json? // { checklistId, checklistName, items: [{id, label, checked, note?}], completedAt }
   requesterId                    String?
   requester                      TicketRequester?         @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+  specializationTags             String[]                 @default([])
   statusLogs                     TicketStatusLog[]
   comments                       TicketComment[]
   evidence                       TicketEvidence[]

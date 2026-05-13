@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../l10n/app_localizations.dart';
 import '../models/inspection_checklist.dart';
 
@@ -34,12 +35,15 @@ class ChecklistWidget extends StatefulWidget {
   final List<InspectionChecklist> templates;
   final bool loading;
   final void Function(Map<String, dynamic> response) onComplete;
+  /// When set, auto-select this template once [templates] are loaded (e.g. ticket’s attached checklist).
+  final String? initialTemplateId;
 
   const ChecklistWidget({
     super.key,
     required this.templates,
     required this.loading,
     required this.onComplete,
+    this.initialTemplateId,
   });
 
   @override
@@ -49,6 +53,36 @@ class ChecklistWidget extends StatefulWidget {
 class _ChecklistWidgetState extends State<ChecklistWidget> {
   InspectionChecklist? _selected;
   List<ChecklistResponseItem> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _applyInitialTemplateIfNeeded();
+    });
+  }
+
+  @override
+  void didUpdateWidget(ChecklistWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTemplateId != oldWidget.initialTemplateId ||
+        widget.templates != oldWidget.templates) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _applyInitialTemplateIfNeeded();
+      });
+    }
+  }
+
+  void _applyInitialTemplateIfNeeded() {
+    final id = widget.initialTemplateId;
+    if (id == null || id.isEmpty || _selected != null) return;
+    for (final t in widget.templates) {
+      if (t.id == id) {
+        _selectChecklist(t);
+        return;
+      }
+    }
+  }
 
   void _selectChecklist(InspectionChecklist checklist) {
     setState(() {
