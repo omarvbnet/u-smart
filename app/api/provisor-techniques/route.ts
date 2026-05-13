@@ -117,7 +117,7 @@ function workspaceTechniqueWhereClause(
 
 /** Authenticated Provisor / web QC dashboard: list techniques for forms. */
 export async function GET(_req: NextRequest) {
-  const auth = getRequesterFromRequest(req);
+  const auth = getRequesterFromRequest(_req);
   if (!auth) {
     return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
   }
