@@ -69,6 +69,9 @@ class ApiConfig {
       '/api/tickets/$ticketId/request-edit';
 
   static const String inspectionChecklists = '/api/inspection-checklists';
+  static String inspectionChecklistDetail(String id) => '/api/inspection-checklists/$id';
+  static String ticketChecklistTemplate(String ticketId) =>
+      '/api/tickets/$ticketId/checklist-template';
   static const String uploadTicketAttachment = '/api/upload/ticket-attachment';
 
   static const String conflicts = '/api/conflicts';

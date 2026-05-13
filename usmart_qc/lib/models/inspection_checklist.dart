@@ -18,11 +18,15 @@ class InspectionChecklist {
   final String id;
   final String name;
   final List<ChecklistItem> items;
+  final bool archived;
+  final String? createdByRequesterId;
 
   InspectionChecklist({
     required this.id,
     required this.name,
     required this.items,
+    this.archived = false,
+    this.createdByRequesterId,
   });
 
   factory InspectionChecklist.fromJson(Map<String, dynamic> json) {
@@ -37,6 +41,8 @@ class InspectionChecklist {
       id: json['id'] as String,
       name: json['name'] as String,
       items: items,
+      archived: json['archived'] == true,
+      createdByRequesterId: json['createdByRequesterId'] as String?,
     );
   }
 }

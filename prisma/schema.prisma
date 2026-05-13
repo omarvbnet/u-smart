@@ -667,16 +667,22 @@ enum ContactStatus {
 
 // Inspection checklist templates (admin-generated, used in QC tickets)
 model InspectionChecklist {
-  id             String                @id @default(cuid())
-  name           String // e.g. "Site Safety Inspection"
-  items          Json // [{ "id": "uuid", "label": "Item 1" }, ...]
-  companyId      String?
-  company        CoordinatorCompany?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  taskCategory   ProviderTaskCategory?
-  techniqueTypes String[]              @default([])
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id                     String                @id @default(cuid())
+  name                   String // e.g. "Site Safety Inspection"
+  items                  Json // [{ "id": "uuid", "label": "Item 1" }, ...]
+  companyId              String?
+  company                  CoordinatorCompany?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskCategory             ProviderTaskCategory?
+  techniqueTypes           String[]              @default([])
+  /// When true, hidden from default template pickers; engineer can unarchive for reuse.
+  archived                 Boolean               @default(false)
+  /// TicketRequester id when an ENGINEER created this template from the field app.
+  createdByRequesterId     String?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
 
+  @@index([createdByRequesterId])
+  @@index([archived])
   @@map("inspection_checklists")
 }
 

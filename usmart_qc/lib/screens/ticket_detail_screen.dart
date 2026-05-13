@@ -43,9 +43,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   List<TicketComment> _comments = [];
   List<TicketEvidence> _evidence = [];
   List<InspectionChecklist> _checklists = [];
+  List<InspectionChecklist> _archivedChecklists = [];
   bool _loadingComments = false;
   bool _loadingEvidence = false;
   bool _loadingChecklists = false;
+  bool _loadingArchivedChecklists = false;
+  String? _attachTemplateChoice;
   bool _uploading = false;
   bool _completingMaintenance = false;
 
@@ -79,7 +82,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       });
       // Load comments & evidence for both company and engineer (both can view/reply/upload)
       _loadCommentsAndEvidence();
-      if (_isEngineer) _loadChecklists();
+      if (_isEngineer && t != null) {
+        _attachTemplateChoice = t.checklistTemplateId;
+        _loadChecklistsForTicket(t);
+        _loadArchivedChecklists();
+      }
       context.read<SitesProvider>().fetchSites();
     }
   }
@@ -104,16 +111,290 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  Future<void> _loadChecklists() async {
+  Future<void> _loadChecklistsForTicket(Ticket t) async {
     final provider = context.read<TicketsProvider>();
     setState(() => _loadingChecklists = true);
-    final checklists = await provider.fetchChecklists();
+    final checklists = await provider.fetchChecklists(technique: t.technique);
     if (mounted) {
       setState(() {
         _checklists = checklists;
         _loadingChecklists = false;
       });
     }
+  }
+
+  Future<void> _loadArchivedChecklists() async {
+    final provider = context.read<TicketsProvider>();
+    setState(() => _loadingArchivedChecklists = true);
+    final list = await provider.fetchChecklists(archiveScope: 'mine');
+    if (mounted) {
+      setState(() {
+        _archivedChecklists = list;
+        _loadingArchivedChecklists = false;
+      });
+    }
+  }
+
+  Future<void> _applyChecklistTemplateToTicket(Ticket t, AppLocalizations l10n) async {
+    final id = (_attachTemplateChoice ?? t.checklistTemplateId)?.trim();
+    if (id == null || id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('engineer_cl_apply_failed'))),
+      );
+      return;
+    }
+    final ok = await context.read<TicketsProvider>().setTicketChecklistTemplate(t.id, id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? l10n.t('site_save') : l10n.t('engineer_cl_apply_failed')),
+        backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+      ),
+    );
+    if (ok) await _load();
+  }
+
+  Future<void> _archiveTemplate(InspectionChecklist c, AppLocalizations l10n) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(l10n.t('engineer_cl_archive'), style: const TextStyle(color: Colors.white)),
+        content: Text(l10n.t('engineer_cl_archive_confirm'),
+            style: TextStyle(color: Colors.white.withAlpha(200))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.t('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.t('engineer_cl_archive'))),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final ok = await context.read<TicketsProvider>().updateInspectionChecklist(c.id, archived: true);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? l10n.t('site_save') : l10n.t('engineer_cl_create_failed'))),
+    );
+    if (ok) {
+      if (_ticket != null) await _loadChecklistsForTicket(_ticket!);
+      await _loadArchivedChecklists();
+    }
+  }
+
+  Future<void> _unarchiveTemplate(InspectionChecklist c, AppLocalizations l10n) async {
+    final ok = await context.read<TicketsProvider>().updateInspectionChecklist(c.id, archived: false);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? l10n.t('site_save') : l10n.t('engineer_cl_create_failed'))),
+    );
+    if (ok) {
+      if (_ticket != null) await _loadChecklistsForTicket(_ticket!);
+      await _loadArchivedChecklists();
+    }
+  }
+
+  Future<void> _showCreateChecklistDialog(Ticket t, AppLocalizations l10n) async {
+    final nameCtrl = TextEditingController();
+    final itemsCtrl = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(l10n.t('engineer_cl_create'), style: const TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: l10n.t('engineer_cl_name'),
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(180)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: itemsCtrl,
+                minLines: 4,
+                maxLines: 10,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: l10n.t('engineer_cl_items_hint'),
+                  alignLabelWithHint: true,
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(180)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('site_save')),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final name = nameCtrl.text.trim();
+    final lines = itemsCtrl.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    if (name.isEmpty || lines.isEmpty) return;
+    final items = <Map<String, dynamic>>[];
+    for (var i = 0; i < lines.length; i++) {
+      items.add({
+        'id': 'item-${DateTime.now().microsecondsSinceEpoch}-$i',
+        'label': lines[i],
+        'weight': 'minor',
+      });
+    }
+    final created = await context.read<TicketsProvider>().createInspectionChecklist(
+      name: name,
+      items: items,
+      techniqueTypes: [t.technique],
+    );
+    if (!mounted) return;
+    if (created == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('engineer_cl_create_failed'))),
+      );
+      return;
+    }
+    final attached = await context.read<TicketsProvider>().setTicketChecklistTemplate(t.id, created.id);
+    if (!mounted) return;
+    if (attached) {
+      await _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('engineer_cl_apply_failed'))),
+      );
+    }
+  }
+
+  List<Widget> _engineerChecklistTemplateControls(Ticket t, AppLocalizations l10n) {
+    final me = context.read<AuthProvider>().user?.id;
+    return [
+      const SizedBox(height: 12),
+      _glassContainer(
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.t('engineer_cl_attach'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(180),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_loadingChecklists)
+                const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)))
+              else ...[
+                Builder(
+                  builder: (ctx) {
+                    final ids = _checklists.map((c) => c.id).toSet();
+                    final chosen = (_attachTemplateChoice ?? t.checklistTemplateId)?.trim();
+                    final dropdownValue =
+                        chosen != null && chosen.isNotEmpty && ids.contains(chosen) ? chosen : null;
+                    return DropdownButtonFormField<String>(
+                      value: dropdownValue,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white.withAlpha(8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      dropdownColor: const Color(0xFF1A1A35),
+                      hint: Text(l10n.t('no_checklist_selected'),
+                          style: TextStyle(color: Colors.white.withAlpha(120))),
+                      items: [
+                        ..._checklists.map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.name, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _attachTemplateChoice = v),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => _applyChecklistTemplateToTicket(t, l10n),
+                        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                        child: Text(l10n.t('engineer_cl_apply')),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton(
+                      onPressed: () => _showCreateChecklistDialog(t, l10n),
+                      child: Text(l10n.t('engineer_cl_create')),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ..._checklists.where((c) => c.createdByRequesterId != null && c.createdByRequesterId == me).map(
+                  (c) => ListTile(
+                    dense: true,
+                    title: Text(c.name, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.archive_outlined, color: Color(0xFF8B83FF), size: 20),
+                      onPressed: () => _archiveTemplate(c, l10n),
+                      tooltip: l10n.t('engineer_cl_archive'),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.white12),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(
+                    l10n.t('engineer_cl_archived'),
+                    style: const TextStyle(color: Color(0xFF00D4AA), fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  children: [
+                    if (_loadingArchivedChecklists)
+                      const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    else if (_archivedChecklists.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          l10n.t('engineer_cl_archived_empty'),
+                          style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12),
+                        ),
+                      )
+                    else
+                      ..._archivedChecklists.map(
+                        (c) => ListTile(
+                          dense: true,
+                          title: Text(c.name, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          trailing: TextButton(
+                            onPressed: () => _unarchiveTemplate(c, l10n),
+                            child: Text(l10n.t('engineer_cl_unarchive')),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
   }
 
   Future<void> _assignToMe() async {
@@ -1289,6 +1570,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           !t.isMaintenance &&
           !t.isCompleted &&
           (!t.isNcr || _isNcrResolved(t))) ...[
+        ..._engineerChecklistTemplateControls(t, l10n),
         const SizedBox(height: 16),
         _glassContainer(
           ChecklistWidget(

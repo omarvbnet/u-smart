@@ -592,9 +592,19 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   // ─── Checklists ───
-  Future<List<InspectionChecklist>> fetchChecklists() async {
+  Future<List<InspectionChecklist>> fetchChecklists({
+    String? technique,
+    String? archiveScope,
+  }) async {
     try {
-      final data = await _api.get(ApiConfig.inspectionChecklists);
+      final query = <String, String>{};
+      if (technique != null && technique.trim().isNotEmpty) {
+        query['technique'] = technique.trim();
+      }
+      if (archiveScope != null && archiveScope.trim().isNotEmpty) {
+        query['archiveScope'] = archiveScope.trim();
+      }
+      final data = await _api.get(ApiConfig.inspectionChecklists, query: query.isEmpty ? null : query);
       if (data['success'] == true && data['checklists'] is List) {
         return (data['checklists'] as List)
             .map((e) =>
@@ -603,6 +613,64 @@ class TicketsProvider extends ChangeNotifier {
       }
     } catch (_) {}
     return [];
+  }
+
+  Future<InspectionChecklist?> createInspectionChecklist({
+    required String name,
+    required List<Map<String, dynamic>> items,
+    List<String>? techniqueTypes,
+  }) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.inspectionChecklists,
+        body: {
+          'name': name,
+          'items': items,
+          if (techniqueTypes != null && techniqueTypes.isNotEmpty)
+            'techniqueTypes': techniqueTypes,
+        },
+      );
+      if (data['success'] == true && data['checklist'] != null) {
+        return InspectionChecklist.fromJson(
+            data['checklist'] as Map<String, dynamic>);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> updateInspectionChecklist(
+    String id, {
+    String? name,
+    List<Map<String, dynamic>>? items,
+    bool? archived,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (name != null) body['name'] = name;
+      if (items != null) body['items'] = items;
+      if (archived != null) body['archived'] = archived;
+      if (body.isEmpty) return false;
+      final data = await _api.patch(
+        ApiConfig.inspectionChecklistDetail(id),
+        body: body,
+      );
+      return data['success'] == true;
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> setTicketChecklistTemplate(
+    String ticketId,
+    String checklistTemplateId,
+  ) async {
+    try {
+      final data = await _api.patch(
+        ApiConfig.ticketChecklistTemplate(ticketId),
+        body: {'checklistTemplateId': checklistTemplateId},
+      );
+      return data['success'] == true;
+    } catch (_) {}
+    return false;
   }
 
   // ─── Complete Ticket ───

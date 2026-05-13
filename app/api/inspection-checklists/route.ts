@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
-import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
 import { hasPrivilege } from '@/lib/coordinator-access';
+import { ensureLegacyRequesterCompany } from '@/lib/ensure-legacy-requester-company';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -24,112 +22,6 @@ const CHECKLIST_EDITOR_ROLES = new Set([
   'COMPANY',
 ]);
 
-async function ensureLegacyRequesterCompany(requesterId: string): Promise<string | null> {
-  const requester = await prisma.ticketRequester.findUnique({
-    where: { id: requesterId },
-    select: { id: true, username: true, email: true, role: true, name: true, company: true },
-  });
-  if (!requester) return null;
-
-  const username = (requester.username ?? '').trim();
-  const email = (typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '');
-  if (username || email) {
-    const existingOwner = await prisma.coordinatorUser.findFirst({
-      where: {
-        OR: [
-          ...(username ? [{ username: { equals: username, mode: 'insensitive' as const } }] : []),
-          ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
-        ],
-      },
-      select: { companyId: true },
-    });
-    if (existingOwner?.companyId) return existingOwner.companyId;
-  }
-
-  const linked = await getLinkedCoordinatorCompanyId(_prisma, {
-    id: requester.id,
-    username: requester.username ?? '',
-    email: requester.email ?? null,
-    role: requester.role ?? null,
-  });
-  if (linked) return linked;
-
-  const companyName =
-    (typeof requester.company === 'string' && requester.company.trim()) ||
-    (typeof requester.name === 'string' && requester.name.trim()) ||
-    requester.username ||
-    `Company ${requester.id.slice(-6)}`;
-  /** One slug per requester — avoids collisions and orphan companies on retry. */
-  const deterministicSlug = `lc-${requester.id}`.replace(/[^a-z0-9-]/gi, '-').slice(0, 48);
-
-  const existingBySlug = await prisma.coordinatorCompany.findUnique({
-    where: { slug: deterministicSlug },
-    select: { id: true },
-  });
-  if (existingBySlug?.id) {
-    const hasOwner = await prisma.coordinatorUser.findFirst({
-      where: { companyId: existingBySlug.id },
-      select: { id: true },
-    });
-    if (hasOwner) return existingBySlug.id;
-    const ownerUsername = `owner${requester.id.replace(/[^a-z0-9]/gi, '').slice(0, 10)}${Math.floor(100 + Math.random() * 900)}`;
-    const ownerEmail =
-      (typeof requester.email === 'string' && requester.email.trim().toLowerCase()) ||
-      `${ownerUsername}@legacy-company.local`;
-    const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10);
-    await prisma.coordinatorUser.create({
-      data: {
-        username: ownerUsername,
-        email: ownerEmail,
-        name: requester.name ?? companyName,
-        passwordHash,
-        role: 'COMPANY_OWNER',
-        status: 'ACTIVE',
-        mustChangePassword: true,
-        companyId: existingBySlug.id,
-      },
-      select: { id: true },
-    });
-    return existingBySlug.id;
-  }
-
-  let companyId: string | null = null;
-  try {
-    const created = await prisma.coordinatorCompany.create({
-      data: { name: companyName, slug: deterministicSlug },
-      select: { id: true },
-    });
-    companyId = created.id;
-  } catch {
-    const fallback = await prisma.coordinatorCompany.findUnique({
-      where: { slug: deterministicSlug },
-      select: { id: true },
-    });
-    companyId = fallback?.id ?? null;
-  }
-  if (!companyId) return null;
-
-  const ownerUsername = `owner${requester.id.replace(/[^a-z0-9]/gi, '').slice(0, 10)}${Math.floor(100 + Math.random() * 900)}`;
-  const ownerEmail =
-    (typeof requester.email === 'string' && requester.email.trim().toLowerCase()) ||
-    `${ownerUsername}@legacy-company.local`;
-  const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10);
-  await prisma.coordinatorUser.create({
-    data: {
-      username: ownerUsername,
-      email: ownerEmail,
-      name: requester.name ?? companyName,
-      passwordHash,
-      role: 'COMPANY_OWNER',
-      status: 'ACTIVE',
-      mustChangePassword: true,
-      companyId,
-    },
-    select: { id: true },
-  });
-  return companyId;
-}
-
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
   if (!auth) {
@@ -141,6 +33,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const taskCategory = searchParams.get('taskCategory')?.trim().toUpperCase() || '';
     const technique = searchParams.get('technique')?.trim().toLowerCase() || '';
+    const archiveScope = searchParams.get('archiveScope')?.trim().toLowerCase() || '';
 
     let companyScopeId: string | null = null;
     if (coordinatorContext) {
@@ -156,11 +49,34 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const where: Record<string, unknown> = {
-      OR: [{ companyId: companyScopeId }, { companyId: null }],
-    };
+    const baseOr: Record<string, unknown>[] = [{ companyId: companyScopeId }, { companyId: null }];
+
+    let where: Record<string, unknown>;
+
+    if (archiveScope === 'mine') {
+      const tr = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { role: true },
+      });
+      const r = (tr?.role ?? '').toUpperCase();
+      const fieldEngineer = r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
+      if (!fieldEngineer) {
+        return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
+      }
+      where = {
+        AND: [
+          { archived: true },
+          { createdByRequesterId: auth.payload.requesterId },
+          { OR: baseOr },
+        ],
+      };
+    } else {
+      where = {
+        AND: [{ archived: false }, { OR: baseOr }],
+      };
+    }
     if (taskCategory) {
-      where.taskCategory = taskCategory;
+      (where.AND as Record<string, unknown>[]).push({ taskCategory });
     }
     const checklists = await prisma.inspectionChecklist.findMany({
       where,
@@ -172,6 +88,8 @@ export async function GET(req: NextRequest) {
         companyId: true,
         taskCategory: true,
         techniqueTypes: true,
+        archived: true,
+        createdByRequesterId: true,
         createdAt: true,
       },
     });
@@ -244,6 +162,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Checklist name is required' }, { status: 400 });
     }
 
+    let createdByRequesterId: string | null = null;
+    if (!coordinatorContext && auth.payload.identitySource === 'ticket_requester') {
+      const tr = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { role: true },
+      });
+      const r = (tr?.role ?? '').toUpperCase();
+      if (r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER') {
+        createdByRequesterId = auth.payload.requesterId;
+      }
+    }
+
     const checklist = await prisma.inspectionChecklist.create({
       data: {
         name,
@@ -251,6 +181,7 @@ export async function POST(req: NextRequest) {
         companyId,
         taskCategory: taskCategory || null,
         techniqueTypes,
+        createdByRequesterId,
       },
     });
     return NextResponse.json({ success: true, checklist });
