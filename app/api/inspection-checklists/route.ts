@@ -54,15 +54,6 @@ export async function GET(req: NextRequest) {
     let where: Record<string, unknown>;
 
     if (archiveScope === 'mine') {
-      const tr = await prisma.ticketRequester.findUnique({
-        where: { id: auth.payload.requesterId },
-        select: { role: true },
-      });
-      const r = (tr?.role ?? '').toUpperCase();
-      const fieldEngineer = r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
-      if (!fieldEngineer) {
-        return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
-      }
       where = {
         AND: [
           { archived: true },
@@ -128,6 +119,27 @@ export async function POST(req: NextRequest) {
       }
       companyId = coordinatorContext.companyId;
     } else if (auth.payload.identitySource === 'ticket_requester') {
+      const tr = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { role: true },
+      });
+      const rr = (tr?.role ?? 'COMPANY').toUpperCase();
+      const mayCreateChecklist = new Set([
+        'ENGINEER',
+        'QUALITY_ENGINEER',
+        'SUPERVISION_ENGINEER',
+        'COMPANY',
+        'PERSONAL',
+        'MANAGER',
+        'COORDINATOR',
+        'TECHNICIAN',
+      ]);
+      if (!mayCreateChecklist.has(rr)) {
+        return NextResponse.json(
+          { success: false, message: 'Your role cannot create checklist templates.' },
+          { status: 403 }
+        );
+      }
       companyId = await ensureLegacyRequesterCompany(auth.payload.requesterId);
       if (!companyId) {
         return NextResponse.json(
@@ -164,14 +176,7 @@ export async function POST(req: NextRequest) {
 
     let createdByRequesterId: string | null = null;
     if (!coordinatorContext && auth.payload.identitySource === 'ticket_requester') {
-      const tr = await prisma.ticketRequester.findUnique({
-        where: { id: auth.payload.requesterId },
-        select: { role: true },
-      });
-      const r = (tr?.role ?? '').toUpperCase();
-      if (r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER') {
-        createdByRequesterId = auth.payload.requesterId;
-      }
+      createdByRequesterId = auth.payload.requesterId;
     }
 
     const checklist = await prisma.inspectionChecklist.create({

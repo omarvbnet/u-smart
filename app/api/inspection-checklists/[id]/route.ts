@@ -62,15 +62,6 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: 'Checklist is outside your company' }, { status: 403 });
       }
     } else if (auth.payload.identitySource === 'ticket_requester') {
-      const tr = await prisma.ticketRequester.findUnique({
-        where: { id: auth.payload.requesterId },
-        select: { role: true },
-      });
-      const r = (tr?.role ?? '').toUpperCase();
-      const fieldEngineer = r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
-      if (!fieldEngineer) {
-        return NextResponse.json({ success: false, message: 'Only engineers can edit their checklists here.' }, { status: 403 });
-      }
       if (existing.createdByRequesterId !== auth.payload.requesterId) {
         return NextResponse.json(
           { success: false, message: 'You can only edit checklists you created.' },

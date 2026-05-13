@@ -17,12 +17,16 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
   List<WarehouseItem> _items = const [];
   List<WarehouseMovement> _activity = const [];
   List<MaterialRequest> _materialRequests = const [];
+  List<Map<String, dynamic>> _staffMaterialBudgetLines = const [];
+  Map<String, dynamic>? _keeperTracking;
 
   WarehouseDashboard? get dashboard => _dashboard;
   List<WarehouseMaterial> get materials => _materials;
   List<WarehouseItem> get items => _items;
   List<WarehouseMovement> get activity => _activity;
   List<MaterialRequest> get materialRequests => _materialRequests;
+  List<Map<String, dynamic>> get staffMaterialBudgetLines => _staffMaterialBudgetLines;
+  Map<String, dynamic>? get keeperTracking => _keeperTracking;
 
   // ── UI flags ───────────────────────────────────────────────────────────
   bool _loading = false;
@@ -123,6 +127,7 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
       _loadMaterials(),
       _loadItems(),
       _loadActivity(),
+      _loadKeeperTracking(),
     ]);
     _loading = false;
     notifyListeners();
@@ -174,13 +179,29 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
 
   Future<void> _loadActivity() async {
     try {
-      final res = await _api.getSafe(ApiConfig.privateCompanyWarehouseActivity);
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseActivity,
+        query: const {'limit': '120'},
+      );
       if (res != null && res['success'] == true) {
         _activity = ((res['movements'] as List?) ?? const [])
             .map((m) => WarehouseMovement.fromJson(m as Map<String, dynamic>))
             .toList();
       }
     } catch (_) {}
+  }
+
+  Future<void> _loadKeeperTracking() async {
+    try {
+      final res = await _api.getSafe(ApiConfig.privateCompanyWarehouseKeeperTracking);
+      if (res != null && res['success'] == true) {
+        _keeperTracking = Map<String, dynamic>.from(res);
+      } else {
+        _keeperTracking = null;
+      }
+    } catch (_) {
+      _keeperTracking = null;
+    }
   }
 
   Future<void> refreshDashboard() async {
@@ -200,6 +221,12 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
 
   Future<void> refreshActivity() async {
     await _loadActivity();
+    notifyListeners();
+  }
+
+  /// Reloads keeper-tracking payload (full-inventory roles only; no-op data for others).
+  Future<void> loadKeeperTracking() async {
+    await _loadKeeperTracking();
     notifyListeners();
   }
 
@@ -511,14 +538,20 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
           },
           successMessage: 'Recorded on ticket.');
 
-  Future<bool> markDamaged(String id, {String? note}) =>
+  Future<bool> markDamaged(String id, {String? note, String? ticketId}) =>
       _itemAction(id, 'damage',
-          body: {if (note != null) 'note': note},
+          body: {
+            if (note != null) 'note': note,
+            if (ticketId != null && ticketId.trim().isNotEmpty) 'ticketId': ticketId.trim(),
+          },
           successMessage: 'Marked damaged.');
 
-  Future<bool> markLost(String id, {String? note}) =>
+  Future<bool> markLost(String id, {String? note, String? ticketId}) =>
       _itemAction(id, 'lose',
-          body: {if (note != null) 'note': note},
+          body: {
+            if (note != null) 'note': note,
+            if (ticketId != null && ticketId.trim().isNotEmpty) 'ticketId': ticketId.trim(),
+          },
           successMessage: 'Marked lost.');
 
   /// Units currently in the warehouse for this catalog material (uses the
@@ -572,6 +605,103 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<Map<String, dynamic>?> fetchTicketMaterialSummary(String ticketId) async {
+    try {
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseTicketMaterialSummary,
+        query: {'ticketId': ticketId},
+      );
+      if (res != null && res['success'] == true) {
+        return Map<String, dynamic>.from(res);
+      }
+    } catch (_) {
+      /* non-fatal */
+    }
+    return null;
+  }
+
+  Future<void> loadStaffMaterialBudgets({String? staffId}) async {
+    try {
+      final query = <String, String>{};
+      if (staffId != null && staffId.isNotEmpty) query['staffId'] = staffId;
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseStaffMaterialBudgets,
+        query: query.isEmpty ? null : query,
+      );
+      if (res != null && res['success'] == true) {
+        _staffMaterialBudgetLines = ((res['budgets'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        notifyListeners();
+      }
+    } catch (_) {
+      /* non-fatal */
+    }
+  }
+
+  Future<bool> saveStaffMaterialBudget({
+    required String staffId,
+    required String materialId,
+    required int budgetQuantity,
+    String? notes,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyWarehouseStaffMaterialBudgets, body: {
+        'staffId': staffId,
+        'materialId': materialId,
+        'budgetQuantity': budgetQuantity,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      });
+      if (res['success'] == true) {
+        await loadStaffMaterialBudgets(staffId: staffId);
+        _setSuccess('Budget saved.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to save budget.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteStaffMaterialBudget(String budgetId, {required String staffId}) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.delete(
+        ApiConfig.privateCompanyWarehouseStaffMaterialBudgets,
+        query: {'id': budgetId},
+      );
+      if (res['success'] == true) {
+        await loadStaffMaterialBudgets(staffId: staffId);
+        _setSuccess('Budget removed.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Delete failed.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> confirmOutboundHandover(String itemId, {String? note}) =>
+      _itemAction(
+        itemId,
+        'confirm-handover',
+        body: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
+        successMessage: 'Receipt from assignee confirmed.',
+      );
 
   Future<bool> createMaterialRequest({
     required String kind,
@@ -653,6 +783,8 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     _items = const [];
     _activity = const [];
     _materialRequests = const [];
+    _staffMaterialBudgetLines = const [];
+    _keeperTracking = null;
     resetFilters();
     _error = null;
     _lastSuccess = null;

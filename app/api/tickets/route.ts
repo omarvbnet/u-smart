@@ -27,6 +27,12 @@ const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'building', 'hs
 const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES, ...MAINTENANCE_TECHNIQUES];
 const TASK_CATEGORY_VALUES = ['MAINTENANCE', 'QUALITY', 'SUPERVISION'];
+
+/** QC ticket pool (mobile / dashboard): not only legacy `ENGINEER` role. */
+function isQcPoolEngineerRole(role: string | null | undefined) {
+  const r = (role ?? '').toUpperCase();
+  return r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
+}
 const PLAN_RATE_USD: Record<string, number> = {
   WEEKLY: 0.7,
   MONTHLY: 0.6,
@@ -1264,11 +1270,14 @@ export async function GET(req: NextRequest) {
         }
       : { OR: [{ assignmentScope: { not: 'PRIVATE_COMPANY_STAFF' as const } }, { privateCompanyId: null }] };
 
-    if (requesterRole === 'ENGINEER') {
+    if (isQcPoolEngineerRole(requesterRole)) {
       // Engineers see ONLY QC tickets (inspection, supervision, etc.). Maintenance tickets are for Technicians and Admin only.
       const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
-      if (provinceFilterActive && requesterProvince) {
-        pendingFilter.province = requesterProvince;
+      if (provinceFilterActive && requesterProvince?.trim()) {
+        pendingFilter.province = {
+          equals: requesterProvince.trim(),
+          mode: 'insensitive',
+        };
       }
       const engineerAnd: Record<string, unknown>[] = [
         {
@@ -1278,7 +1287,10 @@ export async function GET(req: NextRequest) {
       ];
       if (requesterSpecialization) {
         engineerAnd.push({
-          OR: [{ specializationTags: { equals: [] } }, { specializationTags: { has: requesterSpecialization } }],
+          OR: [
+            { specializationTags: { isEmpty: true } },
+            { specializationTags: { has: requesterSpecialization } },
+          ],
         });
       }
       where = {
@@ -1289,8 +1301,11 @@ export async function GET(req: NextRequest) {
     } else if (requesterRole === 'TECHNICIAN') {
       // Technicians see ONLY maintenance tickets (province pool matches engineer rules when filter is on).
       const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
-      if (provinceFilterActive && requesterProvince) {
-        pendingFilter.province = requesterProvince;
+      if (provinceFilterActive && requesterProvince?.trim()) {
+        pendingFilter.province = {
+          equals: requesterProvince.trim(),
+          mode: 'insensitive',
+        };
       }
       const technicianAnd: Record<string, unknown>[] = [
         {
@@ -1300,7 +1315,10 @@ export async function GET(req: NextRequest) {
       ];
       if (requesterSpecialization) {
         technicianAnd.push({
-          OR: [{ specializationTags: { equals: [] } }, { specializationTags: { has: requesterSpecialization } }],
+          OR: [
+            { specializationTags: { isEmpty: true } },
+            { specializationTags: { has: requesterSpecialization } },
+          ],
         });
       }
       where = {

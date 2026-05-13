@@ -25,6 +25,9 @@ const ITEM_INCLUDE = {
   assignedTo: {
     select: { id: true, name: true, username: true, role: true, privateCompanyDepartmentId: true },
   },
+  handoverConfirmedBy: {
+    select: { id: true, name: true, username: true, role: true },
+  },
   usedTicket: {
     select: { id: true, technique: true, province: true, siteName: true, status: true },
   },
@@ -45,6 +48,7 @@ const ITEM_INCLUDE = {
  *   ?ticketId=...
  *   ?q=<serial, note, or material name substring>
  *   ?mine=1   (full-view only: list units assigned to the current user)
+ *   ?take=800 (full-view only, max 1500; default 800. Field roles: max 500.)
  */
 export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
@@ -79,11 +83,18 @@ export async function GET(req: NextRequest) {
     where.assignedToId = guard.requesterId;
   }
 
+  const defaultTake = guard.canViewAllWarehouseInventory ? 800 : 500;
+  const maxTake = guard.canViewAllWarehouseInventory ? 1500 : 500;
+  const take = Math.min(
+    maxTake,
+    Math.max(1, parseInt(searchParams.get('take') ?? String(defaultTake), 10) || defaultTake)
+  );
+
   const items = await prisma.privateCompanyMaterialItem.findMany({
     where,
     orderBy: [{ updatedAt: 'desc' }],
     include: ITEM_INCLUDE,
-    take: 500,
+    take,
   });
   const inventoryScope = guard.canViewAllWarehouseInventory ? 'all' : 'assigned';
   return NextResponse.json({ success: true, inventoryScope, items });

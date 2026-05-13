@@ -140,6 +140,8 @@ class WarehouseItem {
     this.notes,
     this.createdAt,
     this.updatedAt,
+    this.handoverConfirmedAt,
+    this.handoverConfirmedByName,
   });
 
   final String id;
@@ -161,11 +163,20 @@ class WarehouseItem {
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? handoverConfirmedAt;
+  final String? handoverConfirmedByName;
+
+  /// Assigned to someone but warehouse keeper has not confirmed physical receipt yet.
+  bool get handoverPending =>
+      status == MaterialItemStatus.assigned &&
+      assignedToId != null &&
+      handoverConfirmedAt == null;
 
   factory WarehouseItem.fromJson(Map<String, dynamic> json) {
     final material = json['material'] as Map<String, dynamic>?;
     final assigned = json['assignedTo'] as Map<String, dynamic>?;
     final ticket = json['usedTicket'] as Map<String, dynamic>?;
+    final handoverBy = json['handoverConfirmedBy'] as Map<String, dynamic>?;
     return WarehouseItem(
       id: json['id'] as String,
       serialNumber: json['serialNumber'] as String? ?? '',
@@ -192,6 +203,11 @@ class WarehouseItem {
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'].toString())
           : null,
+      handoverConfirmedAt: json['handoverConfirmedAt'] != null
+          ? DateTime.tryParse(json['handoverConfirmedAt'].toString())
+          : null,
+      handoverConfirmedByName: handoverBy?['name'] as String? ??
+          handoverBy?['username'] as String?,
     );
   }
 }

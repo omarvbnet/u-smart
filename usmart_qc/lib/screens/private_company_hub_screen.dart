@@ -4044,12 +4044,14 @@ class _KpiStatRow extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 // WAREHOUSE TAB
 //
-// Holds five sub-tabs:
+// Holds six sub-tabs:
 //   • Dashboard — aggregate counters + recent activity
 //   • Inventory — searchable / filterable list of items (with actions)
 //   • Requests — material requests (all staff submit; keepers review)
 //   • Materials — catalog management (managers only)
 //   • Activity  — full movement log
+//   • Budgets   — per-staff assignment caps by catalog material (managers;
+//                  everyone can view their own lines)
 //
 // Visibility rules:
 //   • Owner / manager / coordinator: everything
@@ -4072,7 +4074,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
   @override
   void initState() {
     super.initState();
-    _subTabs = TabController(length: 5, vsync: this);
+    _subTabs = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -4172,6 +4174,9 @@ class _WarehouseTabState extends State<_WarehouseTab>
               Tab(icon: Icon(Icons.post_add_rounded, size: 16), text: 'Requests'),
               Tab(icon: Icon(Icons.category_rounded, size: 16), text: 'Materials'),
               Tab(icon: Icon(Icons.history_rounded, size: 16), text: 'Activity'),
+              Tab(
+                  icon: Icon(Icons.account_balance_wallet_outlined, size: 16),
+                  text: 'Budgets'),
             ],
           ),
         ),
@@ -4184,7 +4189,475 @@ class _WarehouseTabState extends State<_WarehouseTab>
               _WarehouseRequestsView(canManage: canManage),
               _WarehouseMaterialsView(canManage: canManage),
               _WarehouseActivityView(),
+              _WarehouseBudgetsView(workspace: widget.workspace),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Budgets sub-tab (per-staff caps; managers edit, all roles can view self) ─
+
+class _WarehouseBudgetsView extends StatefulWidget {
+  const _WarehouseBudgetsView({required this.workspace});
+  final PrivateCompanyWorkspace workspace;
+
+  @override
+  State<_WarehouseBudgetsView> createState() => _WarehouseBudgetsViewState();
+}
+
+class _WarehouseBudgetsViewState extends State<_WarehouseBudgetsView> {
+  String? _selectedStaffId;
+  String? _pickMaterialId;
+  final _qtyCtrl = TextEditingController(text: '1');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  @override
+  void dispose() {
+    _qtyCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final pc = context.read<PrivateCompanyProvider>();
+    final uid = context.read<AuthProvider>().user?.id;
+    await wh.refreshMaterials();
+    if (pc.canManageStaff) {
+      if (widget.workspace.staff.isNotEmpty) {
+        _selectedStaffId ??= widget.workspace.staff.first.id;
+      } else if (pc.isOwner && uid != null) {
+        _selectedStaffId = uid;
+      }
+      await wh.loadStaffMaterialBudgets(staffId: _selectedStaffId);
+    } else {
+      await wh.loadStaffMaterialBudgets();
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final pc = context.watch<PrivateCompanyProvider>();
+    final canEdit = pc.canManageStaff;
+    return RefreshIndicator(
+      onRefresh: _reload,
+      color: const Color(0xFF38BDF8),
+      backgroundColor: const Color(0xFF12122A),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          Text(
+            canEdit
+                ? 'Set how many units of each catalog material a staff member may hold in “assigned” status at once. Warehouse assignments are blocked if they would exceed the cap.'
+                : 'Your material assignment budget (per catalog SKU). Used, damaged, and returned totals are taken from the warehouse movement log.',
+            style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12, height: 1.35),
+          ),
+          if (canEdit && widget.workspace.staff.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Staff member', style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12)),
+            const SizedBox(height: 6),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withAlpha(20)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: _selectedStaffId,
+                  dropdownColor: const Color(0xFF12122A),
+                  items: widget.workspace.staff
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s.id,
+                          child: Text(
+                            s.name ?? s.username,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) async {
+                    if (v == null) return;
+                    setState(() => _selectedStaffId = v);
+                    await wh.loadStaffMaterialBudgets(staffId: v);
+                  },
+                ),
+              ),
+            ),
+          ],
+          if (canEdit && widget.workspace.staff.isEmpty && pc.isOwner) ...[
+            const SizedBox(height: 8),
+            Text(
+              'No staff rows yet — budgets will apply to your owner account id once you add people, or use the People tab first.',
+              style: TextStyle(color: Colors.orange.withAlpha(220), fontSize: 12),
+            ),
+          ],
+          if (canEdit && _selectedStaffId != null) ...[
+            const SizedBox(height: 16),
+            Text('Add / update budget line', style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12)),
+            const SizedBox(height: 8),
+            if (wh.materials.isEmpty)
+              Text('Add catalog materials first.', style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12))
+            else ...[
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: wh.materials.map((m) {
+                  final sel = _pickMaterialId == m.id;
+                  return GestureDetector(
+                    onTap: () => setState(() => _pickMaterialId = m.id),
+                    child: _ChipBox(
+                      label: m.name,
+                      selected: sel,
+                      color: _parseHex(m.color) ?? const Color(0xFF6C63FF),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _qtyCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Budget quantity (max assigned units)',
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(140)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withAlpha(30)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _GradientButton(
+                onPressed: wh.submitting || _selectedStaffId == null || _pickMaterialId == null
+                    ? null
+                    : () async {
+                        final q = int.tryParse(_qtyCtrl.text.trim()) ?? 0;
+                        if (q < 0) return;
+                        final ok = await wh.saveStaffMaterialBudget(
+                          staffId: _selectedStaffId!,
+                          materialId: _pickMaterialId!,
+                          budgetQuantity: q,
+                        );
+                        if (ok && mounted) setState(() {});
+                      },
+                label: 'Save budget line',
+                icon: Icons.save_rounded,
+                stretch: true,
+              ),
+            ],
+          ],
+          const SizedBox(height: 20),
+          Text('Budget lines', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          if (wh.staffMaterialBudgetLines.isEmpty)
+            Text(
+              'No budget rows yet.',
+              style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 13),
+            )
+          else
+            ...wh.staffMaterialBudgetLines.map((row) {
+              final mat = row['material'] as Map<String, dynamic>?;
+              final name = mat?['name'] as String? ?? 'Material';
+              final cap = (row['budgetQuantity'] as num?)?.toInt() ?? 0;
+              final assigned = (row['assignedQuantity'] as num?)?.toInt() ?? 0;
+              final avail = (row['availableToAssign'] as num?)?.toInt() ?? 0;
+              final used = (row['usedLifetimeQuantity'] as num?)?.toInt() ?? 0;
+              final dmg = (row['damagedLifetime'] as num?)?.toInt() ?? 0;
+              final lost = (row['lostLifetime'] as num?)?.toInt() ?? 0;
+              final id = row['id'] as String?;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _GlassCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Cap $cap · assigned $assigned · available $avail · used (lifetime) $used · damaged $dmg · lost $lost',
+                          style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11, height: 1.3),
+                        ),
+                        if (canEdit && id != null && _selectedStaffId != null) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: wh.submitting
+                                  ? null
+                                  : () async {
+                                      final ok = await _confirm(
+                                        context,
+                                        'Remove this budget line?',
+                                        'Assignments already within the cap stay valid; only future assignments are unrestricted.',
+                                      );
+                                      if (ok == true) {
+                                        await wh.deleteStaffMaterialBudget(id, staffId: _selectedStaffId!);
+                                        if (mounted) setState(() {});
+                                      }
+                                    },
+                              child: const Text('Remove', style: TextStyle(color: Color(0xFFFF4757))),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Keeper / full-inventory tracking (dashboard) ─────────────────────────
+
+class _WarehouseKeeperTrackingSections extends StatelessWidget {
+  const _WarehouseKeeperTrackingSections();
+
+  static String _fmtDate(dynamic raw) {
+    if (raw == null) return '—';
+    final d = DateTime.tryParse(raw.toString());
+    if (d == null) return raw.toString();
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pc = context.watch<PrivateCompanyProvider>();
+    if (pc.seesOnlyAssignedWarehouseInventory) return const SizedBox.shrink();
+    final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final t = wh.keeperTracking;
+    if (t == null || t['success'] != true) return const SizedBox.shrink();
+
+    final rollup = (t['materialRollup'] as List?) ?? const [];
+    final assigned = (t['assignedItems'] as List?) ?? const [];
+    final used = (t['recentlyUsedItems'] as List?) ?? const [];
+    final dmg = (t['damageAndLoss'] as List?) ?? const [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Keeper tracking — all staff & materials'),
+        const SizedBox(height: 6),
+        Text(
+          'Per SKU counts (in warehouse / assigned / used / damaged / lost), every assignment with holder, recent consumption with ticket site & time, and damage or loss with the reason from the log.',
+          style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11, height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        if (rollup.isNotEmpty)
+          _GlassCard(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('By material type',
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(200),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  for (final raw in rollup.take(40))
+                    Builder(
+                      builder: (_) {
+                        final m = raw as Map<String, dynamic>;
+                        final name = m['name'] as String? ?? '—';
+                        final iw = (m['IN_WAREHOUSE'] as num?)?.toInt() ?? 0;
+                        final asg = (m['ASSIGNED'] as num?)?.toInt() ?? 0;
+                        final u = (m['USED'] as num?)?.toInt() ?? 0;
+                        final d = (m['DAMAGED'] as num?)?.toInt() ?? 0;
+                        final l = (m['LOST'] as num?)?.toInt() ?? 0;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            '$name — in stock $iw · assigned $asg · used $u · damaged $d · lost $l',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 14),
+        _GlassCard(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Assigned to staff (${assigned.length} lines)',
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(200),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                if (assigned.isEmpty)
+                  Text('Nothing assigned right now.',
+                      style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11))
+                else
+                  for (final raw in assigned.take(60))
+                    Builder(
+                      builder: (_) {
+                        final row = raw as Map<String, dynamic>;
+                        final mat = row['material'] as Map<String, dynamic>?;
+                        final matName = mat?['name'] as String? ?? 'Material';
+                        final sn = row['serialNumber'] as String? ?? '';
+                        final qty = (row['quantity'] as num?)?.toInt() ?? 1;
+                        final prov = row['province'] as String? ?? '';
+                        final as = row['assignedTo'] as Map<String, dynamic>?;
+                        final holder = as?['name'] as String? ?? as?['username'] as String? ?? '—';
+                        final role = as?['role'] as String? ?? '';
+                        final ho = row['handoverConfirmedAt'];
+                        final hoOk = ho != null;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            '· $matName ($sn) ×$qty — $holder${role.isNotEmpty ? ' ($role)' : ''} · $prov · handover ${hoOk ? '✓' : 'pending'}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.35),
+                          ),
+                        );
+                      },
+                    ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _GlassCard(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Recently used on tickets (${used.length})',
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(200),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                if (used.isEmpty)
+                  Text('No usage records yet.',
+                      style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11))
+                else
+                  for (final raw in used.take(50))
+                    Builder(
+                      builder: (_) {
+                        final row = raw as Map<String, dynamic>;
+                        final mat = row['material'] as Map<String, dynamic>?;
+                        final matName = mat?['name'] as String? ?? 'Material';
+                        final sn = row['serialNumber'] as String? ?? '';
+                        final qty = (row['quantity'] as num?)?.toInt() ?? 1;
+                        final usedAt = _fmtDate(row['usedAt']);
+                        final tk = row['usedTicket'] as Map<String, dynamic>?;
+                        final site = tk?['siteName'] as String? ?? '';
+                        final tec = tk?['technique'] as String? ?? '';
+                        final tprov = tk?['province'] as String? ?? '';
+                        final tid = tk?['id'] as String? ?? '';
+                        final where = [site, tec, tprov].where((e) => e.trim().isNotEmpty).join(' · ');
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            '· $matName ($sn) ×$qty — when $usedAt — where: ${where.isNotEmpty ? where : tid}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.35),
+                          ),
+                        );
+                      },
+                    ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _GlassCard(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Damage & loss (with reason from log)',
+                    style: TextStyle(
+                        color: Colors.white.withAlpha(200),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                if (dmg.isEmpty)
+                  Text('No damage or loss movements.',
+                      style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11))
+                else
+                  for (final raw in dmg.take(50))
+                    Builder(
+                      builder: (_) {
+                        final mv = raw as Map<String, dynamic>;
+                        final typ = mv['type'] as String? ?? '';
+                        final at = _fmtDate(mv['createdAt']);
+                        final note = mv['note'] as String? ?? '';
+                        final item = mv['item'] as Map<String, dynamic>?;
+                        final mat = item?['material'] as Map<String, dynamic>?;
+                        final matName = mat?['name'] as String? ?? 'Item';
+                        final sn = item?['serialNumber'] as String? ?? '';
+                        final from = mv['fromStaff'] as Map<String, dynamic>?;
+                        final holder =
+                            from?['name'] as String? ?? from?['username'] as String? ?? '—';
+                        final act = mv['actor'] as Map<String, dynamic>?;
+                        final actor =
+                            act?['name'] as String? ?? act?['username'] as String? ?? '—';
+                        final tk = mv['ticket'] as Map<String, dynamic>?;
+                        final tks = tk == null
+                            ? ''
+                            : [
+                                tk['siteName'],
+                                tk['province'],
+                                tk['technique'],
+                              ].whereType<String>().where((s) => s.trim().isNotEmpty).join(' · ');
+                        final why =
+                            note.trim().isNotEmpty ? note : '(no note — ask the reporter)';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$typ · $matName ($sn) · $at',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Held by: $holder · Recorded by: $actor',
+                                style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 10),
+                              ),
+                              if (tks.isNotEmpty)
+                                Text('Ticket: $tks',
+                                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 10)),
+                              Text('Why: $why',
+                                  style: const TextStyle(
+                                      color: Color(0xFFFFB4A8), fontSize: 11, height: 1.35)),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+              ],
+            ),
           ),
         ),
       ],
@@ -4389,6 +4862,8 @@ class _WarehouseDashboardView extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 18),
+            const _WarehouseKeeperTrackingSections(),
+            const SizedBox(height: 18),
             const _SectionTitle('Tickets consuming most items'),
             const SizedBox(height: 8),
             if (d.topUsageTickets.isEmpty)
@@ -4560,7 +5035,14 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
           ),
         Expanded(
           child: RefreshIndicator(
-            onRefresh: wh.refreshItems,
+            onRefresh: () async {
+              await wh.refreshItems();
+              if (!context.mounted) return;
+              final pc = context.read<PrivateCompanyProvider>();
+              if (!pc.seesOnlyAssignedWarehouseInventory) {
+                await wh.loadKeeperTracking();
+              }
+            },
             color: const Color(0xFF38BDF8),
             backgroundColor: const Color(0xFF12122A),
             child: wh.items.isEmpty
@@ -4735,6 +5217,11 @@ class _InventoryRow extends StatelessWidget {
                     _StaffBadge(
                       label: 'Ticket: ${item.usedTicketSiteName}',
                       color: const Color(0xFF00D4AA),
+                    ),
+                  if (item.handoverPending)
+                    _StaffBadge(
+                      label: 'Handover pending',
+                      color: const Color(0xFFE11D48),
                     ),
                   if (item.quantity > 1)
                     _StaffBadge(
@@ -5739,7 +6226,14 @@ class _WarehouseActivityView extends StatelessWidget {
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
     return RefreshIndicator(
-      onRefresh: wh.refreshActivity,
+      onRefresh: () async {
+        await wh.refreshActivity();
+        if (!context.mounted) return;
+        final pc = context.read<PrivateCompanyProvider>();
+        if (!pc.seesOnlyAssignedWarehouseInventory) {
+          await wh.loadKeeperTracking();
+        }
+      },
       color: const Color(0xFF38BDF8),
       backgroundColor: const Color(0xFF12122A),
       child: wh.activity.isEmpty
@@ -6098,6 +6592,8 @@ Color _movementColor(String type) {
       return const Color(0xFFFF4757);
     case 'LOST':
       return const Color(0xFF94A3B8);
+    case 'HANDOVER_CONFIRMED':
+      return const Color(0xFF22C55E);
     case 'ADJUSTED':
     default:
       return const Color(0xFF8B83FF);
@@ -6120,6 +6616,8 @@ IconData _movementIcon(String type) {
       return Icons.report_problem_rounded;
     case 'LOST':
       return Icons.help_outline_rounded;
+    case 'HANDOVER_CONFIRMED':
+      return Icons.verified_user_outlined;
     case 'ADJUSTED':
     default:
       return Icons.tune_rounded;
@@ -6142,6 +6640,8 @@ String _movementLabel(String type) {
       return 'Damaged';
     case 'LOST':
       return 'Lost';
+    case 'HANDOVER_CONFIRMED':
+      return 'Keeper confirmed receipt';
     case 'ADJUSTED':
     default:
       return 'Adjusted';
@@ -6903,6 +7403,31 @@ class _ItemActionsSheet extends StatelessWidget {
                       await wh.assignItem(item.id, staffId,
                           quantity: item.quantity > 1 ? moveQty : null);
                     }
+                  },
+                ),
+              if (canManage && item.handoverPending)
+                _ActionTile(
+                  icon: Icons.verified_user_outlined,
+                  label: 'Confirm assignee received materials',
+                  color: const Color(0xFF22C55E),
+                  onTap: () async {
+                    final ok = await _confirm(
+                      anchorContext,
+                      'Confirm physical handover?',
+                      'Use this after the engineer or technician has received the materials from the warehouse.',
+                    );
+                    if (ok != true) return;
+                    if (!anchorContext.mounted) return;
+                    Navigator.pop(context);
+                    final success =
+                        await wh.confirmOutboundHandover(item.id);
+                    if (!anchorContext.mounted) return;
+                    final msg = success
+                        ? (wh.lastSuccess ?? 'Confirmed.')
+                        : (wh.error ?? 'Could not confirm.');
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(content: Text(msg)),
+                    );
                   },
                 ),
               if (canReturn)

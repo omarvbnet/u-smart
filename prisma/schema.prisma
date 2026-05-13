@@ -377,6 +377,8 @@ model TicketRequester {
   materialItemsStocked           PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemStocker")
   materialRequestsSubmitted      PrivateCompanyMaterialRequest[]  @relation("MaterialRequestRequester")
   materialRequestsResponded      PrivateCompanyMaterialRequest[]  @relation("MaterialRequestResponder")
+  materialStaffBudgets           PrivateCompanyStaffMaterialBudget[] @relation("StaffMaterialBudget")
+  materialHandoversConfirmed     PrivateCompanyMaterialItem[]        @relation("MaterialHandoverConfirmedBy")
 
   @@map("ticket_requesters")
 }
@@ -1352,6 +1354,7 @@ model PrivateCompany {
   materialItems    PrivateCompanyMaterialItem[]    @relation("PrivateCompanyMaterialItems")
   materialMovements PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovements")
   materialRequests PrivateCompanyMaterialRequest[]  @relation("PrivateCompanyMaterialRequests")
+  staffMaterialBudgets PrivateCompanyStaffMaterialBudget[] @relation("PrivateCompanyStaffMaterialBudgets")
   /// Optional QC / maintenance technique slugs for this workspace (owner-managed).
   workspaceTechniques PrivateCompanyTechnique[]
   createdAt        DateTime                   @default(now())
@@ -1452,6 +1455,7 @@ enum PrivateCompanyMaterialMovementType {
   DAMAGED
   LOST
   ADJUSTED    // metadata/status edit
+  HANDOVER_CONFIRMED // warehouse keeper confirmed assignee received the unit(s)
 }
 
 enum PrivateCompanyMaterialRequestKind {
@@ -1483,12 +1487,33 @@ model PrivateCompanyMaterial {
   createdBy   TicketRequester?                @relation("PrivateCompanyMaterialCreator", fields: [createdById], references: [id], onDelete: SetNull)
   items       PrivateCompanyMaterialItem[]
   requests    PrivateCompanyMaterialRequest[] @relation("PrivateCompanyMaterialRequestMaterial")
+  staffBudgets PrivateCompanyStaffMaterialBudget[] @relation("StaffBudgetMaterial")
   createdAt   DateTime                        @default(now())
   updatedAt   DateTime                        @updatedAt
 
   @@unique([companyId, name])
   @@index([companyId])
   @@map("private_company_materials")
+}
+
+/// Per-staff cap on how many units of a catalog material they may hold in
+/// ASSIGNED status at once (workspace managers set budgets; keepers enforce on assign).
+model PrivateCompanyStaffMaterialBudget {
+  id               String   @id @default(cuid())
+  companyId        String
+  company          PrivateCompany @relation("PrivateCompanyStaffMaterialBudgets", fields: [companyId], references: [id], onDelete: Cascade)
+  staffRequesterId String
+  staff            TicketRequester @relation("StaffMaterialBudget", fields: [staffRequesterId], references: [id], onDelete: Cascade)
+  materialId       String
+  material         PrivateCompanyMaterial @relation("StaffBudgetMaterial", fields: [materialId], references: [id], onDelete: Cascade)
+  budgetQuantity   Int
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([companyId, staffRequesterId, materialId])
+  @@index([companyId, staffRequesterId])
+  @@map("private_company_staff_material_budgets")
 }
 
 model PrivateCompanyMaterialItem {
@@ -1509,6 +1534,9 @@ model PrivateCompanyMaterialItem {
   usedAt       DateTime?
   createdById  String?
   createdBy    TicketRequester?                  @relation("PrivateCompanyMaterialItemStocker", fields: [createdById], references: [id], onDelete: SetNull)
+  handoverConfirmedAt   DateTime?
+  handoverConfirmedById String?
+  handoverConfirmedBy   TicketRequester?                  @relation("MaterialHandoverConfirmedBy", fields: [handoverConfirmedById], references: [id], onDelete: SetNull)
   movements    PrivateCompanyMaterialMovement[]
   createdAt    DateTime                          @default(now())
   updatedAt    DateTime                          @updatedAt
@@ -1519,6 +1547,7 @@ model PrivateCompanyMaterialItem {
   @@index([materialId])
   @@index([assignedToId])
   @@index([usedTicketId])
+  @@index([handoverConfirmedById])
   @@map("private_company_material_items")
 }
 

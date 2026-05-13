@@ -14,6 +14,7 @@ const VALID_TYPES = new Set([
   'DAMAGED',
   'LOST',
   'ADJUSTED',
+  'HANDOVER_CONFIRMED',
 ]);
 
 /**
@@ -22,6 +23,8 @@ const VALID_TYPES = new Set([
  * Paginated movement log. Full-view roles see the workspace audit trail;
  * field roles see movements on their assigned items and rows where they
  * appear as actor / from / to staff.
+ *
+ * Query: ?limit= (max 250 for full-inventory roles, 100 for field staff; default 50)
  */
 export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
@@ -54,7 +57,10 @@ export async function GET(req: NextRequest) {
 
   const limit = Math.max(
     1,
-    Math.min(100, parseInt(searchParams.get('limit') ?? '50', 10) || 50)
+    Math.min(
+      guard.canViewAllWarehouseInventory ? 250 : 100,
+      parseInt(searchParams.get('limit') ?? '50', 10) || 50
+    )
   );
 
   const movements = await prisma.privateCompanyMaterialMovement.findMany({

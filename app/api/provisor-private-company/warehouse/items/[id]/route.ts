@@ -7,6 +7,7 @@ import {
   logMovement,
   warehouseGuard,
 } from '@/lib/private-company-warehouse';
+import { remainingAssignBudgetForStaffMaterial } from '@/lib/private-company-staff-budget-access';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -20,6 +21,9 @@ const ITEM_INCLUDE = {
   },
   usedTicket: {
     select: { id: true, technique: true, province: true, siteName: true, status: true },
+  },
+  handoverConfirmedBy: {
+    select: { id: true, name: true, username: true, role: true },
   },
   movements: {
     orderBy: { createdAt: 'desc' as const },
@@ -137,15 +141,22 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   return NextResponse.json({ success: true, inventoryScope, item });
 }
 
-type Action = 'assign' | 'transfer' | 'return' | 'use' | 'damage' | 'lose';
+type Action =
+  | 'assign'
+  | 'transfer'
+  | 'return'
+  | 'use'
+  | 'damage'
+  | 'lose'
+  | 'confirm-handover';
 
 /**
  * POST /api/provisor-private-company/warehouse/items/:id
  *
  * Body:
- *   { action: 'assign' | 'transfer' | 'return' | 'use' | 'damage' | 'lose',
+ *   { action: 'assign' | 'transfer' | 'return' | 'use' | 'damage' | 'lose' | 'confirm-handover',
  *     toStaffId?: string,           // for assign/transfer
- *     ticketId?: string,            // for use
+ *     ticketId?: string,            // for use; optional for damage/lose (audit on ticket)
  *     note?: string,                // optional note recorded in the movement
  *     quantity?: number,            // How many units this action moves (defaults to full line).
  *                                   If less than the line quantity for assign/transfer, the line
@@ -159,7 +170,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
   const action = String(body?.action ?? '').toLowerCase() as Action;
-  if (!['assign', 'transfer', 'return', 'use', 'damage', 'lose'].includes(action)) {
+  if (
+    !['assign', 'transfer', 'return', 'use', 'damage', 'lose', 'confirm-handover'].includes(action)
+  ) {
     return NextResponse.json(
       { success: false, message: 'Unknown action.' },
       { status: 400 }
@@ -173,12 +186,29 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const item = await prisma.privateCompanyMaterialItem.findFirst({
     where: { id, companyId: guard.companyId },
-    include: { material: { select: { id: true, name: true, tracking: true } } },
+    select: {
+      id: true,
+      companyId: true,
+      materialId: true,
+      status: true,
+      quantity: true,
+      assignedToId: true,
+      province: true,
+      notes: true,
+      serialNumber: true,
+      usedTicketId: true,
+      handoverConfirmedAt: true,
+      material: { select: { id: true, name: true, tracking: true } },
+    },
   });
   if (!item) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
 
   if (
-    (action === 'assign' || action === 'transfer' || action === 'damage' || action === 'lose') &&
+    (action === 'assign' ||
+      action === 'transfer' ||
+      action === 'damage' ||
+      action === 'lose' ||
+      action === 'confirm-handover') &&
     !guard.canMutateWarehouse
   ) {
     return NextResponse.json(
@@ -213,6 +243,42 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         { status: 403 }
       );
     }
+  }
+
+  if (action === 'confirm-handover') {
+    if (item.status !== 'ASSIGNED' || !item.assignedToId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Only items assigned to field staff can be confirmed as physically received.',
+        },
+        { status: 409 }
+      );
+    }
+    if (item.handoverConfirmedAt) {
+      return NextResponse.json(
+        { success: false, message: 'This assignment was already confirmed.' },
+        { status: 409 }
+      );
+    }
+    const updated = await prisma.privateCompanyMaterialItem.update({
+      where: { id },
+      data: {
+        handoverConfirmedAt: new Date(),
+        handoverConfirmedById: guard.requesterId,
+      },
+      include: ITEM_INCLUDE,
+    });
+    await logMovement({
+      companyId: guard.companyId,
+      itemId: id,
+      type: 'HANDOVER_CONFIRMED',
+      toStaffId: item.assignedToId,
+      actorId: guard.requesterId,
+      quantity: Math.max(1, Math.floor(Number(item.quantity)) || 1),
+      note,
+    });
+    return NextResponse.json({ success: true, item: updated });
   }
 
   switch (action) {
@@ -252,6 +318,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         );
       }
 
+      const rem = await remainingAssignBudgetForStaffMaterial({
+        companyId: guard.companyId,
+        staffId: toStaffId,
+        materialId: item.materialId,
+      });
+      if (!rem.unlimited && rem.remaining < moveQty) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `This assignment exceeds the recipient's budget for "${item.material.name}": cap ${rem.cap}, already assigned ${rem.assigned} units, requested ${moveQty}.`,
+          },
+          { status: 409 }
+        );
+      }
+
       const companyId = guard.companyId;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -271,7 +352,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       if (moveQty === lineQty) {
         const updated = await prisma.privateCompanyMaterialItem.update({
           where: { id },
-          data: { assignedToId: toStaffId, status: 'ASSIGNED' },
+          data: {
+            assignedToId: toStaffId,
+            status: 'ASSIGNED',
+            handoverConfirmedAt: null,
+            handoverConfirmedById: null,
+          },
           include: ITEM_INCLUDE,
         });
         await logMovement({
@@ -313,6 +399,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             notes: item.notes ?? null,
             assignedToId: toStaffId,
             createdById: guard.requesterId,
+            handoverConfirmedAt: null,
+            handoverConfirmedById: null,
           },
           include: ITEM_INCLUDE,
         });
@@ -350,7 +438,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       const fromStaffId = item.assignedToId;
       const updated = await prisma.privateCompanyMaterialItem.update({
         where: { id },
-        data: { assignedToId: null, status: 'IN_WAREHOUSE' },
+        data: {
+          assignedToId: null,
+          status: 'IN_WAREHOUSE',
+          handoverConfirmedAt: null,
+          handoverConfirmedById: null,
+        },
         include: ITEM_INCLUDE,
       });
       await logMovement({
@@ -432,10 +525,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     case 'damage':
     case 'lose': {
+      let ticketIdForLog: string | null = null;
+      const ticketIdRaw = typeof body?.ticketId === 'string' ? body.ticketId.trim() : '';
+      if (ticketIdRaw) {
+        const t = await prisma.visitorRequest.findFirst({
+          where: { id: ticketIdRaw, privateCompanyId: guard.companyId },
+          select: { id: true },
+        });
+        if (!t) {
+          return NextResponse.json(
+            { success: false, message: 'ticketId not found in this workspace.' },
+            { status: 400 }
+          );
+        }
+        ticketIdForLog = ticketIdRaw;
+      }
       const nextStatus = action === 'damage' ? 'DAMAGED' : 'LOST';
       const updated = await prisma.privateCompanyMaterialItem.update({
         where: { id },
-        data: { status: nextStatus, assignedToId: null },
+        data: {
+          status: nextStatus,
+          assignedToId: null,
+          handoverConfirmedAt: null,
+          handoverConfirmedById: null,
+        },
         include: ITEM_INCLUDE,
       });
       await logMovement({
@@ -443,6 +556,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         itemId: id,
         type: action === 'damage' ? 'DAMAGED' : 'LOST',
         fromStaffId: item.assignedToId,
+        ticketId: ticketIdForLog,
         actorId: guard.requesterId,
         quantity: bodyQuantity,
         note,

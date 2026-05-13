@@ -15,6 +15,8 @@ import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
 import '../providers/auth_provider.dart';
 import '../providers/conflicts_provider.dart';
+import '../providers/private_company_provider.dart';
+import '../providers/private_company_warehouse_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../widgets/status_badge.dart';
@@ -56,6 +58,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   List<String> _maintenanceBeforeUrls = [];
   List<String> _maintenanceAfterUrls = [];
 
+  Map<String, dynamic>? _ticketMaterialsSummary;
+
   final _picker = ImagePicker();
 
   bool get _isEngineer => context.read<AuthProvider>().isEngineer;
@@ -88,7 +92,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _loadArchivedChecklists();
       }
       context.read<SitesProvider>().fetchSites();
+      Future.microtask(() => _loadTicketWarehouseSummary());
     }
+  }
+
+  Future<void> _loadTicketWarehouseSummary() async {
+    final pc = context.read<PrivateCompanyProvider>();
+    if (!pc.hasWorkspace || !pc.isApproved) return;
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final res = await wh.fetchTicketMaterialSummary(widget.ticketId);
+    if (!mounted) return;
+    setState(() => _ticketMaterialsSummary = res);
   }
 
   Future<void> _loadCommentsAndEvidence() async {
@@ -114,7 +128,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _loadChecklistsForTicket(Ticket t) async {
     final provider = context.read<TicketsProvider>();
     setState(() => _loadingChecklists = true);
-    final checklists = await provider.fetchChecklists(technique: t.technique);
+    var checklists = await provider.fetchChecklists(technique: t.technique);
+    final tid = t.checklistTemplateId?.trim();
+    final preview = t.checklistTemplate;
+    if (tid != null && tid.isNotEmpty && preview != null && preview.isNotEmpty) {
+      final has = checklists.any((c) => c.id == tid);
+      if (!has) {
+        try {
+          final itemsRaw = preview['items'];
+          final synthetic = InspectionChecklist.fromJson({
+            'id': preview['id'] ?? tid,
+            'name': (preview['name'] as String?)?.trim().isNotEmpty == true
+                ? preview['name']
+                : 'Checklist',
+            'items': itemsRaw is List ? itemsRaw : <dynamic>[],
+            'archived': false,
+          });
+          checklists = [synthetic, ...checklists];
+        } catch (_) {}
+      }
+    }
     if (mounted) {
       setState(() {
         _checklists = checklists;
@@ -1541,6 +1574,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _conflictRecordSection(t, l10n),
       ],
 
+      const SizedBox(height: 16),
+      _ticketWarehouseMaterialsBlock(),
       const SizedBox(height: 16),
       _timelineSection(t),
 
@@ -3246,6 +3281,79 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
     return result;
+  }
+
+  Widget _ticketWarehouseMaterialsBlock() {
+    final m = _ticketMaterialsSummary;
+    if (m == null || m['success'] != true) return const SizedBox.shrink();
+    final totals = m['totals'] as Map<String, dynamic>? ?? {};
+    final usedItems = (m['usedItems'] as List?) ?? const [];
+    final movements = (m['movements'] as List?) ?? const [];
+    final usedRows = (totals['usedItemRows'] as num?)?.toInt() ?? 0;
+    final usedUnits = (totals['usedUnits'] as num?)?.toInt() ?? 0;
+    final damaged = (totals['damagedUnits'] as num?)?.toInt() ?? 0;
+    final lost = (totals['lostUnits'] as num?)?.toInt() ?? 0;
+    final returned = (totals['returnedUnits'] as num?)?.toInt() ?? 0;
+    return _glassSection('Workspace materials', [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        child: Text(
+          'Used lines: $usedRows · units consumed: $usedUnits · damaged (on ticket): $damaged · lost: $lost · returned to stock (on ticket): $returned',
+          style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 12, height: 1.35),
+        ),
+      ),
+      if (usedItems.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: usedItems.take(12).map((raw) {
+              final row = raw as Map<String, dynamic>;
+              final mat = row['material'] as Map<String, dynamic>?;
+              final name = mat?['name'] as String? ?? 'Item';
+              final sn = row['serialNumber'] as String? ?? '';
+              final qty = (row['quantity'] as num?)?.toInt() ?? 1;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '· $name — $sn ×$qty',
+                  style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 12),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      if (movements.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recent movements on this ticket',
+                style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              ...movements.take(8).map((raw) {
+                final mv = raw as Map<String, dynamic>;
+                final type = (mv['type'] as String? ?? '').toUpperCase();
+                final item = mv['item'] as Map<String, dynamic>?;
+                final mat = item?['material'] as Map<String, dynamic>?;
+                final name = mat?['name'] as String? ?? 'Item';
+                final sn = item?['serialNumber'] as String? ?? '';
+                final at = mv['createdAt']?.toString() ?? '';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '$type · $name ($sn) · $at',
+                    style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+    ]);
   }
 
   Widget _timelineSection(Ticket t) {

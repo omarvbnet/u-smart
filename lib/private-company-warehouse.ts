@@ -184,7 +184,8 @@ export async function logMovement(args: {
     | 'TRANSFERRED'
     | 'DAMAGED'
     | 'LOST'
-    | 'ADJUSTED';
+    | 'ADJUSTED'
+    | 'HANDOVER_CONFIRMED';
   fromStaffId?: string | null;
   toStaffId?: string | null;
   ticketId?: string | null;
