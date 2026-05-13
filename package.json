@@ -39,6 +39,9 @@
     "twilio": "^5.12.1",
     "xlsx": "^0.18.5"
   },
+  "overrides": {
+    "effect": "3.16.12"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
