@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
@@ -226,62 +227,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _showCreateChecklistDialog(Ticket t, AppLocalizations l10n) async {
-    final nameCtrl = TextEditingController();
-    final itemsCtrl = TextEditingController();
-    final saved = await showDialog<bool>(
+    final result = await showDialog<_CreateChecklistDialogResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF12122A),
-        title: Text(l10n.t('engineer_cl_create'), style: const TextStyle(color: Colors.white)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: l10n.t('engineer_cl_name'),
-                  labelStyle: TextStyle(color: Colors.white.withAlpha(180)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: itemsCtrl,
-                minLines: 4,
-                maxLines: 10,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: l10n.t('engineer_cl_items_hint'),
-                  alignLabelWithHint: true,
-                  labelStyle: TextStyle(color: Colors.white.withAlpha(180)),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.t('cancel'))),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.t('site_save')),
-          ),
-        ],
-      ),
+      builder: (ctx) => _CreateChecklistTemplateDialog(l10n: l10n),
     );
-    if (saved != true || !mounted) return;
-    final name = nameCtrl.text.trim();
-    final lines = itemsCtrl.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    if (name.isEmpty || lines.isEmpty) return;
-    final items = <Map<String, dynamic>>[];
-    for (var i = 0; i < lines.length; i++) {
-      items.add({
-        'id': 'item-${DateTime.now().microsecondsSinceEpoch}-$i',
-        'label': lines[i],
-        'weight': 'minor',
-      });
-    }
+    if (result == null || !mounted) return;
+    final name = result.name;
+    final items = result.items;
+    if (name.isEmpty || items.isEmpty) return;
     final created = await context.read<TicketsProvider>().createInspectionChecklist(
       name: name,
       items: items,
@@ -1032,7 +985,52 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     double lng,
     AppLocalizations l10n,
   ) async {
-    final ll = '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
+    final dLat = lat.toStringAsFixed(6);
+    final dLng = lng.toStringAsFixed(6);
+    final dest = '$dLat,$dLng';
+
+    Position? pos;
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm != LocationPermission.denied &&
+          perm != LocationPermission.deniedForever) {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 14),
+          ),
+        );
+      }
+    } catch (_) {}
+
+    if (pos != null) {
+      final oLat = pos.latitude.toStringAsFixed(6);
+      final oLng = pos.longitude.toStringAsFixed(6);
+      final wazeRoute = Uri.parse(
+        'https://waze.com/ul?ll=$dest&from=$oLat,$oLng&navigate=yes',
+      );
+      try {
+        if (await canLaunchUrl(wazeRoute)) {
+          final ok = await launchUrl(wazeRoute, mode: LaunchMode.externalApplication);
+          if (ok) return;
+        }
+      } catch (_) {}
+
+      final googleDir = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&origin=$oLat,$oLng&destination=$dLat,$dLng&travelmode=driving',
+      );
+      try {
+        if (await canLaunchUrl(googleDir)) {
+          final ok = await launchUrl(googleDir, mode: LaunchMode.externalApplication);
+          if (ok) return;
+        }
+      } catch (_) {}
+    }
+
+    final ll = dest;
     final appUri = Uri.parse('waze://?ll=$ll&navigate=yes');
     final webUri = Uri.parse('https://waze.com/ul?ll=$ll&navigate=yes');
     try {
@@ -1107,6 +1105,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             final m = Map<String, dynamic>.from(raw);
             final label = m['label'] as String? ?? '';
             if (label.isEmpty) return const SizedBox.shrink();
+            final w = (m['weight'] as String?)?.toLowerCase();
+            final isMajor = w == 'major';
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
@@ -1124,6 +1124,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       style: TextStyle(
                         color: Colors.white.withAlpha(200),
                         fontSize: 13,
+                      ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (isMajor ? const Color(0xFFFF4757) : const Color(0xFF818CF8))
+                          .withAlpha(36),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white.withAlpha(22)),
+                    ),
+                    child: Text(
+                      isMajor ? l10n.t('checklist_weight_major') : l10n.t('checklist_weight_minor'),
+                      style: TextStyle(
+                        color: isMajor ? const Color(0xFFFF8A94) : const Color(0xFFB4B9FF),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -3716,3 +3736,181 @@ class _WorkflowActionButtonState extends State<_WorkflowActionButton> {
   }
 }
 
+class _CreateChecklistDialogResult {
+  _CreateChecklistDialogResult({required this.name, required this.items});
+
+  final String name;
+  final List<Map<String, dynamic>> items;
+}
+
+class _CreateChecklistTemplateDialog extends StatefulWidget {
+  const _CreateChecklistTemplateDialog({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  State<_CreateChecklistTemplateDialog> createState() => _CreateChecklistTemplateDialogState();
+}
+
+class _CreateChecklistTemplateDialogState extends State<_CreateChecklistTemplateDialog> {
+  final _nameCtrl = TextEditingController();
+  final List<TextEditingController> _lineCtrls = [TextEditingController()];
+  final List<String> _weights = ['minor'];
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    for (final c in _lineCtrls) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addLine() {
+    setState(() {
+      _lineCtrls.add(TextEditingController());
+      _weights.add('minor');
+    });
+  }
+
+  void _removeLine(int i) {
+    if (_lineCtrls.length <= 1) return;
+    setState(() {
+      _lineCtrls[i].dispose();
+      _lineCtrls.removeAt(i);
+      _weights.removeAt(i);
+    });
+  }
+
+  void _submit() {
+    final name = _nameCtrl.text.trim();
+    final items = <Map<String, dynamic>>[];
+    final base = DateTime.now().microsecondsSinceEpoch;
+    for (var i = 0; i < _lineCtrls.length; i++) {
+      final label = _lineCtrls[i].text.trim();
+      if (label.isEmpty) continue;
+      final w = _weights[i] == 'major' ? 'major' : 'minor';
+      items.add({
+        'id': 'item-$base-$i',
+        'label': label,
+        'weight': w,
+      });
+    }
+    if (name.isEmpty || items.isEmpty) return;
+    Navigator.pop(
+      context,
+      _CreateChecklistDialogResult(name: name, items: items),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = widget.l10n;
+    return AlertDialog(
+      backgroundColor: const Color(0xFF12122A),
+      title: Text(l10n.t('engineer_cl_create'), style: const TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _nameCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: l10n.t('engineer_cl_name'),
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(180)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              ...List.generate(_lineCtrls.length, (i) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _lineCtrls[i],
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              decoration: InputDecoration(
+                                labelText: '${l10n.t('engineer_cl_item_label')} ${i + 1}',
+                                labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+                              ),
+                            ),
+                          ),
+                          if (_lineCtrls.length > 1)
+                            IconButton(
+                              onPressed: () => _removeLine(i),
+                              icon: Icon(Icons.close_rounded, color: Colors.white.withAlpha(140)),
+                              tooltip: l10n.t('cancel'),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.t('engineer_cl_weight'),
+                        style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                      ),
+                      const SizedBox(height: 4),
+                      SegmentedButton<String>(
+                        segments: [
+                          ButtonSegment(
+                            value: 'minor',
+                            label: Text(l10n.t('checklist_weight_minor')),
+                          ),
+                          ButtonSegment(
+                            value: 'major',
+                            label: Text(l10n.t('checklist_weight_major')),
+                          ),
+                        ],
+                        selected: {_weights[i]},
+                        onSelectionChanged: (s) {
+                          setState(() => _weights[i] = s.first);
+                        },
+                        style: ButtonStyle(
+                          foregroundColor: WidgetStateProperty.resolveWith((states) {
+                            if (states.contains(WidgetState.selected)) {
+                              return Colors.white;
+                            }
+                            return Colors.white70;
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _addLine,
+                  icon: const Icon(Icons.add_rounded, color: Color(0xFF00D4AA)),
+                  label: Text(
+                    l10n.t('engineer_cl_add_item'),
+                    style: const TextStyle(color: Color(0xFF00D4AA)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n.t('cancel')),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(l10n.t('site_save')),
+        ),
+      ],
+    );
+  }
+}

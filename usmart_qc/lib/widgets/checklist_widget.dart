@@ -311,17 +311,49 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        item.label,
-                        style: TextStyle(
-                          color: isAccepted || isRejected
-                              ? Colors.white
-                              : Colors.white.withAlpha(180),
-                          fontSize: 14,
-                          decoration: isRejected
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.label,
+                              style: TextStyle(
+                                color: isAccepted || isRejected
+                                    ? Colors.white
+                                    : Colors.white.withAlpha(180),
+                                fontSize: 14,
+                                decoration: isRejected
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (item.weight == 'major'
+                                      ? const Color(0xFFFF4757)
+                                      : const Color(0xFF818CF8))
+                                  .withAlpha(36),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white.withAlpha(22)),
+                            ),
+                            child: Text(
+                              item.weight == 'major'
+                                  ? l10n.t('checklist_weight_major')
+                                  : l10n.t('checklist_weight_minor'),
+                              style: TextStyle(
+                                color: item.weight == 'major'
+                                    ? const Color(0xFFFF8A94)
+                                    : const Color(0xFFB4B9FF),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),

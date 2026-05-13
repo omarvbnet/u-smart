@@ -30,6 +30,7 @@ import '../providers/private_company_provider.dart';
 import '../widgets/update_password_sheet.dart';
 import '../widgets/site_share_dialog.dart';
 import '../widgets/site_bulk_import_menu.dart';
+import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../config/api_config.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -2388,6 +2389,11 @@ class _TechnicianStatsContent extends StatelessWidget {
             await ticketsProvider.fetchTickets();
             await ticketsProvider.fetchStats();
             await conflictsProvider.fetchConflicts();
+            if (!context.mounted) return;
+            final pc = context.read<PrivateCompanyProvider>();
+            if (pc.hasWorkspace && pc.isApproved) {
+              await refreshWorkspaceFieldStaffAnalytics(context);
+            }
           },
           color: const Color(0xFF6C63FF),
           child: ListView(
@@ -2486,6 +2492,7 @@ class _TechnicianStatsContent extends StatelessWidget {
                   ),
                 ],
               ),
+              const WorkspaceFieldStaffAnalyticsPanel(),
             ],
           ),
         );

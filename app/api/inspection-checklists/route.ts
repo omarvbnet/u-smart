@@ -49,7 +49,19 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const baseOr: Record<string, unknown>[] = [{ companyId: companyScopeId }, { companyId: null }];
+    let privateCompanyStaff = false;
+    if (auth.payload.identitySource === 'ticket_requester') {
+      const tr = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { privateCompanyId: true },
+      });
+      privateCompanyStaff = !!tr?.privateCompanyId;
+    }
+
+    // Private-workspace field staff must not see global (companyId null) templates mixed with their workspace.
+    const baseOr: Record<string, unknown>[] = privateCompanyStaff
+      ? [{ companyId: companyScopeId }]
+      : [{ companyId: companyScopeId }, { companyId: null }];
 
     let where: Record<string, unknown>;
 

@@ -26,6 +26,8 @@ import 'conflicts_screen.dart';
 import '../widgets/update_password_sheet.dart';
 import '../widgets/site_share_dialog.dart';
 import '../widgets/site_bulk_import_menu.dart';
+import '../widgets/workspace_field_staff_analytics_panel.dart';
+import '../providers/private_company_provider.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -1316,6 +1318,11 @@ class _EngineerAnalyticsTab extends StatelessWidget {
             await ticketsProvider.fetchTickets();
             await ticketsProvider.fetchStats();
             await conflictsProvider.fetchConflicts();
+            if (!context.mounted) return;
+            final pc = context.read<PrivateCompanyProvider>();
+            if (pc.hasWorkspace && pc.isApproved) {
+              await refreshWorkspaceFieldStaffAnalytics(context);
+            }
           },
           color: const Color(0xFF6C63FF),
           child: ListView(
@@ -1414,6 +1421,7 @@ class _EngineerAnalyticsTab extends StatelessWidget {
                   ),
                 ],
               ),
+              const WorkspaceFieldStaffAnalyticsPanel(),
             ],
           ),
         );
