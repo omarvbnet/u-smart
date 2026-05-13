@@ -15,6 +15,7 @@ import '../providers/auth_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
 import '../l10n/app_localizations.dart';
+import 'workspace_techniques_screen.dart';
 
 String _pcStatusLabel(PrivateCompanyStatus s, AppLocalizations l10n) {
   switch (s) {
@@ -703,6 +704,7 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
     final byRole = <String, int>{};
     for (final s in workspace.staff) {
       byRole[s.role] = (byRole[s.role] ?? 0) + 1;
@@ -716,6 +718,23 @@ class _OverviewTab extends StatelessWidget {
                 pc.submitting ? null : () => _openBroadcast(context),
             label: 'Send notification',
             icon: Icons.campaign_rounded,
+            stretch: true,
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (pc.canManageWorkspaceTechniques) ...[
+          _GradientButton(
+            onPressed: pc.submitting
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const WorkspaceTechniquesScreen(),
+                      ),
+                    );
+                  },
+            label: l10n.t('pc_ws_manage_techniques_btn'),
+            icon: Icons.category_rounded,
             stretch: true,
           ),
           const SizedBox(height: 14),

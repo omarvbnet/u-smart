@@ -100,6 +100,9 @@ class ApiConfig {
   static const String privateCompanyDepartments = '/api/provisor-private-company/departments';
   static const String privateCompanyStaff = '/api/provisor-private-company/staff';
   static const String privateCompanyChecklists = '/api/provisor-private-company/checklists';
+  static const String privateCompanyTechniques = '/api/provisor-private-company/techniques';
+  static String privateCompanyTechniqueDetail(String id) =>
+      '/api/provisor-private-company/techniques/$id';
   static const String privateCompanyNotifications = '/api/provisor-private-company/notifications';
   static const String privateCompanyKpis = '/api/provisor-private-company/kpis';
   static const String privateCompanyExport = '/api/provisor-private-company/export';

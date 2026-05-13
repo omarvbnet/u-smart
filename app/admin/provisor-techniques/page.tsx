@@ -103,7 +103,9 @@ export default function AdminProvisorTechniquesPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Provisor techniques</h1>
         <p className="text-gray-400 text-sm mt-1">
-          Arabic labels are primary in the app; English is optional. Slugs are stored on tickets — avoid changing slugs after use.
+          Global defaults for all Provisor users and tickets. Arabic labels are primary in the app; English is optional.
+          Slugs are stored on tickets — avoid changing slugs after use. Workspace owners can add additional types scoped
+          to their company in the mobile app (hub → Work techniques).
         </p>
       </div>
 

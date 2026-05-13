@@ -23,6 +23,13 @@ class SiteMapPickerScreen extends StatefulWidget {
 class _SiteMapPickerScreenState extends State<SiteMapPickerScreen> {
   static const _defaultCenter = LatLng(33.3152, 44.3661); // Baghdad
 
+  /// CARTO raster tiles (OSM data, CDN intended for app embedding). Do not use
+  /// `tile.openstreetmap.org` — volunteer OSM servers return 403 for many apps
+  /// that do not meet https://operations.osmfoundation.org/policies/tiles/
+  static const _tileSubdomains = ['a', 'b', 'c', 'd'];
+  static const _tileUrlTemplate =
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
+
   late final MapController _mapController;
   LatLng? _selected;
 
@@ -94,7 +101,10 @@ class _SiteMapPickerScreenState extends State<SiteMapPickerScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: _tileUrlTemplate,
+                  subdomains: _tileSubdomains,
+                  userAgentPackageName: 'usmart_qc',
+                  maxNativeZoom: 19,
                 ),
                 if (_selected != null)
                   MarkerLayer(
@@ -111,6 +121,17 @@ class _SiteMapPickerScreenState extends State<SiteMapPickerScreen> {
                       ),
                     ],
                   ),
+                SimpleAttributionWidget(
+                  alignment: Alignment.bottomRight,
+                  backgroundColor: const Color(0xAA05051A),
+                  source: Text(
+                    l10n.t('site_map_attribution'),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

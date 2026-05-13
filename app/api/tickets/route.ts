@@ -11,6 +11,7 @@ import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 import { hasPrivilege } from '@/lib/coordinator-access';
 import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
+import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,6 +39,43 @@ const REQUESTER_TASK_CATEGORY_BY_TECHNIQUE = (technique: string): 'QUALITY' | 'S
   if (technique === 'supervision') return 'SUPERVISION';
   return 'QUALITY';
 };
+
+/** Active `provisor_techniques.slug` may differ from built-in lists when admins customize labels. */
+type ProvisorTechniqueCategory = 'INSPECTION_QC' | 'MAINTENANCE';
+
+async function lookupProvisorTechniqueCategory(
+  slug: string,
+  opts?: { workspaceCompanyId: string | null }
+): Promise<ProvisorTechniqueCategory | null> {
+  if (opts?.workspaceCompanyId) {
+    try {
+      const delegate = (prisma as any).privateCompanyTechnique;
+      if (delegate?.findFirst) {
+        const w = await delegate.findFirst({
+          where: { companyId: opts.workspaceCompanyId, slug, active: true },
+          select: { category: true },
+        });
+        const wc = w?.category as string | undefined;
+        if (wc === 'INSPECTION_QC' || wc === 'MAINTENANCE') return wc;
+      }
+    } catch {
+      /* table missing */
+    }
+  }
+  try {
+    const delegate = (prisma as any).provisorTechnique;
+    if (!delegate?.findFirst) return null;
+    const row = await delegate.findFirst({
+      where: { slug, active: true },
+      select: { category: true },
+    });
+    const c = row?.category as string | undefined;
+    if (c === 'INSPECTION_QC' || c === 'MAINTENANCE') return c;
+  } catch {
+    /* table missing or query error */
+  }
+  return null;
+}
 
 async function getRequesterChecklistCompanyId(
   requester: { id: string; username?: string | null; email?: string | null; role?: string | null }
@@ -154,7 +192,8 @@ async function notifyPrivateCompanyMembersNewTicket(
   privateCompanyId: string,
   technique: string,
   province: string,
-  siteName: string
+  siteName: string,
+  opts?: { maintenanceStyle?: boolean }
 ) {
   try {
     const company = await (prisma as any).privateCompany.findUnique({
@@ -167,7 +206,8 @@ async function notifyPrivateCompanyMembersNewTicket(
       },
     });
     if (!company) return;
-    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(technique);
+    const isMaintenance =
+      opts?.maintenanceStyle === true || MAINTENANCE_TECHNIQUES.includes(technique);
     const allowed = new Set<string>(['MANAGER', 'COORDINATOR']);
     if (isMaintenance) {
       allowed.add('TECHNICIAN');
@@ -248,7 +288,11 @@ export async function POST(req: NextRequest) {
 
     if (!siteName || !siteCoordinator || !technique) {
       return NextResponse.json(
-        { success: false, message: 'Site name, site location, and technique are required' },
+        {
+          success: false,
+          error: 'MISSING_TICKET_FIELDS',
+          message: 'Site name, site location, and technique are required',
+        },
         { status: 400 }
       );
     }
@@ -309,12 +353,44 @@ export async function POST(req: NextRequest) {
       company = company || coordinatorContext.companyId;
     }
 
+    let approvedWorkspaceCompanyId: string | null = null;
+    if (payload?.requesterId) {
+      const m = await getPrivateCompanyMembership(payload.requesterId);
+      if (m.effectiveCompanyId) {
+        const comp = await prisma.privateCompany.findUnique({
+          where: { id: m.effectiveCompanyId },
+          select: { status: true },
+        });
+        if (comp?.status === 'APPROVED') {
+          approvedWorkspaceCompanyId = m.effectiveCompanyId;
+        }
+      }
+    }
+
+    let provisorTechniqueKind: ProvisorTechniqueCategory | null = null;
     if (!ALL_TECHNIQUES.includes(technique)) {
+      provisorTechniqueKind = await lookupProvisorTechniqueCategory(technique, {
+        workspaceCompanyId: approvedWorkspaceCompanyId,
+      });
+    }
+    if (!ALL_TECHNIQUES.includes(technique) && !provisorTechniqueKind) {
       return NextResponse.json(
-        { success: false, message: 'Invalid technique' },
+        {
+          success: false,
+          error: 'INVALID_TECHNIQUE',
+          message: 'Invalid technique',
+        },
         { status: 400 }
       );
     }
+
+    const ticketIsMaintenanceKind =
+      MAINTENANCE_TECHNIQUES.includes(technique) || provisorTechniqueKind === 'MAINTENANCE';
+    const ticketUsesQcServiceSlug =
+      QUALITY_CONTROL_TECHNIQUES.includes(technique) ||
+      MAINTENANCE_TECHNIQUES.includes(technique) ||
+      provisorTechniqueKind === 'INSPECTION_QC' ||
+      provisorTechniqueKind === 'MAINTENANCE';
 
     // Worker cannot create any tickets – view-only, admin-assigned
     if (payload && !coordinatorContext) {
@@ -326,7 +402,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const isMaintenanceTicket = MAINTENANCE_TECHNIQUES.includes(technique);
+    const isMaintenanceTicket = ticketIsMaintenanceKind;
     if (isMaintenanceTicket && payload && !coordinatorContext) {
       // Private-company workspace members (manager/coordinator/engineer) are
       // also allowed to file maintenance tickets on behalf of their workspace.
@@ -523,7 +599,10 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      autoTaskCategory = REQUESTER_TASK_CATEGORY_BY_TECHNIQUE(technique);
+      autoTaskCategory =
+        provisorTechniqueKind === 'MAINTENANCE'
+          ? 'MAINTENANCE'
+          : REQUESTER_TASK_CATEGORY_BY_TECHNIQUE(technique);
       autoRoleScope = ROLE_SCOPE_BY_TASK_CATEGORY[autoTaskCategory] as
         | 'QUALITY_ENGINEER'
         | 'SUPERVISION_ENGINEER'
@@ -678,11 +757,9 @@ export async function POST(req: NextRequest) {
     }
     const companyPayload = JSON.stringify(companyPayloadObj);
 
-    const serviceSlug = QUALITY_CONTROL_TECHNIQUES.includes(technique)
+    const serviceSlug = ticketUsesQcServiceSlug
       ? 'quality-control-supervision'
-      : MAINTENANCE_TECHNIQUES.includes(technique)
-        ? 'quality-control-supervision'
-        : 'enterprise-networking';
+      : 'enterprise-networking';
 
     const ticketData: {
       buildingType: string;
@@ -884,7 +961,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (serviceSlug === 'quality-control-supervision') {
-        if (MAINTENANCE_TECHNIQUES.includes(technique)) {
+        if (ticketIsMaintenanceKind) {
           notifyTechniciansNewTicket(ticket.id, province, siteName).catch(() => {});
         } else {
           notifyEngineersNewTicket(ticket.id, province, siteName).catch(() => {});
@@ -942,9 +1019,10 @@ export async function POST(req: NextRequest) {
           privateCompanyIdForTicket,
           technique,
           province,
-          siteName
+          siteName,
+          { maintenanceStyle: ticketIsMaintenanceKind }
         ).catch(() => {});
-      } else if (MAINTENANCE_TECHNIQUES.includes(technique)) {
+      } else if (ticketIsMaintenanceKind) {
         notifyTechniciansNewTicket(ticket.id, province, siteName, {
           directoryOnly: notifyOpenPoolDirectoryOnly,
         }).catch(() => {});

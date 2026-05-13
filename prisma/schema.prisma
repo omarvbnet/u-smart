@@ -1345,11 +1345,36 @@ model PrivateCompany {
   materialItems    PrivateCompanyMaterialItem[]    @relation("PrivateCompanyMaterialItems")
   materialMovements PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovements")
   materialRequests PrivateCompanyMaterialRequest[]  @relation("PrivateCompanyMaterialRequests")
+  /// Optional QC / maintenance technique slugs for this workspace (owner-managed).
+  workspaceTechniques PrivateCompanyTechnique[]
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
   @@index([status])
   @@map("private_companies")
+}
+
+/// Workspace-specific ticket technique options (slug stored on VisitorRequest.technique).
+/// Optional [departmentId] limits visibility to that department; null = all members.
+model PrivateCompanyTechnique {
+  id           String                    @id @default(cuid())
+  companyId    String
+  company      PrivateCompany            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category     String // INSPECTION_QC | MAINTENANCE
+  slug         String
+  labelAr      String
+  labelEn      String?
+  sortOrder    Int                       @default(0)
+  active       Boolean                   @default(true)
+  departmentId String?
+  department   PrivateCompanyDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@unique([companyId, category, slug])
+  @@index([companyId, active])
+  @@index([departmentId])
+  @@map("private_company_techniques")
 }
 
 model PrivateCompanyDepartment {
@@ -1362,6 +1387,7 @@ model PrivateCompanyDepartment {
   iconKey     String? // material icon key for UI
   sortOrder   Int               @default(0)
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
+  techniques  PrivateCompanyTechnique[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 

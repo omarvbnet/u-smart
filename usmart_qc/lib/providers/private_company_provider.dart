@@ -588,6 +588,75 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  /// Only the workspace owner may manage workspace-scoped ticket techniques.
+  bool get canManageWorkspaceTechniques => isOwner;
+
+  // ─── Workspace techniques (owner) ───────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> fetchWorkspaceTechniquesManagement() async {
+    try {
+      final res = await _api.get(ApiConfig.privateCompanyTechniques);
+      if (res['success'] == true && res['techniques'] is List) {
+        return List<Map<String, dynamic>>.from(res['techniques'] as List);
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> createWorkspaceTechnique({
+    required String category,
+    required String slug,
+    required String labelAr,
+    String? labelEn,
+    int sortOrder = 0,
+    String? departmentId,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyTechniques, body: {
+        'category': category,
+        'slug': slug,
+        'labelAr': labelAr,
+        if (labelEn != null && labelEn.trim().isNotEmpty) 'labelEn': labelEn.trim(),
+        'sortOrder': sortOrder,
+        if (departmentId != null && departmentId.isNotEmpty) 'departmentId': departmentId,
+      });
+      if (res['success'] == true) {
+        _setSuccess('Technique saved.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to save technique.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteWorkspaceTechnique(String id) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.delete(ApiConfig.privateCompanyTechniqueDetail(id));
+      if (res['success'] == true) {
+        _setSuccess('Technique removed.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to delete.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   // ─── Owner broadcast ─────────────────────────────────────────────────────
 
   /// Owner-only. Sends an in-app + push notification to staff matching the
