@@ -44,27 +44,36 @@ async function getRequesterChecklistCompanyId(
 ): Promise<string | null> {
   const role = String(requester.role ?? '').toUpperCase();
   if (role === 'COMPANY') {
-    const linked = await getLinkedCoordinatorCompanyId(prisma, {
-      id: requester.id,
-      username: requester.username ?? '',
-      email: requester.email ?? null,
-      role,
-    });
-    if (linked) return linked;
+    try {
+      const linked = await getLinkedCoordinatorCompanyId(prisma, {
+        id: requester.id,
+        username: requester.username ?? '',
+        email: requester.email ?? null,
+        role,
+      });
+      if (linked) return linked;
+    } catch {
+      /* ignore */
+    }
   }
-  const username = (requester.username ?? '').trim();
-  const email = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
-  if (!username && !email) return null;
-  const owner = await (prisma as any).coordinatorUser.findFirst({
-    where: {
-      OR: [
-        ...(username ? [{ username: { equals: username, mode: 'insensitive' } }] : []),
-        ...(email ? [{ email: { equals: email, mode: 'insensitive' } }] : []),
-      ],
-    },
-    select: { companyId: true },
-  });
-  return owner?.companyId ?? null;
+  try {
+    const username = (requester.username ?? '').trim();
+    const email = typeof requester.email === 'string' ? requester.email.trim().toLowerCase() : '';
+    if (!username && !email) return null;
+    const owner = await (prisma as any).coordinatorUser.findFirst({
+      where: {
+        OR: [
+          ...(username ? [{ username: { equals: username, mode: 'insensitive' } }] : []),
+          ...(email ? [{ email: { equals: email, mode: 'insensitive' } }] : []),
+        ],
+      },
+      select: { companyId: true },
+    });
+    return owner?.companyId ?? null;
+  } catch (e) {
+    console.error('getRequesterChecklistCompanyId:', e);
+    return null;
+  }
 }
 
 async function notifyRoleNewTicket(
@@ -225,6 +234,17 @@ export async function POST(req: NextRequest) {
     let company = typeof body.company === 'string' ? body.company.trim() : '';
     let phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     let province = typeof body.province === 'string' ? body.province.trim() : '';
+
+    const requestedAssignmentScopeRaw =
+      typeof body.assignmentScope === 'string' ? body.assignmentScope.trim().toUpperCase() : '';
+    const wantsOpenPoolAssignmentScope =
+      requestedAssignmentScopeRaw === 'GLOBAL' ||
+      requestedAssignmentScopeRaw === 'USMART_STAFF' ||
+      requestedAssignmentScopeRaw === 'ALL' ||
+      requestedAssignmentScopeRaw === 'OPEN';
+    const wantsPrivateCompanyAssignmentScope =
+      requestedAssignmentScopeRaw === 'PRIVATE_COMPANY' ||
+      requestedAssignmentScopeRaw === 'PRIVATE_COMPANY_STAFF';
 
     if (!siteName || !siteCoordinator || !technique) {
       return NextResponse.json(
@@ -527,17 +547,11 @@ export async function POST(req: NextRequest) {
               ? (me as { privateCompanyOwned?: { id: string } | null })?.privateCompanyOwned?.id ?? null
               : (me as { privateCompanyId?: string | null })?.privateCompanyId ?? null;
           creatorPrivateWorkspaceId = myWorkspaceId;
-          const requestedScopeRaw =
-            typeof body.assignmentScope === 'string' ? body.assignmentScope.trim().toUpperCase() : '';
-          const wantsPrivate =
-            requestedScopeRaw === 'PRIVATE_COMPANY' ||
-            requestedScopeRaw === 'PRIVATE_COMPANY_STAFF';
-          const wantsGlobal =
-            requestedScopeRaw === 'GLOBAL' ||
-            requestedScopeRaw === 'USMART_STAFF' ||
-            requestedScopeRaw === 'ALL' ||
-            requestedScopeRaw === 'OPEN';
-          if (myWorkspaceId && !wantsGlobal && (wantsPrivate || requestedScopeRaw === '')) {
+          if (
+            myWorkspaceId &&
+            !wantsOpenPoolAssignmentScope &&
+            (wantsPrivateCompanyAssignmentScope || requestedAssignmentScopeRaw === '')
+          ) {
             assignmentScope = 'PRIVATE_COMPANY_STAFF';
             privateCompanyIdForTicket = myWorkspaceId;
           }
@@ -567,7 +581,11 @@ export async function POST(req: NextRequest) {
               me?.privateCompanyOwned?.status === 'APPROVED'
                 ? me.privateCompanyOwned.id
                 : (me?.privateCompanyId ?? null);
-            if (myWorkspaceId && myWorkspaceId === pc.companyId) {
+            if (
+              myWorkspaceId &&
+              myWorkspaceId === pc.companyId &&
+              !wantsOpenPoolAssignmentScope
+            ) {
               resolved = { id: pc.id, source: 'private' };
             }
           }

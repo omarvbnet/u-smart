@@ -40,7 +40,7 @@
     "xlsx": "^0.18.5"
   },
   "overrides": {
-    "effect": "3.16.12"
+    "effect": "3.21.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
