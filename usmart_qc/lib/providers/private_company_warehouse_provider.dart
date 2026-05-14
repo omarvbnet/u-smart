@@ -209,6 +209,20 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Province breakdown for owners / managers / coordinators / keepers (full inventory scope).
+  Future<Map<String, dynamic>?> fetchProvinceInventory(String province) async {
+    try {
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyWarehouseProvinceInventory,
+        query: {'province': province},
+      );
+      if (res != null && res['success'] == true) {
+        return Map<String, dynamic>.from(res);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> refreshMaterials() async {
     await _loadMaterials();
     notifyListeners();

@@ -13,6 +13,7 @@ import { hasPrivilege } from '@/lib/coordinator-access';
 import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 import {
+  assignedStaffIdFromCompanyJson,
   parseTicketCompanyJson,
   ticketFieldStaffInvolvesRequester,
 } from '@/lib/private-company-kpi';
@@ -1515,18 +1516,41 @@ export async function GET(req: NextRequest) {
       const deptId = (meRow as { privateCompanyDepartmentId?: string | null } | null)?.privateCompanyDepartmentId ?? null;
       const allowedSlugsRaw = (meRow as { privateCompanyAllowedTaskSlugs?: string[] | null } | null)?.privateCompanyAllowedTaskSlugs;
       const allowedSlugs = Array.isArray(allowedSlugsRaw) ? allowedSlugsRaw : [];
+      let engineerAvailabilityPoolEnabled = true;
+      let technicianAvailabilityPoolEnabled = true;
+      if (deptId) {
+        const drow = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: deptId, companyId: myStaffWorkspaceId },
+          select: {
+            engineerAvailabilityPoolEnabled: true,
+            technicianAvailabilityPoolEnabled: true,
+          },
+        });
+        if (drow) {
+          engineerAvailabilityPoolEnabled = drow.engineerAvailabilityPoolEnabled !== false;
+          technicianAvailabilityPoolEnabled = drow.technicianAvailabilityPoolEnabled !== false;
+        }
+      }
       rowsForList = rowsForList.filter((r) => {
         const pcId = r.privateCompanyId ?? null;
         const scope = r.assignmentScope ?? null;
         if (pcId !== myStaffWorkspaceId || scope !== 'PRIVATE_COMPANY_STAFF') return true;
         const parsed = parseTicketCompanyJson(r.company);
         if (ticketFieldStaffInvolvesRequester(parsed, payload.requesterId)) return true;
-        return staffTicketTechniqueAllowed({
+        const allowedByTechnique = staffTicketTechniqueAllowed({
           technique: r.technique,
           staffDepartmentId: deptId,
           staffAllowedSlugs: allowedSlugs,
           workspaceRows: techRows,
         });
+        if (!allowedByTechnique) return false;
+        const pendingUnassigned =
+          String(r.status).toUpperCase() === 'PENDING' && !assignedStaffIdFromCompanyJson(parsed);
+        if (pendingUnassigned) {
+          if (requesterRole === 'TECHNICIAN' && !technicianAvailabilityPoolEnabled) return false;
+          if (isQcPoolEngineerRole(requesterRole) && !engineerAvailabilityPoolEnabled) return false;
+        }
+        return true;
       });
     }
 

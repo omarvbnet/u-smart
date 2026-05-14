@@ -3577,7 +3577,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
-              ...movements.take(8).map((raw) {
+              ...movements.take(15).map((raw) {
                 final mv = raw as Map<String, dynamic>;
                 final type = (mv['type'] as String? ?? '').toUpperCase();
                 final item = mv['item'] as Map<String, dynamic>?;

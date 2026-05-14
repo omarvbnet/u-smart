@@ -10,9 +10,11 @@ const prisma = _prisma as any;
 /**
  * Only the workspace owner (COMPANY) and dedicated warehouse keepers may
  * create catalog entries, stock serials, import Excel, assign/transfer items,
- * or mark damaged/lost. Managers, coordinators, and keepers may browse the
- * full workspace inventory; field roles (engineer / technician / worker, etc.)
- * only see units assigned to them and related movement rows.
+ * or mark items damaged/lost on behalf of the warehouse without assignment.
+ * Assignees with ticket-material roles may report their own assigned lines
+ * damaged/lost (same gate as recording use on tickets). Managers, coordinators,
+ * and keepers may browse the full workspace inventory; field roles only see
+ * units assigned to them and related movement rows.
  */
 export const CAN_MUTATE_WAREHOUSE_ROLES = new Set(['COMPANY', 'WAREHOUSE_KEEPER']);
 

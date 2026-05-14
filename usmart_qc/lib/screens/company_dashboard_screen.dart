@@ -32,6 +32,7 @@ import '../widgets/update_password_sheet.dart';
 import '../widgets/site_share_dialog.dart';
 import '../widgets/site_bulk_import_menu.dart';
 import '../widgets/workspace_field_staff_analytics_panel.dart';
+import '../widgets/available_tickets_pool_tab.dart';
 import '../config/api_config.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -63,7 +64,12 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
     final tickets = context.read<TicketsProvider>();
     final conflicts = context.read<ConflictsProvider>();
     final auth = context.read<AuthProvider>();
+    final pc = context.read<PrivateCompanyProvider>();
     final isTechnician = auth.isTechnician;
+    final inApprovedPrivateWorkspace =
+        pc.workspace != null && pc.isApproved && (pc.isOwner || pc.isStaff);
+    final technicianWorkspacePool =
+        isTechnician && inApprovedPrivateWorkspace && !auth.isWorker;
     final futures = <Future<void>>[
       tickets.fetchTickets(),
       tickets.refreshAnalyticsForSession(
@@ -71,6 +77,9 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       ),
       conflicts.fetchConflicts(),
     ];
+    if (technicianWorkspacePool) {
+      futures.add(tickets.loadProvinceFilter());
+    }
     if (!auth.isWorker) {
       futures.add(context.read<SitesProvider>().fetchSites());
     }
@@ -90,18 +99,54 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
     final showCompanyTab = auth.canAccessCompanyHub;
     final inApprovedPrivateWorkspace =
         pc.workspace != null && pc.isApproved && (pc.isOwner || pc.isStaff);
+    final technicianWorkspacePool =
+        isTechnician && inApprovedPrivateWorkspace && !isWorker;
     final readOnlyRole =
         isWorker || (isTechnician && !inApprovedPrivateWorkspace);
     final technicianWithSites = isTechnician && !isWorker;
 
     // Tab order depends on role
-    final tabChildren = readOnlyRole && !technicianWithSites
-        ? const [_TicketsTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()]
-        : readOnlyRole && technicianWithSites
-            ? const [_TicketsTab(), _SitesTab(allowCreateSite: false), _StatsTab(), _ConflictsTab(), _ProfileTab()]
-        : showCompanyTab
-            ? const [_TicketsTab(), _SitesTab(), _StatsTab(), _CompanyTab(), _ConflictsTab(), _ProfileTab()]
-            : const [_TicketsTab(), _SitesTab(), _StatsTab(), _ConflictsTab(), _ProfileTab()];
+    final tabChildren = technicianWorkspacePool
+        ? [
+            AvailableTicketsPoolTab(
+                workspaceScopeHint: pc.workspaceFieldAssignmentHint),
+            const _TicketsTab(),
+            const _SitesTab(allowCreateSite: false),
+            const _StatsTab(),
+            const _ConflictsTab(),
+            const _ProfileTab(),
+          ]
+        : readOnlyRole && !technicianWithSites
+            ? const [
+                _TicketsTab(),
+                _StatsTab(),
+                _ConflictsTab(),
+                _ProfileTab()
+              ]
+            : readOnlyRole && technicianWithSites
+                ? const [
+                    _TicketsTab(),
+                    _SitesTab(allowCreateSite: false),
+                    _StatsTab(),
+                    _ConflictsTab(),
+                    _ProfileTab()
+                  ]
+                : showCompanyTab
+                    ? const [
+                        _TicketsTab(),
+                        _SitesTab(),
+                        _StatsTab(),
+                        _CompanyTab(),
+                        _ConflictsTab(),
+                        _ProfileTab()
+                      ]
+                    : const [
+                        _TicketsTab(),
+                        _SitesTab(),
+                        _StatsTab(),
+                        _ConflictsTab(),
+                        _ProfileTab()
+                      ];
     final tabCount = tabChildren.length;
 
     return Scaffold(
@@ -154,7 +199,16 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               selectedFontSize: 10,
               unselectedFontSize: 10,
               elevation: 0,
-              items: readOnlyRole && !technicianWithSites
+              items: technicianWorkspacePool
+                  ? [
+                      _navItem(Icons.inbox_rounded, l10n.t('nav_available')),
+                      _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                      _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                      _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                      _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                      _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                    ]
+                  : readOnlyRole && !technicianWithSites
                   ? [
                       _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
                       _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
@@ -169,27 +223,29 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                           _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
                           _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                         ]
-                  : showCompanyTab
-                      ? [
-                          _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
-                          _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
-                          _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
-                          _navItem(Icons.business_center_rounded, l10n.t('nav_company')),
-                          _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
-                          _navItem(Icons.person_rounded, l10n.t('nav_profile')),
-                        ]
-                      : [
-                          _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
-                          _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
-                          _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
-                          _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
-                          _navItem(Icons.person_rounded, l10n.t('nav_profile')),
-                        ],
+                      : showCompanyTab
+                          ? [
+                              _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                              _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                              _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                              _navItem(Icons.business_center_rounded, l10n.t('nav_company')),
+                              _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                              _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                            ]
+                          : [
+                              _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
+                              _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                              _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
+                              _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                              _navItem(Icons.person_rounded, l10n.t('nav_profile')),
+                            ],
             ),
           ),
         ),
       ),
-      floatingActionButton: _currentTab == 0 && !readOnlyRole
+      floatingActionButton: _currentTab ==
+                  (technicianWorkspacePool ? 1 : 0) &&
+              !readOnlyRole
           ? Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(

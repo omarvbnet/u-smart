@@ -123,6 +123,8 @@ class ApiConfig {
       '/api/provisor-private-company/warehouse/items/$id';
   static const String privateCompanyWarehouseDashboard =
       '/api/provisor-private-company/warehouse/dashboard';
+  static const String privateCompanyWarehouseProvinceInventory =
+      '/api/provisor-private-company/warehouse/province-inventory';
   static const String privateCompanyWarehouseActivity =
       '/api/provisor-private-company/warehouse/activity';
   static const String privateCompanyWarehouseStaffMaterialBudgets =

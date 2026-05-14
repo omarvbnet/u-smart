@@ -1080,6 +1080,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   String _color = '#6C63FF';
   String? _iconKey;
   bool _proxJoin = false;
+  bool _engineerAvailabilityPool = true;
+  bool _technicianAvailabilityPool = true;
 
   static const _iconOptions = <String, IconData>{
     'engineering': Icons.engineering_rounded,
@@ -1114,6 +1116,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
     );
     _color = widget.existing?.color ?? _colorOptions[math.Random().nextInt(_colorOptions.length)];
     _iconKey = widget.existing?.iconKey;
+    _engineerAvailabilityPool = widget.existing?.engineerAvailabilityPoolEnabled ?? true;
+    _technicianAvailabilityPool = widget.existing?.technicianAvailabilityPoolEnabled ?? true;
   }
 
   @override
@@ -1135,6 +1139,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         description: _description.text.trim(),
         color: _color,
         iconKey: _iconKey,
+        engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
+        technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
       );
     } else {
       final r = int.tryParse(_proxRadius.text.trim());
@@ -1147,6 +1153,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         iconKey: _iconKey ?? '',
         maintenanceProximityJoinEnabled: _proxJoin,
         maintenanceProximityRadiusM: radius,
+        engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
+        technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
       );
     }
     if (ok && mounted) Navigator.pop(context);
@@ -1257,6 +1265,54 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                       ),
                     );
                   }).toList(),
+                ),
+                const SizedBox(height: 20),
+                const _SectionTitle('Availability pool'),
+                const SizedBox(height: 6),
+                Text(
+                  'When off, engineers or technicians in this department cannot browse or self-assign unassigned workspace tickets from the Available tab (they still see tickets already assigned to them).',
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Engineers — QC availability pool',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Pending inspection / QC tickets this department may claim.',
+                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                  ),
+                  value: _engineerAvailabilityPool,
+                  activeThumbColor: const Color(0xFF6C63FF),
+                  onChanged: (v) => setState(() => _engineerAvailabilityPool = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Technicians — maintenance availability pool',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Pending maintenance tickets this department may claim.',
+                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                  ),
+                  value: _technicianAvailabilityPool,
+                  activeThumbColor: const Color(0xFF00D4AA),
+                  onChanged: (v) => setState(() => _technicianAvailabilityPool = v),
                 ),
                 if (widget.existing != null) ...[
                   const SizedBox(height: 20),
@@ -4803,6 +4859,293 @@ class _WarehouseKeeperTrackingSections extends StatelessWidget {
 
 // ─── Dashboard sub-tab ─────────────────────────────────────────────────────
 
+Future<void> _showProvinceWarehouseInventory(
+    BuildContext context, String province) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => DraggableScrollableSheet(
+      initialChildSize: 0.78,
+      minChildSize: 0.38,
+      maxChildSize: 0.95,
+      builder: (_, scrollCtrl) =>
+          _ProvinceInventorySheet(province: province, scrollController: scrollCtrl),
+    ),
+  );
+}
+
+class _ProvinceInventorySheet extends StatefulWidget {
+  const _ProvinceInventorySheet({
+    required this.province,
+    required this.scrollController,
+  });
+  final String province;
+  final ScrollController scrollController;
+
+  @override
+  State<_ProvinceInventorySheet> createState() => _ProvinceInventorySheetState();
+}
+
+class _ProvinceInventorySheetState extends State<_ProvinceInventorySheet> {
+  bool _loading = true;
+  String? _error;
+  Map<String, dynamic>? _payload;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        if (_payload != null) _loading = true;
+        _error = null;
+      });
+    }
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final res = await wh.fetchProvinceInventory(widget.province);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (res == null) {
+        _error = 'Could not load inventory for this province.';
+      } else {
+        _payload = res;
+      }
+    });
+  }
+
+  String _statusLabel(String apiKey) =>
+      materialItemStatusLabel(materialItemStatusFromString(apiKey));
+
+  String _statusTotalChipLabel(MapEntry<String, dynamic> e) {
+    final m = e.value is Map
+        ? Map<String, dynamic>.from(e.value as Map)
+        : const <String, dynamic>{};
+    final q = (m['quantity'] as num?)?.toInt() ?? 0;
+    final lines = (m['lines'] as num?)?.toInt() ?? 0;
+    return '${_statusLabel(e.key)} · $q qty · $lines lines';
+  }
+
+  List<Widget> _provinceInventoryListChildren() {
+    final p = _payload!;
+    final st = (p['statusTotals'] as Map?)?.cast<String, dynamic>() ?? {};
+    final raw = (p['materials'] as List?) ?? const [];
+    final out = <Widget>[];
+
+    if (st.isNotEmpty) {
+      out.addAll([
+        Text(
+          'Totals by status',
+          style: TextStyle(
+            color: Colors.white.withAlpha(170),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in st.entries)
+              _StaffBadge(
+                label: _statusTotalChipLabel(e),
+                color: _statusColor(materialItemStatusFromString(e.key)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+      ]);
+    }
+
+    out.addAll([
+      Text(
+        'Materials (quantities in this province)',
+        style: TextStyle(
+          color: Colors.white.withAlpha(170),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 8),
+    ]);
+
+    if (raw.isEmpty) {
+      out.add(
+        Text(
+          'No stock rows in this province.',
+          style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 13),
+        ),
+      );
+      return out;
+    }
+
+    for (final row in raw) {
+      final m = Map<String, dynamic>.from(row as Map);
+      final name = m['name']?.toString() ?? '—';
+      final unit = m['unit']?.toString();
+      final total = (m['totalQuantity'] as num?)?.toInt() ?? 0;
+      final lines = (m['lineCount'] as num?)?.toInt() ?? 0;
+      final by = (m['byStatus'] as Map?)?.cast<String, dynamic>() ?? {};
+      final colorHex = m['color']?.toString();
+      final dot = _parseHex(colorHex) ?? const Color(0xFF6C63FF);
+      final detail = by.entries
+          .map((e) =>
+              '${_statusLabel(e.key)}: ${(e.value as num?)?.toInt() ?? 0}')
+          .join(' · ');
+      out.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: dot,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$total${unit != null && unit.isNotEmpty ? ' $unit' : ''}',
+                      style: const TextStyle(
+                        color: Color(0xFF38BDF8),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$lines stock line(s)',
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(130),
+                    fontSize: 11,
+                  ),
+                ),
+                if (detail.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    detail,
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(160),
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0A1F),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 44,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.province,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                ),
+              ],
+            ),
+          ),
+          if (_loading)
+            const Expanded(
+              child: Center(
+                child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+              ),
+            )
+          else if (_error != null)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 14),
+                  ),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: RefreshIndicator(
+                color: const Color(0xFF38BDF8),
+                backgroundColor: const Color(0xFF12122A),
+                onRefresh: _load,
+                child: ListView(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                  children: _provinceInventoryListChildren(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WarehouseDashboardView extends StatelessWidget {
   const _WarehouseDashboardView({required this.canManage});
   final bool canManage;
@@ -4810,6 +5153,7 @@ class _WarehouseDashboardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final pc = context.watch<PrivateCompanyProvider>();
     final d = wh.dashboard;
     return RefreshIndicator(
       onRefresh: wh.refreshAll,
@@ -4939,6 +5283,12 @@ class _WarehouseDashboardView extends StatelessWidget {
                           maxValue: d.byProvince.first.count,
                           color: const Color(0xFF38BDF8),
                           icon: Icons.public_rounded,
+                          onTap: pc.seesOnlyAssignedWarehouseInventory
+                              ? null
+                              : () => _showProvinceWarehouseInventory(
+                                    context,
+                                    r.province,
+                                  ),
                         ),
                     ],
                   ),
@@ -6596,6 +6946,7 @@ class _BarRow extends StatelessWidget {
     required this.color,
     required this.icon,
     this.subLabel,
+    this.onTap,
   });
   final String label;
   final String? subLabel;
@@ -6603,11 +6954,12 @@ class _BarRow extends StatelessWidget {
   final int maxValue;
   final Color color;
   final IconData icon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final pct = maxValue == 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
-    return Padding(
+    Widget core = Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -6633,6 +6985,11 @@ class _BarRow extends StatelessWidget {
                 style: TextStyle(
                     color: color, fontSize: 12, fontWeight: FontWeight.w800),
               ),
+              if (onTap != null) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded,
+                    size: 16, color: color.withAlpha(160)),
+              ],
             ],
           ),
           if (subLabel != null && subLabel!.isNotEmpty)
@@ -6657,6 +7014,17 @@ class _BarRow extends StatelessWidget {
         ],
       ),
     );
+    if (onTap != null) {
+      core = Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: core,
+        ),
+      );
+    }
+    return core;
   }
 }
 
@@ -7567,6 +7935,11 @@ class _ItemActionsSheet extends StatelessWidget {
     final canReturn = item.status == MaterialItemStatus.assigned;
     final canUse = item.status == MaterialItemStatus.assigned ||
         (canManage && item.status == MaterialItemStatus.inWarehouse);
+    final canFieldReportDamagedOrLost = uid != null &&
+        item.assignedToId == uid &&
+        item.status == MaterialItemStatus.assigned &&
+        pc.canRecordWarehouseMaterialOnTicket &&
+        !canManage;
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF0A0A1F),
@@ -7764,6 +8137,88 @@ class _ItemActionsSheet extends StatelessWidget {
                     await wh.useOnTicket(item.id, res.$1, note: res.$2);
                   },
                 ),
+              if (canFieldReportDamagedOrLost) ...[
+                _ActionTile(
+                  icon: Icons.report_problem_rounded,
+                  label: 'Report damaged (my stock)',
+                  color: const Color(0xFFFF4757),
+                  onTap: () async {
+                    final ok = await _confirm(
+                      anchorContext,
+                      'Report this unit as damaged?',
+                      'It will leave your active stock. You can add notes and optionally link a ticket next.',
+                    );
+                    if (ok != true) return;
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    final note = await _promptNote(
+                      anchorContext,
+                      'Damaged — note (optional)',
+                    );
+                    if (note == null || !anchorContext.mounted) return;
+                    final pick =
+                        await _promptOptionalTicketForMaterial(anchorContext);
+                    if (pick == null || pick.cancelled || !anchorContext.mounted) {
+                      return;
+                    }
+                    final success = await wh.markDamaged(
+                      item.id,
+                      note: note.isEmpty ? null : note,
+                      ticketId: pick.ticketId,
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success
+                              ? (wh.lastSuccess ?? 'Marked as damaged.')
+                              : (wh.error ?? 'Could not update this item.'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _ActionTile(
+                  icon: Icons.help_outline_rounded,
+                  label: 'Report lost (my stock)',
+                  color: const Color(0xFF94A3B8),
+                  onTap: () async {
+                    final ok = await _confirm(
+                      anchorContext,
+                      'Report this unit as lost?',
+                      'This records a loss. You can add notes and optionally link a ticket next.',
+                    );
+                    if (ok != true) return;
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    final note = await _promptNote(
+                      anchorContext,
+                      'Lost — note (optional)',
+                    );
+                    if (note == null || !anchorContext.mounted) return;
+                    final pick =
+                        await _promptOptionalTicketForMaterial(anchorContext);
+                    if (pick == null || pick.cancelled || !anchorContext.mounted) {
+                      return;
+                    }
+                    final success = await wh.markLost(
+                      item.id,
+                      note: note.isEmpty ? null : note,
+                      ticketId: pick.ticketId,
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success
+                              ? (wh.lastSuccess ?? 'Marked as lost.')
+                              : (wh.error ?? 'Could not update this item.'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
               if (canManage) ...[
                 _ActionTile(
                   icon: Icons.report_problem_rounded,
@@ -8499,6 +8954,55 @@ Future<List<String>?> _promptReturnToWarehouse(
   final r = reason.text.trim();
   reason.dispose();
   return [condition, r];
+}
+
+Future<({bool cancelled, String? ticketId})?> _promptOptionalTicketForMaterial(
+    BuildContext context) async {
+  final ctrl = TextEditingController();
+  final r = await showDialog<({bool cancelled, String? ticketId})>(
+    context: context,
+    builder: (dCtx) => AlertDialog(
+      backgroundColor: const Color(0xFF12122A),
+      title: const Text(
+        'Link to ticket?',
+        style: TextStyle(color: Colors.white, fontSize: 17),
+      ),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Ticket ID (optional)',
+          hintStyle: TextStyle(color: Colors.white.withAlpha(80)),
+          filled: true,
+          fillColor: Colors.white10,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.pop(dCtx, (cancelled: true, ticketId: null)),
+          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () {
+            final t = ctrl.text.trim();
+            Navigator.pop(
+              dCtx,
+              (cancelled: false, ticketId: t.isEmpty ? null : t),
+            );
+          },
+          child: const Text('Continue',
+              style: TextStyle(color: Color(0xFF6C63FF))),
+        ),
+      ],
+    ),
+  );
+  return r;
 }
 
 Future<String?> _promptNote(BuildContext context, String title) async {

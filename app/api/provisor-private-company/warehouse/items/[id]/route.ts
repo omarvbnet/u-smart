@@ -205,12 +205,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
   if (!item) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
 
+  /** Field staff may report their own assigned stock damaged/lost (same role gate as ticket use). */
+  const staffSelfDamageOrLoss =
+    (action === 'damage' || action === 'lose') &&
+    !guard.canMutateWarehouse &&
+    item.status === 'ASSIGNED' &&
+    item.assignedToId === guard.requesterId &&
+    CAN_USE_MATERIALS_ON_TICKET_ROLES.has(guard.actorRole);
+
   if (
     (action === 'assign' ||
       action === 'transfer' ||
       action === 'damage' ||
       action === 'lose') &&
-    !guard.canMutateWarehouse
+    !guard.canMutateWarehouse &&
+    !staffSelfDamageOrLoss
   ) {
     return NextResponse.json(
       {
@@ -584,6 +593,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     case 'damage':
     case 'lose': {
+      if (item.status === 'USED' || item.status === 'RETIRED' || item.status === 'LOST') {
+        return NextResponse.json(
+          { success: false, message: `Item is ${item.status} and cannot be updated this way.` },
+          { status: 409 }
+        );
+      }
+      if (action === 'damage' && item.status === 'DAMAGED') {
+        return NextResponse.json(
+          { success: false, message: 'Item is already marked damaged.' },
+          { status: 409 }
+        );
+      }
       let ticketIdForLog: string | null = null;
       const ticketIdRaw = typeof body?.ticketId === 'string' ? body.ticketId.trim() : '';
       if (ticketIdRaw) {

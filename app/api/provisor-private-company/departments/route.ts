@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
+import {
+  deleteDepartmentTechniqueRows,
+  upsertDepartmentTechniqueRows,
+} from '@/lib/private-company-department-techniques';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -50,6 +54,8 @@ export async function GET(req: NextRequest) {
       createdAt: true,
       maintenanceProximityJoinEnabled: true,
       maintenanceProximityRadiusM: true,
+      engineerAvailabilityPoolEnabled: true,
+      technicianAvailabilityPoolEnabled: true,
       members: {
         select: {
           id: true,
@@ -88,6 +94,14 @@ export async function POST(req: NextRequest) {
     orderBy: { sortOrder: 'desc' },
     select: { sortOrder: true },
   });
+  const engineerPool =
+    body?.engineerAvailabilityPoolEnabled === undefined
+      ? undefined
+      : body.engineerAvailabilityPoolEnabled === true;
+  const technicianPool =
+    body?.technicianAvailabilityPoolEnabled === undefined
+      ? undefined
+      : body.technicianAvailabilityPoolEnabled === true;
   try {
     const dept = await prisma.privateCompanyDepartment.create({
       data: {
@@ -97,8 +111,20 @@ export async function POST(req: NextRequest) {
         color,
         iconKey,
         sortOrder: (lastSort?.sortOrder ?? -1) + 1,
+        ...(engineerPool !== undefined ? { engineerAvailabilityPoolEnabled: engineerPool } : {}),
+        ...(technicianPool !== undefined ? { technicianAvailabilityPoolEnabled: technicianPool } : {}),
       },
     });
+    try {
+      await upsertDepartmentTechniqueRows(prisma, {
+        companyId: guard.companyId,
+        departmentId: dept.id,
+        departmentName: name,
+        sortOrder: dept.sortOrder ?? 0,
+      });
+    } catch (e) {
+      console.error('Department technique sync (create):', e);
+    }
     return NextResponse.json({ success: true, department: dept });
   } catch (err) {
     const e = err as Error & { code?: string };
@@ -119,7 +145,7 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
   const dept = await prisma.privateCompanyDepartment.findFirst({
     where: { id, companyId: guard.companyId },
-    select: { id: true },
+    select: { id: true, name: true, sortOrder: true },
   });
   if (!dept) return NextResponse.json({ success: false, message: 'Department not found.' }, { status: 404 });
   const data: Record<string, unknown> = {};
@@ -137,11 +163,27 @@ export async function PATCH(req: NextRequest) {
       Math.min(5000, Math.floor(Number(body.maintenanceProximityRadiusM)))
     );
   }
+  if (body?.engineerAvailabilityPoolEnabled !== undefined) {
+    data.engineerAvailabilityPoolEnabled = body.engineerAvailabilityPoolEnabled === true;
+  }
+  if (body?.technicianAvailabilityPoolEnabled !== undefined) {
+    data.technicianAvailabilityPoolEnabled = body.technicianAvailabilityPoolEnabled === true;
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
   }
   try {
     const updated = await prisma.privateCompanyDepartment.update({ where: { id }, data });
+    try {
+      await upsertDepartmentTechniqueRows(prisma, {
+        companyId: guard.companyId,
+        departmentId: id,
+        departmentName: String(updated.name ?? dept.name ?? ''),
+        sortOrder: typeof updated.sortOrder === 'number' ? updated.sortOrder : Number(dept.sortOrder ?? 0),
+      });
+    } catch (e) {
+      console.error('Department technique sync (update):', e);
+    }
     return NextResponse.json({ success: true, department: updated });
   } catch (err) {
     const e = err as Error & { code?: string };
@@ -165,6 +207,11 @@ export async function DELETE(req: NextRequest) {
     select: { id: true },
   });
   if (!dept) return NextResponse.json({ success: false, message: 'Department not found.' }, { status: 404 });
+  try {
+    await deleteDepartmentTechniqueRows(prisma, guard.companyId, id);
+  } catch (e) {
+    console.error('Department technique delete:', e);
+  }
   await prisma.privateCompanyDepartment.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

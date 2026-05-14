@@ -106,6 +106,19 @@ class PrivateCompanyProvider extends ChangeNotifier {
         role != 'WAREHOUSE_KEEPER';
   }
 
+  /// Matches server [CAN_USE_MATERIALS_ON_TICKET_ROLES]: record use / self-report damaged or lost on assigned lines.
+  bool get canRecordWarehouseMaterialOnTicket {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole;
+    if (role == null) return false;
+    return role == 'MANAGER' ||
+        role == 'COORDINATOR' ||
+        role == 'ENGINEER' ||
+        role == 'TECHNICIAN' ||
+        role == 'WORKER';
+  }
+
   /// True for managers/coordinators (non-owner) — they are scoped to their own
   /// department and may only grant the ENGINEER / TECHNICIAN / WORKER roles.
   bool get isDepartmentManager {
@@ -117,6 +130,31 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   /// Department id the current user belongs to (when staff).
   String? get myDepartmentId => _membership.departmentId;
+
+  /// Short line for technician “Available” tab: department label + home province from staff profile.
+  String? get workspaceFieldAssignmentHint {
+    final ws = _workspace;
+    if (ws == null || !isApproved || !isStaff) return null;
+    final parts = <String>[];
+    final mName = _membership.departmentName?.trim();
+    if (mName != null && mName.isNotEmpty) {
+      parts.add('Department: $mName');
+    } else {
+      final did = myDepartmentId ?? _myStaffEntry?.departmentId;
+      if (did != null) {
+        for (final d in ws.departments) {
+          if (d.id == did) {
+            final n = d.name.trim();
+            if (n.isNotEmpty) parts.add('Department: $n');
+            break;
+          }
+        }
+      }
+    }
+    final p = _myStaffEntry?.province?.trim();
+    if (p != null && p.isNotEmpty) parts.add('My province: $p');
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   /// Cached entry of the current user inside the workspace's staff list (only set
   /// when [setCurrentRequesterId] has been called and the user is staff).
@@ -286,6 +324,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? description,
     String? color,
     String? iconKey,
+    bool engineerAvailabilityPoolEnabled = true,
+    bool technicianAvailabilityPoolEnabled = true,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -296,6 +336,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'description': description.trim(),
         if (color != null) 'color': color,
         if (iconKey != null) 'iconKey': iconKey,
+        'engineerAvailabilityPoolEnabled': engineerAvailabilityPoolEnabled,
+        'technicianAvailabilityPoolEnabled': technicianAvailabilityPoolEnabled,
       });
       if (res['success'] == true) {
         await refresh();
@@ -321,6 +363,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? iconKey,
     bool? maintenanceProximityJoinEnabled,
     int? maintenanceProximityRadiusM,
+    bool? engineerAvailabilityPoolEnabled,
+    bool? technicianAvailabilityPoolEnabled,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -335,6 +379,10 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'maintenanceProximityJoinEnabled': maintenanceProximityJoinEnabled,
         if (maintenanceProximityRadiusM != null)
           'maintenanceProximityRadiusM': maintenanceProximityRadiusM,
+        if (engineerAvailabilityPoolEnabled != null)
+          'engineerAvailabilityPoolEnabled': engineerAvailabilityPoolEnabled,
+        if (technicianAvailabilityPoolEnabled != null)
+          'technicianAvailabilityPoolEnabled': technicianAvailabilityPoolEnabled,
       });
       if (res['success'] == true) {
         await refresh();

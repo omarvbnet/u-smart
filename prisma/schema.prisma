@@ -1405,6 +1405,10 @@ model PrivateCompanyDepartment {
   maintenanceProximityJoinEnabled Boolean @default(false)
   /// Default pairing radius in meters (technicians); staff may override individually.
   maintenanceProximityRadiusM     Int     @default(100)
+  /// Owner: engineers in this department may browse and self-assign from the pending QC pool (workspace tickets).
+  engineerAvailabilityPoolEnabled   Boolean @default(true)
+  /// Owner: technicians in this department may browse and self-assign from the pending maintenance pool (workspace tickets).
+  technicianAvailabilityPoolEnabled Boolean @default(true)
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
   createdAt   DateTime          @default(now())

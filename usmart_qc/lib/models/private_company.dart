@@ -78,6 +78,8 @@ class PrivateCompanyDepartment {
     this.members = const [],
     this.maintenanceProximityJoinEnabled = false,
     this.maintenanceProximityRadiusM = 100,
+    this.engineerAvailabilityPoolEnabled = true,
+    this.technicianAvailabilityPoolEnabled = true,
   });
 
   final String id;
@@ -90,6 +92,8 @@ class PrivateCompanyDepartment {
   final List<PrivateCompanyStaff> members;
   final bool maintenanceProximityJoinEnabled;
   final int maintenanceProximityRadiusM;
+  final bool engineerAvailabilityPoolEnabled;
+  final bool technicianAvailabilityPoolEnabled;
 
   Color get colorValue {
     final raw = color;
@@ -126,6 +130,8 @@ class PrivateCompanyDepartment {
       members: members,
       maintenanceProximityJoinEnabled: json['maintenanceProximityJoinEnabled'] == true,
       maintenanceProximityRadiusM: (json['maintenanceProximityRadiusM'] as num?)?.toInt() ?? 100,
+      engineerAvailabilityPoolEnabled: json['engineerAvailabilityPoolEnabled'] != false,
+      technicianAvailabilityPoolEnabled: json['technicianAvailabilityPoolEnabled'] != false,
     );
   }
 }

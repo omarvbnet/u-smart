@@ -4,6 +4,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
+import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
 
 const prisma = _prisma as any;
 
@@ -125,7 +126,15 @@ export async function PATCH(
 
     const row = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, status: true, company: true, requesterId: true, technique: true },
+      select: {
+        id: true,
+        status: true,
+        company: true,
+        requesterId: true,
+        technique: true,
+        privateCompanyId: true,
+        assignmentScope: true,
+      },
     });
     if (!row) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
@@ -164,6 +173,82 @@ export async function PATCH(
         { success: false, message: 'Ticket is already assigned' },
         { status: 400 }
       );
+    }
+
+    const roleUpper = (requester.role ?? 'COMPANY').toUpperCase();
+    const isQcPoolRole =
+      roleUpper === 'ENGINEER' ||
+      roleUpper === 'QUALITY_ENGINEER' ||
+      roleUpper === 'SUPERVISION_ENGINEER';
+
+    if (row.assignmentScope === 'PRIVATE_COMPANY_STAFF' && row.privateCompanyId) {
+      const meFull = await prisma.ticketRequester.findUnique({
+        where: { id: requester.id },
+        select: {
+          privateCompanyId: true,
+          privateCompanyDepartmentId: true,
+          privateCompanyAllowedTaskSlugs: true,
+        },
+      });
+      if (!meFull || meFull.privateCompanyId !== row.privateCompanyId) {
+        return NextResponse.json(
+          { success: false, message: 'You are not a member of this ticket workspace.' },
+          { status: 403 }
+        );
+      }
+      const deptId = meFull.privateCompanyDepartmentId ?? null;
+      let engineerPoolOk = true;
+      let technicianPoolOk = true;
+      if (deptId) {
+        const d = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: deptId, companyId: row.privateCompanyId },
+          select: {
+            engineerAvailabilityPoolEnabled: true,
+            technicianAvailabilityPoolEnabled: true,
+          },
+        });
+        if (d) {
+          engineerPoolOk = d.engineerAvailabilityPoolEnabled !== false;
+          technicianPoolOk = d.technicianAvailabilityPoolEnabled !== false;
+        }
+      }
+      if (isTechnician && !technicianPoolOk) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Your department cannot self-assign from the maintenance availability pool. Contact the workspace owner.',
+          },
+          { status: 403 }
+        );
+      }
+      if (isQcPoolRole && !isTechnician && !engineerPoolOk) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Your department cannot self-assign from the QC availability pool. Contact the workspace owner.',
+          },
+          { status: 403 }
+        );
+      }
+      const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
+      const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
+        ? meFull.privateCompanyAllowedTaskSlugs
+        : [];
+      if (
+        !staffTicketTechniqueAllowed({
+          technique: String(row.technique ?? ''),
+          staffDepartmentId: deptId,
+          staffAllowedSlugs: allowedSlugs,
+          workspaceRows: techRows,
+        })
+      ) {
+        return NextResponse.json(
+          { success: false, message: 'This ticket is outside your department task scope.' },
+          { status: 403 }
+        );
+      }
     }
 
     // Check if engineer already has an uncompleted assigned ticket.
