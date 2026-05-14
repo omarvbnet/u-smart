@@ -27,6 +27,8 @@ import {
   deriveSpecializationTagsFromTechnique,
   normalizeSpecializationTags,
 } from '@/lib/technique-specialization-tags';
+import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
+import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-rows';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,43 +62,6 @@ const REQUESTER_TASK_CATEGORY_BY_TECHNIQUE = (technique: string): 'QUALITY' | 'S
   if (technique === 'supervision') return 'SUPERVISION';
   return 'QUALITY';
 };
-
-/** Active `provisor_techniques.slug` may differ from built-in lists when admins customize labels. */
-type ProvisorTechniqueCategory = 'INSPECTION_QC' | 'MAINTENANCE';
-
-async function lookupProvisorTechniqueCategory(
-  slug: string,
-  opts?: { workspaceCompanyId: string | null }
-): Promise<ProvisorTechniqueCategory | null> {
-  if (opts?.workspaceCompanyId) {
-    try {
-      const delegate = (prisma as any).privateCompanyTechnique;
-      if (delegate?.findFirst) {
-        const w = await delegate.findFirst({
-          where: { companyId: opts.workspaceCompanyId, slug, active: true },
-          select: { category: true },
-        });
-        const wc = w?.category as string | undefined;
-        if (wc === 'INSPECTION_QC' || wc === 'MAINTENANCE') return wc;
-      }
-    } catch {
-      /* table missing */
-    }
-  }
-  try {
-    const delegate = (prisma as any).provisorTechnique;
-    if (!delegate?.findFirst) return null;
-    const row = await delegate.findFirst({
-      where: { slug, active: true },
-      select: { category: true },
-    });
-    const c = row?.category as string | undefined;
-    if (c === 'INSPECTION_QC' || c === 'MAINTENANCE') return c;
-  } catch {
-    /* table missing or query error */
-  }
-  return null;
-}
 
 async function getRequesterChecklistCompanyId(
   requester: { id: string; username?: string | null; email?: string | null; role?: string | null }
@@ -437,9 +402,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let provisorTechniqueKind: ProvisorTechniqueCategory | null = null;
+    let provisorTechniqueKind: 'INSPECTION_QC' | 'MAINTENANCE' | null = null;
     if (!ALL_TECHNIQUES.includes(technique)) {
-      provisorTechniqueKind = await lookupProvisorTechniqueCategory(technique, {
+      provisorTechniqueKind = await lookupProvisorTechniqueCategory(prisma, technique, {
         workspaceCompanyId: approvedWorkspaceCompanyId,
       });
     }
@@ -1542,15 +1507,19 @@ export async function GET(req: NextRequest) {
       if (myStaffWorkspaceId) {
         technicianPendingOr.push({
           status: 'PENDING',
-          assignmentScope: 'PRIVATE_COMPANY_STAFF',
+          OR: [
+            { assignmentScope: 'PRIVATE_COMPANY_STAFF' },
+            { assignmentScope: null },
+          ],
           privateCompanyId: myStaffWorkspaceId,
-          technique: { in: MAINTENANCE_TECHNIQUES },
         });
         technicianPendingOr.push({
           status: { in: ['ON_SITE', 'IN_PROGRESS'] },
-          assignmentScope: 'PRIVATE_COMPANY_STAFF',
+          OR: [
+            { assignmentScope: 'PRIVATE_COMPANY_STAFF' },
+            { assignmentScope: null },
+          ],
           privateCompanyId: myStaffWorkspaceId,
-          technique: { in: MAINTENANCE_TECHNIQUES },
         });
       }
       const technicianAnd: Record<string, unknown>[] = [
@@ -1564,7 +1533,6 @@ export async function GET(req: NextRequest) {
       }
       where = {
         serviceSlug: filterServiceSlug,
-        technique: { in: MAINTENANCE_TECHNIQUES },
         AND: technicianAnd,
       };
     } else if (requesterRole === 'WORKER') {
@@ -1658,6 +1626,9 @@ export async function GET(req: NextRequest) {
       assignmentScope: string | null;
       privateCompanyTargetDepartmentId: string | null;
     }>;
+    if (requesterRole === 'TECHNICIAN') {
+      rowsForList = await filterRowsToMaintenanceTickets(prisma, rowsForList, myStaffWorkspaceId);
+    }
     if (
       myStaffWorkspaceId &&
       (isQcPoolEngineerRole(requesterRole) || requesterRole === 'TECHNICIAN')
@@ -1693,16 +1664,15 @@ export async function GET(req: NextRequest) {
       const maintDeptIdsForDispatch = [
         ...new Set(
           rowsForList
-              .filter((r) => {
-                const t = (r.technique ?? '').toLowerCase();
-                return (
-                    MAINTENANCE_TECHNIQUES.includes(t) &&
-                    r.privateCompanyId === myStaffWorkspaceId &&
-                    (r.assignmentScope ?? '') === 'PRIVATE_COMPANY_STAFF' &&
-                    !!r.privateCompanyTargetDepartmentId
-                );
-              })
-              .map((r) => r.privateCompanyTargetDepartmentId as string)
+            .filter((r) => {
+              const scope = r.assignmentScope ?? null;
+              return (
+                r.privateCompanyId === myStaffWorkspaceId &&
+                (scope === 'PRIVATE_COMPANY_STAFF' || scope === null) &&
+                !!r.privateCompanyTargetDepartmentId
+              );
+            })
+            .map((r) => r.privateCompanyTargetDepartmentId as string)
         ),
       ];
       let dispatchModeByDeptId = new Map<string, string>();
@@ -1725,7 +1695,10 @@ export async function GET(req: NextRequest) {
       rowsForList = rowsForList.filter((r) => {
         const pcId = r.privateCompanyId ?? null;
         const scope = r.assignmentScope ?? null;
-        if (pcId !== myStaffWorkspaceId || scope !== 'PRIVATE_COMPANY_STAFF') return true;
+        const isWorkspaceStaffRow =
+          pcId === myStaffWorkspaceId &&
+          (scope === 'PRIVATE_COMPANY_STAFF' || scope === null);
+        if (!isWorkspaceStaffRow) return true;
         const parsed = parseTicketCompanyJson(r.company);
         if (ticketFieldStaffInvolvesRequester(parsed, payload.requesterId)) return true;
         const targetDept = r.privateCompanyTargetDepartmentId ?? null;
@@ -1766,7 +1739,6 @@ export async function GET(req: NextRequest) {
         if (
           pendingUnassigned &&
           requesterRole === 'TECHNICIAN' &&
-          MAINTENANCE_TECHNIQUES.includes((r.technique ?? '').toLowerCase()) &&
           targetDept &&
           dispatchModeByDeptId.get(targetDept) === MAINTENANCE_DISPATCH_ENGINEER
         ) {

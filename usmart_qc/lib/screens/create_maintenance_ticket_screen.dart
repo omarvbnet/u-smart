@@ -907,7 +907,11 @@ class _CreateMaintenanceTicketScreenState
     required String label,
     VoidCallback? onTap,
   }) {
-    return Expanded(
+    // Must not use [Expanded] here: this widget sits in a [Column] inside a
+    // [ListView], which has unbounded vertical constraints — Expanded would
+    // assert and break hit testing ("render box with no size").
+    return SizedBox(
+      width: double.infinity,
       child: Material(
         color: const Color(0xFF6C63FF).withAlpha(25),
         borderRadius: BorderRadius.circular(14),

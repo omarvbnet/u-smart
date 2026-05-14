@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
+import '../providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../screens/notifications_screen.dart';
@@ -19,8 +20,8 @@ class AvailableTicketsPoolTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Consumer<TicketsProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<TicketsProvider, AuthProvider>(
+      builder: (context, provider, auth, _) {
         if (provider.loading && provider.tickets.isEmpty) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
@@ -31,6 +32,7 @@ class AvailableTicketsPoolTab extends StatelessWidget {
         final hasActive = provider.hasActiveTicket;
         final engineerProvince = provider.province;
         final filterActive = provider.provinceFilterActive;
+        final isTechnician = auth.isTechnician;
 
         return Column(
           children: [
@@ -203,7 +205,9 @@ class AvailableTicketsPoolTab extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  l10n.t('available_empty'),
+                  l10n.t(isTechnician
+                      ? 'available_empty_technician'
+                      : 'available_empty'),
                   style: TextStyle(
                       color: Colors.white.withAlpha(80), fontSize: 13),
                 ),

@@ -159,6 +159,8 @@ const Map<String, String> _en = {
   'filter_my_province': 'My Province',
   'filter_all_iraq': 'All Iraq',
   'available_empty': 'Unassigned tickets waiting for an engineer',
+  'available_empty_technician':
+      'Set your work province in profile to see nearby unassigned maintenance tickets. Workspace tickets still follow your department and company settings.',
   'complete_current': 'Complete your current ticket before taking a new one',
   'no_available': 'No available tickets',
   'all_assigned': 'All tickets are assigned or completed',
@@ -786,6 +788,8 @@ const Map<String, String> _ar = {
   'filter_my_province': 'محافظتي',
   'filter_all_iraq': 'كل العراق',
   'available_empty': 'تذاكر غير معينة في انتظار مهندس',
+  'available_empty_technician':
+      'عيّن محافظة عملك في الملف الشخصي لعرض تذاكر الصيانة غير المعينة في منطقتك. تذاكر مساحة العمل تتبع إعدادات قسمك وشركتك.',
   'complete_current': 'أكمل التذكرة الحالية قبل أخذ واحدة جديدة',
   'no_available': 'لا توجد تذاكر متاحة',
   'all_assigned': 'جميع التذاكر معينة أو مكتملة',
@@ -1401,6 +1405,8 @@ const Map<String, String> _ku = {
   'filter_my_province': 'پارێزگاکەم',
   'filter_all_iraq': 'هەموو عێراق',
   'available_empty': 'تیکێتی دیارینەکراو چاوەڕوانی ئەندازیار',
+  'available_empty_technician':
+      'پارێزگای کار لە پرۆفایل دیاری بکە بۆ بینینی تیکێتی چاککردنەوەی نزیک. تیکێتی workspace بەپێی بەش و ڕێکخستنی کۆمپانیاکەت دەبێت.',
   'complete_current': 'تیکێتی ئێستات تەواو بکە پێش وەرگرتنی نوێ',
   'no_available': 'هیچ تیکێتێک بەردەست نییە',
   'all_assigned': 'هەموو تیکێتەکان دیاریکراون یان تەواو',
@@ -2019,6 +2025,8 @@ const Map<String, String> _tr = {
   'filter_my_province': 'İlim',
   'filter_all_iraq': 'Tüm Irak',
   'available_empty': 'Mühendis bekleyen atanmamış biletler',
+  'available_empty_technician':
+      'Yakındaki atanmamış bakım biletlerini görmek için profilde çalışma ilinizi ayarlayın. Çalışma alanı biletleri departman ve şirket ayarlarınıza tabidir.',
   'complete_current': 'Yeni bilet almadan önce mevcut bileti tamamlayın',
   'no_available': 'Mevcut bilet yok',
   'all_assigned': 'Tüm biletler atandı veya tamamlandı',
