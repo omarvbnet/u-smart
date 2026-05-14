@@ -63,6 +63,10 @@ class ApiConfig {
       '/api/tickets/$ticketId/evidence';
   static String ticketComplete(String ticketId) =>
       '/api/tickets/$ticketId/complete';
+  static String ticketMaintenanceConfirmCompletion(String ticketId) =>
+      '/api/tickets/$ticketId/maintenance-confirm-completion';
+  static String ticketMaintenanceRejectCompletion(String ticketId) =>
+      '/api/tickets/$ticketId/maintenance-reject-completion';
   static String ticketReportConflict(String ticketId) =>
       '/api/tickets/$ticketId/report-conflict';
   static String ticketResubmit(String ticketId) =>

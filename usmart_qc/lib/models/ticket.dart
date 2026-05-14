@@ -127,6 +127,10 @@ class Ticket {
   final String? privateCompanyTargetDepartmentId;
   /// Additional technician requester ids on the same maintenance ticket (workspace).
   final List<String> maintenanceCrewIds;
+  /// ISO timestamp: field team sent completion for requester confirmation (maintenance).
+  final String? maintenanceAwaitingRequesterSince;
+  /// Last rejection reason from the requester (maintenance confirmation flow).
+  final String? maintenanceRequesterRejectReason;
   /// Site coordinates from server (Sites table), when available.
   final double? siteLatitude;
   final double? siteLongitude;
@@ -175,6 +179,8 @@ class Ticket {
     this.privateCompanyId,
     this.privateCompanyTargetDepartmentId,
     this.maintenanceCrewIds = const [],
+    this.maintenanceAwaitingRequesterSince,
+    this.maintenanceRequesterRejectReason,
     this.siteLatitude,
     this.siteLongitude,
   });
@@ -199,6 +205,10 @@ class Ticket {
   }
   bool get isAssigned => assignedEngineerId != null;
   bool get canBeAssigned => isPending && !isAssigned;
+
+  bool get maintenanceAwaitingRequesterConfirmation =>
+      maintenanceAwaitingRequesterSince != null &&
+      maintenanceAwaitingRequesterSince!.trim().isNotEmpty;
 
   /// Inspection duration in hours (from first ON_SITE/IN_PROGRESS to completedAt). Null if not completed.
   double? get inspectionHours {
@@ -297,6 +307,8 @@ class Ticket {
               .where((s) => s.isNotEmpty)
               .toList() ??
           const [],
+      maintenanceAwaitingRequesterSince: json['maintenanceAwaitingRequesterSince'] as String?,
+      maintenanceRequesterRejectReason: json['maintenanceRequesterRejectReason'] as String?,
       siteLatitude: (json['siteLatitude'] as num?)?.toDouble(),
       siteLongitude: (json['siteLongitude'] as num?)?.toDouble(),
     );

@@ -718,7 +718,8 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   // ─── Complete Ticket ───
-  Future<bool> completeTicket(
+  /// Returns [success] and [awaitingRequesterConfirmation] for maintenance sent to the requester.
+  Future<({bool success, bool awaitingRequesterConfirmation})> completeTicket(
     String ticketId,
     Map<String, dynamic>? checklistResponse, {
     List<String>? beforeImageUrls,
@@ -747,6 +748,34 @@ class TicketsProvider extends ChangeNotifier {
       final data = await _api.patch(
         ApiConfig.ticketComplete(ticketId),
         body: body,
+      );
+      if (data['success'] == true) {
+        await fetchTickets();
+        return (
+          success: true,
+          awaitingRequesterConfirmation: data['awaitingRequesterConfirmation'] == true,
+        );
+      }
+    } catch (_) {}
+    return (success: false, awaitingRequesterConfirmation: false);
+  }
+
+  Future<bool> confirmMaintenanceRequesterCompletion(String ticketId) async {
+    try {
+      final data = await _api.post(ApiConfig.ticketMaintenanceConfirmCompletion(ticketId));
+      if (data['success'] == true) {
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> rejectMaintenanceRequesterCompletion(String ticketId, String reason) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketMaintenanceRejectCompletion(ticketId),
+        body: {'reason': reason},
       );
       if (data['success'] == true) {
         await fetchTickets();

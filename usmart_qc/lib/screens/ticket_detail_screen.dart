@@ -57,6 +57,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   String? _attachTemplateChoice;
   bool _uploading = false;
   bool _completingMaintenance = false;
+  bool _confirmingMaintenance = false;
   bool _maintenanceCrewBusy = false;
 
   /// Maintenance: before (4–6) and after (4–6) image URLs for completion
@@ -69,6 +70,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   bool get _isEngineer => context.read<AuthProvider>().isEngineer;
   bool get _isTechnician => context.read<AuthProvider>().isTechnician;
+
+  bool _userOnMaintenanceTicket(Ticket t) {
+    final uid = context.read<AuthProvider>().user?.id;
+    if (uid == null || !t.isMaintenance) return false;
+    if (t.assignedEngineerId == uid) return true;
+    return t.maintenanceCrewIds.contains(uid);
+  }
+
+  bool _canSubmitMaintenanceCompletion() {
+    final r = (context.read<AuthProvider>().user?.role ?? '').toUpperCase();
+    return r == 'TECHNICIAN' || r == 'WORKER';
+  }
 
   @override
   void initState() {
@@ -84,9 +97,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       setState(() {
         _ticket = t;
         _loading = false;
-        if (t != null && _isTechnician && t.isMaintenance) {
-          _maintenanceBeforeUrls = List.from(t.beforeImageUrls);
-          _maintenanceAfterUrls = List.from(t.finishingImageUrls);
+        if (t != null && t.isMaintenance) {
+          final uid = context.read<AuthProvider>().user?.id;
+          final role = (context.read<AuthProvider>().user?.role ?? '').toUpperCase();
+          final onTicket =
+              uid != null && (uid == t.assignedEngineerId || t.maintenanceCrewIds.contains(uid));
+          if (onTicket && (role == 'TECHNICIAN' || role == 'WORKER')) {
+            _maintenanceBeforeUrls = List.from(t.beforeImageUrls);
+            _maintenanceAfterUrls = List.from(t.finishingImageUrls);
+          }
         }
       });
       // Load comments & evidence for both company and engineer (both can view/reply/upload)
@@ -849,15 +868,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? l10n.t('ticket_completed') : l10n.t('complete_failed')),
+          content: Text(ok.success ? l10n.t('ticket_completed') : l10n.t('complete_failed')),
           backgroundColor:
-              ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+              ok.success ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      if (ok) await _load();
+      if (ok.success) await _load();
     }
   }
 
@@ -1913,14 +1932,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ),
       ],
-      // Maintenance complete: only Complete button + before/after images (no checklist)
-      if (_isTechnician &&
+      if (t.isMaintenance &&
+          !t.isCompleted &&
+          t.maintenanceAwaitingRequesterConfirmation &&
+          t.requesterId == context.read<AuthProvider>().user?.id) ...[
+        const SizedBox(height: 16),
+        _maintenanceRequesterConfirmCard(t, l10n),
+      ],
+      // Maintenance complete: before/after images + send for confirmation (when requester exists)
+      if (_canSubmitMaintenanceCompletion() &&
+          _userOnMaintenanceTicket(t) &&
           t.isMaintenance &&
-          isMyTicket &&
           !t.isCompleted &&
           t.isInProgress) ...[
         const SizedBox(height: 16),
-        _maintenanceCompleteSection(l10n),
+        _maintenanceCompleteSection(t, l10n),
       ],
 
       if (t.isMaintenance &&
@@ -2165,12 +2191,134 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return widgets;
   }
 
-  Widget _maintenanceCompleteSection(AppLocalizations l10n) {
+  Widget _maintenanceRequesterConfirmCard(Ticket t, AppLocalizations l10n) {
+    return _glassContainer(
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.t('maint_await_requester_title'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.t('maint_sent_for_confirmation'),
+              style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13, height: 1.35),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _confirmingMaintenance ? null : () => _confirmMaintenanceByRequester(l10n),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: _confirmingMaintenance
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(l10n.t('maint_confirm_requester_btn')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _confirmingMaintenance ? null : () => _promptRejectMaintenanceByRequester(l10n),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF9F43),
+                      side: const BorderSide(color: Color(0xFFFF9F43)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(l10n.t('maint_reject_requester_btn')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmMaintenanceByRequester(AppLocalizations l10n) async {
+    setState(() => _confirmingMaintenance = true);
+    final ok = await context.read<TicketsProvider>().confirmMaintenanceRequesterCompletion(widget.ticketId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? l10n.t('ticket_completed') : l10n.t('complete_failed')),
+        backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    if (ok) await _load();
+    setState(() => _confirmingMaintenance = false);
+  }
+
+  Future<void> _promptRejectMaintenanceByRequester(AppLocalizations l10n) async {
+    final ctrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(l10n.t('maint_reject_requester_btn'), style: const TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 4,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: l10n.t('maint_reject_reason_label'),
+            hintStyle: TextStyle(color: Colors.white.withAlpha(120)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text(l10n.t('maint_reject_requester_btn')),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (!mounted) return;
+    if (reason == null || reason.length < 3) return;
+    setState(() => _confirmingMaintenance = true);
+    final ok = await context.read<TicketsProvider>().rejectMaintenanceRequesterCompletion(widget.ticketId, reason);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? l10n.t('site_save') : l10n.t('complete_failed')),
+        backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    if (ok) await _load();
+    setState(() => _confirmingMaintenance = false);
+  }
+
+  Widget _maintenanceCompleteSection(Ticket t, AppLocalizations l10n) {
     const minImages = 4;
     const maxImages = 6;
     final beforeOk = _maintenanceBeforeUrls.length >= minImages && _maintenanceBeforeUrls.length <= maxImages;
     final afterOk = _maintenanceAfterUrls.length >= minImages && _maintenanceAfterUrls.length <= maxImages;
     final canComplete = beforeOk && afterOk;
+    final hasRequester = (t.requesterId ?? '').trim().isNotEmpty;
+    final awaiting = t.maintenanceAwaitingRequesterConfirmation;
+    final reject = (t.maintenanceRequesterRejectReason ?? '').trim();
 
     return _glassContainer(
       Column(
@@ -2188,6 +2336,24 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               ),
             ),
           ),
+          if (reject.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF9F43).withAlpha(28),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFF9F43).withAlpha(90)),
+                ),
+                child: Text(
+                  l10n.t('maint_rejection_note', {'reason': reject}),
+                  style: const TextStyle(color: Color(0xFFFF9F43), fontSize: 13, height: 1.35),
+                ),
+              ),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
@@ -2196,39 +2362,49 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _maintImageRow(l10n.t('before_photos'), _maintenanceBeforeUrls, true, minImages, maxImages),
+          _maintImageRow(l10n.t('before_photos'), _maintenanceBeforeUrls, true, minImages, maxImages, locked: awaiting),
           const SizedBox(height: 12),
-          _maintImageRow(l10n.t('after_photos'), _maintenanceAfterUrls, false, minImages, maxImages),
+          _maintImageRow(l10n.t('after_photos'), _maintenanceAfterUrls, false, minImages, maxImages, locked: awaiting),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: canComplete && !_completingMaintenance
-                  ? () => _completeMaintenance(l10n)
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00D4AA),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+          if (awaiting)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                l10n.t('maint_waiting_requester'),
+                style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 13, fontWeight: FontWeight.w600),
               ),
-              child: _completingMaintenance
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(l10n.t('complete_ticket'), style: const TextStyle(fontWeight: FontWeight.w600)),
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: canComplete && !_completingMaintenance ? () => _completeMaintenance(l10n) : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00D4AA),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: _completingMaintenance
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(
+                        hasRequester ? l10n.t('maint_complete_send_confirm') : l10n.t('complete_ticket'),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _maintImageRow(String label, List<String> urls, bool isBefore, int min, int max) {
+  Widget _maintImageRow(String label, List<String> urls, bool isBefore, int min, int max, {bool locked = false}) {
     final count = urls.length;
     final valid = count >= min && count <= max;
     return Column(
@@ -2253,8 +2429,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
-              ...urls.asMap().entries.map((e) => _maintThumb(e.value, isBefore, e.key)),
-              if (count < max && !_uploading)
+              ...urls.asMap().entries.map((e) => _maintThumb(e.value, isBefore, e.key, locked: locked)),
+              if (count < max && !_uploading && !locked)
                 GestureDetector(
                   onTap: () => _pickAndAddMaintenanceImage(isBefore),
                   child: Container(
@@ -2275,7 +2451,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  Widget _maintThumb(String url, bool isBefore, int index) {
+  Widget _maintThumb(String url, bool isBefore, int index, {bool locked = false}) {
     return Stack(
       children: [
         Container(
@@ -2296,26 +2472,27 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             ),
           ),
         ),
-        Positioned(
-          top: 4,
-          right: 12,
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                if (isBefore) {
-                  _maintenanceBeforeUrls.removeAt(index);
-                } else {
-                  _maintenanceAfterUrls.removeAt(index);
-                }
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(color: Color(0xFFFF4757), shape: BoxShape.circle),
-              child: const Icon(Icons.close, color: Colors.white, size: 12),
+        if (!locked)
+          Positioned(
+            top: 4,
+            right: 12,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isBefore) {
+                    _maintenanceBeforeUrls.removeAt(index);
+                  } else {
+                    _maintenanceAfterUrls.removeAt(index);
+                  }
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Color(0xFFFF4757), shape: BoxShape.circle),
+                child: const Icon(Icons.close, color: Colors.white, size: 12),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -2347,22 +2524,35 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _completeMaintenance(AppLocalizations l10n) async {
     setState(() => _completingMaintenance = true);
     try {
-      final ok = await context.read<TicketsProvider>().completeTicket(
+      final r = await context.read<TicketsProvider>().completeTicket(
         widget.ticketId,
         null,
         beforeImageUrls: _maintenanceBeforeUrls,
         finishingImageUrls: _maintenanceAfterUrls,
       );
-      if (mounted) {
+      if (!mounted) return;
+      if (r.success) {
+        final msg = r.awaitingRequesterConfirmation
+            ? l10n.t('maint_sent_for_confirmation')
+            : l10n.t('ticket_completed');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? l10n.t('ticket_completed') : l10n.t('complete_failed')),
-            backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+            content: Text(msg),
+            backgroundColor: const Color(0xFF00D4AA),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
-        if (ok) await _load();
+        await _load();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('complete_failed')),
+            backgroundColor: const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -2375,8 +2565,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _completingMaintenance = false);
     }
-    if (mounted) setState(() => _completingMaintenance = false);
   }
 
   Widget _buildStatusStepper(Ticket t, AppLocalizations l10n) {

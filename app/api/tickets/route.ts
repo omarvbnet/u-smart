@@ -22,6 +22,7 @@ import {
   MAINTENANCE_DISPATCH_ENGINEER,
   normalizeMaintenanceDispatchMode,
 } from '@/lib/private-company-maintenance-dispatch';
+import { tryAutoConfirmExpiredMaintenanceAwaiting } from '@/lib/maintenance-requester-confirmation';
 import {
   deriveSpecializationTagsFromTechnique,
   normalizeSpecializationTags,
@@ -1515,26 +1516,34 @@ export async function GET(req: NextRequest) {
         };
       }
     } else if (requesterRole === 'TECHNICIAN') {
-      // Technicians see ONLY maintenance tickets (province pool matches engineer rules when filter is on).
-      const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
+      // Technicians: maintenance only. Pending pool uses province for open-market rows; workspace
+      // PRIVATE_COMPANY_STAFF pending rows are matched without province in SQL, then filtered in memory.
+      const pendingWithProvince: Record<string, unknown> = { status: 'PENDING' };
       if (provinceFilterActive && requesterProvince?.trim()) {
-        pendingFilter.province = {
+        pendingWithProvince.province = {
           equals: requesterProvince.trim(),
           mode: 'insensitive',
         };
       }
+      const technicianPendingOr: Record<string, unknown>[] = [
+        pendingWithProvince,
+        { company: { contains: payload.requesterId } },
+      ];
+      if (myStaffWorkspaceId) {
+        technicianPendingOr.push({
+          status: 'PENDING',
+          assignmentScope: 'PRIVATE_COMPANY_STAFF',
+          privateCompanyId: myStaffWorkspaceId,
+          technique: { in: MAINTENANCE_TECHNIQUES },
+        });
+      }
       const technicianAnd: Record<string, unknown>[] = [
-        {
-          OR: [pendingFilter, { company: { contains: payload.requesterId } }],
-        },
+        { OR: technicianPendingOr },
         privateCompanyTicketScope,
       ];
       if (requesterSpecialization) {
         technicianAnd.push({
-          OR: [
-            { specializationTags: { isEmpty: true } },
-            { specializationTags: { has: requesterSpecialization } },
-          ],
+          OR: [{ specializationTags: { isEmpty: true } }, { specializationTags: { has: requesterSpecialization } }],
         });
       }
       where = {
@@ -1612,6 +1621,7 @@ export async function GET(req: NextRequest) {
         technique: true,
         company: true,
         status: true,
+        province: true,
         createdAt: true,
         requesterId: true,
         privateCompanyId: true,
@@ -1625,6 +1635,7 @@ export async function GET(req: NextRequest) {
       technique: string;
       company: string | null;
       status: string;
+      province: string;
       createdAt: Date;
       requesterId: string | null;
       privateCompanyId: string | null;
@@ -1702,9 +1713,7 @@ export async function GET(req: NextRequest) {
         const parsed = parseTicketCompanyJson(r.company);
         if (ticketFieldStaffInvolvesRequester(parsed, payload.requesterId)) return true;
         const targetDept = r.privateCompanyTargetDepartmentId ?? null;
-        if (targetDept) {
-          if (!deptId || targetDept !== deptId) return false;
-        }
+        if (targetDept && deptId && targetDept !== deptId) return false;
         const allowedByTechnique = staffTicketTechniqueAllowed({
           technique: r.technique,
           staffDepartmentId: deptId,
@@ -1714,6 +1723,20 @@ export async function GET(req: NextRequest) {
         if (!allowedByTechnique) return false;
         const pendingUnassigned =
           String(r.status).toUpperCase() === 'PENDING' && !assignedStaffIdFromCompanyJson(parsed);
+        if (
+          pendingUnassigned &&
+          requesterRole === 'TECHNICIAN' &&
+          provinceFilterActive &&
+          requesterProvince?.trim()
+        ) {
+          const ticketProv = String(r.province ?? '').trim();
+          if (
+            ticketProv &&
+            ticketProv.toLowerCase() !== requesterProvince.trim().toLowerCase()
+          ) {
+            return false;
+          }
+        }
         if (pendingUnassigned) {
           if (requesterRole === 'TECHNICIAN' && !technicianAvailabilityPoolEnabled) return false;
           if (isQcPoolEngineerRole(requesterRole) && !engineerAvailabilityPoolEnabled) {

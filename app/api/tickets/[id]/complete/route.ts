@@ -3,9 +3,19 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
+import {
+  MAINTENANCE_AWAITING_SINCE_KEY,
+  MAINTENANCE_REJECT_REASON_KEY,
+  MAINTENANCE_REQUESTER_CONFIRM_MINUTES,
+  readMaintenanceAwaitingSince,
+  readTicketJsonStatus,
+} from '@/lib/maintenance-requester-confirmation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
+
+const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = getRequesterFromRequest(req);
@@ -14,8 +24,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-
-  const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
   try {
     const coordinatorContext = await getCoordinatorContext(req);
@@ -41,10 +49,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     let parsed: Record<string, unknown> = {};
     try {
       parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     const assignedId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
-    const assignedCoordinatorId = ticket.assigneeCoordinatorUserId ?? (typeof parsed.assigneeCoordinatorUserId === 'string' ? parsed.assigneeCoordinatorUserId : null);
+    const crewIds = maintenanceCrewIdsFromCompanyJson(parsed);
+    const fieldActor =
+      assignedId === auth.payload.requesterId || crewIds.includes(auth.payload.requesterId);
+    const assignedCoordinatorId =
+      ticket.assigneeCoordinatorUserId ??
+      (typeof parsed.assigneeCoordinatorUserId === 'string' ? parsed.assigneeCoordinatorUserId : null);
     if (coordinatorContext) {
       if (ticket.coordinatorCompanyId !== coordinatorContext.companyId) {
         return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
@@ -52,8 +67,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (assignedCoordinatorId && assignedCoordinatorId !== coordinatorContext.userId) {
         return NextResponse.json({ success: false, message: 'Only assigned staff can complete this ticket' }, { status: 403 });
       }
-    } else if (assignedId !== auth.payload.requesterId) {
-      return NextResponse.json({ success: false, message: 'Only the assigned technician or engineer can complete this ticket' }, { status: 403 });
+    } else if (!fieldActor) {
+      return NextResponse.json(
+        { success: false, message: 'Only the assigned technician (or crew) can complete this ticket' },
+        { status: 403 }
+      );
     }
 
     if (ticket.status === 'COMPLETED') {
@@ -69,10 +87,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Maintenance: no checklist; require 4–6 before and 4–6 after images
     if (isMaintenance) {
       if (checklistResponse) {
-        return NextResponse.json({ success: false, message: 'Maintenance tickets do not use checklists. Attach 4–6 before and 4–6 after photos and complete.' }, { status: 400 });
+        return NextResponse.json(
+          { success: false, message: 'Maintenance tickets do not use checklists. Attach 4–6 before and 4–6 after photos and complete.' },
+          { status: 400 }
+        );
       }
-      const beforeUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim()) : [];
-      const afterUrls = Array.isArray(body.finishingImageUrls) ? body.finishingImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim()) : [];
+      const beforeUrls = Array.isArray(body.beforeImageUrls)
+        ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim())
+        : [];
+      const afterUrls = Array.isArray(body.finishingImageUrls)
+        ? body.finishingImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim())
+        : [];
       if (beforeUrls.length < 4 || beforeUrls.length > 6) {
         return NextResponse.json({ success: false, message: 'Before images must be between 4 and 6' }, { status: 400 });
       }
@@ -81,13 +106,72 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       parsed.beforeImageUrls = beforeUrls;
       parsed.finishingImageUrls = afterUrls;
+
+      // Requester-confirmation flow (Provisor requester tickets only; coordinator dashboard unchanged)
+      if (ticket.requesterId && !coordinatorContext) {
+        const effectiveStatus = readTicketJsonStatus(parsed, String(ticket.status ?? 'PENDING'));
+        if (effectiveStatus !== 'IN_PROGRESS') {
+          return NextResponse.json(
+            { success: false, message: 'Start maintenance (in progress) before requesting completion confirmation.' },
+            { status: 400 }
+          );
+        }
+        const already = readMaintenanceAwaitingSince(parsed);
+        if (already) {
+          return NextResponse.json(
+            { success: false, message: 'Already waiting for the requester to confirm completion.' },
+            { status: 400 }
+          );
+        }
+        if (!parsed._ticket) parsed._ticket = true;
+        parsed[MAINTENANCE_AWAITING_SINCE_KEY] = new Date().toISOString();
+        delete parsed[MAINTENANCE_REJECT_REASON_KEY];
+        parsed.status = 'IN_PROGRESS';
+        parsed.workflowState = 'IN_PROGRESS';
+
+        await prisma.visitorRequest.update({
+          where: { id },
+          data: {
+            status: 'IN_PROGRESS',
+            workflowState: 'IN_PROGRESS',
+            company: JSON.stringify(parsed),
+            beforeImageUrls: beforeUrls,
+            finishingImageUrls: afterUrls,
+          },
+        });
+
+        try {
+          await notifyRequesterI18n({
+            prisma,
+            type: 'status_changed',
+            ticketId: id,
+            requesterId: ticket.requesterId,
+            payload: {
+              key: 'maintenance_awaiting_your_confirm',
+              vars: {
+                ticketId: id,
+                minutes: String(MAINTENANCE_REQUESTER_CONFIRM_MINUTES),
+              },
+            },
+            data: { ticketId: id, type: 'status_changed' },
+          });
+        } catch {
+          /* ignore */
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Sent to the requester for confirmation.',
+          awaitingRequesterConfirmation: true,
+        });
+      }
     }
+
     const inspectionResult = typeof body.inspectionResult === 'string' ? body.inspectionResult.trim().toLowerCase() : null;
     const inspectionComments = typeof body.inspectionComments === 'string' ? body.inspectionComments.trim() : null;
-    const ncrReason = typeof body.ncrReason === 'string' ? body.ncrReason.trim() : (inspectionResult === 'ncr' ? inspectionComments : null);
+    const ncrReason = typeof body.ncrReason === 'string' ? body.ncrReason.trim() : inspectionResult === 'ncr' ? inspectionComments : null;
     const ncrImageUrls = Array.isArray(body.ncrImageUrls) ? body.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
 
-    // NCR: keep status IN_PROGRESS until NCR is resolved (requester resubmits → engineer approves or reworks)
     const isNcr = inspectionResult === 'ncr';
     if (!isNcr) {
       parsed.status = 'COMPLETED';
@@ -102,14 +186,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (checklistResponse) {
       parsed.checklistResponse = checklistResponse;
-      // Convert to inspectionChecklist format expected by admin panel
       const items = Array.isArray(checklistResponse.items) ? checklistResponse.items : [];
       parsed.inspectionChecklist = items.map((item: Record<string, unknown>) => ({
         id: String(item.id ?? ''),
         label: String(item.label ?? ''),
         checked: !!item.checked,
-        result: typeof item.result === 'string' ? item.result : (item.checked ? 'accepted' : 'rejected'),
-        comment: typeof item.comment === 'string' ? item.comment : (typeof item.note === 'string' ? item.note : undefined),
+        result: typeof item.result === 'string' ? item.result : item.checked ? 'accepted' : 'rejected',
+        comment: typeof item.comment === 'string' ? item.comment : typeof item.note === 'string' ? item.note : undefined,
         weight: typeof item.weight === 'string' ? item.weight : 'minor',
       }));
     }
@@ -141,7 +224,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await prisma.ticketStatusLog.create({
           data: { visitorRequestId: id, status: 'COMPLETED' },
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     if (ticket.requesterId) {

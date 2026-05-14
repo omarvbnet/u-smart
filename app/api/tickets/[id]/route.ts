@@ -5,6 +5,11 @@ import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { viewerHasSharedSiteTicketRead, visitorRequestSiteLogicalId } from '@/lib/site-share-access';
 import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates, embeddedTicketSiteCoords } from '@/lib/ticket-detail-enrichment';
 import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
+import {
+  tryAutoConfirmExpiredMaintenanceAwaiting,
+  readMaintenanceAwaitingSince,
+  readMaintenanceRejectReason,
+} from '@/lib/maintenance-requester-confirmation';
 
 const prisma = _prisma as any;
 
@@ -23,6 +28,8 @@ export async function GET(
   if (!id) {
     return NextResponse.json({ success: false, message: 'Ticket ID required' }, { status: 400 });
   }
+
+  await tryAutoConfirmExpiredMaintenanceAwaiting(prisma, id);
 
   // Coordinator-role access (new provider account system)
   if (coordinatorContext) {
@@ -134,12 +141,45 @@ export async function GET(
   } catch { /* fallback to COMPANY */ }
 
   try {
-    // ENGINEER: QC tickets only (no maintenance). TECHNICIAN: only maintenance. COMPANY/PERSONAL: own tickets only.
+    // ENGINEER: QC tickets + workspace-scoped maintenance (dispatch / triage). TECHNICIAN: maintenance. COMPANY/PERSONAL: own tickets only.
     const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+    let engineerWorkspaceId: string | null = null;
+    try {
+      const meWs = await prisma.ticketRequester.findUnique({
+        where: { id: payload.requesterId },
+        select: {
+          privateCompanyId: true,
+          privateCompanyOwned: { select: { id: true, status: true } },
+        },
+      });
+      const owned =
+        meWs?.privateCompanyOwned?.status === 'APPROVED' ? meWs.privateCompanyOwned?.id ?? null : null;
+      engineerWorkspaceId = owned ?? meWs?.privateCompanyId ?? null;
+    } catch {
+      engineerWorkspaceId = null;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let whereClause: any;
-    if (requesterRole === 'ENGINEER') {
-      whereClause = { id, technique: { notIn: MAINTENANCE_TECHNIQUES } };
+    const isQcPoolEngineer =
+      requesterRole === 'ENGINEER' ||
+      requesterRole === 'QUALITY_ENGINEER' ||
+      requesterRole === 'SUPERVISION_ENGINEER';
+    if (isQcPoolEngineer) {
+      whereClause = {
+        id,
+        OR: [
+          { technique: { notIn: MAINTENANCE_TECHNIQUES } },
+          ...(engineerWorkspaceId
+            ? [
+                {
+                  technique: { in: MAINTENANCE_TECHNIQUES },
+                  assignmentScope: 'PRIVATE_COMPANY_STAFF',
+                  privateCompanyId: engineerWorkspaceId,
+                },
+              ]
+            : []),
+        ],
+      };
     } else if (requesterRole === 'TECHNICIAN') {
       whereClause = { id, technique: { in: MAINTENANCE_TECHNIQUES } };
     } else if (requesterRole === 'WORKER') {
@@ -303,6 +343,8 @@ export async function GET(
     let assignedAt: string | null = null;
     let maintenanceCrewIds: string[] = [];
     let embeddedChecklistTemplateId: string | null = null;
+    let maintenanceAwaitingRequesterSince: string | null = null;
+    let maintenanceRequesterRejectReason: string | null = null;
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -345,6 +387,8 @@ export async function GET(
         assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
         assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
         maintenanceCrewIds = maintenanceCrewIdsFromCompanyJson(parsed as Record<string, unknown>);
+        maintenanceAwaitingRequesterSince = readMaintenanceAwaitingSince(parsed as Record<string, unknown>);
+        maintenanceRequesterRejectReason = readMaintenanceRejectReason(parsed as Record<string, unknown>);
         checklistHistory = Array.isArray(parsed.checklistHistory)
           ? (parsed.checklistHistory as Array<{ at?: string; inspectionChecklist?: unknown[]; inspectionResult?: string; inspectionComments?: string }>).map((e) => ({
               at: e.at || '',
@@ -454,6 +498,8 @@ export async function GET(
         requesterName,
         requesterRole: ticketRequesterRole,
         requesterPhone,
+        maintenanceAwaitingRequesterSince,
+        maintenanceRequesterRejectReason,
         conflictReported,
         conflictStatus,
         conflictResolution,

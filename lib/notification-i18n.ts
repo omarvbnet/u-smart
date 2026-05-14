@@ -26,7 +26,9 @@ export type NotificationCopyKey =
   | 'material_request_updated'
   | 'material_request_receipt_disputed'
   | 'material_request_issue_acknowledged'
-  | 'maintenance_crew_joined';
+  | 'maintenance_crew_joined'
+  | 'maintenance_awaiting_your_confirm'
+  | 'maintenance_rejected_by_requester';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -631,6 +633,42 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: 'تەکنیسینێک بەشداری تیکەتەکەت بوو',
       body: `${v.name} بەشداری لیژنەی چاککردن بوو لە تیکەتی ${v.ticketId}.`,
+    }),
+  },
+  maintenance_awaiting_your_confirm: {
+    en: (v) => ({
+      title: 'Confirm maintenance completion',
+      body: `Your team finished work on ticket ${v.ticketId}. Please confirm or report an issue within about ${v.minutes} minutes (otherwise it will be accepted automatically).`,
+    }),
+    ar: (v) => ({
+      title: 'تأكيد إكمال الصيانة',
+      body: `أنهى الفريق العمل على التذكرة ${v.ticketId}. يُرجى التأكيد أو الإبلاغ عن مشكلة خلال نحو ${v.minutes} دقيقة (وإلا تُقبل تلقائياً).`,
+    }),
+    tr: (v) => ({
+      title: 'Bakım tamamını onaylayın',
+      body: `Ekip ${v.ticketId} talebinde işi bitirdi. Yaklaşık ${v.minutes} dakika içinde onaylayın veya sorun bildirin (aksi halde otomatik kabul edilir).`,
+    }),
+    ku: (v) => ({
+      title: 'تەواوکردنی چاککردنەوە پشتڕاست بکەرەوە',
+      body: `تیمەکە کارەکەی لە تیکەتی ${v.ticketId} تەواو کرد. تکایە لە نزیکەی ${v.minutes} خولەکدا پشتڕاستی بکەرەوە یان کێشە ڕابگەیەنە (وەگرنا بە شێوەی ئۆتۆماتیکی قبووڵ دەکرێت).`,
+    }),
+  },
+  maintenance_rejected_by_requester: {
+    en: (v) => ({
+      title: 'Requester reported an issue',
+      body: `Ticket ${v.ticketId}: ${v.reason}`,
+    }),
+    ar: (v) => ({
+      title: 'أبلغ مقدّم الطلب عن مشكلة',
+      body: `التذكرة ${v.ticketId}: ${v.reason}`,
+    }),
+    tr: (v) => ({
+      title: 'Talep sahibi sorun bildirdi',
+      body: `Talep ${v.ticketId}: ${v.reason}`,
+    }),
+    ku: (v) => ({
+      title: 'داواکار کێشەیەکی ڕاگەیاند',
+      body: `تیکەت ${v.ticketId}: ${v.reason}`,
     }),
   },
   workspace_announcement: {

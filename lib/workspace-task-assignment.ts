@@ -43,7 +43,9 @@ export function staffTicketTechniqueAllowed(args: {
 
   const deptId = args.staffDepartmentId;
   const matchesDeptOrGlobal = rows.some(
-    (r) => r.slug === tech && (r.departmentId === null || r.departmentId === deptId)
+    (r) =>
+      r.slug === tech &&
+      (r.departmentId === null || deptId == null || deptId === '' || r.departmentId === deptId)
   );
   if (!matchesDeptOrGlobal) return false;
 
