@@ -9,8 +9,36 @@ import {
   MAINTENANCE_DISPATCH_ENGINEER,
   normalizeMaintenanceDispatchMode,
 } from '@/lib/private-company-maintenance-dispatch';
+import { MAINTENANCE_TECHNIQUES } from '@/lib/qc-conflict-mapper';
+import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
 
 const prisma = _prisma as any;
+
+/** Same semantics as GET /api/tickets list: workspace staff scope may be stored as null on legacy rows. */
+function isPrivateCompanyStaffTicket(row: {
+  assignmentScope: string | null;
+  privateCompanyId: string | null;
+}): boolean {
+  const scope = row.assignmentScope ?? null;
+  return (
+    !!row.privateCompanyId &&
+    (scope === 'PRIVATE_COMPANY_STAFF' || scope === null)
+  );
+}
+
+async function ticketIsMaintenanceCategory(row: {
+  technique: string | null;
+  privateCompanyId: string | null;
+}): Promise<boolean> {
+  const slug = String(row.technique ?? '').trim();
+  if (!slug) return false;
+  const lo = slug.toLowerCase();
+  if (MAINTENANCE_TECHNIQUES.includes(lo) || lo === 'maintenance') return true;
+  const kind = await lookupProvisorTechniqueCategory(prisma, slug, {
+    workspaceCompanyId: row.privateCompanyId ?? null,
+  });
+  return kind === 'MAINTENANCE';
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -160,9 +188,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
     }
 
-    const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
-    const tech = (row.technique ?? '').toLowerCase();
-    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(tech);
+    const isMaintenance = await ticketIsMaintenanceCategory(row);
 
     if (assigneeRequesterId) {
       if (!isMaintenance) {
@@ -171,7 +197,7 @@ export async function PATCH(
           { status: 400 },
         );
       }
-      if (row.assignmentScope !== 'PRIVATE_COMPANY_STAFF' || !row.privateCompanyId) {
+      if (!isPrivateCompanyStaffTicket(row)) {
         return NextResponse.json(
           { success: false, message: 'This ticket is not a private workspace maintenance ticket.' },
           { status: 400 },
@@ -448,7 +474,7 @@ export async function PATCH(
       roleUpper === 'QUALITY_ENGINEER' ||
       roleUpper === 'SUPERVISION_ENGINEER';
 
-    if (row.assignmentScope === 'PRIVATE_COMPANY_STAFF' && row.privateCompanyId) {
+    if (isPrivateCompanyStaffTicket(row)) {
       const meFull = await prisma.ticketRequester.findUnique({
         where: { id: requester.id },
         select: {
