@@ -75,6 +75,36 @@ class PrivateCompanyProvider extends ChangeNotifier {
   /// Only the workspace owner can create / edit / delete departments.
   bool get canManageDepartments => isOwner;
 
+  /// Pending maintenance in [ENGINEER_ASSIGNS] departments: who may pick a technician (API-enforced).
+  bool departmentUsesEngineerMaintenanceDispatch(String? departmentId) {
+    if (!hasWorkspace || departmentId == null || departmentId.isEmpty) return false;
+    for (final d in _workspace!.departments) {
+      if (d.id == departmentId) {
+        return d.maintenanceDispatchMode == 'ENGINEER_ASSIGNS';
+      }
+    }
+    return false;
+  }
+
+  /// Same-department dispatchers, or the workspace owner, may assign a technician for engineer-dispatch maintenance.
+  bool canDispatchMaintenanceForDepartment(String? targetDepartmentId) {
+    if (!hasWorkspace || !isApproved || targetDepartmentId == null || targetDepartmentId.isEmpty) {
+      return false;
+    }
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = (_resolvedRole ?? '').toUpperCase();
+    const dispatchRoles = {
+      'ENGINEER',
+      'QUALITY_ENGINEER',
+      'SUPERVISION_ENGINEER',
+      'MANAGER',
+      'COORDINATOR',
+    };
+    if (!dispatchRoles.contains(role)) return false;
+    return myDepartmentId == targetDepartmentId;
+  }
+
   /// Only the workspace owner can broadcast workspace announcements.
   bool get canBroadcastNotifications => isOwner;
 
@@ -359,10 +389,14 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? iconKey,
     bool engineerAvailabilityPoolEnabled = true,
     bool technicianAvailabilityPoolEnabled = true,
+    String maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
   }) async {
     _submitting = true;
     notifyListeners();
     try {
+      final mode = maintenanceDispatchMode.trim().toUpperCase() == 'ENGINEER_ASSIGNS'
+          ? 'ENGINEER_ASSIGNS'
+          : 'DIRECT_TECHNICIAN';
       final res = await _api.post(ApiConfig.privateCompanyDepartments, body: {
         'name': name,
         if (description != null && description.trim().isNotEmpty)
@@ -371,6 +405,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
         if (iconKey != null) 'iconKey': iconKey,
         'engineerAvailabilityPoolEnabled': engineerAvailabilityPoolEnabled,
         'technicianAvailabilityPoolEnabled': technicianAvailabilityPoolEnabled,
+        'maintenanceDispatchMode': mode,
       });
       if (res['success'] == true) {
         await refresh();
@@ -398,6 +433,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     int? maintenanceProximityRadiusM,
     bool? engineerAvailabilityPoolEnabled,
     bool? technicianAvailabilityPoolEnabled,
+    String? maintenanceDispatchMode,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -416,6 +452,11 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'engineerAvailabilityPoolEnabled': engineerAvailabilityPoolEnabled,
         if (technicianAvailabilityPoolEnabled != null)
           'technicianAvailabilityPoolEnabled': technicianAvailabilityPoolEnabled,
+        if (maintenanceDispatchMode != null)
+          'maintenanceDispatchMode':
+              maintenanceDispatchMode.trim().toUpperCase() == 'ENGINEER_ASSIGNS'
+                  ? 'ENGINEER_ASSIGNS'
+                  : 'DIRECT_TECHNICIAN',
       });
       if (res['success'] == true) {
         await refresh();

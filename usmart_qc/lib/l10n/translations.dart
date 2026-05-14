@@ -576,6 +576,18 @@ const Map<String, String> _en = {
   'pc_ws_tab_checklists': 'Checklists',
   'pc_ws_tab_performance': 'Performance',
   'pc_ws_tab_warehouse': 'Warehouse',
+  'pc_dept_maintenance_dispatch_title': 'Maintenance routing',
+  'pc_dept_maintenance_dispatch_subtitle':
+      'For this department: either technicians pick pending jobs from Available, or dispatchers assign a technician first. Province and technique rules still apply.',
+  'pc_dispatch_direct': 'Direct to technician pool',
+  'pc_dispatch_direct_desc':
+      'Technicians can self-assign pending maintenance from Available when allowed.',
+  'pc_dispatch_engineer': 'Dispatcher assigns first',
+  'pc_dispatch_engineer_desc':
+      'Engineers, managers, or coordinators in this department pick the technician before work starts.',
+  'maint_assign_technician': 'Assign technician',
+  'maint_assign_technician_empty':
+      'No technicians in this department match the ticket province (or they are inactive).',
   'pc_ws_screen_title': 'Private workspace',
   'pc_ws_owner_badge': 'OWNER',
   'pc_ws_manage_techniques_btn': 'Work techniques',
@@ -1171,6 +1183,17 @@ const Map<String, String> _ar = {
   'pc_ws_tab_checklists': 'قوائم التحقق',
   'pc_ws_tab_performance': 'الأداء',
   'pc_ws_tab_warehouse': 'المستودع',
+  'pc_dept_maintenance_dispatch_title': 'توجيه الصيانة',
+  'pc_dept_maintenance_dispatch_subtitle':
+      'لهذا القسم: إما أن يلتقط الفنيون المهام المعلّقة من «متاح»، أو يعيّن المنسّقون/المهندسون الفني أولاً. تبقى قواعد المحافظة ونوع المهمة سارية.',
+  'pc_dispatch_direct': 'مباشرة إلى مجموعة الفنيين',
+  'pc_dispatch_direct_desc': 'يمكن للفنيين المطالبة بالصيانة المعلّقة من «متاح» عند السماح.',
+  'pc_dispatch_engineer': 'المنسّق يعيّن أولاً',
+  'pc_dispatch_engineer_desc':
+      'المهندسون أو المديرون أو المنسّقون في هذا القسم يختارون الفني قبل بدء العمل.',
+  'maint_assign_technician': 'تعيين فني',
+  'maint_assign_technician_empty':
+      'لا يوجد فنيون في القسم يطابقون محافظة التذكرة (أو غير نشطين).',
   'pc_ws_screen_title': 'مساحة العمل الخاصة',
   'pc_ws_owner_badge': 'المالك',
   'pc_ws_manage_techniques_btn': 'أنواع العمل',
@@ -1769,6 +1792,17 @@ const Map<String, String> _ku = {
   'pc_ws_tab_checklists': 'لیستی پشکنین',
   'pc_ws_tab_performance': 'ئەداء',
   'pc_ws_tab_warehouse': 'کۆگا',
+  'pc_dept_maintenance_dispatch_title': 'ڕێڕەوی چاککردنەوە',
+  'pc_dept_maintenance_dispatch_subtitle':
+      'بۆ ئەم بەشە: یان تەکنیسینەکان لە «بەردەست» دەست دەکەن، یان پێشتر بەڕێوەبەر/ئەندازیار تەکنیسین دیاری دەکات. یاساکانی پارێزگا و جۆری کار هەر دەمێننەوە.',
+  'pc_dispatch_direct': 'ڕاستەوخۆ بۆ کۆمەڵی تەکنیسین',
+  'pc_dispatch_direct_desc': 'تەکنیسین دەتوانن لە «بەردەست» خۆیان دیاری بکەن کاتێک ڕێگەپێدراون.',
+  'pc_dispatch_engineer': 'پێشتر بەڕێوەبەر دیاری دەکات',
+  'pc_dispatch_engineer_desc':
+      'ئەندازیار، بەڕێوەبەر، یان هەماهەنگکەر لەم بەشە تەکنیسین هەڵدەبژێرێت پێش دەستپێکردن.',
+  'maint_assign_technician': 'تەکنیسین دیاری بکە',
+  'maint_assign_technician_empty':
+      'تەکنیسین لەم بەشەدا نییە کە لەگەڵ پارێزگای تیکەتدا بگونجێت (یان چالاک نین).',
   'pc_ws_screen_title': 'شوێنی کارکردنی تایبەت',
   'pc_ws_owner_badge': 'خاوەن',
   'pc_ws_manage_techniques_btn': 'جۆرەکانی کار',
@@ -2369,6 +2403,18 @@ const Map<String, String> _tr = {
   'pc_ws_tab_checklists': 'Kontrol listeleri',
   'pc_ws_tab_performance': 'Performans',
   'pc_ws_tab_warehouse': 'Depo',
+  'pc_dept_maintenance_dispatch_title': 'Bakım yönlendirmesi',
+  'pc_dept_maintenance_dispatch_subtitle':
+      'Bu departman için: teknisyenler Bekleyen’den iş alır veya önce koordinatör/mühendis teknisyen atar. İl ve görev türü kuralları geçerlidir.',
+  'pc_dispatch_direct': 'Doğrudan teknisyen havuzuna',
+  'pc_dispatch_direct_desc':
+      'İzinliyse teknisyenler bekleyen bakımı Müsait’ten kendilerine alabilir.',
+  'pc_dispatch_engineer': 'Önce koordinatör atar',
+  'pc_dispatch_engineer_desc':
+      'Bu departmandaki mühendis, yönetici veya koordinatör işe başlamadan teknisyeni seçer.',
+  'maint_assign_technician': 'Teknisyen ata',
+  'maint_assign_technician_empty':
+      'Bilet iline uyan veya aktif teknisyen yok.',
   'pc_ws_screen_title': 'Özel çalışma alanı',
   'pc_ws_owner_badge': 'SAHİP',
   'pc_ws_manage_techniques_btn': 'İş türleri',

@@ -5,6 +5,10 @@ import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
 import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
+import {
+  MAINTENANCE_DISPATCH_ENGINEER,
+  normalizeMaintenanceDispatchMode,
+} from '@/lib/private-company-maintenance-dispatch';
 
 const prisma = _prisma as any;
 
@@ -109,6 +113,10 @@ export async function PATCH(
       });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const assigneeRequesterId =
+      typeof body?.assigneeRequesterId === 'string' ? body.assigneeRequesterId.trim() : '';
+
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: auth.payload.requesterId },
       select: { id: true, name: true, username: true, role: true },
@@ -120,8 +128,18 @@ export async function PATCH(
     const role = requester.role ?? 'COMPANY';
     const isEngineer = role === 'ENGINEER';
     const isTechnician = role === 'TECHNICIAN';
-    if (!isEngineer && !isTechnician) {
-      return NextResponse.json({ success: false, message: 'Only engineers or technicians can assign tickets' }, { status: 403 });
+    const roleUpper = (requester.role ?? 'COMPANY').toUpperCase();
+    const isDispatcherRole =
+      roleUpper === 'ENGINEER' ||
+      roleUpper === 'QUALITY_ENGINEER' ||
+      roleUpper === 'SUPERVISION_ENGINEER' ||
+      roleUpper === 'MANAGER' ||
+      roleUpper === 'COORDINATOR';
+    if (!assigneeRequesterId && !isDispatcherRole && !isTechnician) {
+      return NextResponse.json(
+        { success: false, message: 'Only engineers, managers, or coordinators can use this action.' },
+        { status: 403 },
+      );
     }
 
     const row = await prisma.visitorRequest.findUnique({
@@ -132,6 +150,7 @@ export async function PATCH(
         company: true,
         requesterId: true,
         technique: true,
+        province: true,
         privateCompanyId: true,
         assignmentScope: true,
         privateCompanyTargetDepartmentId: true,
@@ -144,6 +163,254 @@ export async function PATCH(
     const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
     const tech = (row.technique ?? '').toLowerCase();
     const isMaintenance = MAINTENANCE_TECHNIQUES.includes(tech);
+
+    if (assigneeRequesterId) {
+      if (!isMaintenance) {
+        return NextResponse.json(
+          { success: false, message: 'assigneeRequesterId is only for maintenance tickets.' },
+          { status: 400 },
+        );
+      }
+      if (row.assignmentScope !== 'PRIVATE_COMPANY_STAFF' || !row.privateCompanyId) {
+        return NextResponse.json(
+          { success: false, message: 'This ticket is not a private workspace maintenance ticket.' },
+          { status: 400 },
+        );
+      }
+      const targetDeptId = row.privateCompanyTargetDepartmentId?.trim() || '';
+      if (!targetDeptId) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Assign-to-technician requires the ticket to target a department.',
+          },
+          { status: 400 },
+        );
+      }
+      const ownedCompany = await prisma.privateCompany.findFirst({
+        where: { id: row.privateCompanyId, ownerRequesterId: requester.id },
+        select: { id: true },
+      });
+      const isWorkspaceOwnerDispatcher = !!ownedCompany;
+      if (!isDispatcherRole && !isWorkspaceOwnerDispatcher) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Only engineers, managers, coordinators, or the workspace owner can assign a technician.',
+          },
+          { status: 403 },
+        );
+      }
+      const deptRow = await prisma.privateCompanyDepartment.findFirst({
+        where: { id: targetDeptId, companyId: row.privateCompanyId },
+        select: { maintenanceDispatchMode: true },
+      });
+      if (
+        normalizeMaintenanceDispatchMode(deptRow?.maintenanceDispatchMode) !== MAINTENANCE_DISPATCH_ENGINEER
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'This department is configured for direct technician pool, not engineer dispatch.',
+          },
+          { status: 400 },
+        );
+      }
+      const meFull = await prisma.ticketRequester.findUnique({
+        where: { id: requester.id },
+        select: {
+          privateCompanyId: true,
+          privateCompanyDepartmentId: true,
+          privateCompanyAllowedTaskSlugs: true,
+        },
+      });
+      if (!meFull || meFull.privateCompanyId !== row.privateCompanyId) {
+        return NextResponse.json(
+          { success: false, message: 'You are not a member of this ticket workspace.' },
+          { status: 403 },
+        );
+      }
+      const myDept = meFull.privateCompanyDepartmentId ?? null;
+      if (!isWorkspaceOwnerDispatcher) {
+        if (!myDept || myDept !== targetDeptId) {
+          return NextResponse.json(
+            { success: false, message: 'You can only assign technicians in the same department as this ticket.' },
+            { status: 403 },
+          );
+        }
+        const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
+        const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
+          ? meFull.privateCompanyAllowedTaskSlugs
+          : [];
+        if (
+          !staffTicketTechniqueAllowed({
+            technique: String(row.technique ?? ''),
+            staffDepartmentId: myDept,
+            staffAllowedSlugs: allowedSlugs,
+            workspaceRows: techRows,
+          })
+        ) {
+          return NextResponse.json(
+            { success: false, message: 'This ticket is outside your department task scope.' },
+            { status: 403 },
+          );
+        }
+      }
+
+      const assignee = await prisma.ticketRequester.findFirst({
+        where: {
+          id: assigneeRequesterId,
+          privateCompanyId: row.privateCompanyId,
+          role: 'TECHNICIAN',
+          status: 'ACTIVE',
+          privateCompanyDepartmentId: targetDeptId,
+        },
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          province: true,
+          provinceFilterActive: true,
+        },
+      });
+      if (!assignee) {
+        return NextResponse.json(
+          { success: false, message: 'Technician not found in this department.' },
+          { status: 404 },
+        );
+      }
+      const ticketProvince = (row.province ?? '').trim();
+      const filterActive = assignee.provinceFilterActive !== false;
+      const ap = (assignee.province ?? '').trim();
+      if (filterActive && ap && ticketProvince && ap.toLowerCase() !== ticketProvince.toLowerCase()) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Technician province filter does not match this ticket province.',
+          },
+          { status: 400 },
+        );
+      }
+
+      let currentStatus = row.status ?? 'PENDING';
+      let parsed: Record<string, unknown> = {};
+      if (typeof row.company === 'string') {
+        try {
+          parsed = JSON.parse(row.company) as Record<string, unknown>;
+          if (parsed._ticket && typeof parsed.status === 'string') {
+            currentStatus = parsed.status;
+          }
+        } catch {
+          /* fallback */
+        }
+      }
+      if (currentStatus !== 'PENDING') {
+        return NextResponse.json(
+          { success: false, message: 'Only PENDING tickets can be assigned' },
+          { status: 400 },
+        );
+      }
+      if (parsed._ticket && parsed.assignedEngineerId) {
+        return NextResponse.json(
+          { success: false, message: 'Ticket is already assigned' },
+          { status: 400 },
+        );
+      }
+
+      const activeTickets = await prisma.visitorRequest.findMany({
+        where: { status: { not: 'COMPLETED' } },
+        select: { id: true, company: true },
+      });
+      const assigneeBusy = activeTickets.some((t: { id: string; company: string | null }) => {
+        if (t.id === id) return false;
+        if (!t.company || typeof t.company !== 'string') return false;
+        try {
+          const p = JSON.parse(t.company) as { _ticket?: boolean; assignedEngineerId?: string };
+          return p._ticket === true && p.assignedEngineerId === assignee.id;
+        } catch {
+          return false;
+        }
+      });
+      if (assigneeBusy) {
+        return NextResponse.json(
+          { success: false, message: 'This technician already has an active ticket.' },
+          { status: 400 },
+        );
+      }
+
+      const newStatus = 'ON_SITE';
+      parsed.assignedEngineerId = assignee.id;
+      parsed.assignedEngineerName = assignee.name || assignee.username;
+      parsed.assignedAt = new Date().toISOString();
+      parsed.status = newStatus;
+      if (!parsed._ticket) parsed._ticket = true;
+
+      await prisma.visitorRequest.update({
+        where: { id },
+        data: { status: newStatus, company: JSON.stringify(parsed) },
+      });
+      try {
+        await prisma.ticketStatusLog.create({
+          data: { visitorRequestId: id, status: newStatus },
+        });
+      } catch {
+        /* ignore */
+      }
+      if (assignee.id) {
+        try {
+          await notifyRequesterI18n({
+            prisma,
+            type: 'status_changed',
+            ticketId: id,
+            requesterId: assignee.id,
+            payload: {
+              key: 'staff_assigned',
+              vars: {
+                staffKind: 'technician',
+                assigneeName: assignee.name || assignee.username || '',
+              },
+            },
+            data: { ticketId: id, type: 'status_changed' },
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+      if (row.requesterId) {
+        try {
+          await notifyRequesterI18n({
+            prisma,
+            type: 'status_changed',
+            ticketId: id,
+            requesterId: row.requesterId,
+            payload: {
+              key: 'staff_assigned',
+              vars: {
+                staffKind: 'technician',
+                assigneeName: assignee.name || assignee.username || '',
+              },
+            },
+            data: { ticketId: id, type: 'status_changed' },
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+      return NextResponse.json({
+        success: true,
+        ticket: {
+          id,
+          status: newStatus,
+          assignedEngineerId: assignee.id,
+          assignedEngineerName: assignee.name || assignee.username,
+        },
+      });
+    }
+
+    if (!isEngineer && !isTechnician) {
+      return NextResponse.json({ success: false, message: 'Only engineers or technicians can assign tickets' }, { status: 403 });
+    }
     if (isTechnician && !isMaintenance) {
       return NextResponse.json({ success: false, message: 'Technicians can only assign maintenance tickets' }, { status: 403 });
     }
@@ -176,7 +443,6 @@ export async function PATCH(
       );
     }
 
-    const roleUpper = (requester.role ?? 'COMPANY').toUpperCase();
     const isQcPoolRole =
       roleUpper === 'ENGINEER' ||
       roleUpper === 'QUALITY_ENGINEER' ||
@@ -222,6 +488,29 @@ export async function PATCH(
           },
           { status: 403 }
         );
+      }
+      if (isTechnician && isMaintenance && row.privateCompanyTargetDepartmentId) {
+        const dDispatch = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: row.privateCompanyTargetDepartmentId, companyId: row.privateCompanyId },
+          select: { maintenanceDispatchMode: true },
+        });
+        const pendingUnassigned =
+          currentStatus === 'PENDING' &&
+          !(typeof parsed.assignedEngineerId === 'string' && (parsed.assignedEngineerId as string).trim());
+        if (
+          pendingUnassigned &&
+          normalizeMaintenanceDispatchMode(dDispatch?.maintenanceDispatchMode) ===
+            MAINTENANCE_DISPATCH_ENGINEER
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'This maintenance ticket is assigned by an engineer or coordinator for your department.',
+            },
+            { status: 403 },
+          );
+        }
       }
       if (isQcPoolRole && !isTechnician && !engineerPoolOk) {
         return NextResponse.json(

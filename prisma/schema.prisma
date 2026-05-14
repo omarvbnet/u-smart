@@ -1413,8 +1413,10 @@ model PrivateCompanyDepartment {
   maintenanceProximityRadiusM     Int     @default(100)
   /// Owner: engineers in this department may browse and self-assign from the pending QC pool (workspace tickets).
   engineerAvailabilityPoolEnabled   Boolean @default(true)
-  /// Owner: technicians in this department may browse and self-assign from the pending maintenance pool (workspace tickets).
+  /// Owner: technicians may self-assign pending maintenance from the pool (when ticket targets this department).
   technicianAvailabilityPoolEnabled Boolean @default(true)
+  /// DIRECT_TECHNICIAN = pending maintenance goes to technician pool. ENGINEER_ASSIGNS = engineers/managers/coordinators assign a technician first (same department + ticket province rules as staff).
+  maintenanceDispatchMode           String  @default("DIRECT_TECHNICIAN")
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
   workspaceTargetedTickets VisitorRequest[] @relation("WorkspaceTicketTargetDepartment")

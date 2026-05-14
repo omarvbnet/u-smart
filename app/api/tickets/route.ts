@@ -19,6 +19,10 @@ import {
 } from '@/lib/private-company-kpi';
 import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
 import {
+  MAINTENANCE_DISPATCH_ENGINEER,
+  normalizeMaintenanceDispatchMode,
+} from '@/lib/private-company-maintenance-dispatch';
+import {
   deriveSpecializationTagsFromTechnique,
   normalizeSpecializationTags,
 } from '@/lib/technique-specialization-tags';
@@ -232,15 +236,34 @@ async function notifyPrivateCompanyMembersNewTicket(
     if (!company) return;
     const isMaintenance =
       opts?.maintenanceStyle === true || MAINTENANCE_TECHNIQUES.includes(technique);
+    const targetDept = opts?.targetDepartmentId?.trim() || null;
+    let maintenanceViaEngineer = false;
+    if (isMaintenance && targetDept) {
+      try {
+        const drow = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: targetDept, companyId: privateCompanyId },
+          select: { maintenanceDispatchMode: true },
+        });
+        maintenanceViaEngineer =
+          normalizeMaintenanceDispatchMode(drow?.maintenanceDispatchMode) === MAINTENANCE_DISPATCH_ENGINEER;
+      } catch {
+        maintenanceViaEngineer = false;
+      }
+    }
     const allowed = new Set<string>(['MANAGER', 'COORDINATOR']);
     if (isMaintenance) {
-      allowed.add('TECHNICIAN');
+      if (maintenanceViaEngineer) {
+        allowed.add('ENGINEER');
+        allowed.add('QUALITY_ENGINEER');
+        allowed.add('SUPERVISION_ENGINEER');
+      } else {
+        allowed.add('TECHNICIAN');
+      }
     } else {
       allowed.add('ENGINEER');
     }
     const techRows = await fetchWorkspaceTechniqueRows(prisma, privateCompanyId);
     const recipientIds = new Set<string>([company.ownerRequesterId]);
-    const targetDept = opts?.targetDepartmentId?.trim() || null;
     for (const s of (company.staff ?? []) as Array<{
       id: string;
       role: string | null;
@@ -1424,8 +1447,25 @@ export async function GET(req: NextRequest) {
         }
       : { OR: [{ assignmentScope: { not: 'PRIVATE_COMPANY_STAFF' as const } }, { privateCompanyId: null }] };
 
+    let engineerMaintenanceDeptIds: string[] = [];
+    if (myStaffWorkspaceId && isQcPoolEngineerRole(requesterRole)) {
+      try {
+        const ed = await prisma.privateCompanyDepartment.findMany({
+          where: {
+            companyId: myStaffWorkspaceId,
+            maintenanceDispatchMode: MAINTENANCE_DISPATCH_ENGINEER,
+          },
+          select: { id: true },
+        });
+        engineerMaintenanceDeptIds = (ed as Array<{ id: string }>).map((e) => e.id);
+      } catch {
+        engineerMaintenanceDeptIds = [];
+      }
+    }
+
     if (isQcPoolEngineerRole(requesterRole)) {
-      // Engineers see ONLY QC tickets (inspection, supervision, etc.). Maintenance tickets are for Technicians and Admin only.
+      // Engineers: QC pool tickets, plus workspace maintenance tickets for departments
+      // where the owner set "engineer assigns technician" (same province / specialization rules).
       const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
       if (provinceFilterActive && requesterProvince?.trim()) {
         pendingFilter.province = {
@@ -1447,11 +1487,33 @@ export async function GET(req: NextRequest) {
           ],
         });
       }
-      where = {
-        serviceSlug: filterServiceSlug,
+      const qcBlock = {
         technique: { notIn: MAINTENANCE_TECHNIQUES },
         AND: engineerAnd,
       };
+      const maintBlocks: Record<string, unknown>[] = [];
+      if (myStaffWorkspaceId && engineerMaintenanceDeptIds.length > 0) {
+        for (const deptId of engineerMaintenanceDeptIds) {
+          maintBlocks.push({
+            technique: { in: MAINTENANCE_TECHNIQUES },
+            assignmentScope: 'PRIVATE_COMPANY_STAFF' as const,
+            privateCompanyId: myStaffWorkspaceId,
+            privateCompanyTargetDepartmentId: deptId,
+            AND: [...engineerAnd],
+          });
+        }
+      }
+      if (maintBlocks.length > 0) {
+        where = {
+          serviceSlug: filterServiceSlug,
+          OR: [qcBlock, ...maintBlocks],
+        };
+      } else {
+        where = {
+          serviceSlug: filterServiceSlug,
+          ...qcBlock,
+        };
+      }
     } else if (requesterRole === 'TECHNICIAN') {
       // Technicians see ONLY maintenance tickets (province pool matches engineer rules when filter is on).
       const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
@@ -1601,6 +1663,38 @@ export async function GET(req: NextRequest) {
           technicianAvailabilityPoolEnabled = drow.technicianAvailabilityPoolEnabled !== false;
         }
       }
+      const maintDeptIdsForDispatch = [
+        ...new Set(
+          rowsForList
+              .filter((r) => {
+                const t = (r.technique ?? '').toLowerCase();
+                return (
+                    MAINTENANCE_TECHNIQUES.includes(t) &&
+                    r.privateCompanyId === myStaffWorkspaceId &&
+                    (r.assignmentScope ?? '') === 'PRIVATE_COMPANY_STAFF' &&
+                    !!r.privateCompanyTargetDepartmentId
+                );
+              })
+              .map((r) => r.privateCompanyTargetDepartmentId as string)
+        ),
+      ];
+      let dispatchModeByDeptId = new Map<string, string>();
+      if (maintDeptIdsForDispatch.length > 0) {
+        try {
+          const drows = await prisma.privateCompanyDepartment.findMany({
+            where: { companyId: myStaffWorkspaceId, id: { in: maintDeptIdsForDispatch } },
+            select: { id: true, maintenanceDispatchMode: true },
+          });
+          dispatchModeByDeptId = new Map(
+            (drows as Array<{ id: string; maintenanceDispatchMode?: string | null }>).map((d) => [
+              d.id,
+              normalizeMaintenanceDispatchMode(d.maintenanceDispatchMode),
+            ])
+          );
+        } catch {
+          dispatchModeByDeptId = new Map();
+        }
+      }
       rowsForList = rowsForList.filter((r) => {
         const pcId = r.privateCompanyId ?? null;
         const scope = r.assignmentScope ?? null;
@@ -1622,7 +1716,22 @@ export async function GET(req: NextRequest) {
           String(r.status).toUpperCase() === 'PENDING' && !assignedStaffIdFromCompanyJson(parsed);
         if (pendingUnassigned) {
           if (requesterRole === 'TECHNICIAN' && !technicianAvailabilityPoolEnabled) return false;
-          if (isQcPoolEngineerRole(requesterRole) && !engineerAvailabilityPoolEnabled) return false;
+          if (isQcPoolEngineerRole(requesterRole) && !engineerAvailabilityPoolEnabled) {
+            const isMaint = MAINTENANCE_TECHNIQUES.includes((r.technique ?? '').toLowerCase());
+            const td = r.privateCompanyTargetDepartmentId;
+            const viaEngineerDispatch =
+              !!td && dispatchModeByDeptId.get(td) === MAINTENANCE_DISPATCH_ENGINEER;
+            if (!isMaint || !viaEngineerDispatch) return false;
+          }
+        }
+        if (
+          pendingUnassigned &&
+          requesterRole === 'TECHNICIAN' &&
+          MAINTENANCE_TECHNIQUES.includes((r.technique ?? '').toLowerCase()) &&
+          targetDept &&
+          dispatchModeByDeptId.get(targetDept) === MAINTENANCE_DISPATCH_ENGINEER
+        ) {
+          return false;
         }
         return true;
       });

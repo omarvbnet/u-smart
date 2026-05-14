@@ -6,6 +6,9 @@ import {
   deleteDepartmentTechniqueRows,
   upsertDepartmentTechniqueRows,
 } from '@/lib/private-company-department-techniques';
+import {
+  normalizeMaintenanceDispatchMode,
+} from '@/lib/private-company-maintenance-dispatch';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -56,6 +59,7 @@ export async function GET(req: NextRequest) {
       maintenanceProximityRadiusM: true,
       engineerAvailabilityPoolEnabled: true,
       technicianAvailabilityPoolEnabled: true,
+      maintenanceDispatchMode: true,
       members: {
         select: {
           id: true,
@@ -102,6 +106,7 @@ export async function POST(req: NextRequest) {
     body?.technicianAvailabilityPoolEnabled === undefined
       ? undefined
       : body.technicianAvailabilityPoolEnabled === true;
+  const dispatchMode = normalizeMaintenanceDispatchMode(body?.maintenanceDispatchMode);
   try {
     const dept = await prisma.privateCompanyDepartment.create({
       data: {
@@ -111,6 +116,7 @@ export async function POST(req: NextRequest) {
         color,
         iconKey,
         sortOrder: (lastSort?.sortOrder ?? -1) + 1,
+        maintenanceDispatchMode: dispatchMode,
         ...(engineerPool !== undefined ? { engineerAvailabilityPoolEnabled: engineerPool } : {}),
         ...(technicianPool !== undefined ? { technicianAvailabilityPoolEnabled: technicianPool } : {}),
       },
@@ -168,6 +174,9 @@ export async function PATCH(req: NextRequest) {
   }
   if (body?.technicianAvailabilityPoolEnabled !== undefined) {
     data.technicianAvailabilityPoolEnabled = body.technicianAvailabilityPoolEnabled === true;
+  }
+  if (body?.maintenanceDispatchMode !== undefined) {
+    data.maintenanceDispatchMode = normalizeMaintenanceDispatchMode(body.maintenanceDispatchMode);
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });

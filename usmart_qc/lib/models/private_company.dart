@@ -80,6 +80,7 @@ class PrivateCompanyDepartment {
     this.maintenanceProximityRadiusM = 100,
     this.engineerAvailabilityPoolEnabled = true,
     this.technicianAvailabilityPoolEnabled = true,
+    this.maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
   });
 
   final String id;
@@ -94,6 +95,8 @@ class PrivateCompanyDepartment {
   final int maintenanceProximityRadiusM;
   final bool engineerAvailabilityPoolEnabled;
   final bool technicianAvailabilityPoolEnabled;
+  /// `DIRECT_TECHNICIAN` (default) or `ENGINEER_ASSIGNS` (engineer/coordinator assigns techs first).
+  final String maintenanceDispatchMode;
 
   Color get colorValue {
     final raw = color;
@@ -132,7 +135,15 @@ class PrivateCompanyDepartment {
       maintenanceProximityRadiusM: (json['maintenanceProximityRadiusM'] as num?)?.toInt() ?? 100,
       engineerAvailabilityPoolEnabled: json['engineerAvailabilityPoolEnabled'] != false,
       technicianAvailabilityPoolEnabled: json['technicianAvailabilityPoolEnabled'] != false,
+      maintenanceDispatchMode: _normalizeMaintenanceDispatchMode(
+          json['maintenanceDispatchMode'] as String?),
     );
+  }
+
+  static String _normalizeMaintenanceDispatchMode(String? raw) {
+    final u = (raw ?? '').trim().toUpperCase();
+    if (u == 'ENGINEER_ASSIGNS') return 'ENGINEER_ASSIGNS';
+    return 'DIRECT_TECHNICIAN';
   }
 }
 

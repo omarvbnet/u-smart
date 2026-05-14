@@ -43,6 +43,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Ticket? _ticket;
   bool _loading = true;
   bool _assigning = false;
+  bool _assigningTechnician = false;
   bool _updatingStatus = false;
 
   List<TicketComment> _comments = [];
@@ -384,6 +385,177 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
       ),
     ];
+  }
+
+  bool _maintenanceEngineerDispatchPending(Ticket t, PrivateCompanyProvider pc) {
+    if (!t.canBeAssigned || !t.isMaintenance) return false;
+    if ((t.assignmentScope ?? '').toUpperCase() != 'PRIVATE_COMPANY_STAFF') return false;
+    final did = t.privateCompanyTargetDepartmentId;
+    if (did == null || did.isEmpty) return false;
+    if (!pc.hasWorkspace || !pc.isApproved) return false;
+    return pc.departmentUsesEngineerMaintenanceDispatch(did);
+  }
+
+  bool _maintenanceDispatchAssignEligible(Ticket t, PrivateCompanyProvider pc) =>
+      _maintenanceEngineerDispatchPending(t, pc) &&
+      pc.canDispatchMaintenanceForDepartment(t.privateCompanyTargetDepartmentId);
+
+  List<PrivateCompanyStaff> _technicianAssignCandidates(Ticket t, PrivateCompanyProvider pc) {
+    final ws = pc.workspace;
+    final did = t.privateCompanyTargetDepartmentId;
+    if (ws == null || did == null || did.isEmpty) return [];
+    final out = <PrivateCompanyStaff>[];
+    for (final s in ws.staff) {
+      if (s.status.toUpperCase() != 'ACTIVE') continue;
+      if (s.role.toUpperCase() != 'TECHNICIAN') continue;
+      if (s.departmentId != did) continue;
+      out.add(s);
+    }
+    out.sort((a, b) {
+      final na = (a.name?.trim().isNotEmpty == true) ? a.name!.trim() : a.username;
+      final nb = (b.name?.trim().isNotEmpty == true) ? b.name!.trim() : b.username;
+      return na.toLowerCase().compareTo(nb.toLowerCase());
+    });
+    return out;
+  }
+
+  List<Widget> _maintenanceDispatcherAssignWidgets(Ticket t, AppLocalizations l10n) {
+    final hasActive = context.read<TicketsProvider>().hasActiveTicket;
+    if (hasActive) {
+      return [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBBF24).withAlpha(15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFBBF24).withAlpha(40)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  color: Color(0xFFFBBF24), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.t('complete_before_assign'),
+                  style: TextStyle(
+                    color: const Color(0xFFFBBF24).withAlpha(220),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ];
+    }
+    return [
+      _actionButton(
+        icon: Icons.group_add_rounded,
+        label: l10n.t('maint_assign_technician'),
+        gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+        loading: _assigningTechnician,
+        onTap: () => _openAssignTechnicianPicker(t),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  Future<void> _openAssignTechnicianPicker(Ticket t) async {
+    final l10n = AppLocalizations.of(context);
+    final pc = context.read<PrivateCompanyProvider>();
+    final candidates = _technicianAssignCandidates(t, pc);
+    if (!mounted) return;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('maint_assign_technician_empty')),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+    final maxH = MediaQuery.of(context).size.height * 0.5;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Text(
+                    l10n.t('maint_assign_technician'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: candidates.length,
+                    itemBuilder: (_, i) {
+                      final s = candidates[i];
+                      final label =
+                          (s.name?.trim().isNotEmpty == true) ? s.name!.trim() : s.username;
+                      final sub = (s.province ?? '').trim();
+                      return ListTile(
+                        leading:
+                            const Icon(Icons.person_rounded, color: Color(0xFF6C63FF)),
+                        title: Text(label, style: const TextStyle(color: Colors.white)),
+                        subtitle: sub.isNotEmpty
+                            ? Text(sub,
+                                style: TextStyle(
+                                    color: Colors.white.withAlpha(160), fontSize: 12))
+                            : null,
+                        onTap: () => Navigator.pop(ctx, s.id),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    await _assignTicketToTechnician(picked);
+  }
+
+  Future<void> _assignTicketToTechnician(String assigneeRequesterId) async {
+    setState(() => _assigningTechnician = true);
+    final ok = await context
+        .read<TicketsProvider>()
+        .assignTicketToRequester(widget.ticketId, assigneeRequesterId);
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? l10n.t('assign_success') : l10n.t('assign_failed')),
+        backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    if (ok) await _load();
+    setState(() => _assigningTechnician = false);
   }
 
   Future<void> _assignToMe() async {
@@ -1270,10 +1442,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final auth = context.read<AuthProvider>();
     final isCoordinatorUser = auth.hasCoordinatorCompany &&
         (auth.isCompanyOwner || auth.isCoordinator || auth.user?.role == 'ADMIN');
+    final pc = context.read<PrivateCompanyProvider>();
+    final maintDispatchAssignNonEngineer =
+        !isEngineer && _maintenanceDispatchAssignEligible(t, pc);
 
     return [
       // ─── Engineer/Technician action buttons ───
       if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
+      if (maintDispatchAssignNonEngineer) ..._maintenanceDispatcherAssignWidgets(t, l10n),
       if (_isTechnician && t.isMaintenance) ..._buildTechnicianActions(t, isMyTicket, l10n),
 
       // ─── Resubmit for edit: field staff sends ticket back to coordinator ───
@@ -1802,9 +1978,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
     final hasActive = context.read<TicketsProvider>().hasActiveTicket;
+    final pc = context.read<PrivateCompanyProvider>();
+    final maintDispatcherAssign = _maintenanceDispatchAssignEligible(t, pc);
 
     if (t.canBeAssigned) {
-      if (hasActive) {
+      if (maintDispatcherAssign) {
+        widgets.addAll(_maintenanceDispatcherAssignWidgets(t, l10n));
+      } else if (hasActive) {
         widgets.add(Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -1830,6 +2010,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             ],
           ),
         ));
+        widgets.add(const SizedBox(height: 12));
       } else {
         widgets.add(_actionButton(
           icon: Icons.person_add_rounded,
@@ -1838,8 +2019,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           loading: _assigning,
           onTap: _assignToMe,
         ));
+        widgets.add(const SizedBox(height: 12));
       }
-      widgets.add(const SizedBox(height: 12));
     }
 
     if (isMyTicket && !t.isCompleted) {
@@ -1895,8 +2076,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   List<Widget> _buildTechnicianActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
     final hasActive = context.read<TicketsProvider>().hasActiveTicket;
+    final pc = context.read<PrivateCompanyProvider>();
+    final engDispatchPending = _maintenanceEngineerDispatchPending(t, pc);
 
-    if (t.canBeAssigned) {
+    if (t.canBeAssigned && !engDispatchPending) {
       if (hasActive) {
         widgets.add(Container(
           width: double.infinity,

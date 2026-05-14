@@ -490,6 +490,21 @@ class TicketsProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Workspace maintenance: assign a technician by requester id (engineer-dispatch departments).
+  Future<bool> assignTicketToRequester(String ticketId, String assigneeRequesterId) async {
+    try {
+      final data = await _api.patch(
+        ApiConfig.ticketAssign(ticketId),
+        body: {'assigneeRequesterId': assigneeRequesterId},
+      );
+      if (data['success'] == true) {
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   Future<bool> submitNcrResubmission(
       String id, String comment, List<String> imageUrls) async {
     try {

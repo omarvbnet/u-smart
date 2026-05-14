@@ -1082,6 +1082,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   bool _proxJoin = false;
   bool _engineerAvailabilityPool = true;
   bool _technicianAvailabilityPool = true;
+  String _maintDispatchMode = 'DIRECT_TECHNICIAN';
 
   static const _iconOptions = <String, IconData>{
     'engineering': Icons.engineering_rounded,
@@ -1118,6 +1119,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
     _iconKey = widget.existing?.iconKey;
     _engineerAvailabilityPool = widget.existing?.engineerAvailabilityPoolEnabled ?? true;
     _technicianAvailabilityPool = widget.existing?.technicianAvailabilityPoolEnabled ?? true;
+    _maintDispatchMode = widget.existing?.maintenanceDispatchMode ?? 'DIRECT_TECHNICIAN';
   }
 
   @override
@@ -1141,6 +1143,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         iconKey: _iconKey,
         engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
+        maintenanceDispatchMode: _maintDispatchMode,
       );
     } else {
       final r = int.tryParse(_proxRadius.text.trim());
@@ -1155,6 +1158,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         maintenanceProximityRadiusM: radius,
         engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
+        maintenanceDispatchMode: _maintDispatchMode,
       );
     }
     if (ok && mounted) Navigator.pop(context);
@@ -1163,6 +1167,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -1313,6 +1318,50 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                   value: _technicianAvailabilityPool,
                   activeThumbColor: const Color(0xFF00D4AA),
                   onChanged: (v) => setState(() => _technicianAvailabilityPool = v),
+                ),
+                const SizedBox(height: 20),
+                _SectionTitle(l10n.t('pc_dept_maintenance_dispatch_title')),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.t('pc_dept_maintenance_dispatch_subtitle'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: [
+                    ButtonSegment<String>(
+                      value: 'DIRECT_TECHNICIAN',
+                      label: Text(
+                        l10n.t('pc_dispatch_direct'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    ButtonSegment<String>(
+                      value: 'ENGINEER_ASSIGNS',
+                      label: Text(
+                        l10n.t('pc_dispatch_engineer'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                  selected: {_maintDispatchMode},
+                  onSelectionChanged: (v) {
+                    if (v.isEmpty) return;
+                    setState(() => _maintDispatchMode = v.first);
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _maintDispatchMode == 'ENGINEER_ASSIGNS'
+                      ? l10n.t('pc_dispatch_engineer_desc')
+                      : l10n.t('pc_dispatch_direct_desc'),
+                  style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11, height: 1.35),
                 ),
                 if (widget.existing != null) ...[
                   const SizedBox(height: 20),
