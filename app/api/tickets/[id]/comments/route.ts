@@ -3,11 +3,42 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { visitorRequestSiteLogicalId, viewerHasSharedSiteTicketRead } from '@/lib/site-share-access';
+import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+async function technicianMaintenanceCommentAccess(
+  prismaClient: any,
+  ticketId: string,
+  requesterId: string
+): Promise<boolean> {
+  const ticket = await prismaClient.visitorRequest.findFirst({
+    where: { id: ticketId },
+    select: {
+      id: true,
+      technique: true,
+      assignmentScope: true,
+      privateCompanyId: true,
+      privateCompanyTargetDepartmentId: true,
+      province: true,
+      status: true,
+      company: true,
+    },
+  });
+  if (!ticket) return false;
+  const meWs = await prismaClient.ticketRequester.findUnique({
+    where: { id: requesterId },
+    select: {
+      privateCompanyId: true,
+      privateCompanyOwned: { select: { id: true, status: true } },
+    },
+  });
+  const owned =
+    meWs?.privateCompanyOwned?.status === 'APPROVED' ? meWs.privateCompanyOwned?.id ?? null : null;
+  const workspaceId = owned ?? meWs?.privateCompanyId ?? null;
+  return assertTechnicianMaintenanceTicketDetailAccess(prismaClient, requesterId, workspaceId, ticket);
+}
 
 async function verifyTicketReadAccess(prismaClient: any, ticketId: string, requesterId: string): Promise<boolean> {
   const reqRow = await prismaClient.ticketRequester.findUnique({
@@ -15,6 +46,10 @@ async function verifyTicketReadAccess(prismaClient: any, ticketId: string, reque
     select: { role: true },
   });
   const role = reqRow?.role ?? 'COMPANY';
+
+  if (role === 'TECHNICIAN') {
+    return technicianMaintenanceCommentAccess(prismaClient, ticketId, requesterId);
+  }
 
   const ticket = await prismaClient.visitorRequest.findFirst({
     where: { id: ticketId },
@@ -28,13 +63,6 @@ async function verifyTicketReadAccess(prismaClient: any, ticketId: string, reque
   if (role === 'WORKER') {
     const w = await prismaClient.visitorRequest.findFirst({
       where: { id: ticketId, company: { contains: requesterId } },
-      select: { id: true },
-    });
-    return !!w;
-  }
-  if (role === 'TECHNICIAN') {
-    const w = await prismaClient.visitorRequest.findFirst({
-      where: { id: ticketId, technique: { in: MAINTENANCE_TECHNIQUES } },
       select: { id: true },
     });
     return !!w;
@@ -59,6 +87,10 @@ async function verifyTicketWriteAccess(prismaClient: any, ticketId: string, requ
   });
   const role = reqRow?.role ?? 'COMPANY';
 
+  if (role === 'TECHNICIAN') {
+    return technicianMaintenanceCommentAccess(prismaClient, ticketId, requesterId);
+  }
+
   const ticket = await prismaClient.visitorRequest.findFirst({
     where: { id: ticketId },
     select: { id: true, requesterId: true },
@@ -75,13 +107,6 @@ async function verifyTicketWriteAccess(prismaClient: any, ticketId: string, requ
   if (role === 'WORKER') {
     const w = await prismaClient.visitorRequest.findFirst({
       where: { id: ticketId, company: { contains: requesterId } },
-      select: { id: true },
-    });
-    return !!w;
-  }
-  if (role === 'TECHNICIAN') {
-    const w = await prismaClient.visitorRequest.findFirst({
-      where: { id: ticketId, technique: { in: MAINTENANCE_TECHNIQUES } },
       select: { id: true },
     });
     return !!w;
