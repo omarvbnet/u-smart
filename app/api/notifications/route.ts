@@ -5,6 +5,10 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import type { AppNotificationLocale } from '@/lib/notification-i18n';
 import { formatNotificationCopy, normalizeAppLocale, parseNotificationPayload } from '@/lib/notification-i18n';
 import { fetchPreferredLocales } from '@/lib/requester-locale';
+import {
+  buildMaintenanceTicketMap,
+  technicianSeesMaintenanceInboxRow,
+} from '@/lib/technician-notification-filter';
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,14 +45,59 @@ export async function GET(req: NextRequest) {
       if (!payload) {
         return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 });
       }
+
+      let requesterRole = '';
+      try {
+        const rr = await prisma.ticketRequester.findUnique({
+          where: { id: payload.requesterId },
+          select: { role: true },
+        });
+        requesterRole = String(rr?.role ?? '').toUpperCase();
+      } catch {
+        requesterRole = '';
+      }
+      const isTechnicianInbox = requesterRole === 'TECHNICIAN';
+
       const list = await notification.findMany({
         where: { requesterId: payload.requesterId, forAdmin: false, type: { not: 'push_token' } },
         orderBy: { createdAt: 'desc' },
-        take: 50,
+        take: isTechnicianInbox ? 120 : 50,
       });
-      const unreadCount = await notification.count({
-        where: { requesterId: payload.requesterId, forAdmin: false, read: false, type: { not: 'push_token' } },
-      });
+
+      let listForResponse = list as Record<string, unknown>[];
+      let unreadCount = 0;
+      if (isTechnicianInbox) {
+        const ticketIds = (listForResponse as { ticketId?: string | null }[]).map((n) => n.ticketId ?? null);
+        const maintMap = await buildMaintenanceTicketMap(prisma as any, ticketIds);
+        listForResponse = listForResponse
+          .filter((n) =>
+            technicianSeesMaintenanceInboxRow(
+              { ticketId: (n.ticketId as string | null) ?? null, payload: n.payload },
+              maintMap
+            )
+          )
+          .slice(0, 50);
+        const unreadRows = (await notification.findMany({
+          where: {
+            requesterId: payload.requesterId,
+            forAdmin: false,
+            read: false,
+            type: { not: 'push_token' },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 2000,
+          select: { ticketId: true, payload: true },
+        })) as Array<{ ticketId: string | null; payload: unknown }>;
+        const unreadTicketIds = unreadRows.map((n) => n.ticketId);
+        const unreadMap = await buildMaintenanceTicketMap(prisma as any, unreadTicketIds);
+        unreadCount = unreadRows.filter((n) =>
+          technicianSeesMaintenanceInboxRow({ ticketId: n.ticketId, payload: n.payload }, unreadMap)
+        ).length;
+      } else {
+        unreadCount = await notification.count({
+          where: { requesterId: payload.requesterId, forAdmin: false, read: false, type: { not: 'push_token' } },
+        });
+      }
 
       const q = req.nextUrl.searchParams.get('locale');
       const h = req.headers.get('x-provisor-locale');
@@ -60,7 +109,7 @@ export async function GET(req: NextRequest) {
         locale = pref.get(payload.requesterId) ?? 'en';
       }
 
-      const mapped = (list as Record<string, unknown>[]).map((n) => {
+      const mapped = (isTechnicianInbox ? listForResponse : (list as Record<string, unknown>[])).map((n) => {
         const parsed = parseNotificationPayload(n.payload);
         if (!parsed) return n;
         const copy = formatNotificationCopy(locale, parsed);
