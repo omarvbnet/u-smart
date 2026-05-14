@@ -42,6 +42,7 @@ class _CreateMaintenanceTicketScreenState
   final List<String> _beforePhotoUrls = [];
   /// Same semantics as [CreateTicketScreen]: private workspace vs global pool.
   String _assignmentScope = 'PRIVATE_COMPANY';
+  String? _workspaceTargetDepartmentId;
 
   @override
   void initState() {
@@ -120,6 +121,10 @@ class _CreateMaintenanceTicketScreenState
       maintenanceReason: reason,
       beforeImageUrls: _beforePhotoUrls.isEmpty ? null : List.from(_beforePhotoUrls),
       assignmentScope: scopeForApi,
+      privateCompanyTargetDepartmentId:
+          inWorkspace && scopeForApi == 'PRIVATE_COMPANY' && pc.canChooseWorkspaceTicketTargetDepartment
+              ? _workspaceTargetDepartmentId
+              : null,
     );
 
     if (!mounted) return;
@@ -506,7 +511,10 @@ class _CreateMaintenanceTicketScreenState
                   ),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => setState(() => _assignmentScope = 'GLOBAL'),
+                      onTap: () => setState(() {
+                        _assignmentScope = 'GLOBAL';
+                        _workspaceTargetDepartmentId = null;
+                      }),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         padding: const EdgeInsets.symmetric(
@@ -538,6 +546,68 @@ class _CreateMaintenanceTicketScreenState
                 ],
               ),
             ),
+            if (isPrivate && pc.canChooseWorkspaceTicketTargetDepartment) ...[
+              const SizedBox(height: 14),
+              Text(
+                l10n.t('ticket_target_department').toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(80),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                l10n.t('ticket_target_department_hint'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(140),
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _workspaceTargetDepartmentId ?? '',
+                dropdownColor: const Color(0xFF1E1E36),
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: '',
+                    child: Text(l10n.t('ticket_all_departments')),
+                  ),
+                  ...(() {
+                    final list = List.of(pc.workspace?.departments ?? []);
+                    list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+                    return list
+                        .map(
+                          (d) => DropdownMenuItem<String>(
+                            value: d.id,
+                            child: Text(d.name, overflow: TextOverflow.ellipsis),
+                          ),
+                        )
+                        .toList();
+                  })(),
+                ],
+                onChanged: (v) => setState(() {
+                  _workspaceTargetDepartmentId =
+                      (v == null || v.isEmpty) ? null : v;
+                }),
+              ),
+            ],
           ],
         );
       },

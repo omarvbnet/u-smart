@@ -41,6 +41,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   String? _selectedChecklistId;
   /// 'PRIVATE_COMPANY' = restrict to my workspace staff, 'GLOBAL' = open to all engineers
   String _assignmentScope = 'PRIVATE_COMPANY';
+  /// When [canChooseWorkspaceTicketTargetDepartment]: null = all departments, else department id.
+  String? _workspaceTargetDepartmentId;
   /// Set when user picks a saved site (quick-fill); province comes from that site.
   Site? _linkedSite;
   String? _selectedProvince;
@@ -177,6 +179,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
       checklistTemplateId: _selectedChecklistId,
       assignmentScope: scopeForApi,
+      privateCompanyTargetDepartmentId:
+          inWorkspace && scopeForApi == 'PRIVATE_COMPANY' && pc.canChooseWorkspaceTicketTargetDepartment
+              ? _workspaceTargetDepartmentId
+              : null,
     );
 
     if (mounted) {
@@ -758,11 +764,76 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                     icon: Icons.public_rounded,
                     title: l10n.t('scope_global'),
                     subtitle: l10n.t('scope_global_hint'),
-                    onTap: () => setState(() => _assignmentScope = 'GLOBAL'),
+                    onTap: () => setState(() {
+                      _assignmentScope = 'GLOBAL';
+                      _workspaceTargetDepartmentId = null;
+                    }),
                   ),
                 ],
               ),
             ),
+            if (isPrivate && pc.canChooseWorkspaceTicketTargetDepartment) ...[
+              const SizedBox(height: 14),
+              Text(
+                l10n.t('ticket_target_department').toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(80),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                l10n.t('ticket_target_department_hint'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(140),
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _workspaceTargetDepartmentId ?? '',
+                dropdownColor: const Color(0xFF1E1E36),
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: '',
+                    child: Text(l10n.t('ticket_all_departments')),
+                  ),
+                  ...(() {
+                    final list = List.of(pc.workspace?.departments ?? []);
+                    list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+                    return list
+                        .map(
+                          (d) => DropdownMenuItem<String>(
+                            value: d.id,
+                            child: Text(d.name, overflow: TextOverflow.ellipsis),
+                          ),
+                        )
+                        .toList();
+                  })(),
+                ],
+                onChanged: (v) => setState(() {
+                  _workspaceTargetDepartmentId =
+                      (v == null || v.isEmpty) ? null : v;
+                }),
+              ),
+            ],
           ],
         );
       },

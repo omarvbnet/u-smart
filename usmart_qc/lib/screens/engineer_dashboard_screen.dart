@@ -496,6 +496,7 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _statusFilter = 'ALL';
   String _techniqueFilter = 'ALL';
+  String _departmentFilter = 'ALL';
   DateTimeRange? _dateRange;
   bool _showFilters = true;
 
@@ -503,6 +504,13 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  bool _useDepartmentTicketFilter(PrivateCompanyProvider pc) {
+    if (!pc.hasWorkspace || !pc.isApproved) return false;
+    if (!(pc.isOwner || pc.isStaff)) return false;
+    final depts = pc.workspace?.departments ?? [];
+    return depts.isNotEmpty;
   }
 
   Future<void> _pickDateRange() async {
@@ -531,11 +539,24 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
     setState(() => _dateRange = picked);
   }
 
-  List<Ticket> _applyFilters(List<Ticket> tickets) {
+  List<Ticket> _applyFilters(List<Ticket> tickets, PrivateCompanyProvider pc) {
     final query = _searchController.text.trim().toLowerCase();
+    final useDept = _useDepartmentTicketFilter(pc);
+    final deptNames = {
+      for (final d in (pc.workspace?.departments ?? [])) d.id: d.name,
+    };
     return tickets.where((t) {
       if (_statusFilter != 'ALL' && t.status != _statusFilter) return false;
-      if (_techniqueFilter != 'ALL' && t.technique != _techniqueFilter) return false;
+      if (useDept) {
+        if (_departmentFilter != 'ALL' &&
+            t.privateCompanyTargetDepartmentId != _departmentFilter) {
+          return false;
+        }
+      } else {
+        if (_techniqueFilter != 'ALL' && t.technique != _techniqueFilter) {
+          return false;
+        }
+      }
       if (_dateRange != null) {
         final start = DateTime(
           _dateRange!.start.year,
@@ -553,12 +574,16 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
         if (t.createdAt.isBefore(start) || t.createdAt.isAfter(end)) return false;
       }
       if (query.isEmpty) return true;
+      final targetDeptName = t.privateCompanyTargetDepartmentId == null
+          ? ''
+          : (deptNames[t.privateCompanyTargetDepartmentId!] ?? '');
       final blob = [
         t.id,
         t.siteName ?? '',
         t.siteCoordinator ?? '',
         t.status,
         t.technique,
+        targetDeptName,
         t.requesterName ?? '',
         t.requesterPhone ?? '',
         t.requesterRole ?? '',
@@ -572,13 +597,21 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Consumer<TicketsProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<TicketsProvider, PrivateCompanyProvider>(
+      builder: (context, provider, pc, _) {
         if (provider.loading && provider.tickets.isEmpty) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
           );
         }
+
+        final useDept = _useDepartmentTicketFilter(pc);
+        final sortedDepts = List.of(pc.workspace?.departments ?? [])
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        final departmentIds = <String>['ALL', ...sortedDepts.map((d) => d.id)];
+        final deptNameById = {for (final d in sortedDepts) d.id: d.name};
+        final effectiveDept =
+            departmentIds.contains(_departmentFilter) ? _departmentFilter : 'ALL';
 
         final allMyTickets = [...provider.myActiveTickets, ...provider.myCompletedTickets];
         final statuses = <String>{
@@ -591,7 +624,21 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
         }.toList();
         final effectiveStatus = statuses.contains(_statusFilter) ? _statusFilter : 'ALL';
         final effectiveTechnique = techniques.contains(_techniqueFilter) ? _techniqueFilter : 'ALL';
-        if (effectiveStatus != _statusFilter || effectiveTechnique != _techniqueFilter) {
+        if (useDept) {
+          if (effectiveDept != _departmentFilter || effectiveStatus != _statusFilter) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              setState(() {
+                if (effectiveDept != _departmentFilter) {
+                  _departmentFilter = effectiveDept;
+                }
+                if (effectiveStatus != _statusFilter) {
+                  _statusFilter = effectiveStatus;
+                }
+              });
+            });
+          }
+        } else if (effectiveStatus != _statusFilter || effectiveTechnique != _techniqueFilter) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             setState(() {
@@ -601,7 +648,7 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
           });
         }
 
-        final filtered = _applyFilters(allMyTickets);
+        final filtered = _applyFilters(allMyTickets, pc);
         final active = filtered.where((t) => !t.isCompleted).toList();
         final completed = filtered.where((t) => t.isCompleted).toList();
 
@@ -685,7 +732,9 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B83FF)),
-                              hintText: 'Search by site, ticket ID, requester, status, technique...',
+                              hintText: useDept
+                                  ? 'Search by site, ticket ID, requester, status, department...'
+                                  : 'Search by site, ticket ID, requester, status, technique...',
                               hintStyle: TextStyle(color: Colors.white.withAlpha(120), fontSize: 13),
                               filled: true,
                               fillColor: Colors.white.withAlpha(8),
@@ -708,12 +757,24 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: _FilterDropdown(
-                                  label: 'Technique',
-                                  value: effectiveTechnique,
-                                  items: techniques,
-                                  onChanged: (v) => setState(() => _techniqueFilter = v),
-                                ),
+                                child: useDept
+                                    ? _FilterDropdown(
+                                        label: l10n.t('pc_ws_tab_departments'),
+                                        value: effectiveDept,
+                                        items: departmentIds,
+                                        itemLabel: (id) => id == 'ALL'
+                                            ? l10n.t('ticket_all_departments')
+                                            : (deptNameById[id] ?? id),
+                                        onChanged: (v) =>
+                                            setState(() => _departmentFilter = v),
+                                      )
+                                    : _FilterDropdown(
+                                        label: 'Technique',
+                                        value: effectiveTechnique,
+                                        items: techniques,
+                                        onChanged: (v) =>
+                                            setState(() => _techniqueFilter = v),
+                                      ),
                               ),
                             ],
                           ),
@@ -745,6 +806,7 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
                                   setState(() {
                                     _statusFilter = 'ALL';
                                     _techniqueFilter = 'ALL';
+                                    _departmentFilter = 'ALL';
                                     _dateRange = null;
                                   });
                                 },
@@ -790,7 +852,11 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          Text(filtered.isEmpty && allMyTickets.isNotEmpty ? 'Try changing date range, status, technique, or search' : l10n.t('assign_first_ticket'),
+                          Text(filtered.isEmpty && allMyTickets.isNotEmpty
+                              ? (useDept
+                                  ? 'Try changing date range, status, department, or search'
+                                  : 'Try changing date range, status, technique, or search')
+                              : l10n.t('assign_first_ticket'),
                               style: TextStyle(
                                   color: Colors.white.withAlpha(100),
                                   fontSize: 14)),
@@ -887,12 +953,14 @@ class _FilterDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
   final ValueChanged<String> onChanged;
+  final String Function(String item)? itemLabel;
 
   const _FilterDropdown({
     required this.label,
     required this.value,
     required this.items,
     required this.onChanged,
+    this.itemLabel,
   });
 
   @override
@@ -914,7 +982,12 @@ class _FilterDropdown extends StatelessWidget {
           items: items
               .map((item) => DropdownMenuItem<String>(
                     value: item,
-                    child: Text(item == 'ALL' ? '$label: ALL' : item, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      item == 'ALL'
+                          ? '$label: ALL'
+                          : (itemLabel?.call(item) ?? item),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ))
               .toList(),
           onChanged: (v) {

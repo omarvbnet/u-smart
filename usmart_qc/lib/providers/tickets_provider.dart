@@ -397,6 +397,8 @@ class TicketsProvider extends ChangeNotifier {
     String? assignmentScope,
     String? assigneeCoordinatorUserId,
     bool resubmitToRequester = false,
+    /// Workspace owner / coordinator only: narrow ticket to one department (API validates).
+    String? privateCompanyTargetDepartmentId,
   }) async {
     lastTicketCreateMessage = null;
     try {
@@ -444,6 +446,10 @@ class TicketsProvider extends ChangeNotifier {
         }
         if (assignmentScope != null && assignmentScope.trim().isNotEmpty) {
           body['assignmentScope'] = assignmentScope.trim().toUpperCase();
+        }
+        final tid = privateCompanyTargetDepartmentId?.trim();
+        if (tid != null && tid.isNotEmpty) {
+          body['privateCompanyTargetDepartmentId'] = tid;
         }
       }
       final data = await _api.post(ApiConfig.tickets, body: body);

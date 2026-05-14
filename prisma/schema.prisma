@@ -252,6 +252,9 @@ model VisitorRequest {
   checklistTemplateId            String?
   privateCompanyId               String?
   privateCompany                 PrivateCompany?          @relation("PrivateCompanyScopedTickets", fields: [privateCompanyId], references: [id], onDelete: SetNull)
+  /// When set, workspace pool visibility is limited to this department (plus assignee/crew). Null = all departments (still filtered by technique matrix + province).
+  privateCompanyTargetDepartmentId String?
+  privateCompanyTargetDepartment   PrivateCompanyDepartment? @relation("WorkspaceTicketTargetDepartment", fields: [privateCompanyTargetDepartmentId], references: [id], onDelete: SetNull)
   coordinatorCompanyId           String?
   coordinatorCompany             CoordinatorCompany?      @relation(fields: [coordinatorCompanyId], references: [id], onDelete: SetNull)
   createdByCoordinatorUserId     String?
@@ -283,6 +286,7 @@ model VisitorRequest {
   usedMaterialItems              PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemUsedTicket")
   materialMovements              PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementTicket")
 
+  @@index([privateCompanyTargetDepartmentId])
   @@map("visitor_requests")
 }
 
@@ -1411,6 +1415,7 @@ model PrivateCompanyDepartment {
   technicianAvailabilityPoolEnabled Boolean @default(true)
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
+  workspaceTargetedTickets VisitorRequest[] @relation("WorkspaceTicketTargetDepartment")
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 

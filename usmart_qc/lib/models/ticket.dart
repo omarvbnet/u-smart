@@ -121,6 +121,10 @@ class Ticket {
   final Map<String, dynamic>? checklistTemplate;
   /// `PRIVATE_COMPANY_STAFF` when ticket is owned by a workspace field team.
   final String? assignmentScope;
+  /// Workspace id when [assignmentScope] is private-company scoped.
+  final String? privateCompanyId;
+  /// Optional department target for workspace pool visibility (null = all departments).
+  final String? privateCompanyTargetDepartmentId;
   /// Additional technician requester ids on the same maintenance ticket (workspace).
   final List<String> maintenanceCrewIds;
   /// Site coordinates from server (Sites table), when available.
@@ -168,6 +172,8 @@ class Ticket {
     this.checklistTemplateId,
     this.checklistTemplate,
     this.assignmentScope,
+    this.privateCompanyId,
+    this.privateCompanyTargetDepartmentId,
     this.maintenanceCrewIds = const [],
     this.siteLatitude,
     this.siteLongitude,
@@ -283,6 +289,9 @@ class Ticket {
           ? Map<String, dynamic>.from(json['checklistTemplate'] as Map)
           : null,
       assignmentScope: json['assignmentScope'] as String?,
+      privateCompanyId: json['privateCompanyId'] as String?,
+      privateCompanyTargetDepartmentId:
+          json['privateCompanyTargetDepartmentId'] as String?,
       maintenanceCrewIds: (json['maintenanceCrewIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .where((s) => s.isNotEmpty)

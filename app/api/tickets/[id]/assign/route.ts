@@ -134,6 +134,7 @@ export async function PATCH(
         technique: true,
         privateCompanyId: true,
         assignmentScope: true,
+        privateCompanyTargetDepartmentId: true,
       },
     });
     if (!row) {
@@ -246,6 +247,13 @@ export async function PATCH(
       ) {
         return NextResponse.json(
           { success: false, message: 'This ticket is outside your department task scope.' },
+          { status: 403 }
+        );
+      }
+      const targetDept = row.privateCompanyTargetDepartmentId ?? null;
+      if (targetDept && (deptId == null || deptId !== targetDept)) {
+        return NextResponse.json(
+          { success: false, message: 'This ticket is scoped to another department.' },
           { status: 403 }
         );
       }

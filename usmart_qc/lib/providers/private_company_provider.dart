@@ -78,6 +78,13 @@ class PrivateCompanyProvider extends ChangeNotifier {
   /// Only the workspace owner can broadcast workspace announcements.
   bool get canBroadcastNotifications => isOwner;
 
+  /// Owner or coordinator: optional target department on workspace-scoped tickets (omit = all departments).
+  bool get canChooseWorkspaceTicketTargetDepartment {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    return _resolvedRole == 'COORDINATOR';
+  }
+
   /// Owner: full workspace export. Manager / coordinator: department-scoped export.
   bool get canExportWorkspaceData {
     if (!hasWorkspace || !isApproved) return false;

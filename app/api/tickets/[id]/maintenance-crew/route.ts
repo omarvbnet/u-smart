@@ -64,6 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       status: true,
       privateCompanyId: true,
       assignmentScope: true,
+      privateCompanyTargetDepartmentId: true,
       company: true,
     },
   });
@@ -101,6 +102,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   ) {
     return NextResponse.json(
       { success: false, message: 'You are not allowed for this ticket type in your workspace.' },
+      { status: 403 }
+    );
+  }
+
+  const targetDept = ticket.privateCompanyTargetDepartmentId ?? null;
+  const myDept = me.privateCompanyDepartmentId ?? null;
+  if (targetDept && (myDept == null || myDept !== targetDept)) {
+    return NextResponse.json(
+      { success: false, message: 'This ticket is scoped to another department.' },
       { status: 403 }
     );
   }

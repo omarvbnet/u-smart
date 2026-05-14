@@ -209,7 +209,7 @@ async function notifyPrivateCompanyMembersNewTicket(
   technique: string,
   province: string,
   siteName: string,
-  opts?: { maintenanceStyle?: boolean }
+  opts?: { maintenanceStyle?: boolean; targetDepartmentId?: string | null }
 ) {
   try {
     const company = await (prisma as any).privateCompany.findUnique({
@@ -240,6 +240,7 @@ async function notifyPrivateCompanyMembersNewTicket(
     }
     const techRows = await fetchWorkspaceTechniqueRows(prisma, privateCompanyId);
     const recipientIds = new Set<string>([company.ownerRequesterId]);
+    const targetDept = opts?.targetDepartmentId?.trim() || null;
     for (const s of (company.staff ?? []) as Array<{
       id: string;
       role: string | null;
@@ -250,6 +251,10 @@ async function notifyPrivateCompanyMembersNewTicket(
       privateCompanyAllowedTaskSlugs: string[] | null;
     }>) {
       if ((s.status ?? 'ACTIVE') !== 'ACTIVE') continue;
+      if (targetDept) {
+        const sid = s.privateCompanyDepartmentId ?? null;
+        if (!sid || sid !== targetDept) continue;
+      }
       const role = String(s.role ?? '').toUpperCase();
       if (!allowed.has(role)) continue;
       const filterActive = s.provinceFilterActive ?? true;
@@ -777,6 +782,61 @@ export async function POST(req: NextRequest) {
     const specializationTags =
       explicitSpecTags.length > 0 ? explicitSpecTags : deriveSpecializationTagsFromTechnique(technique);
 
+    let privateCompanyTargetDepartmentId: string | null = null;
+    if (
+      !coordinatorContext &&
+      assignmentScope === 'PRIVATE_COMPANY_STAFF' &&
+      privateCompanyIdForTicket &&
+      payload?.requesterId
+    ) {
+      const creator = await prisma.ticketRequester.findUnique({
+        where: { id: payload.requesterId },
+        select: {
+          role: true,
+          privateCompanyDepartmentId: true,
+          privateCompanyOwned: { select: { id: true, status: true } },
+        },
+      });
+      const roleUpper = String(creator?.role ?? '').toUpperCase();
+      const isWorkspaceOwner =
+        creator?.privateCompanyOwned?.status === 'APPROVED' &&
+        creator.privateCompanyOwned.id === privateCompanyIdForTicket;
+      const canPickTargetDept =
+        roleUpper === 'COORDINATOR' || (roleUpper === 'COMPANY' && isWorkspaceOwner);
+
+      if (canPickTargetDept) {
+        const raw =
+          typeof body.privateCompanyTargetDepartmentId === 'string'
+            ? body.privateCompanyTargetDepartmentId.trim()
+            : '';
+        if (raw) {
+          const deptRow = await prisma.privateCompanyDepartment.findFirst({
+            where: { id: raw, companyId: privateCompanyIdForTicket },
+            select: { id: true },
+          });
+          if (!deptRow) {
+            return NextResponse.json(
+              { success: false, message: 'Target department is not part of this workspace.' },
+              { status: 400 }
+            );
+          }
+          privateCompanyTargetDepartmentId = deptRow.id;
+        }
+      } else {
+        privateCompanyTargetDepartmentId = creator?.privateCompanyDepartmentId ?? null;
+        if (!privateCompanyTargetDepartmentId) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'Workspace staff tickets require your profile department. Ask the workspace owner to assign you to a department.',
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const companyPayloadObj: Record<string, unknown> = {
       _ticket: 1,
       siteName,
@@ -839,6 +899,7 @@ export async function POST(req: NextRequest) {
       assignmentScope?: string;
       checklistTemplateId?: string;
       privateCompanyId?: string;
+      privateCompanyTargetDepartmentId?: string | null;
       coordinatorCompanyId?: string;
       createdByCoordinatorUserId?: string;
       assigneeCoordinatorUserId?: string;
@@ -880,6 +941,9 @@ export async function POST(req: NextRequest) {
       if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket) {
         ticketData.assignmentScope = assignmentScope;
         ticketData.privateCompanyId = privateCompanyIdForTicket;
+        if (privateCompanyTargetDepartmentId) {
+          ticketData.privateCompanyTargetDepartmentId = privateCompanyTargetDepartmentId;
+        }
       }
     }
 
@@ -899,6 +963,7 @@ export async function POST(req: NextRequest) {
         const fallbackData: Record<string, unknown> = { ...ticketData };
         for (const key of [
           'privateCompanyId',
+          'privateCompanyTargetDepartmentId',
           'assignmentScope',
           'workflowState',
           'roleScope',
@@ -1123,7 +1188,10 @@ export async function POST(req: NextRequest) {
           technique,
           province,
           siteName,
-          { maintenanceStyle: ticketIsMaintenanceKind }
+          {
+            maintenanceStyle: ticketIsMaintenanceKind,
+            targetDepartmentId: privateCompanyTargetDepartmentId,
+          }
         ).catch(() => {});
       } else if (ticketIsMaintenanceKind) {
         notifyTechniciansNewTicket(ticket.id, province, siteName, {
@@ -1486,6 +1554,7 @@ export async function GET(req: NextRequest) {
         requesterId: true,
         privateCompanyId: true,
         assignmentScope: true,
+        privateCompanyTargetDepartmentId: true,
       },
     });
 
@@ -1498,6 +1567,7 @@ export async function GET(req: NextRequest) {
       requesterId: string | null;
       privateCompanyId: string | null;
       assignmentScope: string | null;
+      privateCompanyTargetDepartmentId: string | null;
     }>;
     if (
       myStaffWorkspaceId &&
@@ -1537,6 +1607,10 @@ export async function GET(req: NextRequest) {
         if (pcId !== myStaffWorkspaceId || scope !== 'PRIVATE_COMPANY_STAFF') return true;
         const parsed = parseTicketCompanyJson(r.company);
         if (ticketFieldStaffInvolvesRequester(parsed, payload.requesterId)) return true;
+        const targetDept = r.privateCompanyTargetDepartmentId ?? null;
+        if (targetDept) {
+          if (!deptId || targetDept !== deptId) return false;
+        }
         const allowedByTechnique = staffTicketTechniqueAllowed({
           technique: r.technique,
           staffDepartmentId: deptId,
@@ -1582,6 +1656,7 @@ export async function GET(req: NextRequest) {
       requesterId: string | null;
       privateCompanyId?: string | null;
       assignmentScope?: string | null;
+      privateCompanyTargetDepartmentId?: string | null;
     };
     const tickets = rowsForList.map((r: Row) => {
       const row = r as { status?: string };
@@ -1648,6 +1723,9 @@ export async function GET(req: NextRequest) {
         assignedAt,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
         requesterId: r.requesterId ?? null,
+        privateCompanyId: r.privateCompanyId ?? null,
+        assignmentScope: r.assignmentScope ?? null,
+        privateCompanyTargetDepartmentId: r.privateCompanyTargetDepartmentId ?? null,
       };
     });
 
