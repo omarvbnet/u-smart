@@ -22,7 +22,7 @@ import {
   MAINTENANCE_DISPATCH_ENGINEER,
   normalizeMaintenanceDispatchMode,
 } from '@/lib/private-company-maintenance-dispatch';
-import { tryAutoConfirmExpiredMaintenanceAwaiting } from '@/lib/maintenance-requester-confirmation';
+import { sweepExpiredMaintenanceAwaitingConfirmations } from '@/lib/maintenance-requester-confirmation';
 import {
   deriveSpecializationTagsFromTechnique,
   normalizeSpecializationTags,
@@ -1255,6 +1255,12 @@ export async function GET(req: NextRequest) {
     }
     const payload = auth.payload;
     const coordinatorContext = await getCoordinatorContext(req);
+
+    try {
+      await sweepExpiredMaintenanceAwaitingConfirmations(prisma);
+    } catch {
+      /* Non-fatal: list still loads; next GET can finalize expired awaiting confirmations. */
+    }
 
     if (coordinatorContext) {
       const { searchParams } = new URL(req.url);

@@ -10,12 +10,12 @@ import {
   MAINTENANCE_REQUESTER_CONFIRM_MINUTES,
   readMaintenanceAwaitingSince,
   readTicketJsonStatus,
+  resolveIsMaintenanceVisitorRequest,
+  tryAutoConfirmExpiredMaintenanceAwaiting,
 } from '@/lib/maintenance-requester-confirmation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
-
-const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = getRequesterFromRequest(req);
@@ -26,6 +26,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
 
   try {
+    await tryAutoConfirmExpiredMaintenanceAwaiting(prisma, id);
+
     const coordinatorContext = await getCoordinatorContext(req);
     const ticket = await prisma.visitorRequest.findUnique({
       where: { id },
@@ -35,6 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         company: true,
         requesterId: true,
         technique: true,
+        privateCompanyId: true,
         beforeImageUrls: true,
         finishingImageUrls: true,
         coordinatorCompanyId: true,
@@ -78,8 +81,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ success: false, message: 'Ticket is already completed' }, { status: 400 });
     }
 
-    const tech = (ticket.technique ?? '').toLowerCase();
-    const isMaintenance = MAINTENANCE_TECHNIQUES.includes(tech);
+    const isMaintenance = await resolveIsMaintenanceVisitorRequest(
+      prisma,
+      ticket.technique,
+      ticket.privateCompanyId
+    );
 
     const body = await req.json();
     const checklistResponse = body.checklistResponse ?? null;

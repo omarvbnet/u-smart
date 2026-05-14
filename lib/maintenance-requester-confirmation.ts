@@ -5,15 +5,32 @@
  */
 
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
+import { MAINTENANCE_TECHNIQUES } from '@/lib/qc-conflict-mapper';
+import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
 
 export const MAINTENANCE_REQUESTER_CONFIRM_MINUTES = 40;
 export const MAINTENANCE_AWAITING_SINCE_KEY = 'maintenanceAwaitingRequesterSince';
 export const MAINTENANCE_REJECT_REASON_KEY = 'maintenanceRequesterRejectReason';
 
-const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
-
 export function isMaintenanceTechnique(technique: string | null | undefined): boolean {
-  return MAINTENANCE_TECHNIQUES.includes(String(technique ?? '').toLowerCase());
+  const lo = String(technique ?? '').trim().toLowerCase();
+  if (!lo) return false;
+  return MAINTENANCE_TECHNIQUES.includes(lo) || lo === 'maintenance';
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function resolveIsMaintenanceVisitorRequest(
+  prisma: any,
+  technique: string | null | undefined,
+  privateCompanyId: string | null | undefined
+): Promise<boolean> {
+  if (isMaintenanceTechnique(technique)) return true;
+  const slug = String(technique ?? '').trim();
+  if (!slug) return false;
+  const kind = await lookupProvisorTechniqueCategory(prisma, slug, {
+    workspaceCompanyId: privateCompanyId ?? null,
+  });
+  return kind === 'MAINTENANCE';
 }
 
 export function readMaintenanceAwaitingSince(parsed: Record<string, unknown>): string | null {
@@ -110,12 +127,13 @@ export async function tryAutoConfirmExpiredMaintenanceAwaiting(prisma: any, tick
       status: true,
       technique: true,
       requesterId: true,
+      privateCompanyId: true,
       beforeImageUrls: true,
       finishingImageUrls: true,
     },
   });
   if (!row || !row.requesterId) return false;
-  if (!isMaintenanceTechnique(row.technique)) return false;
+  if (!(await resolveIsMaintenanceVisitorRequest(prisma, row.technique, row.privateCompanyId))) return false;
 
   let parsed: Record<string, unknown> = {};
   try {
@@ -131,4 +149,25 @@ export async function tryAutoConfirmExpiredMaintenanceAwaiting(prisma: any, tick
 
   await finalizeMaintenanceAsCompleted(prisma, row);
   return true;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function sweepExpiredMaintenanceAwaitingConfirmations(prisma: any): Promise<{
+  scanned: number;
+  completed: number;
+}> {
+  const candidates = await prisma.visitorRequest.findMany({
+    where: {
+      requesterId: { not: null },
+      status: { not: 'COMPLETED' },
+      company: { contains: MAINTENANCE_AWAITING_SINCE_KEY },
+    },
+    select: { id: true },
+    take: 500,
+  });
+  let completed = 0;
+  for (const c of candidates) {
+    if (await tryAutoConfirmExpiredMaintenanceAwaiting(prisma, c.id)) completed += 1;
+  }
+  return { scanned: candidates.length, completed };
 }
