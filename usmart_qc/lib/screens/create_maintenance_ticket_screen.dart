@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../config/api_config.dart';
+import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
+import '../models/site.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
@@ -44,10 +46,18 @@ class _CreateMaintenanceTicketScreenState
   String _assignmentScope = 'PRIVATE_COMPANY';
   String? _workspaceTargetDepartmentId;
 
+  /// When user picks a saved site (quick-fill); province comes from that site when set.
+  Site? _linkedSite;
+  String? _selectedProvince;
+
   @override
   void initState() {
     super.initState();
+    _siteNameCtrl.addListener(_onSiteIdEdited);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final sites = context.read<SitesProvider>();
+      await sites.fetchSites();
+      if (!mounted) return;
       final tech = context.read<ProvisorTechniquesProvider>();
       await tech.ensureLoaded();
       if (!mounted) return;
@@ -95,6 +105,21 @@ class _CreateMaintenanceTicketScreenState
       return;
     }
 
+    final province = (_linkedSite != null && _linkedSite!.province.trim().isNotEmpty)
+        ? _linkedSite!.province.trim()
+        : (_selectedProvince?.trim() ?? '');
+    if (province.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('ticket_province_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
     final techProv = context.read<ProvisorTechniquesProvider>();
@@ -117,6 +142,7 @@ class _CreateMaintenanceTicketScreenState
       siteCoordinator: coordinator,
       technique: technique,
       slaHours: sla,
+      province: province,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       maintenanceReason: reason,
       beforeImageUrls: _beforePhotoUrls.isEmpty ? null : List.from(_beforePhotoUrls),
@@ -217,6 +243,128 @@ class _CreateMaintenanceTicketScreenState
     if (mounted) setState(() => _uploading = false);
   }
 
+  void _onSiteIdEdited() {
+    final id = _siteNameCtrl.text.trim();
+    if (_linkedSite != null && id != _linkedSite!.siteId) {
+      setState(() => _linkedSite = null);
+    }
+  }
+
+  void _applySiteQuickFill(Site s) {
+    setState(() {
+      _linkedSite = s;
+      _siteNameCtrl.text = s.siteId;
+      _coordinatorCtrl.text = s.location;
+      final p = s.province.trim();
+      if (p.isNotEmpty) _selectedProvince = p;
+    });
+  }
+
+  Widget _buildProvinceSection(AppLocalizations l10n) {
+    if (_linkedSite != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.t('ticket_province_from_site').toUpperCase(),
+            style: TextStyle(
+              color: Colors.white.withAlpha(80),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF12122A),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF6C63FF).withAlpha(50)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.map_rounded, color: Color(0xFF8B83FF), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _linkedSite!.province.isNotEmpty
+                        ? _linkedSite!.province
+                        : l10n.t('ticket_province_hint'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _linkedSite = null;
+                    });
+                  },
+                  child: Text(
+                    l10n.t('ticket_clear_site_link'),
+                    style: const TextStyle(color: Color(0xFF8B83FF), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('ticket_province').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF12122A),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withAlpha(10)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedProvince != null && kIraqProvinces.contains(_selectedProvince)
+                  ? _selectedProvince
+                  : null,
+              hint: Text(
+                l10n.t('ticket_province_hint'),
+                style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 15),
+              ),
+              isExpanded: true,
+              dropdownColor: const Color(0xFF12122A),
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              icon: Icon(Icons.expand_more_rounded, color: Colors.white.withAlpha(80)),
+              items: kIraqProvinces
+                  .map(
+                    (p) => DropdownMenuItem<String>(
+                      value: p,
+                      child: Text(p),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedProvince = v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _removeAttachment(int index) => setState(() => _beforePhotoUrls.removeAt(index));
 
   void _showError(String message) {
@@ -232,6 +380,7 @@ class _CreateMaintenanceTicketScreenState
 
   @override
   void dispose() {
+    _siteNameCtrl.removeListener(_onSiteIdEdited);
     _siteNameCtrl.dispose();
     _coordinatorCtrl.dispose();
     _slaCtrl.dispose();
@@ -288,10 +437,7 @@ class _CreateMaintenanceTicketScreenState
                 itemBuilder: (_, i) {
                   final s = sites[i];
                   return GestureDetector(
-                    onTap: () {
-                      _siteNameCtrl.text = s.siteId;
-                      _coordinatorCtrl.text = s.location;
-                    },
+                    onTap: () => _applySiteQuickFill(s),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
@@ -327,6 +473,8 @@ class _CreateMaintenanceTicketScreenState
             hint: l10n.t('site_name_hint'),
             icon: Icons.location_on_outlined,
           ),
+          const SizedBox(height: 16),
+          _buildProvinceSection(l10n),
           const SizedBox(height: 16),
           _buildField(
             controller: _coordinatorCtrl,

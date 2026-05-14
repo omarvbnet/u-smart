@@ -329,6 +329,7 @@ class PrivateCompanyWorkspace {
     this.departments = const [],
     this.staff = const [],
     this.checklists = const [],
+    this.materialUseReasons = const [],
   });
 
   final String id;
@@ -343,6 +344,8 @@ class PrivateCompanyWorkspace {
   final List<PrivateCompanyDepartment> departments;
   final List<PrivateCompanyStaff> staff;
   final List<PrivateCompanyChecklist> checklists;
+  /// Workspace-defined reasons for material USE / DAMAGE / LOST (audit dropdown).
+  final List<String> materialUseReasons;
 
   bool get isApproved => status == PrivateCompanyStatus.approved;
   bool get isPending => status == PrivateCompanyStatus.pending;
@@ -385,6 +388,11 @@ class PrivateCompanyWorkspace {
               .map(PrivateCompanyChecklist.fromJson)
               .toList()
           : const [],
+      materialUseReasons: () {
+        final raw = json['materialUseReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
     );
   }
 }

@@ -561,27 +561,31 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
         successMessage: 'Receipt confirmed.',
       );
 
-  Future<bool> useOnTicket(String id, String ticketId, {String? note, int? quantity}) =>
+  Future<bool> useOnTicket(String id, String ticketId,
+          {String? note, String? useReason, int? quantity}) =>
       _itemAction(id, 'use',
           body: {
             'ticketId': ticketId,
             if (note != null) 'note': note,
+            if (useReason != null && useReason.trim().isNotEmpty) 'useReason': useReason.trim(),
             if (quantity != null) 'quantity': quantity,
           },
           successMessage: 'Recorded on ticket.');
 
-  Future<bool> markDamaged(String id, {String? note, String? ticketId}) =>
+  Future<bool> markDamaged(String id, {String? note, String? ticketId, String? useReason}) =>
       _itemAction(id, 'damage',
           body: {
             if (note != null) 'note': note,
+            if (useReason != null && useReason.trim().isNotEmpty) 'useReason': useReason.trim(),
             if (ticketId != null && ticketId.trim().isNotEmpty) 'ticketId': ticketId.trim(),
           },
           successMessage: 'Marked damaged.');
 
-  Future<bool> markLost(String id, {String? note, String? ticketId}) =>
+  Future<bool> markLost(String id, {String? note, String? ticketId, String? useReason}) =>
       _itemAction(id, 'lose',
           body: {
             if (note != null) 'note': note,
+            if (useReason != null && useReason.trim().isNotEmpty) 'useReason': useReason.trim(),
             if (ticketId != null && ticketId.trim().isNotEmpty) 'ticketId': ticketId.trim(),
           },
           successMessage: 'Marked lost.');

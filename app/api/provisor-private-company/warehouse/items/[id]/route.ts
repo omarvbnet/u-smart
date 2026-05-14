@@ -12,6 +12,43 @@ import { remainingAssignBudgetForStaffMaterial } from '@/lib/private-company-sta
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
+async function resolveMaterialMovementNote(
+  companyId: string,
+  body: Record<string, unknown>
+): Promise<{ ok: true; note: string | null } | { ok: false; response: NextResponse }> {
+  const freeNote = typeof body?.note === 'string' ? body.note.trim() : '';
+  const useReasonRaw = typeof body?.useReason === 'string' ? body.useReason.trim() : '';
+  const comp = await prisma.privateCompany.findUnique({
+    where: { id: companyId },
+    select: { materialUseReasons: true },
+  });
+  const allowed = Array.isArray(comp?.materialUseReasons)
+    ? (comp.materialUseReasons as string[])
+        .map((s) => String(s).trim())
+        .filter(Boolean)
+    : [];
+  if (allowed.length > 0) {
+    if (!useReasonRaw || !allowed.includes(useReasonRaw)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            message:
+              'Select a material reason from the workspace list (Company → Warehouse → Material reasons), or ask an owner/manager/coordinator to add one.',
+          },
+          { status: 400 }
+        ),
+      };
+    }
+  }
+  const parts: string[] = [];
+  if (useReasonRaw) parts.push(`Reason: ${useReasonRaw}`);
+  if (freeNote) parts.push(freeNote);
+  const combined = parts.length ? parts.join(' | ') : null;
+  return { ok: true, note: combined };
+}
+
 const ITEM_INCLUDE = {
   material: {
     select: { id: true, name: true, category: true, unit: true, color: true, tracking: true },
@@ -558,6 +595,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         );
       }
       const previousHolderId = item.assignedToId;
+      const noteRes = await resolveMaterialMovementNote(guard.companyId, body as Record<string, unknown>);
+      if (!noteRes.ok) return noteRes.response;
+      const resolvedNote = noteRes.note;
       const updated = await prisma.privateCompanyMaterialItem.update({
         where: { id },
         data: {
@@ -575,7 +615,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         ticketId,
         actorId: guard.requesterId,
         quantity: bodyQuantity,
-        note,
+        note: resolvedNote,
       });
       const ticketLabel =
         [ticket.siteName, ticket.technique].filter(Boolean).join(' · ') || ticket.id;
@@ -621,6 +661,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         ticketIdForLog = ticketIdRaw;
       }
       const nextStatus = action === 'damage' ? 'DAMAGED' : 'LOST';
+      const noteRes = await resolveMaterialMovementNote(guard.companyId, body as Record<string, unknown>);
+      if (!noteRes.ok) return noteRes.response;
+      const resolvedNote = noteRes.note;
       const updated = await prisma.privateCompanyMaterialItem.update({
         where: { id },
         data: {
@@ -639,7 +682,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         ticketId: ticketIdForLog,
         actorId: guard.requesterId,
         quantity: bodyQuantity,
-        note,
+        note: resolvedNote,
       });
       return NextResponse.json({ success: true, item: updated });
     }

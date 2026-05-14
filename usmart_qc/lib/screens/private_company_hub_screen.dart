@@ -4231,10 +4231,114 @@ class _WarehouseTabState extends State<_WarehouseTab>
     _subTabs = TabController(length: 6, vsync: this);
   }
 
-  @override
-  void dispose() {
-    _subTabs.dispose();
-    super.dispose();
+  Future<void> _openMaterialUseReasonsEditor() async {
+    final pc = context.read<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
+    final initial = List<String>.from(pc.workspace?.materialUseReasons ?? const []);
+    final editCtrl = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        var live = List<String>.from(initial);
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF12122A),
+              title: Text(
+                l10n.t('pc_ws_material_use_reasons'),
+                style: const TextStyle(color: Colors.white, fontSize: 17),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: editCtrl,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: l10n.t('pc_ws_material_reason_add_hint'),
+                        hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.add_circle_outline,
+                              color: Color(0xFF6C63FF)),
+                          onPressed: () {
+                            final s = editCtrl.text.trim();
+                            if (s.isEmpty) return;
+                            if (live.any(
+                                (x) => x.toLowerCase() == s.toLowerCase())) {
+                              return;
+                            }
+                            setLocal(() {
+                              live = [...live, s];
+                              editCtrl.clear();
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: live.length,
+                        itemBuilder: (_, i) {
+                          final r = live[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text(r,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close,
+                                  color: Colors.white54, size: 20),
+                              onPressed: () {
+                                setLocal(() {
+                                  live = [...live]..removeAt(i);
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(l10n.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final ok = await pc.updateMaterialUseReasons(live);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (pc.lastSuccess ??
+                                  l10n.t('pc_ws_material_reasons_saved'))
+                              : (pc.error ??
+                                  l10n.t('pc_ws_material_reasons_save_failed')),
+                        ),
+                      ),
+                    );
+                  },
+                  child: Text(l10n.t('submit')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    editCtrl.dispose();
   }
 
   @override
@@ -4296,6 +4400,20 @@ class _WarehouseTabState extends State<_WarehouseTab>
               ),
             ),
           ),
+        if (pc.canManageStaff)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: OutlinedButton.icon(
+              onPressed: _openMaterialUseReasonsEditor,
+              icon: const Icon(Icons.list_alt_rounded,
+                  size: 18, color: Color(0xFF8B83FF)),
+              label: Text(l10n.t('pc_ws_material_use_reasons')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF8B83FF),
+                side: const BorderSide(color: Color(0xFF6C63FF)),
+              ),
+            ),
+          ),
         Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           decoration: BoxDecoration(
@@ -4349,6 +4467,12 @@ class _WarehouseTabState extends State<_WarehouseTab>
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    _subTabs.dispose();
+    super.dispose();
   }
 }
 

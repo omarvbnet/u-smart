@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
             approvedAt: true,
             createdAt: true,
             updatedAt: true,
+            materialUseReasons: true,
             departments: {
               orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
               select: {
@@ -136,6 +137,7 @@ export async function GET(req: NextRequest) {
           logoUrl: true,
           status: true,
           approvedAt: true,
+          materialUseReasons: true,
           departments: {
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
             select: {

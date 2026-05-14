@@ -324,6 +324,32 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  /// Owner, manager, or coordinator: labels for material USE / DAMAGE / LOST audit dropdowns.
+  Future<bool> updateMaterialUseReasons(List<String> reasons) async {
+    if (!canManageStaff) return false;
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(
+        ApiConfig.privateCompanyWarehouseMaterialUseReasons,
+        body: {'reasons': reasons},
+      );
+      if (res['success'] == true) {
+        await refresh();
+        _setSuccess('Material reasons saved.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to save reasons.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   // ─── Departments ─────────────────────────────────────────────────────────
 
   Future<bool> createDepartment({

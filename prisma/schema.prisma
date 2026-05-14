@@ -1366,6 +1366,8 @@ model PrivateCompany {
   staffMaterialBudgets PrivateCompanyStaffMaterialBudget[] @relation("PrivateCompanyStaffMaterialBudgets")
   /// Optional QC / maintenance technique slugs for this workspace (owner-managed).
   workspaceTechniques PrivateCompanyTechnique[]
+  /// Preset labels for material USE / DAMAGE / LOST movement notes (owner, manager, coordinator).
+  materialUseReasons String[] @default([])
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 

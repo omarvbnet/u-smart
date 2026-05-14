@@ -12,6 +12,7 @@ import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
 import '../models/private_company.dart';
+import '../models/private_company_warehouse.dart';
 import '../models/comment.dart';
 import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
@@ -1761,35 +1762,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ]),
       ],
-      if (t.isMaintenance && t.beforeImageUrls.isNotEmpty) ...[
+      if (t.isMaintenance) ...[
         const SizedBox(height: 16),
-        _glassSection(l10n.t('before_photos'), [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: t.beforeImageUrls
-                  .map((url) => _buildAttachmentThumbnail(url, l10n))
-                  .toList(),
-            ),
-          ),
-        ]),
-      ],
-      if (t.isMaintenance && t.finishingImageUrls.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        _glassSection(l10n.t('after_photos'), [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: t.finishingImageUrls
-                  .map((url) => _buildAttachmentThumbnail(url, l10n))
-                  .toList(),
-            ),
-          ),
-        ]),
+        ..._maintenanceEvidenceSections(t, l10n),
       ],
       if (t.designSpecifications != null &&
           t.designSpecifications!.isNotEmpty) ...[
@@ -2384,6 +2359,244 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _maintenanceEvidenceSections(Ticket t, AppLocalizations l10n) {
+    Widget strip(List<String> urls) {
+      if (urls.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+          child: Text(
+            l10n.t('maint_evidence_none'),
+            style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 13),
+          ),
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children:
+              urls.map((url) => _buildAttachmentThumbnail(url, l10n)).toList(),
+        ),
+      );
+    }
+
+    return [
+      _glassSection(l10n.t('maint_evidence_before'), [strip(t.beforeImageUrls)]),
+      const SizedBox(height: 12),
+      _glassSection(l10n.t('maint_evidence_after'), [strip(t.finishingImageUrls)]),
+    ];
+  }
+
+  Future<void> _openUseMaterialFromMyAssignment(Ticket t) async {
+    final l10n = AppLocalizations.of(context);
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    wh.resetFilters();
+    wh.setFilters(mineOnly: true, status: 'ASSIGNED');
+    await wh.refreshItems();
+    if (!mounted) return;
+    final items = List<WarehouseItem>.from(wh.items);
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('maint_no_assigned_materials'))),
+      );
+      return;
+    }
+    final maxH = MediaQuery.of(context).size.height * 0.55;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: SizedBox(
+            height: maxH,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Text(
+                    l10n.t('maint_use_material_title'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final it = items[i];
+                      final name = it.materialName ?? 'Material';
+                      return ListTile(
+                        title: Text(name,
+                            style: const TextStyle(color: Colors.white)),
+                        subtitle: Text(
+                          '${it.serialNumber} · ×${it.quantity} ${it.materialUnit ?? ''}',
+                          style: TextStyle(color: Colors.white.withAlpha(140)),
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _promptUseMaterialOnTicket(t, it);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _promptUseMaterialOnTicket(Ticket t, WarehouseItem item) async {
+    final l10n = AppLocalizations.of(context);
+    final pc = context.read<PrivateCompanyProvider>();
+    final reasons = pc.workspace?.materialUseReasons ?? const <String>[];
+    final noteCtrl = TextEditingController();
+    String? picked = reasons.length == 1 ? reasons.first : null;
+
+    final res = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF12122A),
+              title: Text(
+                l10n.t('maint_use_material_title'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 17,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${item.materialName ?? 'Material'} — ${item.serialNumber} ×${item.quantity}',
+                      style:
+                          TextStyle(color: Colors.white.withAlpha(200), fontSize: 14),
+                    ),
+                    if (reasons.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        value: picked != null && reasons.contains(picked)
+                            ? picked
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: l10n.t('maint_material_reason_label'),
+                          labelStyle:
+                              TextStyle(color: Colors.white.withAlpha(180)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                BorderSide(color: Colors.white.withAlpha(40)),
+                          ),
+                          focusedBorder: const OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
+                            borderSide: BorderSide(color: Color(0xFF6C63FF)),
+                          ),
+                        ),
+                        dropdownColor: const Color(0xFF1e1e36),
+                        style: const TextStyle(color: Colors.white),
+                        items: reasons
+                            .map((r) =>
+                                DropdownMenuItem(value: r, child: Text(r)))
+                            .toList(),
+                        onChanged: (v) => setLocal(() => picked = v),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: noteCtrl,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: l10n.t('maint_material_optional_note'),
+                        labelStyle:
+                            TextStyle(color: Colors.white.withAlpha(160)),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              BorderSide(color: Colors.white.withAlpha(40)),
+                        ),
+                        focusedBorder: const OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                          borderSide: BorderSide(color: Color(0xFF6C63FF)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(l10n.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (reasons.isNotEmpty &&
+                        (picked == null || picked!.trim().isEmpty)) {
+                      return;
+                    }
+                    Navigator.pop(ctx, {
+                      'useReason': picked?.trim(),
+                      'note': noteCtrl.text.trim(),
+                    });
+                  },
+                  child: Text(l10n.t('submit')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    noteCtrl.dispose();
+    if (res == null || !mounted) return;
+    final useReason = res['useReason'] as String?;
+    final note = res['note'] as String?;
+    if (reasons.isNotEmpty && (useReason == null || useReason.isEmpty)) {
+      return;
+    }
+
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final success = await wh.useOnTicket(
+      item.id,
+      t.id,
+      useReason: useReason?.isNotEmpty == true ? useReason : null,
+      note: note?.isNotEmpty == true ? note : null,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? l10n.t('maint_material_use_recorded')
+              : (wh.error ?? l10n.t('maint_material_use_failed')),
+        ),
+      ),
+    );
+    if (success) {
+      wh.resetFilters();
+      await wh.refreshItems();
+      await _loadTicketWarehouseSummary();
+    }
   }
 
   Widget _glassContainer(Widget child) {
@@ -3521,21 +3734,48 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final returned = (totals['returnedUnits'] as num?)?.toInt() ?? 0;
     final pc = context.watch<PrivateCompanyProvider>();
     final auth = context.watch<AuthProvider>();
+    final l10n = AppLocalizations.of(context);
+    final t = _ticket;
     final canRequestMaterials = pc.hasWorkspace &&
         pc.isApproved &&
         (auth.isEngineer || auth.isTechnician);
-    return _glassSection('Workspace materials', [
-      if (canRequestMaterials)
+    final canUseFromAssignment = t != null &&
+        t.isMaintenance &&
+        !t.isCompleted &&
+        pc.hasWorkspace &&
+        pc.isApproved &&
+        pc.canRecordWarehouseMaterialOnTicket;
+    return _glassSection(l10n.t('pc_ticket_workspace_materials'), [
+      if (canRequestMaterials || canUseFromAssignment)
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-          child: OutlinedButton.icon(
-            onPressed: _openTicketWarehouseMaterialRequest,
-            icon: const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF6C63FF)),
-            label: const Text('Request material from warehouse'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF8B83FF),
-              side: const BorderSide(color: Color(0xFF6C63FF)),
-            ),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (canRequestMaterials)
+                OutlinedButton.icon(
+                  onPressed: _openTicketWarehouseMaterialRequest,
+                  icon: const Icon(Icons.inventory_2_outlined,
+                      size: 18, color: Color(0xFF6C63FF)),
+                  label: Text(l10n.t('maint_request_warehouse_material')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF8B83FF),
+                    side: const BorderSide(color: Color(0xFF6C63FF)),
+                  ),
+                ),
+              if (canUseFromAssignment)
+                OutlinedButton.icon(
+                  onPressed: () => _openUseMaterialFromMyAssignment(t),
+                  icon: const Icon(Icons.handyman_outlined,
+                      size: 18, color: Color(0xFF38BDF8)),
+                  label: Text(l10n.t('maint_use_from_my_stock')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF38BDF8),
+                    side: const BorderSide(color: Color(0xFF38BDF8)),
+                  ),
+                ),
+            ],
           ),
         ),
       Padding(
@@ -3573,7 +3813,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Recent movements on this ticket',
+                l10n.t('maint_movements_on_ticket'),
                 style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
@@ -3585,10 +3825,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 final name = mat?['name'] as String? ?? 'Item';
                 final sn = item?['serialNumber'] as String? ?? '';
                 final at = mv['createdAt']?.toString() ?? '';
+                final note = (mv['note'] as String?)?.trim();
+                final noteLine =
+                    (note != null && note.isNotEmpty) ? '\n    $note' : '';
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
+                  padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
-                    '$type · $name ($sn) · $at',
+                    '$type · $name ($sn) · $at$noteLine',
                     style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
                   ),
                 );
