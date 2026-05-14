@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { readTicketJsonStatus } from '@/lib/maintenance-requester-confirmation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const role = requesterRow?.role ?? 'COMPANY';
     const ticket = await prisma.visitorRequest.findUnique({
       where: { id },
-      select: { id: true, requesterId: true, status: true, company: true },
+      select: { id: true, requesterId: true, status: true, company: true, technique: true },
     });
     if (!ticket) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
@@ -70,6 +71,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const isPending = ticketStatus === 'PENDING';
       if (!isAssignedToMe && !isPending) {
         return NextResponse.json({ success: false, message: 'Assign this ticket to yourself before adding evidence' }, { status: 403 });
+      }
+    }
+
+    const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
+    const tech = String(ticket.technique ?? '').toLowerCase();
+    if (MAINTENANCE_TECHNIQUES.includes(tech)) {
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
+      } catch {
+        parsed = {};
+      }
+      const effectiveStatus = readTicketJsonStatus(parsed, String(ticket.status ?? 'PENDING'));
+      if (effectiveStatus !== 'IN_PROGRESS') {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'On maintenance tickets, evidence uploads are available only while the ticket is in progress.',
+          },
+          { status: 403 }
+        );
       }
     }
 

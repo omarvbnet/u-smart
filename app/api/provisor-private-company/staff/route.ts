@@ -294,6 +294,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Department not found.' }, { status: 404 });
     }
   }
+  const executionRolesRequiringDepartment = new Set(['ENGINEER', 'TECHNICIAN', 'WORKER']);
+  if (executionRolesRequiringDepartment.has(role) && !(effectiveDepartmentId ?? '').trim()) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          'Technicians, engineers, and workers must be assigned to a workspace department so tickets and notifications route to the correct team.',
+      },
+      { status: 400 }
+    );
+  }
   if (email) {
     const existing = await prisma.ticketRequester.findUnique({ where: { email }, select: { id: true } });
     if (existing) {
@@ -592,6 +603,25 @@ export async function PATCH(req: NextRequest) {
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
+  }
+  const nextRole = typeof data.role === 'string' ? String(data.role).toUpperCase() : String(target.role ?? '').toUpperCase();
+  let nextDeptId: string | null = target.privateCompanyDepartmentId ?? null;
+  if (data.privateCompanyDepartmentId !== undefined) {
+    const v = data.privateCompanyDepartmentId;
+    nextDeptId = typeof v === 'string' && v.trim() ? v.trim() : null;
+  }
+  if (
+    ['ENGINEER', 'TECHNICIAN', 'WORKER'].includes(nextRole) &&
+    !nextDeptId
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          'Technicians, engineers, and workers must belong to a department. Assign one before saving.',
+      },
+      { status: 400 }
+    );
   }
   const updated = await prisma.ticketRequester.update({
     where: { id },

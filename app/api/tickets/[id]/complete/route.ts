@@ -92,6 +92,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           { status: 400 }
         );
       }
+      const effectiveStatusForEvidence = readTicketJsonStatus(parsed, String(ticket.status ?? 'PENDING'));
+      if (effectiveStatusForEvidence !== 'IN_PROGRESS') {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Before and after maintenance photos can only be submitted while the ticket is in progress.',
+          },
+          { status: 400 }
+        );
+      }
       const beforeUrls = Array.isArray(body.beforeImageUrls)
         ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && String(u).trim())
         : [];
@@ -109,13 +120,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       // Requester-confirmation flow (Provisor requester tickets only; coordinator dashboard unchanged)
       if (ticket.requesterId && !coordinatorContext) {
-        const effectiveStatus = readTicketJsonStatus(parsed, String(ticket.status ?? 'PENDING'));
-        if (effectiveStatus !== 'IN_PROGRESS') {
-          return NextResponse.json(
-            { success: false, message: 'Start maintenance (in progress) before requesting completion confirmation.' },
-            { status: 400 }
-          );
-        }
         const already = readMaintenanceAwaitingSince(parsed);
         if (already) {
           return NextResponse.json(

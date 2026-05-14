@@ -1723,6 +1723,18 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
       return;
     }
     if (widget.existing == null) {
+      const needDept = {'ENGINEER', 'TECHNICIAN', 'WORKER'};
+      if (needDept.contains(_role) &&
+          (_departmentId == null || _departmentId!.trim().isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pick a workspace department for technicians, engineers, and workers so tickets can match their team.',
+            ),
+          ),
+        );
+        return;
+      }
       final temp = await pc.createStaff(
         firstName: firstName,
         lastName: _lastName.text.trim(),

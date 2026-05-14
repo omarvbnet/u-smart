@@ -163,7 +163,9 @@ async function notifyRoleNewTicket(
     for (const recipient of recipients) {
       const filterActive = recipient.provinceFilterActive ?? true;
       const recipientProvince = recipient.province ?? null;
-      if (filterActive && recipientProvince && recipientProvince !== province) continue;
+      const provNorm = (province ?? '').trim().toLowerCase();
+      const recNorm = (recipientProvince ?? '').trim().toLowerCase();
+      if (filterActive && recipientProvince && provNorm && recNorm !== provNorm) continue;
       try {
         await notifyRequesterI18n({
           prisma,
@@ -282,7 +284,9 @@ async function notifyPrivateCompanyMembersNewTicket(
       const role = String(s.role ?? '').toUpperCase();
       if (!allowed.has(role)) continue;
       const filterActive = s.provinceFilterActive ?? true;
-      if (filterActive && s.province && s.province !== province) continue;
+      const provNorm = (province ?? '').trim().toLowerCase();
+      const staffProv = (s.province ?? '').trim().toLowerCase();
+      if (filterActive && s.province && staffProv && staffProv !== provNorm) continue;
       if (
         !staffTicketTechniqueAllowed({
           technique,
@@ -948,7 +952,13 @@ export async function POST(req: NextRequest) {
         ticketData.requesterId = payload.requesterId;
       }
     }
-    if (isMaintenanceTicket && beforeImageUrls.length > 0) {
+    // Maintenance "before/after site evidence" is captured in the field workflow
+    // (IN_PROGRESS). Requesters may only attach optional specs via attachmentUrls / designSpecifications.
+    if (
+      isMaintenanceTicket &&
+      beforeImageUrls.length > 0 &&
+      coordinatorContext
+    ) {
       ticketData.beforeImageUrls = beforeImageUrls;
     }
     if (coordinatorContext) {
@@ -1536,6 +1546,12 @@ export async function GET(req: NextRequest) {
           privateCompanyId: myStaffWorkspaceId,
           technique: { in: MAINTENANCE_TECHNIQUES },
         });
+        technicianPendingOr.push({
+          status: { in: ['ON_SITE', 'IN_PROGRESS'] },
+          assignmentScope: 'PRIVATE_COMPANY_STAFF',
+          privateCompanyId: myStaffWorkspaceId,
+          technique: { in: MAINTENANCE_TECHNIQUES },
+        });
       }
       const technicianAnd: Record<string, unknown>[] = [
         { OR: technicianPendingOr },
@@ -1738,7 +1754,7 @@ export async function GET(req: NextRequest) {
           }
         }
         if (pendingUnassigned) {
-          if (requesterRole === 'TECHNICIAN' && !technicianAvailabilityPoolEnabled) return false;
+          // Technician availability pool only restricts self-assign (assign route), not list visibility.
           if (isQcPoolEngineerRole(requesterRole) && !engineerAvailabilityPoolEnabled) {
             const isMaint = MAINTENANCE_TECHNIQUES.includes((r.technique ?? '').toLowerCase());
             const td = r.privateCompanyTargetDepartmentId;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../config/api_config.dart';
 import '../constants/iraq_provinces.dart';
@@ -37,11 +36,11 @@ class _CreateMaintenanceTicketScreenState
   final _slaCtrl = TextEditingController(text: '24');
   final _reasonCtrl = TextEditingController();
   final _designSpecsCtrl = TextEditingController();
-  final _picker = ImagePicker();
   String _maintenanceType = 'fiber_route';
   bool _submitting = false;
   bool _uploading = false;
-  final List<String> _beforePhotoUrls = [];
+  /// Optional design / specification / explanation files (not before-maintenance site evidence).
+  final List<String> _specAttachmentUrls = [];
   /// Same semantics as [CreateTicketScreen]: private workspace vs global pool.
   String _assignmentScope = 'PRIVATE_COMPANY';
   String? _workspaceTargetDepartmentId;
@@ -145,7 +144,8 @@ class _CreateMaintenanceTicketScreenState
       province: province,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       maintenanceReason: reason,
-      beforeImageUrls: _beforePhotoUrls.isEmpty ? null : List.from(_beforePhotoUrls),
+      attachmentUrls:
+          _specAttachmentUrls.isEmpty ? null : List.from(_specAttachmentUrls),
       assignmentScope: scopeForApi,
       privateCompanyTargetDepartmentId:
           inWorkspace && scopeForApi == 'PRIVATE_COMPANY' && pc.canChooseWorkspaceTicketTargetDepartment
@@ -177,37 +177,6 @@ class _CreateMaintenanceTicketScreenState
     }
   }
 
-  Future<void> _pickAndUploadImage() async {
-    final xFile = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 2048,
-      imageQuality: 85,
-    );
-    if (!mounted || xFile == null) return;
-    final provider = context.read<TicketsProvider>();
-    setState(() => _uploading = true);
-    try {
-      final bytes = await xFile.readAsBytes();
-      if (bytes.isEmpty) return;
-      final ext = xFile.path.split('.').lastOrNull ?? 'jpg';
-      final url = await provider.uploadFileFromBytes(
-        bytes,
-        'maint_${DateTime.now().millisecondsSinceEpoch}.$ext',
-      );
-      if (url != null && mounted) {
-        final u = url;
-        setState(() => _beforePhotoUrls.add(u));
-      } else if (mounted) {
-        _showError(AppLocalizations.of(context).t('upload_failed'));
-      }
-    } catch (_) {
-      if (mounted) {
-        _showError(AppLocalizations.of(context).t('upload_failed'));
-      }
-    }
-    if (mounted) setState(() => _uploading = false);
-  }
-
   Future<void> _pickAndUploadFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -231,7 +200,7 @@ class _CreateMaintenanceTicketScreenState
       }
       if (url != null && mounted) {
         final u = url;
-        setState(() => _beforePhotoUrls.add(u));
+        setState(() => _specAttachmentUrls.add(u));
       } else if (mounted) {
         _showError(AppLocalizations.of(context).t('upload_failed'));
       }
@@ -365,7 +334,8 @@ class _CreateMaintenanceTicketScreenState
     );
   }
 
-  void _removeAttachment(int index) => setState(() => _beforePhotoUrls.removeAt(index));
+  void _removeAttachment(int index) =>
+      setState(() => _specAttachmentUrls.removeAt(index));
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -812,7 +782,7 @@ class _CreateMaintenanceTicketScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          l10n.t('before_photos').toUpperCase(),
+          l10n.t('add_attachments').toUpperCase(),
           style: TextStyle(
             color: Colors.white.withAlpha(80),
             fontSize: 11,
@@ -822,31 +792,21 @@ class _CreateMaintenanceTicketScreenState
         ),
         const SizedBox(height: 8),
         Text(
-          l10n.t('before_photos_hint'),
+          l10n.t('add_attachments_hint'),
           style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            _attachmentButton(
-              icon: Icons.photo_library_outlined,
-              label: l10n.t('add_image'),
-              onTap: _uploading ? null : _pickAndUploadImage,
-            ),
-            const SizedBox(width: 12),
-            _attachmentButton(
-              icon: Icons.attach_file_rounded,
-              label: l10n.t('add_file'),
-              onTap: _uploading ? null : _pickAndUploadFile,
-            ),
-          ],
+        _attachmentButton(
+          icon: Icons.attach_file_rounded,
+          label: l10n.t('add_file'),
+          onTap: _uploading ? null : _pickAndUploadFile,
         ),
-        if (_beforePhotoUrls.isNotEmpty) ...[
+        if (_specAttachmentUrls.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _beforePhotoUrls.asMap().entries.map((e) {
+            children: _specAttachmentUrls.asMap().entries.map((e) {
               final url = e.value;
               final idx = e.key;
               final isImage = url.toLowerCase().contains('image') ||

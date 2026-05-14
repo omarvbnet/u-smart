@@ -102,9 +102,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           final role = (context.read<AuthProvider>().user?.role ?? '').toUpperCase();
           final onTicket =
               uid != null && (uid == t.assignedEngineerId || t.maintenanceCrewIds.contains(uid));
-          if (onTicket && (role == 'TECHNICIAN' || role == 'WORKER')) {
+          if (onTicket && (role == 'TECHNICIAN' || role == 'WORKER') && t.isInProgress) {
             _maintenanceBeforeUrls = List.from(t.beforeImageUrls);
             _maintenanceAfterUrls = List.from(t.finishingImageUrls);
+          } else if (t.isMaintenance) {
+            _maintenanceBeforeUrls = [];
+            _maintenanceAfterUrls = [];
           }
         }
       });
@@ -1912,7 +1915,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           uploading: _uploading,
           onPickImage: _pickAndUploadImage,
           onPickFile: _pickAndUploadFile,
-          showUploadButtons: !t.isCompleted,
+          showUploadButtons: !t.isCompleted &&
+              (!t.isMaintenance || t.isInProgress),
         ),
       ),
       // QC checklists: only for engineers on QC tickets (not maintenance)
