@@ -267,7 +267,7 @@ class _CompletePhoneRegistrationScreenState
                     isExpanded: true,
                     dropdownColor: const Color(0xFF1a1a2e),
                     style: const TextStyle(color: Colors.white, fontSize: 15),
-                    items: iraqProvinces
+                    items: kIraqProvinces
                         .map(
                           (p) => DropdownMenuItem<String?>(
                             value: p,

@@ -3,7 +3,7 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { viewerHasSharedSiteTicketRead, visitorRequestSiteLogicalId } from '@/lib/site-share-access';
-import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates } from '@/lib/ticket-detail-enrichment';
+import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates, embeddedTicketSiteCoords } from '@/lib/ticket-detail-enrichment';
 
 const prisma = _prisma as any;
 
@@ -62,12 +62,14 @@ export async function GET(
       let slaHours: number | null = null;
       let status = row.status ?? 'PENDING';
       let embeddedChecklistTemplateId: string | null = null;
+      let parsedCompany: unknown = {};
       try {
-        const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+        parsedCompany = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+        const parsed = parsedCompany as Record<string, unknown>;
         if (parsed._ticket) {
-          siteName = parsed.siteName ?? null;
-          siteCoordinator = parsed.siteCoordinator ?? null;
-          slaHours = parsed.slaHours ?? null;
+          siteName = (parsed.siteName as string) ?? null;
+          siteCoordinator = (parsed.siteCoordinator as string) ?? null;
+          slaHours = (parsed.slaHours as number) ?? null;
           if (parsed.status) status = String(parsed.status);
           if (typeof parsed.checklistTemplateId === 'string' && parsed.checklistTemplateId.trim()) {
             embeddedChecklistTemplateId = parsed.checklistTemplateId.trim();
@@ -78,10 +80,13 @@ export async function GET(
       }
 
       const effectiveTemplateId = row.checklistTemplateId ?? embeddedChecklistTemplateId;
+      const embedCoords = embeddedTicketSiteCoords(parsedCompany);
       const [siteCoords, checklistTpl] = await Promise.all([
         resolveTicketSiteCoordinates(prisma, siteName, row.requesterId ?? null),
         resolveInspectionChecklistTemplate(prisma, effectiveTemplateId),
       ]);
+      const mergedCoords =
+        Object.keys(embedCoords).length > 0 ? embedCoords : siteCoords;
 
       return NextResponse.json({
         success: true,
@@ -100,7 +105,7 @@ export async function GET(
           assignmentScope: row.assignmentScope ?? null,
           checklistTemplateId: checklistTpl.checklistTemplateId ?? row.checklistTemplateId ?? null,
           checklistTemplate: checklistTpl.checklistTemplate,
-          ...siteCoords,
+          ...mergedCoords,
           assigneeCoordinatorUserId: row.assigneeCoordinatorUserId ?? null,
           coordinatorCompanyId: row.coordinatorCompanyId ?? null,
           resubmitReason: row.resubmitReason ?? null,
@@ -393,10 +398,18 @@ export async function GET(
         : null;
     const effectiveTemplateId = dbChecklistTemplateId ?? embeddedChecklistTemplateId;
     const siteOwnerId = (row as { requesterId?: string | null }).requesterId ?? null;
+    let embedCoordsFromJson: { siteLatitude: number; siteLongitude: number } | Record<string, never> = {};
+    try {
+      embedCoordsFromJson = embeddedTicketSiteCoords(JSON.parse(row.company as string));
+    } catch {
+      /* ignore */
+    }
     const [siteCoords, checklistTpl] = await Promise.all([
       resolveTicketSiteCoordinates(prisma, siteName, siteOwnerId),
       resolveInspectionChecklistTemplate(prisma, effectiveTemplateId),
     ]);
+    const mergedSiteCoords =
+      Object.keys(embedCoordsFromJson).length > 0 ? embedCoordsFromJson : siteCoords;
 
     return NextResponse.json({
       success: true,
@@ -440,7 +453,7 @@ export async function GET(
         conflictResolvedAt,
         checklistTemplateId: checklistTpl.checklistTemplateId ?? effectiveTemplateId,
         checklistTemplate: checklistTpl.checklistTemplate,
-        ...siteCoords,
+        ...mergedSiteCoords,
       },
     });
   } catch (err) {

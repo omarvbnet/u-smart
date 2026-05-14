@@ -546,7 +546,7 @@ class _RegistrationRequestContentState extends State<_RegistrationRequestContent
           label: l10n.t('reg_province'),
           hint: l10n.t('reg_province_hint'),
           value: _selectedProvince,
-          items: iraqProvinces,
+          items: kIraqProvinces,
           onChanged: (v) => setState(() => _selectedProvince = v),
         ),
         if (!_isPersonalRole) ...[

@@ -81,10 +81,15 @@ export async function GET(req: NextRequest) {
     Math.max(10, parseInt(searchParams.get('damageLimit') ?? '100', 10) || 100)
   );
 
-  const [groupRows, materialsCatalog, assignedItems, usedItems, damageLossMovements] =
+  const [groupRows, provinceRows, materialsCatalog, assignedItems, usedItems, damageLossMovements] =
     await Promise.all([
       prisma.privateCompanyMaterialItem.groupBy({
         by: ['materialId', 'status'],
+        where: { companyId },
+        _count: { _all: true },
+      }),
+      prisma.privateCompanyMaterialItem.groupBy({
+        by: ['province', 'status'],
         where: { companyId },
         _count: { _all: true },
       }),
@@ -181,10 +186,45 @@ export async function GET(req: NextRequest) {
     a.name.localeCompare(b.name)
   );
 
+  type ProvRoll = {
+    province: string;
+    IN_WAREHOUSE: number;
+    ASSIGNED: number;
+    USED: number;
+    DAMAGED: number;
+    LOST: number;
+    RETIRED: number;
+  };
+  const provMap = new Map<string, ProvRoll>();
+  for (const row of provinceRows as Array<{ province: string; status: string; _count: { _all: number } }>) {
+    const p = row.province?.trim() || '—';
+    if (!provMap.has(p)) {
+      provMap.set(p, {
+        province: p,
+        IN_WAREHOUSE: 0,
+        ASSIGNED: 0,
+        USED: 0,
+        DAMAGED: 0,
+        LOST: 0,
+        RETIRED: 0,
+      });
+    }
+    const bucket = provMap.get(p)!;
+    const st = row.status as keyof Pick<
+      ProvRoll,
+      'IN_WAREHOUSE' | 'ASSIGNED' | 'USED' | 'DAMAGED' | 'LOST' | 'RETIRED'
+    >;
+    if (st in bucket) {
+      bucket[st] += row._count._all;
+    }
+  }
+  const provinceRollup = Array.from(provMap.values()).sort((a, b) => a.province.localeCompare(b.province));
+
   return NextResponse.json({
     success: true,
     inventoryScope: 'all',
     materialRollup,
+    provinceRollup,
     assignedItems,
     recentlyUsedItems: usedItems,
     damageAndLoss: damageLossMovements,

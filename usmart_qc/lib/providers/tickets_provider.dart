@@ -371,6 +371,8 @@ class TicketsProvider extends ChangeNotifier {
     required String technique,
     int slaHours = 24,
     String? province,
+    double? siteLatitude,
+    double? siteLongitude,
     String? designSpecifications,
     List<String>? attachmentUrls,
     String? maintenanceReason,
@@ -391,6 +393,13 @@ class TicketsProvider extends ChangeNotifier {
         'slaHours': slaHours,
         'province': province ?? 'N/A',
       };
+      if (siteLatitude != null &&
+          siteLongitude != null &&
+          siteLatitude.isFinite &&
+          siteLongitude.isFinite) {
+        body['siteLatitude'] = siteLatitude;
+        body['siteLongitude'] = siteLongitude;
+      }
       if (designSpecifications != null && designSpecifications.trim().isNotEmpty) {
         body['designSpecifications'] = designSpecifications.trim();
       }

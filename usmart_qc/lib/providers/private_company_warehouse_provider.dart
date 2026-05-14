@@ -524,10 +524,28 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
           },
           successMessage: 'Item transferred.');
 
-  Future<bool> returnItem(String id, {String? note}) =>
-      _itemAction(id, 'return',
-          body: {if (note != null) 'note': note},
-          successMessage: 'Item returned to warehouse.');
+  Future<bool> returnItem(
+    String id, {
+    String? note,
+    String returnCondition = 'new_good',
+  }) =>
+      _itemAction(
+        id,
+        'return',
+        body: {
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+          'returnCondition': returnCondition,
+        },
+        successMessage: 'Item returned to warehouse.',
+      );
+
+  Future<bool> confirmAssigneeHandover(String id, {String? note}) =>
+      _itemAction(
+        id,
+        'confirm-handover',
+        body: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
+        successMessage: 'Receipt confirmed.',
+      );
 
   Future<bool> useOnTicket(String id, String ticketId, {String? note, int? quantity}) =>
       _itemAction(id, 'use',
@@ -746,6 +764,7 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     String? responseNote,
     String? fulfilledItemId,
     String? receivedNote,
+    String? message,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -760,6 +779,7 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
             'fulfilledItemId': fulfilledItemId.trim(),
           if (receivedNote != null && receivedNote.trim().isNotEmpty)
             'receivedNote': receivedNote.trim(),
+          if (message != null && message.trim().isNotEmpty) 'message': message.trim(),
         },
       );
       if (res['success'] == true) {

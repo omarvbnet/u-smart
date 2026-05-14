@@ -1,5 +1,5 @@
-/// Iraq governorates (19 provinces) — shared by registration flows.
-const List<String> iraqProvinces = [
+/// Iraq governorates (shared by site form and ticket creation).
+const List<String> kIraqProvinces = [
   'Al-Anbar',
   'Babil',
   'Baghdad',

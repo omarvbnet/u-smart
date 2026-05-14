@@ -1,33 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/sites_provider.dart';
 import 'site_map_picker_screen.dart';
-
-/// Iraq provinces (19 governorates)
-const List<String> _iraqProvinces = [
-  'Al-Anbar',
-  'Babil',
-  'Baghdad',
-  'Basra',
-  'Dhi Qar',
-  'Al-Qadisiyyah',
-  'Diyala',
-  'Duhok',
-  'Erbil',
-  'Halabja',
-  'Karbala',
-  'Kirkuk',
-  'Maysan',
-  'Muthanna',
-  'Najaf',
-  'Ninawa',
-  'Salah Al-Din',
-  'Sulaymaniyah',
-  'Wasit',
-];
 
 /// Screen for adding a new site or editing an existing one.
 class SiteFormScreen extends StatefulWidget {
@@ -210,10 +188,10 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
             hint: l10n.t('site_province_hint'),
             value: _selectedProvince,
             items: [
-              ..._iraqProvinces,
+              ...kIraqProvinces,
               if (widget.isEditing &&
                   widget.site!.province.isNotEmpty &&
-                  !_iraqProvinces.contains(widget.site!.province))
+                  !kIraqProvinces.contains(widget.site!.province))
                 widget.site!.province,
             ],
             onChanged: widget.readOnly ? null : (v) => setState(() => _selectedProvince = v),

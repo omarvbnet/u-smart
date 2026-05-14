@@ -23,6 +23,62 @@ async function notifyRequesterRequestUpdated(requesterId: string, companyId: str
   }
 }
 
+async function idsWarehouseKeepers(companyId: string): Promise<string[]> {
+  const rows: Array<{ id: string }> = await prisma.ticketRequester.findMany({
+    where: {
+      privateCompanyId: companyId,
+      role: 'WAREHOUSE_KEEPER',
+      status: { not: 'BLOCKED' },
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+async function ownerRequesterId(companyId: string): Promise<string | null> {
+  const c = await prisma.privateCompany.findUnique({
+    where: { id: companyId },
+    select: { ownerRequesterId: true },
+  });
+  return (c?.ownerRequesterId as string) ?? null;
+}
+
+async function notifyKeepersReceiptDisputed(args: {
+  companyId: string;
+  requestId: string;
+  requesterLabel: string;
+  summary: string;
+  message: string;
+}) {
+  const ids = new Set(await idsWarehouseKeepers(args.companyId));
+  const oid = await ownerRequesterId(args.companyId);
+  if (oid) ids.add(oid);
+  for (const requesterId of ids) {
+    try {
+      await notifyRequesterI18n({
+        prisma,
+        type: 'material_request_receipt_disputed',
+        requesterId,
+        payload: {
+          key: 'material_request_receipt_disputed',
+          vars: {
+            requesterLabel: args.requesterLabel,
+            summary: args.summary,
+            message: args.message,
+          },
+        },
+        data: {
+          scope: 'private_company',
+          companyId: args.companyId,
+          materialRequestId: args.requestId,
+        },
+      });
+    } catch (e) {
+      console.error('notifyKeepersReceiptDisputed', requesterId, e);
+    }
+  }
+}
+
 const REQUEST_INCLUDE = {
   requester: { select: { id: true, name: true, username: true, phone: true, role: true } },
   material: { select: { id: true, name: true, unit: true } },
@@ -33,10 +89,13 @@ const REQUEST_INCLUDE = {
  * PATCH /api/provisor-private-company/warehouse/requests/:id
  *
  * Body:
- *   { action: 'accept' | 'reject' | 'fulfill' | 'cancel' | 'confirm_received',
+ *   { action:
+ *       'accept' | 'reject' | 'fulfill' | 'cancel' | 'confirm_received'
+ *       | 'report_not_received' | 'keeper_ack_receipt_issue' | 'keeper_clear_receipt_issue',
  *     responseNote?: string,
  *     fulfilledItemId?: string,
- *     receivedNote?: string   // optional, for confirm_received
+ *     receivedNote?: string,
+ *     message?: string   // required for report_not_received
  *   }
  */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -54,7 +113,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   const row = await prisma.privateCompanyMaterialRequest.findFirst({
     where: { id, companyId: guard.companyId },
-    select: { id: true, status: true, requesterId: true, responderId: true },
+    select: {
+      id: true,
+      status: true,
+      requesterId: true,
+      responderId: true,
+      quantity: true,
+      customTitle: true,
+      notReceivedAt: true,
+      material: { select: { name: true } },
+    },
   });
   if (!row) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
 
@@ -77,6 +145,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         status: 'FULFILLED',
         receivedAt: new Date(),
         receivedNote: receivedNote ?? null,
+        notReceivedAt: null,
+        notReceivedNote: null,
+        receiptIssueAcknowledgedAt: null,
+        receiptIssueAcknowledgedById: null,
       },
       include: REQUEST_INCLUDE,
     });
@@ -109,6 +181,61 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ success: true, request: updated });
   }
 
+  if (action === 'report_not_received') {
+    if (row.requesterId !== guard.requesterId) {
+      return NextResponse.json(
+        { success: false, message: 'Only the requester can report a receipt problem.' },
+        { status: 403 }
+      );
+    }
+    if (row.status !== 'AWAITING_RECEIPT') {
+      return NextResponse.json(
+        { success: false, message: 'You can only report a problem while the request awaits your receipt confirmation.' },
+        { status: 409 }
+      );
+    }
+    const message = typeof body?.message === 'string' ? body.message.trim() : '';
+    if (!message) {
+      return NextResponse.json(
+        { success: false, message: 'Please describe what was missing or wrong.' },
+        { status: 400 }
+      );
+    }
+    const updated = await prisma.privateCompanyMaterialRequest.update({
+      where: { id },
+      data: {
+        notReceivedAt: new Date(),
+        notReceivedNote: message,
+        receiptIssueAcknowledgedAt: null,
+        receiptIssueAcknowledgedById: null,
+      },
+      include: REQUEST_INCLUDE,
+    });
+    const reqLabelRow = await prisma.ticketRequester.findUnique({
+      where: { id: row.requesterId as string },
+      select: { name: true, username: true },
+    });
+    const requesterLabel =
+      reqLabelRow?.name?.trim() || reqLabelRow?.username?.trim() || 'Staff';
+    const matName = (row.material as { name?: string } | null)?.name?.trim();
+    const summary =
+      matName && matName.length > 0
+        ? `${matName} × ${row.quantity}`
+        : `${(row.customTitle as string | null)?.trim() || 'Custom'} × ${row.quantity}`;
+    await notifyKeepersReceiptDisputed({
+      companyId: guard.companyId,
+      requestId: id,
+      requesterLabel,
+      summary,
+      message,
+    });
+    return NextResponse.json({
+      success: true,
+      request: updated,
+      message: 'Warehouse has been notified. A keeper will follow up.',
+    });
+  }
+
   if (!guard.canMutateWarehouse) {
     return NextResponse.json(
       { success: false, message: 'Only a warehouse keeper or the owner can update this request.' },
@@ -117,6 +244,91 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   const st = String(row.status);
+
+  if (action === 'keeper_ack_receipt_issue') {
+    if (st !== 'AWAITING_RECEIPT') {
+      return NextResponse.json(
+        { success: false, message: 'Receipt issues can only be acknowledged while awaiting receipt.' },
+        { status: 409 }
+      );
+    }
+    if (!row.notReceivedAt) {
+      return NextResponse.json(
+        { success: false, message: 'There is no open receipt issue on this request.' },
+        { status: 409 }
+      );
+    }
+    const updated = await prisma.privateCompanyMaterialRequest.update({
+      where: { id },
+      data: {
+        receiptIssueAcknowledgedAt: new Date(),
+        receiptIssueAcknowledgedById: guard.requesterId,
+      },
+      include: REQUEST_INCLUDE,
+    });
+    try {
+      await notifyRequesterI18n({
+        prisma,
+        type: 'material_request_issue_acknowledged',
+        requesterId: row.requesterId as string,
+        payload: {
+          key: 'material_request_issue_acknowledged',
+          vars: {},
+        },
+        data: {
+          scope: 'private_company',
+          companyId: guard.companyId,
+          materialRequestId: id,
+        },
+      });
+    } catch (e) {
+      console.error('keeper_ack notify', e);
+    }
+    return NextResponse.json({
+      success: true,
+      request: updated,
+      message: 'Receipt issue acknowledged. Coordinate re-delivery with the requester if needed.',
+    });
+  }
+
+  if (action === 'keeper_clear_receipt_issue') {
+    if (st !== 'AWAITING_RECEIPT') {
+      return NextResponse.json(
+        { success: false, message: 'Only open awaiting-receipt requests can be reset.' },
+        { status: 409 }
+      );
+    }
+    const updated = await prisma.privateCompanyMaterialRequest.update({
+      where: { id },
+      data: {
+        notReceivedAt: null,
+        notReceivedNote: null,
+        receiptIssueAcknowledgedAt: null,
+        receiptIssueAcknowledgedById: null,
+      },
+      include: REQUEST_INCLUDE,
+    });
+    try {
+      await notifyRequesterI18n({
+        prisma,
+        type: 'material_request_updated',
+        requesterId: row.requesterId as string,
+        payload: {
+          key: 'material_request_updated',
+          vars: { status: 'AWAITING_RECEIPT' },
+        },
+        data: { scope: 'private_company', companyId: guard.companyId, materialRequestId: id },
+      });
+    } catch (e) {
+      console.error('keeper_clear notify', e);
+    }
+    return NextResponse.json({
+      success: true,
+      request: updated,
+      message: 'Receipt issue flags cleared. The requester can confirm when materials arrive.',
+    });
+  }
+
   let nextStatus: string | null = null;
   if (action === 'accept') {
     if (st !== 'PENDING') {
@@ -166,6 +378,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       fulfilledItemId: action === 'fulfill' ? fulfilledItemId : null,
       receivedAt: action === 'fulfill' ? null : null,
       receivedNote: action === 'fulfill' ? null : null,
+      ...(action === 'fulfill'
+        ? {
+            notReceivedAt: null,
+            notReceivedNote: null,
+            receiptIssueAcknowledgedAt: null,
+            receiptIssueAcknowledgedById: null,
+          }
+        : {}),
     },
     include: REQUEST_INCLUDE,
   });

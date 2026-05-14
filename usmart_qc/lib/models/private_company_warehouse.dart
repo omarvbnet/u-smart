@@ -470,6 +470,9 @@ class MaterialRequest {
     this.fulfilledItemId,
     this.receivedAt,
     this.receivedNote,
+    this.notReceivedAt,
+    this.notReceivedNote,
+    this.receiptIssueAcknowledgedAt,
     this.createdAt,
   });
 
@@ -492,7 +495,12 @@ class MaterialRequest {
   final String? fulfilledItemId;
   final DateTime? receivedAt;
   final String? receivedNote;
+  final DateTime? notReceivedAt;
+  final String? notReceivedNote;
+  final DateTime? receiptIssueAcknowledgedAt;
   final DateTime? createdAt;
+
+  bool get hasOpenReceiptIssue => notReceivedAt != null;
 
   String get summaryLine {
     if (kind == MaterialRequestKind.custom) {
@@ -528,6 +536,13 @@ class MaterialRequest {
           ? DateTime.tryParse(json['receivedAt'].toString())
           : null,
       receivedNote: json['receivedNote'] as String?,
+      notReceivedAt: json['notReceivedAt'] != null
+          ? DateTime.tryParse(json['notReceivedAt'].toString())
+          : null,
+      notReceivedNote: json['notReceivedNote'] as String?,
+      receiptIssueAcknowledgedAt: json['receiptIssueAcknowledgedAt'] != null
+          ? DateTime.tryParse(json['receiptIssueAcknowledgedAt'].toString())
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,

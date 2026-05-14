@@ -23,7 +23,9 @@ export type NotificationCopyKey =
   | 'material_assigned'
   | 'material_used'
   | 'material_request_created'
-  | 'material_request_updated';
+  | 'material_request_updated'
+  | 'material_request_receipt_disputed'
+  | 'material_request_issue_acknowledged';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -574,6 +576,42 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: 'داواکاری کەرەستەکەت نوێکرایەوە',
       body: `دۆخ: ${MATERIAL_REQUEST_STATUS_LABEL.ku[v.status] ?? v.status}.`,
+    }),
+  },
+  material_request_receipt_disputed: {
+    en: (v) => ({
+      title: 'Receipt problem reported',
+      body: `${v.requesterLabel} — ${v.summary}. "${v.message}"`,
+    }),
+    ar: (v) => ({
+      title: 'تم الإبلاغ عن مشكلة في الاستلام',
+      body: `${v.requesterLabel} — ${v.summary}. «${v.message}»`,
+    }),
+    tr: (v) => ({
+      title: 'Teslim sorunu bildirildi',
+      body: `${v.requesterLabel} — ${v.summary}. "${v.message}"`,
+    }),
+    ku: (v) => ({
+      title: 'کێشەی وەرگرتن ڕاگەیەنرا',
+      body: `${v.requesterLabel} — ${v.summary}. «${v.message}»`,
+    }),
+  },
+  material_request_issue_acknowledged: {
+    en: () => ({
+      title: 'Warehouse acknowledged your receipt report',
+      body: 'A keeper has acknowledged your report. Please confirm when materials arrive, or contact the warehouse.',
+    }),
+    ar: () => ({
+      title: 'المستودع أقرّ بتقريرك',
+      body: 'أقرّ أحد أمناء المستودع بتقريرك. أكد الاستلام عند وصول المواد أو تواصل مع المستودع.',
+    }),
+    tr: () => ({
+      title: 'Depo bildiriminizi onayladı',
+      body: 'Bir depo sorumlusu bildiriminizi kaydetti. Malzemeler gelince onaylayın veya depoyla iletişime geçin.',
+    }),
+    ku: () => ({
+      title: 'کۆگا ڕاپۆرتەکەت پشتڕاست کرد',
+      body: 'پارێزەرێک ڕاپۆرتەکەت قبووڵ کرد. کاتێک کەرەستەکان گەیشتن پشتڕاستی بکەرەوە یان پەیوەندی بە کۆگاوە بکە.',
     }),
   },
   workspace_announcement: {

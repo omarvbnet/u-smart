@@ -1776,7 +1776,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: iraqProvinces.map((p) {
+                  children: kIraqProvinces.map((p) {
                     final selected = _province == p;
                     return GestureDetector(
                       onTap: () => setState(() => _province = p),
@@ -2879,7 +2879,7 @@ class _BroadcastSheetState extends State<_BroadcastSheet> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: iraqProvinces.map((p) {
+                  children: kIraqProvinces.map((p) {
                     final selected = _provinces.contains(p);
                     return GestureDetector(
                       onTap: () => setState(() {
@@ -4447,6 +4447,7 @@ class _WarehouseKeeperTrackingSections extends StatelessWidget {
     if (t == null || t['success'] != true) return const SizedBox.shrink();
 
     final rollup = (t['materialRollup'] as List?) ?? const [];
+    final provRoll = (t['provinceRollup'] as List?) ?? const [];
     final assigned = (t['assignedItems'] as List?) ?? const [];
     final used = (t['recentlyUsedItems'] as List?) ?? const [];
     final dmg = (t['damageAndLoss'] as List?) ?? const [];
@@ -4461,6 +4462,43 @@ class _WarehouseKeeperTrackingSections extends StatelessWidget {
           style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11, height: 1.35),
         ),
         const SizedBox(height: 12),
+        if (provRoll.isNotEmpty)
+          _GlassCard(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('By province (counts by status)',
+                      style: TextStyle(
+                          color: Colors.white.withAlpha(200),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  for (final raw in provRoll.take(24))
+                    Builder(
+                      builder: (_) {
+                        final m = raw as Map<String, dynamic>;
+                        final p = m['province'] as String? ?? '—';
+                        final iw = (m['IN_WAREHOUSE'] as num?)?.toInt() ?? 0;
+                        final asg = (m['ASSIGNED'] as num?)?.toInt() ?? 0;
+                        final u = (m['USED'] as num?)?.toInt() ?? 0;
+                        final d = (m['DAMAGED'] as num?)?.toInt() ?? 0;
+                        final l = (m['LOST'] as num?)?.toInt() ?? 0;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            '$p — in stock $iw · assigned $asg · used $u · damaged $d · lost $l',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        if (provRoll.isNotEmpty) const SizedBox(height: 14),
         if (rollup.isNotEmpty)
           _GlassCard(
             child: Padding(
@@ -5474,6 +5512,13 @@ class _MaterialRequestTile extends StatelessWidget {
                     label: materialRequestStatusLabel(request.status),
                     color: stColor,
                   ),
+                  if (request.hasOpenReceiptIssue) ...[
+                    const SizedBox(width: 6),
+                    _StaffBadge(
+                      label: 'Receipt issue',
+                      color: const Color(0xFFFF4757),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 6),
@@ -5701,7 +5746,7 @@ class _NewMaterialRequestSheetState extends State<_NewMaterialRequestSheet> {
                       selected: _province == null,
                       onSelected: (_) => setState(() => _province = null),
                     ),
-                    ...iraqProvinces.map((p) {
+                    ...kIraqProvinces.map((p) {
                       final selected = _province == p;
                       return ChoiceChip(
                         label: Text(p, style: const TextStyle(fontSize: 11)),
@@ -5859,12 +5904,84 @@ class _MaterialRequestDetailSheet extends StatelessWidget {
                   Text('Your note: ${request.receivedNote}',
                       style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12)),
               ],
+              if (request.hasOpenReceiptIssue) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF4757).withAlpha(35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFF4757).withAlpha(90)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Receipt problem reported',
+                        style: TextStyle(
+                          color: Color(0xFFFF8A94),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        request.notReceivedNote ?? '',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.35),
+                      ),
+                      if (request.receiptIssueAcknowledgedAt != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Keeper acknowledged: ${request.receiptIssueAcknowledgedAt!.toLocal().toString().split('.').first}',
+                          style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 11),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               if (canRespond && isAwaitingReceipt) ...[
                 const SizedBox(height: 14),
                 Text(
-                  'Materials were dispatched. The requester must tap “Confirm receipt” on their device to close this request.',
+                  request.hasOpenReceiptIssue
+                      ? 'The requester reported a receipt problem. Acknowledge after you contact them, or clear the flag after re-delivery so they can confirm.'
+                      : 'Materials were dispatched. The requester must confirm receipt (Yes) or report a problem (No) on their device.',
                   style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 12),
                 ),
+                if (request.hasOpenReceiptIssue) ...[
+                  const SizedBox(height: 10),
+                  if (request.receiptIssueAcknowledgedAt == null)
+                    _GradientButton(
+                      onPressed: wh.submitting
+                          ? null
+                          : () async {
+                              final ok = await wh.patchMaterialRequest(
+                                request.id,
+                                action: 'keeper_ack_receipt_issue',
+                              );
+                              if (ok && context.mounted) Navigator.pop(context);
+                            },
+                      label: 'Acknowledge receipt issue',
+                      icon: Icons.thumb_up_alt_outlined,
+                      stretch: true,
+                    ),
+                  if (request.receiptIssueAcknowledgedAt == null) const SizedBox(height: 8),
+                  _GradientButton(
+                    onPressed: wh.submitting
+                        ? null
+                        : () async {
+                            final ok = await wh.patchMaterialRequest(
+                              request.id,
+                              action: 'keeper_clear_receipt_issue',
+                            );
+                            if (ok && context.mounted) Navigator.pop(context);
+                          },
+                    label: 'Clear issue flag (after fix / re-delivery)',
+                    icon: Icons.cleaning_services_rounded,
+                    stretch: true,
+                  ),
+                ],
               ],
               if (keeperCanProgress) ...[
                 const SizedBox(height: 18),
@@ -5933,28 +6050,72 @@ class _MaterialRequestDetailSheet extends StatelessWidget {
               if (isMine && isAwaitingReceipt) ...[
                 const SizedBox(height: 18),
                 Text(
-                  'The warehouse marked this as dispatched. Confirm once you have the materials in hand.',
-                  style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 12),
+                  'Did you receive ${request.summaryLine}?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                _GradientButton(
-                  onPressed: wh.submitting
-                      ? null
-                      : () async {
-                          final note = await _promptNote(
-                            context, 'Optional note (e.g. received in good condition)',
-                          );
-                          if (!context.mounted) return;
-                          final ok = await wh.patchMaterialRequest(
-                            request.id,
-                            action: 'confirm_received',
-                            receivedNote: note,
-                          );
-                          if (ok && context.mounted) Navigator.pop(context);
-                        },
-                  label: 'Confirm receipt',
-                  icon: Icons.inventory_2_rounded,
-                  stretch: true,
+                const SizedBox(height: 6),
+                Text(
+                  'If Yes, inventory stays aligned with your confirmation. If No, warehouse keepers are notified and can acknowledge or clear the flag after helping you.',
+                  style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11, height: 1.35),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GradientButton(
+                        onPressed: wh.submitting
+                            ? null
+                            : () async {
+                                final note = await _promptNote(
+                                  context,
+                                  'Optional note (e.g. received in good condition)',
+                                );
+                                if (!context.mounted) return;
+                                final ok = await wh.patchMaterialRequest(
+                                  request.id,
+                                  action: 'confirm_received',
+                                  receivedNote: note,
+                                );
+                                if (ok && context.mounted) Navigator.pop(context);
+                              },
+                        label: 'Yes — received',
+                        icon: Icons.check_circle_outline_rounded,
+                        stretch: true,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: wh.submitting
+                            ? null
+                            : () async {
+                                final msg = await _promptNote(
+                                  context,
+                                  'What is missing or wrong? (required)',
+                                );
+                                if (msg == null || msg.trim().isEmpty) return;
+                                if (!context.mounted) return;
+                                final ok = await wh.patchMaterialRequest(
+                                  request.id,
+                                  action: 'report_not_received',
+                                  message: msg.trim(),
+                                );
+                                if (ok && context.mounted) Navigator.pop(context);
+                              },
+                        icon: const Icon(Icons.error_outline_rounded, color: Color(0xFFFF8A94)),
+                        label: const Text('No — not received'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFF8A94),
+                          side: const BorderSide(color: Color(0xFFFF4757)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
               if (isMine && isPending) ...[
@@ -7012,7 +7173,7 @@ class _StockItemsSheetState extends State<_StockItemsSheet> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: iraqProvinces.map((p) {
+                  children: kIraqProvinces.map((p) {
                     final selected = _province == p;
                     return GestureDetector(
                       onTap: () => setState(() => _province = p),
@@ -7185,7 +7346,7 @@ class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: iraqProvinces.map((p) {
+                  children: kIraqProvinces.map((p) {
                     final selected = _province == p;
                     return GestureDetector(
                       onTap: () =>
@@ -7295,6 +7456,11 @@ class _ItemActionsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
     final pc = context.watch<PrivateCompanyProvider>();
+    final uid = context.watch<AuthProvider>().user?.id;
+    final isAssigneeSelf = uid != null &&
+        item.assignedToId == uid &&
+        item.handoverPending &&
+        item.status == MaterialItemStatus.assigned;
     final isHolder = item.assignedToId != null &&
         pc.workspace?.staff.any((s) => s.id == item.assignedToId) == true;
     final canAssign = canManage &&
@@ -7378,6 +7544,35 @@ class _ItemActionsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
+              if (isAssigneeSelf)
+                _ActionTile(
+                  icon: Icons.how_to_reg_rounded,
+                  label: 'I received this — confirm handover',
+                  color: const Color(0xFF22C55E),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final note = await _promptNote(
+                      anchorContext,
+                      'Optional note (e.g. received complete)',
+                    );
+                    if (!anchorContext.mounted) return;
+                    final success = await wh.confirmAssigneeHandover(
+                      item.id,
+                      note: note,
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success
+                              ? (wh.lastSuccess ?? 'Confirmed.')
+                              : (wh.error ?? 'Could not confirm.'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              if (isAssigneeSelf) const SizedBox(height: 10),
               if (canAssign)
                 _ActionTile(
                   icon: Icons.person_add_alt_1_rounded,
@@ -7437,7 +7632,26 @@ class _ItemActionsSheet extends StatelessWidget {
                   color: const Color(0xFF6C63FF),
                   onTap: () async {
                     Navigator.pop(context);
-                    await wh.returnItem(item.id);
+                    final label =
+                        '${item.materialName ?? 'Item'} — SN ${item.serialNumber} ×${item.quantity}';
+                    final pair = await _promptReturnToWarehouse(anchorContext, label);
+                    if (pair == null || pair.length < 2) return;
+                    if (!anchorContext.mounted) return;
+                    final ok = await wh.returnItem(
+                      item.id,
+                      returnCondition: pair[0],
+                      note: pair[1],
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (wh.lastSuccess ?? 'Returned.')
+                              : (wh.error ?? 'Return failed.'),
+                        ),
+                      ),
+                    );
                   },
                 ),
               if (canUse)
@@ -8107,6 +8321,86 @@ Future<(String, String?)?> _pickTicket(BuildContext context) async {
       ),
     ),
   );
+}
+
+/// Returns `[returnCondition, reason]` where [0] is `new_good`, `used`, or `damaged`.
+Future<List<String>?> _promptReturnToWarehouse(
+  BuildContext context,
+  String materialLabel,
+) async {
+  String condition = 'new_good';
+  final reason = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          'Return to warehouse',
+          style: TextStyle(color: Colors.white.withAlpha(230)),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                materialLabel,
+                style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'What state is the material in?',
+                style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'new_good', label: Text('New')),
+                  ButtonSegment(value: 'used', label: Text('Used')),
+                  ButtonSegment(value: 'damaged', label: Text('Damaged')),
+                ],
+                selected: {condition},
+                onSelectionChanged: (s) => setLocal(() => condition = s.first),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: reason,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Reason (required)',
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(120)),
+                  filled: true,
+                  fillColor: Colors.white.withAlpha(8),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.white.withAlpha(160))),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (reason.text.trim().isEmpty) return;
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Return'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (ok != true) {
+    reason.dispose();
+    return null;
+  }
+  final r = reason.text.trim();
+  reason.dispose();
+  return [condition, r];
 }
 
 Future<String?> _promptNote(BuildContext context, String title) async {

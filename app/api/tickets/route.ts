@@ -730,6 +730,22 @@ export async function POST(req: NextRequest) {
     const maintenanceReason = typeof body.maintenanceReason === 'string' ? body.maintenanceReason.trim() : '';
     const beforeImageUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
 
+    let embedSiteLat: number | undefined;
+    let embedSiteLng: number | undefined;
+    const rawLat = body.siteLatitude;
+    const rawLng = body.siteLongitude;
+    if (typeof rawLat === 'number' && typeof rawLng === 'number' && Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+      embedSiteLat = rawLat;
+      embedSiteLng = rawLng;
+    } else if (typeof rawLat === 'string' && typeof rawLng === 'string') {
+      const la = parseFloat(rawLat.trim());
+      const lo = parseFloat(rawLng.trim());
+      if (Number.isFinite(la) && Number.isFinite(lo)) {
+        embedSiteLat = la;
+        embedSiteLng = lo;
+      }
+    }
+
     const explicitSpecTags = normalizeSpecializationTags(body.specializationTags);
     const specializationTags =
       explicitSpecTags.length > 0 ? explicitSpecTags : deriveSpecializationTagsFromTechnique(technique);
@@ -743,6 +759,10 @@ export async function POST(req: NextRequest) {
       designSpecifications: designSpecifications || null,
       attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : null,
     };
+    if (embedSiteLat !== undefined && embedSiteLng !== undefined) {
+      companyPayloadObj.siteLatitude = embedSiteLat;
+      companyPayloadObj.siteLongitude = embedSiteLng;
+    }
     if (coordinatorContext) {
       companyPayloadObj.taskCategory = coordinatorTaskCategory;
       companyPayloadObj.roleScope = coordinatorRoleScope;
@@ -922,6 +942,45 @@ export async function POST(req: NextRequest) {
       }
     } catch (_) {
       /* ignore */
+    }
+
+    if (
+      !coordinatorContext &&
+      payload?.requesterId &&
+      embedSiteLat !== undefined &&
+      embedSiteLng !== undefined &&
+      siteName
+    ) {
+      const siteProvince =
+        province && province.trim() && province.trim() !== 'N/A'
+          ? province.trim()
+          : 'Baghdad';
+      try {
+        await prisma.site.upsert({
+          where: {
+            requesterId_siteId: {
+              requesterId: payload.requesterId,
+              siteId: siteName,
+            },
+          },
+          create: {
+            requesterId: payload.requesterId,
+            siteId: siteName,
+            location: siteCoordinator,
+            province: siteProvince,
+            latitude: embedSiteLat,
+            longitude: embedSiteLng,
+          },
+          update: {
+            location: siteCoordinator,
+            province: siteProvince,
+            latitude: embedSiteLat,
+            longitude: embedSiteLng,
+          },
+        });
+      } catch (e) {
+        console.warn('POST /api/tickets: site upsert skipped', e);
+      }
     }
 
     if (!payload) {

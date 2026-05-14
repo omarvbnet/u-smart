@@ -23,6 +23,7 @@ import 'ticket_detail_screen.dart';
 import 'ticket_type_picker_screen.dart';
 import 'conflicts_screen.dart';
 import 'site_form_screen.dart';
+import 'create_ticket_screen.dart';
 import 'filtered_tickets_screen.dart';
 import 'company_provisor_hub_screen.dart';
 import 'private_company_hub_screen.dart';
@@ -902,11 +903,24 @@ class _TicketSection {
 }
 
 // ─── Sites Tab ───
-class _SitesTab extends StatelessWidget {
+class _SitesTab extends StatefulWidget {
   const _SitesTab({this.allowCreateSite = true});
 
   /// Technicians can open the Sites tab but cannot register new sites from the app.
   final bool allowCreateSite;
+
+  @override
+  State<_SitesTab> createState() => _SitesTabState();
+}
+
+class _SitesTabState extends State<_SitesTab> {
+  final TextEditingController _siteSearchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _siteSearchCtrl.dispose();
+    super.dispose();
+  }
 
   static String _fmtSiteHours(double h) {
     if (h <= 0) return '0';
@@ -1040,7 +1054,35 @@ class _SitesTab extends StatelessWidget {
             Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: TextField(
+                    controller: _siteSearchCtrl,
+                    onChanged: (_) => setState(() {}),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: l10n.t('site_search_by_id'),
+                      hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+                      prefixIcon: Icon(Icons.search_rounded, color: Colors.white.withAlpha(120)),
+                      filled: true,
+                      fillColor: const Color(0xFF12122A),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.white.withAlpha(14)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: Row(
                     children: [
                       ShaderMask(
@@ -1089,7 +1131,7 @@ class _SitesTab extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (allowCreateSite) const SiteBulkImportMenu(),
+                      if (widget.allowCreateSite) const SiteBulkImportMenu(),
                     ],
                   ),
                 ),
@@ -1120,7 +1162,7 @@ class _SitesTab extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              if (allowCreateSite) ...[
+                              if (widget.allowCreateSite) ...[
                                 const SizedBox(height: 24),
                                 ElevatedButton.icon(
                                   onPressed: () => Navigator.of(context)
@@ -1152,11 +1194,41 @@ class _SitesTab extends StatelessWidget {
                       : RefreshIndicator(
                           onRefresh: provider.fetchSites,
                           color: const Color(0xFF6C63FF),
-                          child: ListView.builder(
+                          child: Builder(
+                            builder: (context) {
+                              final q = _siteSearchCtrl.text.trim().toLowerCase();
+                              final all = provider.sites;
+                              final visible = q.isEmpty
+                                  ? all
+                                  : all
+                                      .where(
+                                        (s) =>
+                                            s.siteId.toLowerCase().contains(q) ||
+                                            s.id.toLowerCase().contains(q),
+                                      )
+                                      .toList();
+                              if (visible.isEmpty) {
+                                return ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  children: [
+                                    const SizedBox(height: 48),
+                                    Center(
+                                      child: Text(
+                                        l10n.t('no_sites'),
+                                        style: TextStyle(
+                                          color: Colors.white.withAlpha(160),
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+                              return ListView.builder(
                             padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
-                            itemCount: provider.sites.length,
+                            itemCount: visible.length,
                             itemBuilder: (context, index) {
-                              final site = provider.sites[index];
+                              final site = visible[index];
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.symmetric(
@@ -1290,6 +1362,21 @@ class _SitesTab extends StatelessWidget {
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        IconButton(
+                                          onPressed: () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => CreateTicketScreen(
+                                                prefillSite: site,
+                                              ),
+                                            ),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.note_add_outlined,
+                                            color: Color(0xFF00D4AA),
+                                            size: 20,
+                                          ),
+                                          tooltip: l10n.t('site_create_ticket_here'),
+                                        ),
                                         if (site.canEdit) ...[
                                           IconButton(
                                             onPressed: () => Navigator.of(
@@ -1411,12 +1498,14 @@ class _SitesTab extends StatelessWidget {
                                 ),
                               );
                             },
+                          );
+                            },
                           ),
                         ),
                 ),
               ],
             ),
-            if (allowCreateSite)
+            if (widget.allowCreateSite)
               Positioned(
                 right: 20,
                 bottom: 24,

@@ -15,6 +15,7 @@ import '../widgets/ticket_card.dart';
 import 'ticket_detail_screen.dart';
 import 'notifications_screen.dart';
 import 'site_form_screen.dart';
+import 'create_ticket_screen.dart';
 import 'conflict_detail_screen.dart';
 import 'ticket_type_picker_screen.dart';
 import '../providers/sites_provider.dart';
@@ -1431,8 +1432,21 @@ class _EngineerAnalyticsTab extends StatelessWidget {
 }
 
 // ─── Engineer Sites Tab ───
-class _EngineerSitesTab extends StatelessWidget {
+class _EngineerSitesTab extends StatefulWidget {
   const _EngineerSitesTab();
+
+  @override
+  State<_EngineerSitesTab> createState() => _EngineerSitesTabState();
+}
+
+class _EngineerSitesTabState extends State<_EngineerSitesTab> {
+  final TextEditingController _siteSearchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _siteSearchCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirmDelete(
     BuildContext context,
@@ -1559,7 +1573,35 @@ class _EngineerSitesTab extends StatelessWidget {
             Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: TextField(
+                    controller: _siteSearchCtrl,
+                    onChanged: (_) => setState(() {}),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: l10n.t('site_search_by_id'),
+                      hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+                      prefixIcon: Icon(Icons.search_rounded, color: Colors.white.withAlpha(120)),
+                      filled: true,
+                      fillColor: const Color(0xFF12122A),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.white.withAlpha(14)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: Row(
                     children: [
                       ShaderMask(
@@ -1653,11 +1695,41 @@ class _EngineerSitesTab extends StatelessWidget {
                       : RefreshIndicator(
                           onRefresh: provider.fetchSites,
                           color: const Color(0xFF6C63FF),
-                          child: ListView.builder(
+                          child: Builder(
+                            builder: (context) {
+                              final q = _siteSearchCtrl.text.trim().toLowerCase();
+                              final all = provider.sites;
+                              final visible = q.isEmpty
+                                  ? all
+                                  : all
+                                      .where(
+                                        (s) =>
+                                            s.siteId.toLowerCase().contains(q) ||
+                                            s.id.toLowerCase().contains(q),
+                                      )
+                                      .toList();
+                              if (visible.isEmpty) {
+                                return ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  children: [
+                                    const SizedBox(height: 48),
+                                    Center(
+                                      child: Text(
+                                        l10n.t('no_sites'),
+                                        style: TextStyle(
+                                          color: Colors.white.withAlpha(160),
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+                              return ListView.builder(
                             padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
-                            itemCount: provider.sites.length,
+                            itemCount: visible.length,
                             itemBuilder: (context, index) {
-                              final site = provider.sites[index];
+                              final site = visible[index];
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.symmetric(
@@ -1763,6 +1835,21 @@ class _EngineerSitesTab extends StatelessWidget {
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        IconButton(
+                                          onPressed: () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => CreateTicketScreen(
+                                                prefillSite: site,
+                                              ),
+                                            ),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.note_add_outlined,
+                                            color: Color(0xFF00D4AA),
+                                            size: 20,
+                                          ),
+                                          tooltip: l10n.t('site_create_ticket_here'),
+                                        ),
                                         if (site.canEdit) ...[
                                           IconButton(
                                             onPressed: () => Navigator.of(context)
@@ -1835,6 +1922,8 @@ class _EngineerSitesTab extends StatelessWidget {
                                   ],
                                 ),
                               );
+                            },
+                          );
                             },
                           ),
                         ),

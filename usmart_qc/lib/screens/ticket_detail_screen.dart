@@ -1006,52 +1006,38 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       }
     } catch (_) {}
 
+    Future<bool> tryLaunch(Uri u) async {
+      try {
+        if (await canLaunchUrl(u)) {
+          return launchUrl(u, mode: LaunchMode.externalApplication);
+        }
+      } catch (_) {}
+      return false;
+    }
+
+    // Waze officially documents destination + navigate=yes; routing starts from the device's current GPS position.
+    // The undocumented `from=` parameter often prevents proper handoff to the app on iOS.
+    final wazeWebDest = Uri.parse(
+      'https://www.waze.com/ul?ll=$dest&navigate=yes&zoom=17',
+    );
+    final wazeAppDest = Uri.parse('waze://?ll=$dest&navigate=yes');
+
+    if (await tryLaunch(wazeAppDest)) return;
+    if (await tryLaunch(wazeWebDest)) return;
+
     if (pos != null) {
       final oLat = pos.latitude.toStringAsFixed(6);
       final oLng = pos.longitude.toStringAsFixed(6);
-      final wazeRoute = Uri.parse(
-        'https://waze.com/ul?ll=$dest&from=$oLat,$oLng&navigate=yes',
-      );
-      try {
-        if (await canLaunchUrl(wazeRoute)) {
-          final ok = await launchUrl(wazeRoute, mode: LaunchMode.externalApplication);
-          if (ok) return;
-        }
-      } catch (_) {}
-
       final googleDir = Uri.parse(
         'https://www.google.com/maps/dir/?api=1&origin=$oLat,$oLng&destination=$dLat,$dLng&travelmode=driving',
       );
-      try {
-        if (await canLaunchUrl(googleDir)) {
-          final ok = await launchUrl(googleDir, mode: LaunchMode.externalApplication);
-          if (ok) return;
-        }
-      } catch (_) {}
+      if (await tryLaunch(googleDir)) return;
     }
 
-    final ll = dest;
-    final appUri = Uri.parse('waze://?ll=$ll&navigate=yes');
-    final webUri = Uri.parse('https://waze.com/ul?ll=$ll&navigate=yes');
-    try {
-      if (await canLaunchUrl(appUri)) {
-        final ok = await launchUrl(appUri, mode: LaunchMode.externalApplication);
-        if (ok) return;
-      }
-    } catch (_) {}
-    try {
-      final ok = await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.t('site_navigate_failed'))),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.t('site_navigate_failed'))),
-        );
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('site_navigate_failed'))),
+      );
     }
   }
 
@@ -3303,6 +3289,111 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return result;
   }
 
+  Future<void> _openTicketWarehouseMaterialRequest() async {
+    final t = _ticket;
+    if (t == null || !mounted) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    if (!pc.hasWorkspace || !pc.isApproved) return;
+    await wh.refreshMaterials();
+    if (!mounted) return;
+    if (wh.materials.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No catalog materials yet — add materials in Company → Warehouse first.')),
+      );
+      return;
+    }
+    final qtyCtrl = TextEditingController(text: '1');
+    final notesCtrl = TextEditingController();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) {
+        String? pickedId = wh.materials.first.id;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            backgroundColor: const Color(0xFF12122A),
+            title: const Text('Request material from warehouse', style: TextStyle(color: Colors.white)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Ticket: ${t.siteName ?? t.id}',
+                    style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: pickedId,
+                    dropdownColor: const Color(0xFF1A1A35),
+                    decoration: InputDecoration(
+                      labelText: 'Catalog material',
+                      labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+                    ),
+                    items: wh.materials
+                        .map(
+                          (m) => DropdownMenuItem(
+                            value: m.id,
+                            child: Text(m.name, style: const TextStyle(color: Colors.white)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setLocal(() => pickedId = v),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Quantity',
+                      labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: notesCtrl,
+                    maxLines: 2,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Notes (optional)',
+                      labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, pickedId),
+                child: const Text('Submit'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    final materialId = result;
+    final qty = int.tryParse(qtyCtrl.text.trim()) ?? 1;
+    final notesText = notesCtrl.text.trim();
+    qtyCtrl.dispose();
+    notesCtrl.dispose();
+    if (materialId == null || materialId.isEmpty) return;
+    if (!mounted) return;
+    final submitted = await wh.createMaterialRequest(
+      kind: 'INVENTORY_MATERIAL',
+      materialId: materialId,
+      quantity: qty < 1 ? 1 : qty,
+      notes: notesText.isEmpty ? 'From ticket ${t.siteName ?? t.id}' : '$notesText · Ticket ${t.siteName ?? t.id}',
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(submitted ? 'Request submitted.' : (wh.error ?? 'Request failed.'))),
+    );
+    if (submitted) await _loadTicketWarehouseSummary();
+  }
+
   Widget _ticketWarehouseMaterialsBlock() {
     final m = _ticketMaterialsSummary;
     if (m == null || m['success'] != true) return const SizedBox.shrink();
@@ -3314,7 +3405,25 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final damaged = (totals['damagedUnits'] as num?)?.toInt() ?? 0;
     final lost = (totals['lostUnits'] as num?)?.toInt() ?? 0;
     final returned = (totals['returnedUnits'] as num?)?.toInt() ?? 0;
+    final pc = context.watch<PrivateCompanyProvider>();
+    final auth = context.watch<AuthProvider>();
+    final canRequestMaterials = pc.hasWorkspace &&
+        pc.isApproved &&
+        (auth.isEngineer || auth.isTechnician);
     return _glassSection('Workspace materials', [
+      if (canRequestMaterials)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          child: OutlinedButton.icon(
+            onPressed: _openTicketWarehouseMaterialRequest,
+            icon: const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF6C63FF)),
+            label: const Text('Request material from warehouse'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF8B83FF),
+              side: const BorderSide(color: Color(0xFF6C63FF)),
+            ),
+          ),
+        ),
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
         child: Text(

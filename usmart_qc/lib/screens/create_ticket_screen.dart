@@ -2,19 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:latlong2/latlong.dart';
 import '../config/api_config.dart';
+import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
+import '../models/site.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
 import '../providers/private_company_provider.dart';
 import 'attachment_viewer_screen.dart';
+import 'site_map_picker_screen.dart';
 
 const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_building', 'tech_hse', 'tech_investigation', 'tech_tracking'];
 const _qcTechniqueIds = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'];
 
 class CreateTicketScreen extends StatefulWidget {
-  const CreateTicketScreen({super.key});
+  /// When non-null, site id, location, province, and coordinates are prefilled (e.g. from Sites tab).
+  final Site? prefillSite;
+
+  const CreateTicketScreen({super.key, this.prefillSite});
 
   @override
   State<CreateTicketScreen> createState() => _CreateTicketScreenState();
@@ -25,6 +32,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _coordinatorCtrl = TextEditingController();
   final _slaCtrl = TextEditingController(text: '24');
   final _designSpecsCtrl = TextEditingController();
+  final _coordsCtrl = TextEditingController();
   final _picker = ImagePicker();
   String _technique = 'inspection';
   bool _submitting = false;
@@ -33,11 +41,36 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   String? _selectedChecklistId;
   /// 'PRIVATE_COMPANY' = restrict to my workspace staff, 'GLOBAL' = open to all engineers
   String _assignmentScope = 'PRIVATE_COMPANY';
+  /// Set when user picks a saved site (quick-fill); province comes from that site.
+  Site? _linkedSite;
+  String? _selectedProvince;
+
+  void _applyPrefillSite(Site s) {
+    _linkedSite = s;
+    _siteNameCtrl.text = s.siteId;
+    _coordinatorCtrl.text = s.location;
+    _selectedProvince = s.province;
+    if (s.hasCoordinates) {
+      _coordsCtrl.text =
+          '${s.latitude!.toStringAsFixed(6)}, ${s.longitude!.toStringAsFixed(6)}';
+    } else {
+      _coordsCtrl.clear();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    final pre = widget.prefillSite;
+    if (pre != null) {
+      _applyPrefillSite(pre);
+    }
+    _siteNameCtrl.addListener(_onSiteIdEdited);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final sites = context.read<SitesProvider>();
+      await sites.fetchSites();
+      if (!mounted) return;
       final tech = context.read<ProvisorTechniquesProvider>();
       await tech.ensureLoaded();
       if (!mounted) return;
@@ -75,6 +108,47 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       return;
     }
 
+    final province = _linkedSite?.province ?? _selectedProvince?.trim() ?? '';
+    if (province.isEmpty) {
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('ticket_province_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    double? coordLat;
+    double? coordLng;
+    final coordText = _coordsCtrl.text.trim();
+    if (coordText.isNotEmpty) {
+      final parts = coordText
+          .split(RegExp(r'[,\s;]+'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (parts.length >= 2) {
+        coordLat = double.tryParse(parts[0]);
+        coordLng = double.tryParse(parts[1]);
+      }
+      if (coordLat == null || coordLng == null) {
+        final l10n = AppLocalizations.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('ticket_coords_invalid')),
+            backgroundColor: const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
     final techProv = context.read<ProvisorTechniquesProvider>();
@@ -96,6 +170,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       siteCoordinator: coordinator,
       technique: technique,
       slaHours: sla,
+      province: province,
+      siteLatitude: coordLat,
+      siteLongitude: coordLng,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
       checklistTemplateId: _selectedChecklistId,
@@ -126,6 +203,228 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  void _onSiteIdEdited() {
+    final t = _siteNameCtrl.text.trim();
+    if (_linkedSite != null && t != _linkedSite!.siteId) {
+      setState(() => _linkedSite = null);
+    }
+  }
+
+  Future<void> _openMapPicker() async {
+    double? ilat;
+    double? ilng;
+    final parts = _coordsCtrl.text
+        .split(RegExp(r'[,\s;]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.length >= 2) {
+      ilat = double.tryParse(parts[0]);
+      ilng = double.tryParse(parts[1]);
+    }
+    final result = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (context) => SiteMapPickerScreen(
+          initialLat: ilat,
+          initialLng: ilng,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _coordsCtrl.text =
+            '${result.latitude.toStringAsFixed(6)}, ${result.longitude.toStringAsFixed(6)}';
+      });
+    }
+  }
+
+  Widget _buildProvinceSection(AppLocalizations l10n) {
+    if (_linkedSite != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.t('ticket_province_from_site').toUpperCase(),
+            style: TextStyle(
+              color: Colors.white.withAlpha(80),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF12122A),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF6C63FF).withAlpha(50)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.map_rounded, color: Color(0xFF8B83FF), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _linkedSite!.province,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _linkedSite = null;
+                    });
+                  },
+                  child: Text(
+                    l10n.t('ticket_clear_site_link'),
+                    style: const TextStyle(color: Color(0xFF8B83FF), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('ticket_province').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF12122A),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withAlpha(10)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedProvince != null && kIraqProvinces.contains(_selectedProvince)
+                  ? _selectedProvince
+                  : null,
+              hint: Text(
+                l10n.t('ticket_province_hint'),
+                style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 15),
+              ),
+              isExpanded: true,
+              dropdownColor: const Color(0xFF12122A),
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              icon: Icon(Icons.expand_more_rounded, color: Colors.white.withAlpha(80)),
+              items: kIraqProvinces
+                  .map(
+                    (p) => DropdownMenuItem<String>(
+                      value: p,
+                      child: Text(p),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedProvince = v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSiteCoordinatesSection(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('ticket_site_coordinates').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.t('ticket_site_coordinates_hint'),
+          style: TextStyle(
+            color: Colors.white.withAlpha(120),
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _coordsCtrl,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: l10n.t('site_coordinates_hint'),
+                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                  prefixIcon: const Icon(Icons.gps_fixed, color: Color(0xFF6C63FF), size: 20),
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Material(
+              color: const Color(0xFF6C63FF).withAlpha(28),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: _openMapPicker,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_rounded, color: Color(0xFF8B83FF), size: 22),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.t('ticket_pick_on_map'),
+                        style: const TextStyle(
+                          color: Color(0xFF8B83FF),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -207,10 +506,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
   @override
   void dispose() {
+    _siteNameCtrl.removeListener(_onSiteIdEdited);
     _siteNameCtrl.dispose();
     _coordinatorCtrl.dispose();
     _slaCtrl.dispose();
     _designSpecsCtrl.dispose();
+    _coordsCtrl.dispose();
     super.dispose();
   }
 
@@ -260,8 +561,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   final s = sites[i];
                   return GestureDetector(
                     onTap: () {
-                      _siteNameCtrl.text = s.siteId;
-                      _coordinatorCtrl.text = s.location;
+                      setState(() => _applyPrefillSite(s));
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -306,6 +606,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             hint: l10n.t('site_coordinator_hint'),
             icon: Icons.person_outline_rounded,
           ),
+          const SizedBox(height: 16),
+          _buildProvinceSection(l10n),
+          const SizedBox(height: 16),
+          _buildSiteCoordinatesSection(l10n),
           const SizedBox(height: 16),
 
           Text(

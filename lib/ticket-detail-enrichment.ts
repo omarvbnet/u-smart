@@ -1,5 +1,18 @@
 /** Enrichment for GET /api/tickets/[id]: site coordinates + checklist template preview. */
 
+/** Coordinates stored on ticket JSON (`company`) when the requester pinned the site at creation. */
+export function embeddedTicketSiteCoords(parsed: unknown): { siteLatitude: number; siteLongitude: number } | Record<string, never> {
+  if (!parsed || typeof parsed !== 'object') return {};
+  const p = parsed as Record<string, unknown>;
+  if (!p._ticket) return {};
+  const la = p.siteLatitude;
+  const lo = p.siteLongitude;
+  if (typeof la === 'number' && typeof lo === 'number' && Number.isFinite(la) && Number.isFinite(lo)) {
+    return { siteLatitude: la, siteLongitude: lo };
+  }
+  return {};
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function resolveTicketSiteCoordinates(prisma: any, siteName: string | null, ownerRequesterId: string | null) {
   if (!siteName?.trim() || !ownerRequesterId?.trim()) return {};
@@ -43,15 +56,31 @@ export async function resolveInspectionChecklistTemplate(prisma: any, templateId
       where: { id },
       select: { id: true, name: true, items: true },
     });
-    if (!tpl) {
-      return { checklistTemplateId: id, checklistTemplate: null };
+    if (tpl) {
+      const items = normalizeChecklistTemplateItems(tpl.items);
+      return {
+        checklistTemplateId: id,
+        checklistTemplate: { id: tpl.id, name: tpl.name, items },
+      };
     }
-    const items = normalizeChecklistTemplateItems(tpl.items);
-    return {
-      checklistTemplateId: id,
-      checklistTemplate: { id: tpl.id, name: tpl.name, items },
-    };
   } catch {
-    return { checklistTemplateId: id, checklistTemplate: null };
+    /* inspection_checklists query failed — try workspace checklist */
   }
+  // Workspace templates live in `private_company_checklists` (same id stored on the ticket).
+  try {
+    const pc = await prisma.privateCompanyChecklist?.findUnique?.({
+      where: { id },
+      select: { id: true, name: true, items: true },
+    });
+    if (pc) {
+      const items = normalizeChecklistTemplateItems(pc.items);
+      return {
+        checklistTemplateId: id,
+        checklistTemplate: { id: pc.id, name: pc.name, items },
+      };
+    }
+  } catch {
+    /* table may be absent on legacy DB */
+  }
+  return { checklistTemplateId: id, checklistTemplate: null };
 }

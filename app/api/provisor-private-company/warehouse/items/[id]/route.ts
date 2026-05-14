@@ -162,6 +162,7 @@ type Action =
  *                                   If less than the line quantity for assign/transfer, the line
  *                                   is split: remainder stays on the source row, a new row holds
  *                                   the amount going to the recipient.
+ *     returnCondition?: 'new_good' | 'used' | 'damaged'  // for return: new_good/used → IN_WAREHOUSE; damaged → DAMAGED
  *   }
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     );
   }
   const note = typeof body?.note === 'string' ? body.note.trim() || null : null;
+  const returnConditionRaw = String(body?.returnCondition ?? 'new_good').toLowerCase();
   const bodyQuantity =
     typeof body?.quantity === 'number' && body.quantity > 0
       ? Math.floor(body.quantity)
@@ -207,14 +209,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     (action === 'assign' ||
       action === 'transfer' ||
       action === 'damage' ||
-      action === 'lose' ||
-      action === 'confirm-handover') &&
+      action === 'lose') &&
     !guard.canMutateWarehouse
   ) {
     return NextResponse.json(
       {
         success: false,
         message: 'Only the workspace owner or a warehouse keeper can perform this action.',
+      },
+      { status: 403 }
+    );
+  }
+
+  const assigneeSelfConfirmHandover =
+    action === 'confirm-handover' &&
+    item.status === 'ASSIGNED' &&
+    item.assignedToId === guard.requesterId &&
+    !item.handoverConfirmedAt;
+
+  if (action === 'confirm-handover' && !guard.canMutateWarehouse && !assigneeSelfConfirmHandover) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          'Only the assignee (you, if this unit is assigned to you) or a warehouse keeper can confirm physical receipt.',
       },
       { status: 403 }
     );
@@ -436,6 +454,47 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     case 'return': {
       const fromStaffId = item.assignedToId;
+      const lineQty = Math.max(1, Math.floor(Number(item.quantity)) || 1);
+      const moveQty =
+        bodyQuantity !== undefined ? Math.min(Math.max(bodyQuantity, 1), lineQty) : lineQty;
+      const rc =
+        returnConditionRaw === 'damaged' || returnConditionRaw === 'damage'
+          ? 'damaged'
+          : returnConditionRaw === 'used'
+            ? 'used'
+            : 'new_good';
+      const extra =
+        rc === 'used'
+          ? 'Return: used (still serviceable).'
+          : rc === 'damaged'
+            ? 'Return: damaged.'
+            : 'Return: new / unused.';
+      const movementNote = [extra, note].filter(Boolean).join(' | ');
+
+      if (rc === 'damaged') {
+        const updated = await prisma.privateCompanyMaterialItem.update({
+          where: { id },
+          data: {
+            assignedToId: null,
+            status: 'DAMAGED',
+            handoverConfirmedAt: null,
+            handoverConfirmedById: null,
+          },
+          include: ITEM_INCLUDE,
+        });
+        await logMovement({
+          companyId: guard.companyId,
+          itemId: id,
+          type: 'DAMAGED',
+          fromStaffId,
+          toStaffId: null,
+          actorId: guard.requesterId,
+          quantity: moveQty,
+          note: movementNote,
+        });
+        return NextResponse.json({ success: true, item: updated });
+      }
+
       const updated = await prisma.privateCompanyMaterialItem.update({
         where: { id },
         data: {
@@ -453,8 +512,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         fromStaffId,
         toStaffId: null,
         actorId: guard.requesterId,
-        quantity: bodyQuantity,
-        note,
+        quantity: moveQty,
+        note: movementNote,
       });
       return NextResponse.json({ success: true, item: updated });
     }
