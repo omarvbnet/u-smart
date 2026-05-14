@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
       iconKey: true,
       sortOrder: true,
       createdAt: true,
+      maintenanceProximityJoinEnabled: true,
+      maintenanceProximityRadiusM: true,
       members: {
         select: {
           id: true,
@@ -126,6 +128,15 @@ export async function PATCH(req: NextRequest) {
   if (typeof body?.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(body.color.trim())) data.color = body.color.trim();
   if (typeof body?.iconKey === 'string') data.iconKey = body.iconKey.trim() || null;
   if (Number.isFinite(body?.sortOrder)) data.sortOrder = Math.max(0, Math.floor(Number(body.sortOrder)));
+  if (body?.maintenanceProximityJoinEnabled !== undefined) {
+    data.maintenanceProximityJoinEnabled = body.maintenanceProximityJoinEnabled === true;
+  }
+  if (body?.maintenanceProximityRadiusM !== undefined && Number.isFinite(body.maintenanceProximityRadiusM)) {
+    data.maintenanceProximityRadiusM = Math.max(
+      10,
+      Math.min(5000, Math.floor(Number(body.maintenanceProximityRadiusM)))
+    );
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
   }

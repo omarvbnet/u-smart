@@ -25,7 +25,8 @@ export type NotificationCopyKey =
   | 'material_request_created'
   | 'material_request_updated'
   | 'material_request_receipt_disputed'
-  | 'material_request_issue_acknowledged';
+  | 'material_request_issue_acknowledged'
+  | 'maintenance_crew_joined';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -612,6 +613,24 @@ const TEMPLATES: Record<
     ku: () => ({
       title: 'کۆگا ڕاپۆرتەکەت پشتڕاست کرد',
       body: 'پارێزەرێک ڕاپۆرتەکەت قبووڵ کرد. کاتێک کەرەستەکان گەیشتن پشتڕاستی بکەرەوە یان پەیوەندی بە کۆگاوە بکە.',
+    }),
+  },
+  maintenance_crew_joined: {
+    en: (v) => ({
+      title: 'Technician joined your ticket',
+      body: `${v.name} joined the maintenance crew on ticket ${v.ticketId}.`,
+    }),
+    ar: (v) => ({
+      title: 'انضم فني إلى تذكرتك',
+      body: `${v.name} انضم إلى فريق الصيانة على التذكرة ${v.ticketId}.`,
+    }),
+    tr: (v) => ({
+      title: 'Teknisyen talebe katıldı',
+      body: `${v.name}, ${v.ticketId} numaralı bakım talebine ekip olarak katıldı.`,
+    }),
+    ku: (v) => ({
+      title: 'تەکنیسینێک بەشداری تیکەتەکەت بوو',
+      body: `${v.name} بەشداری لیژنەی چاککردن بوو لە تیکەتی ${v.ticketId}.`,
     }),
   },
   workspace_announcement: {

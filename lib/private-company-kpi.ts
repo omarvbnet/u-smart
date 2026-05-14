@@ -20,6 +20,22 @@ export function assignedStaffIdFromCompanyJson(parsed: Record<string, unknown>):
   return typeof id === 'string' && id.trim() ? id.trim() : null;
 }
 
+/** Additional maintenance technicians on the same ticket (requester ids). */
+export function maintenanceCrewIdsFromCompanyJson(parsed: Record<string, unknown>): string[] {
+  const raw = parsed.maintenanceCrewIds;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === 'string' && Boolean(x.trim())).map((x) => x.trim());
+}
+
+export function ticketFieldStaffInvolvesRequester(
+  parsed: Record<string, unknown>,
+  requesterId: string
+): boolean {
+  if (!requesterId) return false;
+  if (assignedStaffIdFromCompanyJson(parsed) === requesterId) return true;
+  return maintenanceCrewIdsFromCompanyJson(parsed).includes(requesterId);
+}
+
 /** Earliest time the ticket entered active field work (ON_SITE or IN_PROGRESS). */
 export function firstActiveWorkAt(logs: TicketLogRow[]): Date | null {
   const active = new Set(['ON_SITE', 'IN_PROGRESS']);

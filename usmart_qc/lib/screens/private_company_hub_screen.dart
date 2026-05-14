@@ -452,6 +452,54 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     return Column(
       children: [
         _WorkspaceHeader(workspace: ws),
+        if (pc.isStaff &&
+            (pc.membership.departmentName != null ||
+                pc.membership.role != null ||
+                pc.membership.specialization != null))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A).withAlpha(220),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withAlpha(18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your workspace profile',
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(200),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      if (pc.membership.departmentName != null &&
+                          pc.membership.departmentName!.trim().isNotEmpty)
+                        'Department: ${pc.membership.departmentName}',
+                      if (pc.membership.role != null && pc.membership.role!.trim().isNotEmpty)
+                        'Role: ${_staffRoleLabel(pc.membership.role!)}',
+                      if (pc.membership.specialization != null &&
+                          pc.membership.specialization!.trim().isNotEmpty)
+                        'Specialization: ${_specLabel(pc.membership.specialization!)}',
+                    ].join(' · '),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (pc.error != null)
           _DismissibleBanner(
             text: pc.error!,
@@ -1028,8 +1076,10 @@ class _DepartmentEditorSheet extends StatefulWidget {
 class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   late final TextEditingController _name;
   late final TextEditingController _description;
+  late final TextEditingController _proxRadius;
   String _color = '#6C63FF';
   String? _iconKey;
+  bool _proxJoin = false;
 
   static const _iconOptions = <String, IconData>{
     'engineering': Icons.engineering_rounded,
@@ -1058,6 +1108,10 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
     super.initState();
     _name = TextEditingController(text: widget.existing?.name ?? '');
     _description = TextEditingController(text: widget.existing?.description ?? '');
+    _proxJoin = widget.existing?.maintenanceProximityJoinEnabled ?? false;
+    _proxRadius = TextEditingController(
+      text: '${widget.existing?.maintenanceProximityRadiusM ?? 100}',
+    );
     _color = widget.existing?.color ?? _colorOptions[math.Random().nextInt(_colorOptions.length)];
     _iconKey = widget.existing?.iconKey;
   }
@@ -1066,6 +1120,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   void dispose() {
     _name.dispose();
     _description.dispose();
+    _proxRadius.dispose();
     super.dispose();
   }
 
@@ -1082,12 +1137,16 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         iconKey: _iconKey,
       );
     } else {
+      final r = int.tryParse(_proxRadius.text.trim());
+      final radius = (r != null && r >= 10 && r <= 5000) ? r : 100;
       ok = await pc.updateDepartment(
         widget.existing!.id,
         name: name,
         description: _description.text.trim(),
         color: _color,
         iconKey: _iconKey ?? '',
+        maintenanceProximityJoinEnabled: _proxJoin,
+        maintenanceProximityRadiusM: radius,
       );
     }
     if (ok && mounted) Navigator.pop(context);
@@ -1199,6 +1258,45 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                     );
                   }).toList(),
                 ),
+                if (widget.existing != null) ...[
+                  const SizedBox(height: 20),
+                  const _SectionTitle('Maintenance crew'),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Technicians can add themselves as extra crew on the same workspace maintenance ticket when this is on. Automatic proximity teaming can use the radius below.',
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(150),
+                      fontSize: 11.5,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Allow multi-technician crew',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Uses proximity radius (meters) for suggested / automatic teaming.',
+                      style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                    ),
+                    value: _proxJoin,
+                    activeThumbColor: const Color(0xFF00D4AA),
+                    onChanged: (v) => setState(() => _proxJoin = v),
+                  ),
+                  _DarkField(
+                    controller: _proxRadius,
+                    label: 'Proximity radius (m)',
+                    hint: '100',
+                    icon: Icons.radar_rounded,
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
                 const SizedBox(height: 22),
                 _GradientButton(
                   onPressed: pc.submitting ? null : _submit,

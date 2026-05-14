@@ -13,6 +13,11 @@ import { hasPrivilege } from '@/lib/coordinator-access';
 import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 import {
+  parseTicketCompanyJson,
+  ticketFieldStaffInvolvesRequester,
+} from '@/lib/private-company-kpi';
+import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
+import {
   deriveSpecializationTagsFromTechnique,
   normalizeSpecializationTags,
 } from '@/lib/technique-specialization-tags';
@@ -211,7 +216,15 @@ async function notifyPrivateCompanyMembersNewTicket(
       select: {
         ownerRequesterId: true,
         staff: {
-          select: { id: true, role: true, status: true, province: true, provinceFilterActive: true },
+          select: {
+            id: true,
+            role: true,
+            status: true,
+            province: true,
+            provinceFilterActive: true,
+            privateCompanyDepartmentId: true,
+            privateCompanyAllowedTaskSlugs: true,
+          },
         },
       },
     });
@@ -224,6 +237,7 @@ async function notifyPrivateCompanyMembersNewTicket(
     } else {
       allowed.add('ENGINEER');
     }
+    const techRows = await fetchWorkspaceTechniqueRows(prisma, privateCompanyId);
     const recipientIds = new Set<string>([company.ownerRequesterId]);
     for (const s of (company.staff ?? []) as Array<{
       id: string;
@@ -231,12 +245,24 @@ async function notifyPrivateCompanyMembersNewTicket(
       status: string | null;
       province: string | null;
       provinceFilterActive: boolean | null;
+      privateCompanyDepartmentId: string | null;
+      privateCompanyAllowedTaskSlugs: string[] | null;
     }>) {
       if ((s.status ?? 'ACTIVE') !== 'ACTIVE') continue;
       const role = String(s.role ?? '').toUpperCase();
       if (!allowed.has(role)) continue;
       const filterActive = s.provinceFilterActive ?? true;
       if (filterActive && s.province && s.province !== province) continue;
+      if (
+        !staffTicketTechniqueAllowed({
+          technique,
+          staffDepartmentId: s.privateCompanyDepartmentId ?? null,
+          staffAllowedSlugs: Array.isArray(s.privateCompanyAllowedTaskSlugs) ? s.privateCompanyAllowedTaskSlugs : [],
+          workspaceRows: techRows,
+        })
+      ) {
+        continue;
+      }
       recipientIds.add(s.id);
     }
     const roleKind = isMaintenance ? 'maintenance' : 'qc';
@@ -1457,10 +1483,54 @@ export async function GET(req: NextRequest) {
         status: true,
         createdAt: true,
         requesterId: true,
+        privateCompanyId: true,
+        assignmentScope: true,
       },
     });
 
-    const ticketIds = rows.map((r: { id: string }) => r.id);
+    let rowsForList = rows as Array<{
+      id: string;
+      technique: string;
+      company: string | null;
+      status: string;
+      createdAt: Date;
+      requesterId: string | null;
+      privateCompanyId: string | null;
+      assignmentScope: string | null;
+    }>;
+    if (
+      myStaffWorkspaceId &&
+      (isQcPoolEngineerRole(requesterRole) || requesterRole === 'TECHNICIAN')
+    ) {
+      const [techRows, meRow] = await Promise.all([
+        fetchWorkspaceTechniqueRows(prisma, myStaffWorkspaceId),
+        prisma.ticketRequester.findUnique({
+          where: { id: payload.requesterId },
+          select: {
+            privateCompanyDepartmentId: true,
+            privateCompanyAllowedTaskSlugs: true,
+          },
+        }),
+      ]);
+      const deptId = (meRow as { privateCompanyDepartmentId?: string | null } | null)?.privateCompanyDepartmentId ?? null;
+      const allowedSlugsRaw = (meRow as { privateCompanyAllowedTaskSlugs?: string[] | null } | null)?.privateCompanyAllowedTaskSlugs;
+      const allowedSlugs = Array.isArray(allowedSlugsRaw) ? allowedSlugsRaw : [];
+      rowsForList = rowsForList.filter((r) => {
+        const pcId = r.privateCompanyId ?? null;
+        const scope = r.assignmentScope ?? null;
+        if (pcId !== myStaffWorkspaceId || scope !== 'PRIVATE_COMPANY_STAFF') return true;
+        const parsed = parseTicketCompanyJson(r.company);
+        if (ticketFieldStaffInvolvesRequester(parsed, payload.requesterId)) return true;
+        return staffTicketTechniqueAllowed({
+          technique: r.technique,
+          staffDepartmentId: deptId,
+          staffAllowedSlugs: allowedSlugs,
+          workspaceRows: techRows,
+        });
+      });
+    }
+
+    const ticketIds = rowsForList.map((r: { id: string }) => r.id);
     let logsByTicket: Record<string, { status: string; createdAt: Date }[]> = {};
     if (ticketIds.length > 0) {
       try {
@@ -1486,8 +1556,10 @@ export async function GET(req: NextRequest) {
       status: string;
       createdAt: Date;
       requesterId: string | null;
+      privateCompanyId?: string | null;
+      assignmentScope?: string | null;
     };
-    const tickets = rows.map((r: Row) => {
+    const tickets = rowsForList.map((r: Row) => {
       const row = r as { status?: string };
       let siteName: string | null = null;
       let siteCoordinator: string | null = null;

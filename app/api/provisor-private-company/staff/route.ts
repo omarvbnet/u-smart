@@ -185,6 +185,9 @@ export async function GET(req: NextRequest) {
           province: true,
           provinceFilterActive: true,
           privateCompanyDepartmentId: true,
+          privateCompanyAllowedTaskSlugs: true,
+          maintenanceProximityJoinOverride: true,
+          maintenanceProximityRadiusOverrideM: true,
           createdAt: true,
         },
       },
@@ -428,6 +431,9 @@ export async function PATCH(req: NextRequest) {
         specialization: true,
         status: true,
         privateCompanyDepartmentId: true,
+        privateCompanyAllowedTaskSlugs: true,
+        maintenanceProximityJoinOverride: true,
+        maintenanceProximityRadiusOverrideM: true,
       },
     });
     const companyNameRow = await prisma.privateCompany.findUnique({
@@ -532,6 +538,58 @@ export async function PATCH(req: NextRequest) {
   if (body?.provinceFilterActive !== undefined) {
     data.provinceFilterActive = body.provinceFilterActive === true;
   }
+  if (body?.privateCompanyAllowedTaskSlugs !== undefined) {
+    if (!guard.isOwner) {
+      return NextResponse.json(
+        { success: false, message: 'Only the workspace owner can configure task type visibility per staff.' },
+        { status: 403 }
+      );
+    }
+    const raw = body.privateCompanyAllowedTaskSlugs;
+    if (raw === null) {
+      data.privateCompanyAllowedTaskSlugs = [];
+    } else if (Array.isArray(raw)) {
+      data.privateCompanyAllowedTaskSlugs = raw
+        .filter((x: unknown): x is string => typeof x === 'string' && Boolean(x.trim()))
+        .map((x) => x.trim().toLowerCase());
+    } else {
+      return NextResponse.json({ success: false, message: 'privateCompanyAllowedTaskSlugs must be an array or null.' }, { status: 400 });
+    }
+  }
+  if (body?.maintenanceProximityJoinOverride !== undefined) {
+    if (!guard.isOwner) {
+      return NextResponse.json(
+        { success: false, message: 'Only the workspace owner can configure maintenance crew overrides.' },
+        { status: 403 }
+      );
+    }
+    if (body.maintenanceProximityJoinOverride === null) {
+      data.maintenanceProximityJoinOverride = null;
+    } else {
+      data.maintenanceProximityJoinOverride = body.maintenanceProximityJoinOverride === true;
+    }
+  }
+  if (body?.maintenanceProximityRadiusOverrideM !== undefined) {
+    if (!guard.isOwner) {
+      return NextResponse.json(
+        { success: false, message: 'Only the workspace owner can configure maintenance crew distance overrides.' },
+        { status: 403 }
+      );
+    }
+    if (body.maintenanceProximityRadiusOverrideM === null) {
+      data.maintenanceProximityRadiusOverrideM = null;
+    } else if (Number.isFinite(body.maintenanceProximityRadiusOverrideM)) {
+      data.maintenanceProximityRadiusOverrideM = Math.max(
+        10,
+        Math.min(5000, Math.floor(Number(body.maintenanceProximityRadiusOverrideM)))
+      );
+    } else {
+      return NextResponse.json(
+        { success: false, message: 'maintenanceProximityRadiusOverrideM must be a number or null.' },
+        { status: 400 }
+      );
+    }
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
   }
@@ -550,6 +608,9 @@ export async function PATCH(req: NextRequest) {
       province: true,
       provinceFilterActive: true,
       privateCompanyDepartmentId: true,
+      privateCompanyAllowedTaskSlugs: true,
+      maintenanceProximityJoinOverride: true,
+      maintenanceProximityRadiusOverrideM: true,
     },
   });
   return NextResponse.json({ success: true, user: updated });

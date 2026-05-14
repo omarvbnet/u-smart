@@ -319,6 +319,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? description,
     String? color,
     String? iconKey,
+    bool? maintenanceProximityJoinEnabled,
+    int? maintenanceProximityRadiusM,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -329,6 +331,10 @@ class PrivateCompanyProvider extends ChangeNotifier {
         if (description != null) 'description': description,
         if (color != null) 'color': color,
         if (iconKey != null) 'iconKey': iconKey,
+        if (maintenanceProximityJoinEnabled != null)
+          'maintenanceProximityJoinEnabled': maintenanceProximityJoinEnabled,
+        if (maintenanceProximityRadiusM != null)
+          'maintenanceProximityRadiusM': maintenanceProximityRadiusM,
       });
       if (res['success'] == true) {
         await refresh();
@@ -429,11 +435,16 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? name,
     String? province,
     bool? provinceFilterActive,
+    List<String>? privateCompanyAllowedTaskSlugs,
+    bool? maintenanceProximityJoinOverride,
+    bool clearMaintenanceProximityJoinOverride = false,
+    int? maintenanceProximityRadiusOverrideM,
+    bool clearMaintenanceProximityRadiusOverride = false,
   }) async {
     _submitting = true;
     notifyListeners();
     try {
-      final res = await _api.patch(ApiConfig.privateCompanyStaff, body: {
+      final body = <String, dynamic>{
         'id': id,
         if (role != null) 'role': role,
         if (departmentId != null) 'departmentId': departmentId,
@@ -444,7 +455,20 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'province': province.trim(),
         if (provinceFilterActive != null)
           'provinceFilterActive': provinceFilterActive,
-      });
+        if (privateCompanyAllowedTaskSlugs != null)
+          'privateCompanyAllowedTaskSlugs': privateCompanyAllowedTaskSlugs,
+        if (clearMaintenanceProximityJoinOverride)
+          'maintenanceProximityJoinOverride': null,
+        if (!clearMaintenanceProximityJoinOverride &&
+            maintenanceProximityJoinOverride != null)
+          'maintenanceProximityJoinOverride': maintenanceProximityJoinOverride,
+        if (clearMaintenanceProximityRadiusOverride)
+          'maintenanceProximityRadiusOverrideM': null,
+        if (!clearMaintenanceProximityRadiusOverride &&
+            maintenanceProximityRadiusOverrideM != null)
+          'maintenanceProximityRadiusOverrideM': maintenanceProximityRadiusOverrideM,
+      };
+      final res = await _api.patch(ApiConfig.privateCompanyStaff, body: body);
       if (res['success'] == true) {
         await refresh();
         _setSuccess('Staff updated.');

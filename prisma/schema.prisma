@@ -365,6 +365,11 @@ model TicketRequester {
   privateCompany             PrivateCompany?           @relation("PrivateCompanyStaff", fields: [privateCompanyId], references: [id], onDelete: SetNull)
   privateCompanyDepartmentId String?
   privateCompanyDepartment   PrivateCompanyDepartment? @relation("PrivateCompanyDepartmentMember", fields: [privateCompanyDepartmentId], references: [id], onDelete: SetNull)
+  /// Optional allowlist of workspace ticket technique slugs; empty = inherit department/workspace technique catalog only.
+  privateCompanyAllowedTaskSlugs String[] @default([])
+  /// When set, overrides department defaults for maintenance proximity teaming.
+  maintenanceProximityJoinOverride   Boolean?
+  maintenanceProximityRadiusOverrideM Int?
   /// Created checklists inside their workspace.
   privateCompanyChecklistsCreated PrivateCompanyChecklist[] @relation("PrivateCompanyChecklistCreator")
 
@@ -1396,6 +1401,10 @@ model PrivateCompanyDepartment {
   color       String? // hex color for UI accent
   iconKey     String? // material icon key for UI
   sortOrder   Int               @default(0)
+  /// Owner: allow technicians on this department to join the same maintenance ticket when in proximity.
+  maintenanceProximityJoinEnabled Boolean @default(false)
+  /// Default pairing radius in meters (technicians); staff may override individually.
+  maintenanceProximityRadiusM     Int     @default(100)
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
   createdAt   DateTime          @default(now())

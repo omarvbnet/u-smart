@@ -76,6 +76,8 @@ class PrivateCompanyDepartment {
     this.sortOrder = 0,
     this.memberCount = 0,
     this.members = const [],
+    this.maintenanceProximityJoinEnabled = false,
+    this.maintenanceProximityRadiusM = 100,
   });
 
   final String id;
@@ -86,6 +88,8 @@ class PrivateCompanyDepartment {
   final int sortOrder;
   final int memberCount;
   final List<PrivateCompanyStaff> members;
+  final bool maintenanceProximityJoinEnabled;
+  final int maintenanceProximityRadiusM;
 
   Color get colorValue {
     final raw = color;
@@ -120,6 +124,8 @@ class PrivateCompanyDepartment {
       sortOrder: (json['sortOrder'] as int?) ?? 0,
       memberCount: memberCount,
       members: members,
+      maintenanceProximityJoinEnabled: json['maintenanceProximityJoinEnabled'] == true,
+      maintenanceProximityRadiusM: (json['maintenanceProximityRadiusM'] as num?)?.toInt() ?? 100,
     );
   }
 }
@@ -139,6 +145,9 @@ class PrivateCompanyStaff {
     this.province,
     this.provinceFilterActive = true,
     this.createdAt,
+    this.privateCompanyAllowedTaskSlugs = const [],
+    this.maintenanceProximityJoinOverride,
+    this.maintenanceProximityRadiusOverrideM,
   });
 
   final String id;
@@ -153,6 +162,9 @@ class PrivateCompanyStaff {
   final String? province;
   final bool provinceFilterActive;
   final DateTime? createdAt;
+  final List<String> privateCompanyAllowedTaskSlugs;
+  final bool? maintenanceProximityJoinOverride;
+  final int? maintenanceProximityRadiusOverrideM;
 
   factory PrivateCompanyStaff.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyStaff(
@@ -174,6 +186,19 @@ class PrivateCompanyStaff {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
+      privateCompanyAllowedTaskSlugs: () {
+        final raw = json['privateCompanyAllowedTaskSlugs'];
+        if (raw is! List) return <String>[];
+        return raw
+            .map((e) => e.toString().trim().toLowerCase())
+            .where((s) => s.isNotEmpty)
+            .toList();
+      }(),
+      maintenanceProximityJoinOverride: json['maintenanceProximityJoinOverride'] is bool
+          ? json['maintenanceProximityJoinOverride'] as bool
+          : null,
+      maintenanceProximityRadiusOverrideM:
+          (json['maintenanceProximityRadiusOverrideM'] as num?)?.toInt(),
     );
   }
 }
@@ -364,17 +389,21 @@ class PrivateCompanyMembership {
     this.isStaff = false,
     this.status,
     this.departmentId,
+    this.departmentName,
     this.role,
+    this.specialization,
   });
 
   final bool isOwner;
   final bool isStaff;
   final PrivateCompanyStatus? status;
   final String? departmentId;
+  final String? departmentName;
   /// Authoritative server-side role (uppercase) for the requester inside the
   /// workspace context. Used by permission helpers when the staff list is not
   /// available client-side.
   final String? role;
+  final String? specialization;
 
   factory PrivateCompanyMembership.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyMembership(
@@ -384,7 +413,9 @@ class PrivateCompanyMembership {
           ? privateCompanyStatusFromString(json['status'])
           : null,
       departmentId: json['departmentId'] as String?,
+      departmentName: json['departmentName'] as String?,
       role: (json['role'] as String?)?.toUpperCase(),
+      specialization: json['specialization'] as String?,
     );
   }
 

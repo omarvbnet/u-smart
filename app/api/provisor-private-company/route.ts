@@ -26,8 +26,12 @@ export async function GET(req: NextRequest) {
         name: true,
         company: true,
         role: true,
+        specialization: true,
         privateCompanyId: true,
         privateCompanyDepartmentId: true,
+        privateCompanyAllowedTaskSlugs: true,
+        maintenanceProximityJoinOverride: true,
+        maintenanceProximityRadiusOverrideM: true,
         privateCompanyOwned: {
           select: {
             id: true,
@@ -49,6 +53,8 @@ export async function GET(req: NextRequest) {
                 iconKey: true,
                 sortOrder: true,
                 createdAt: true,
+                maintenanceProximityJoinEnabled: true,
+                maintenanceProximityRadiusM: true,
                 _count: { select: { members: true } },
               },
             },
@@ -66,6 +72,9 @@ export async function GET(req: NextRequest) {
                 province: true,
                 provinceFilterActive: true,
                 privateCompanyDepartmentId: true,
+                privateCompanyAllowedTaskSlugs: true,
+                maintenanceProximityJoinOverride: true,
+                maintenanceProximityRadiusOverrideM: true,
                 createdAt: true,
               },
             },
@@ -135,6 +144,8 @@ export async function GET(req: NextRequest) {
               iconKey: true,
               sortOrder: true,
               createdAt: true,
+              maintenanceProximityJoinEnabled: true,
+              maintenanceProximityRadiusM: true,
               _count: { select: { members: true } },
             },
           },
@@ -156,6 +167,9 @@ export async function GET(req: NextRequest) {
               province: true,
               provinceFilterActive: true,
               privateCompanyDepartmentId: true,
+              privateCompanyAllowedTaskSlugs: true,
+              maintenanceProximityJoinOverride: true,
+              maintenanceProximityRadiusOverrideM: true,
               createdAt: true,
             },
           },
@@ -175,6 +189,11 @@ export async function GET(req: NextRequest) {
           },
         },
       });
+      let departmentName: string | null = null;
+      if (myDepartmentId && ws?.departments?.length) {
+        const hit = (ws.departments as Array<{ id: string; name: string }>).find((d) => d.id === myDepartmentId);
+        departmentName = hit?.name ?? null;
+      }
       return NextResponse.json({
         success: true,
         membership: {
@@ -182,7 +201,9 @@ export async function GET(req: NextRequest) {
           isStaff: true,
           status: ws?.status ?? null,
           departmentId: myDepartmentId,
+          departmentName,
           role: myRole || null,
+          specialization: requester.specialization ?? null,
         },
         workspace: ws,
       });

@@ -363,6 +363,20 @@ class TicketsProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Workspace maintenance: join or leave `maintenanceCrewIds` (technician only; server enforces).
+  Future<List<String>?> postMaintenanceCrewAction(String ticketId, String action) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketMaintenanceCrew(ticketId),
+        body: {'action': action},
+      );
+      if (data['success'] == true && data['maintenanceCrewIds'] is List) {
+        return (data['maintenanceCrewIds'] as List).map((e) => e.toString()).toList();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   String? lastTicketCreateMessage;
 
   Future<bool> createTicket({

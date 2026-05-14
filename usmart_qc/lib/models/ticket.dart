@@ -119,6 +119,10 @@ class Ticket {
   final String? checklistTemplateId;
   /// API-resolved template `{ id, name, items: [{id,label,weight}, ...] }` for display.
   final Map<String, dynamic>? checklistTemplate;
+  /// `PRIVATE_COMPANY_STAFF` when ticket is owned by a workspace field team.
+  final String? assignmentScope;
+  /// Additional technician requester ids on the same maintenance ticket (workspace).
+  final List<String> maintenanceCrewIds;
   /// Site coordinates from server (Sites table), when available.
   final double? siteLatitude;
   final double? siteLongitude;
@@ -163,6 +167,8 @@ class Ticket {
     this.taskCategory,
     this.checklistTemplateId,
     this.checklistTemplate,
+    this.assignmentScope,
+    this.maintenanceCrewIds = const [],
     this.siteLatitude,
     this.siteLongitude,
   });
@@ -276,6 +282,12 @@ class Ticket {
       checklistTemplate: json['checklistTemplate'] is Map
           ? Map<String, dynamic>.from(json['checklistTemplate'] as Map)
           : null,
+      assignmentScope: json['assignmentScope'] as String?,
+      maintenanceCrewIds: (json['maintenanceCrewIds'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .where((s) => s.isNotEmpty)
+              .toList() ??
+          const [],
       siteLatitude: (json['siteLatitude'] as num?)?.toDouble(),
       siteLongitude: (json['siteLongitude'] as num?)?.toDouble(),
     );

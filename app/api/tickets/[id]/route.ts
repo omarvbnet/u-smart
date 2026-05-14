@@ -4,6 +4,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { viewerHasSharedSiteTicketRead, visitorRequestSiteLogicalId } from '@/lib/site-share-access';
 import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates, embeddedTicketSiteCoords } from '@/lib/ticket-detail-enrichment';
+import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
 
 const prisma = _prisma as any;
 
@@ -160,6 +161,7 @@ export async function GET(
           completedAt: true,
           requesterId: true,
           checklistTemplateId: true,
+          assignmentScope: true,
           requester: {
             select: { name: true, phone: true, role: true, username: true },
           },
@@ -188,6 +190,7 @@ export async function GET(
           completedAt: true,
           requesterId: true,
           checklistTemplateId: true,
+          assignmentScope: true,
         },
       });
     }
@@ -223,6 +226,7 @@ export async function GET(
               completedAt: true,
               requesterId: true,
               checklistTemplateId: true,
+              assignmentScope: true,
               requester: {
                 select: { name: true, phone: true, role: true, username: true },
               },
@@ -251,6 +255,7 @@ export async function GET(
               completedAt: true,
               requesterId: true,
               checklistTemplateId: true,
+              assignmentScope: true,
             },
           });
         }
@@ -296,6 +301,7 @@ export async function GET(
     let assignedEngineerId: string | null = null;
     let assignedEngineerName: string | null = null;
     let assignedAt: string | null = null;
+    let maintenanceCrewIds: string[] = [];
     let embeddedChecklistTemplateId: string | null = null;
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
@@ -338,6 +344,7 @@ export async function GET(
         assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
         assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
         assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
+        maintenanceCrewIds = maintenanceCrewIdsFromCompanyJson(parsed as Record<string, unknown>);
         checklistHistory = Array.isArray(parsed.checklistHistory)
           ? (parsed.checklistHistory as Array<{ at?: string; inspectionChecklist?: unknown[]; inspectionResult?: string; inspectionComments?: string }>).map((e) => ({
               at: e.at || '',
@@ -420,6 +427,7 @@ export async function GET(
         slaHours,
         technique: row.technique,
         status,
+        assignmentScope: (row as { assignmentScope?: string | null }).assignmentScope ?? null,
         createdAt: row.createdAt,
         completedAt,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
@@ -440,6 +448,7 @@ export async function GET(
         assignedEngineerId,
         assignedEngineerName,
         assignedAt,
+        maintenanceCrewIds,
         checklistHistory,
         requesterId: (row as { requesterId?: string | null }).requesterId ?? null,
         requesterName,

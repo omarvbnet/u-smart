@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
+import '../models/private_company.dart';
 import '../models/comment.dart';
 import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
@@ -54,6 +55,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   String? _attachTemplateChoice;
   bool _uploading = false;
   bool _completingMaintenance = false;
+  bool _maintenanceCrewBusy = false;
 
   /// Maintenance: before (4–6) and after (4–6) image URLs for completion
   List<String> _maintenanceBeforeUrls = [];
@@ -885,6 +887,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ],
                     ),
                   ],
+                  if (t.isMaintenance &&
+                      t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
+                      t.isAssigned &&
+                      !t.isCompleted) ...[
+                    const SizedBox(height: 10),
+                    _maintenanceCrewBanner(context, t),
+                  ],
                   if (t.isCompleted && _effectiveInspectionResult(t) != null) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -918,6 +927,111 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
       ),
     );
+  }
+
+  Widget _maintenanceCrewBanner(BuildContext context, Ticket t) {
+    final pc = context.watch<PrivateCompanyProvider>();
+    final auth = context.watch<AuthProvider>();
+    final uid = auth.user?.id;
+    String labelFor(String id) {
+      if (id == t.assignedEngineerId) {
+        final n = t.assignedEngineerName?.trim();
+        return (n != null && n.isNotEmpty) ? n : id;
+      }
+      for (final s in pc.workspace?.staff ?? const <PrivateCompanyStaff>[]) {
+        if (s.id == id) {
+          final n = s.name?.trim();
+          return (n != null && n.isNotEmpty) ? n : s.username;
+        }
+      }
+      return id;
+    }
+
+    final leadId = t.assignedEngineerId;
+    final chips = <Widget>[
+      if (leadId != null && leadId.isNotEmpty)
+        Chip(
+          label: Text('Lead: ${labelFor(leadId)}'),
+          backgroundColor: const Color(0xFF12122A),
+          labelStyle: const TextStyle(color: Colors.white, fontSize: 11),
+          side: BorderSide(color: _accentColor.withAlpha(100)),
+        ),
+      ...t.maintenanceCrewIds.map(
+        (id) => Chip(
+          label: Text(labelFor(id)),
+          backgroundColor: const Color(0xFF12122A),
+          labelStyle: TextStyle(color: Colors.white.withAlpha(230), fontSize: 11),
+          side: BorderSide(color: Colors.white.withAlpha(40)),
+        ),
+      ),
+    ];
+
+    final isLead = uid != null && uid == t.assignedEngineerId;
+    final onCrew = uid != null && t.maintenanceCrewIds.contains(uid);
+    final canTap = _isTechnician && uid != null && !isLead;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Maintenance team',
+          style: TextStyle(
+            color: Colors.white.withAlpha(200),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 6, children: chips),
+        if (canTap) ...[
+          const SizedBox(height: 8),
+          if (!onCrew)
+            TextButton(
+              onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('join'),
+              child: Text(
+                _maintenanceCrewBusy ? '…' : 'Join as crew',
+                style: TextStyle(color: _accentColor, fontWeight: FontWeight.w700),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('leave'),
+              child: Text(
+                _maintenanceCrewBusy ? '…' : 'Leave crew',
+                style: const TextStyle(color: Color(0xFFFF9F43), fontWeight: FontWeight.w700),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _postMaintenanceCrewAction(String action) async {
+    if (_maintenanceCrewBusy) return;
+    setState(() => _maintenanceCrewBusy = true);
+    try {
+      final tp = context.read<TicketsProvider>();
+      final crew = await tp.postMaintenanceCrewAction(widget.ticketId, action);
+      if (!mounted) return;
+      if (crew != null) {
+        final refreshed = await tp.fetchTicketDetail(widget.ticketId);
+        if (mounted) {
+          setState(() {
+            if (refreshed != null) _ticket = refreshed;
+          });
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update crew. You may need department “multi-technician crew” enabled, or the ticket may not be in your workspace.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _maintenanceCrewBusy = false);
+    }
   }
 
   DateTime? get _siteLastUpdated {

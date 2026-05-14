@@ -52,6 +52,8 @@ class ApiConfig {
   static String ticketDetail(String id) => '/api/tickets/$id';
   static String ticketStatus(String id) => '/api/tickets/$id/status';
   static String ticketAssign(String id) => '/api/tickets/$id/assign';
+  static String ticketMaintenanceCrew(String id) =>
+      '/api/tickets/$id/maintenance-crew';
   static String ncrResubmit(String id) => '/api/tickets/$id/ncr-resubmit';
   static String ncrEngineerResponse(String id) =>
       '/api/tickets/$id/ncr-engineer-response';
