@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
+import { commentAuthorDisplayRole } from '@/lib/ticket-comment-author-role';
 
 const prisma = _prisma as any;
 
@@ -141,7 +142,7 @@ export async function GET(
       : [];
     const roleByAuthor: Record<string, string> = {};
     for (const r of requesters) {
-      roleByAuthor[r.id] = r.role === 'ENGINEER' ? 'engineer' : 'requester';
+      roleByAuthor[r.id] = commentAuthorDisplayRole(r.role as string);
     }
     const comments = commentsRows.map((c: { id: string; authorId: string; authorName: string; body: string; createdAt: Date }) => ({
       id: c.id,

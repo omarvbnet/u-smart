@@ -8,11 +8,13 @@ import {
   parseTicketCompanyJson,
 } from '@/lib/private-company-kpi';
 import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
+import {
+  findActiveMaintenanceCrewConflict,
+  isWorkspaceMaintenanceTechnique,
+} from '@/lib/workspace-maintenance-crew';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
-
-const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 
 /**
  * POST /api/tickets/[id]/maintenance-crew
@@ -80,8 +82,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       { status: 400 }
     );
   }
-  const tech = String(ticket.technique ?? '').toLowerCase();
-  if (!MAINTENANCE_TECHNIQUES.includes(tech)) {
+  const isMaint = await isWorkspaceMaintenanceTechnique(
+    prisma,
+    ticket.privateCompanyId as string,
+    ticket.technique
+  );
+  if (!isMaint) {
     return NextResponse.json({ success: false, message: 'Not a maintenance ticket.' }, { status: 400 });
   }
   if (String(ticket.status ?? '').toUpperCase() === 'COMPLETED') {
@@ -148,6 +154,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (action === 'join') {
     if (lead === me.id || crew.includes(me.id)) {
       return NextResponse.json({ success: true, maintenanceCrewIds: crew });
+    }
+    const busy = await findActiveMaintenanceCrewConflict(prisma, {
+      companyId: ticket.privateCompanyId as string,
+      requesterId: me.id,
+      excludeTicketId: ticketId,
+    });
+    if (busy.conflict) {
+      return NextResponse.json({ success: false, message: busy.message }, { status: 409 });
     }
     crew = [...crew, me.id];
     parsed.maintenanceCrewIds = crew;

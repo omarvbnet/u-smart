@@ -1123,9 +1123,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
+  bool _technicianHasAnotherActiveFieldTicket(String uid, Ticket current, List<Ticket> all) {
+    for (final o in all) {
+      if (o.id == current.id) continue;
+      if (!o.isOnSite && !o.isInProgress) continue;
+      if (o.assignedEngineerId == uid) return true;
+      if (o.maintenanceCrewIds.contains(uid)) return true;
+    }
+    return false;
+  }
+
   Widget _maintenanceCrewBanner(BuildContext context, Ticket t) {
+    final l10n = AppLocalizations.of(context);
     final pc = context.watch<PrivateCompanyProvider>();
     final auth = context.watch<AuthProvider>();
+    final ticketsProv = context.watch<TicketsProvider>();
     final uid = auth.user?.id;
     String labelFor(String id) {
       if (id == t.assignedEngineerId) {
@@ -1162,6 +1174,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
     final isLead = uid != null && uid == t.assignedEngineerId;
     final onCrew = uid != null && t.maintenanceCrewIds.contains(uid);
+    final blockedFromJoin = uid != null &&
+        !isLead &&
+        !onCrew &&
+        _technicianHasAnotherActiveFieldTicket(uid, t, ticketsProv.tickets);
     final canTap = _isTechnician && uid != null && !isLead;
 
     return Column(
@@ -1180,13 +1196,23 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         if (canTap) ...[
           const SizedBox(height: 8),
           if (!onCrew)
-            TextButton(
-              onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('join'),
-              child: Text(
-                _maintenanceCrewBusy ? '…' : 'Join as crew',
-                style: TextStyle(color: _accentColor, fontWeight: FontWeight.w700),
-              ),
-            )
+            if (blockedFromJoin)
+              Text(
+                l10n.t('maint_crew_join_blocked_active'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(160),
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              )
+            else
+              TextButton(
+                onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('join'),
+                child: Text(
+                  _maintenanceCrewBusy ? '…' : 'Join as crew',
+                  style: TextStyle(color: _accentColor, fontWeight: FontWeight.w700),
+                ),
+              )
           else
             TextButton(
               onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('leave'),
@@ -1205,9 +1231,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     setState(() => _maintenanceCrewBusy = true);
     try {
       final tp = context.read<TicketsProvider>();
-      final crew = await tp.postMaintenanceCrewAction(widget.ticketId, action);
+      final result = await tp.postMaintenanceCrewAction(widget.ticketId, action);
       if (!mounted) return;
-      if (crew != null) {
+      if (result.crew != null) {
         final refreshed = await tp.fetchTicketDetail(widget.ticketId);
         if (mounted) {
           setState(() {
@@ -1215,12 +1241,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           });
         }
       } else if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        final serverMsg = result.message?.trim();
+        final text = (serverMsg != null && serverMsg.isNotEmpty)
+            ? serverMsg
+            : l10n.t('maint_crew_join_failed_generic');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not update crew. You may need department “multi-technician crew” enabled, or the ticket may not be in your workspace.',
-            ),
-          ),
+          SnackBar(content: Text(text)),
         );
       }
     } finally {

@@ -4,7 +4,7 @@ class TicketComment {
   final String authorName;
   final String body;
   final DateTime createdAt;
-  /// 'engineer' | 'requester'
+  /// Display role from API: engineer | technician | requester
   final String authorRole;
 
   TicketComment({

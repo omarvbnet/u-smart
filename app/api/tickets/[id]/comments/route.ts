@@ -4,6 +4,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { visitorRequestSiteLogicalId, viewerHasSharedSiteTicketRead } from '@/lib/site-share-access';
 import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
+import { commentAuthorDisplayRole } from '@/lib/ticket-comment-author-role';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -149,7 +150,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       : [];
     const roleByAuthor: Record<string, string> = {};
     for (const r of requesters) {
-      roleByAuthor[r.id] = r.role === 'ENGINEER' ? 'engineer' : 'requester';
+      roleByAuthor[r.id] = commentAuthorDisplayRole(r.role as string);
     }
 
     const commentsWithRole = comments.map((c: { id: string; authorId: string; authorName: string; body: string; createdAt: Date }) => ({
@@ -189,7 +190,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       select: { name: true, username: true, role: true },
     });
 
-    const authorRole = requester?.role === 'ENGINEER' ? 'engineer' : 'requester';
+    const authorRole = commentAuthorDisplayRole(requester?.role as string | undefined);
 
     const comment = await prisma.ticketComment.create({
       data: {
@@ -219,7 +220,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const assignedEngineerId = company?.assignedEngineerId;
         const authorName = requester?.name || requester?.username || '';
 
-        if (authorRole === 'engineer' && ticket.requesterId) {
+        if (
+          (authorRole === 'engineer' || authorRole === 'technician') &&
+          ticket.requesterId
+        ) {
           await notifyRequesterI18n({
             prisma,
             type: 'comment_added',

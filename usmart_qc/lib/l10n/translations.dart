@@ -219,6 +219,10 @@ const Map<String, String> _en = {
   'maint_telecom': 'Telecom',
   'maint_ftth': 'FTTH',
   'maint_technique_maintenance': 'Maintenance',
+  'maint_crew_join_blocked_active':
+      'You have another ticket in progress (as lead or as crew). Finish it or leave that crew to join here.',
+  'maint_crew_join_failed_generic':
+      'Could not update crew. Check department “multi-technician crew”, workspace ticket type, or your account overrides.',
   'maint_reason': 'Reason for maintenance',
   'maint_reason_hint': 'Describe why maintenance is needed',
   'maint_reason_required': 'Reason for maintenance is required',
@@ -852,6 +856,10 @@ const Map<String, String> _ar = {
   'maint_telecom': 'اتصالات',
   'maint_ftth': 'FTTH',
   'maint_technique_maintenance': 'صيانة',
+  'maint_crew_join_blocked_active':
+      'لديك تذكرة أخرى قيد التنفيذ (كفني رئيس أو ضمن الطاقم). أنهِ العمل أو اخرج من الطاقم للانضمام هنا.',
+  'maint_crew_join_failed_generic':
+      'تعذّر تحديث الطاقم. تحقق من تفعيل «طاقم متعدد الفنيين» في القسم، أو نوع التذكرة، أو إعدادات حسابك.',
   'maint_reason': 'سبب الصيانة',
   'maint_reason_hint': 'صف لماذا تحتاج الصيانة',
   'maint_reason_required': 'سبب الصيانة مطلوب',
@@ -1473,6 +1481,10 @@ const Map<String, String> _ku = {
   'maint_telecom': 'تەلەکۆم',
   'maint_ftth': 'FTTH',
   'maint_technique_maintenance': 'چاککردنەوە',
+  'maint_crew_join_blocked_active':
+      'تیکەتێکی تر هەیە لە کاردان (وەک سەرەکی یان ئەندامی تیم). تەواوی بکە یان لەو تیمە دەرچوە بۆ بەشداریکردن لێرە.',
+  'maint_crew_join_failed_generic':
+      'نەتوانرا تیم نوێ بکرێتەوە. ڕێکخستنی «تیمی چەند فەنەر» لە بەش، جۆری تیکەت، یان ڕێکخستنی هەژمار بپشکنە.',
   'maint_reason': 'هۆکاری چاککردنەوە',
   'maint_reason_hint': 'باس بکە بۆچی چاککردنەوە پێویستە',
   'maint_reason_required': 'هۆکاری چاککردنەوە پێویستە',
@@ -2098,6 +2110,10 @@ const Map<String, String> _tr = {
   'maint_telecom': 'Telekom',
   'maint_ftth': 'FTTH',
   'maint_technique_maintenance': 'Bakım',
+  'maint_crew_join_blocked_active':
+      'Devam eden başka bir biletiniz var (lider veya ekip üyesi olarak). Buraya katılmadan önce onu bitirin veya ekipten ayrılın.',
+  'maint_crew_join_failed_generic':
+      'Ekip güncellenemedi. Departmanda «çok teknisyenli ekip», bilet türü veya hesap geçersiz kılmalarını kontrol edin.',
   'maint_reason': 'Bakım nedeni',
   'maint_reason_hint': 'Bakımın neden gerekli olduğunu açıklayın',
   'maint_reason_required': 'Bakım nedeni zorunludur',

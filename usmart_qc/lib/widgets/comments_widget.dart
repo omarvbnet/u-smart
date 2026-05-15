@@ -154,30 +154,45 @@ class _CommentsWidgetState extends State<CommentsWidget> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: c.authorRole == 'engineer'
-                                      ? const Color(0xFF0EA5E9).withAlpha(40)
-                                      : const Color(0xFF10B981).withAlpha(40),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  c.authorRole == 'engineer'
-                                      ? l10n.t('engineer')
-                                      : l10n.t('requester'),
-                                  style: TextStyle(
-                                    color: c.authorRole == 'engineer'
-                                        ? const Color(0xFF38BDF8)
-                                        : const Color(0xFF34D399),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
+                              () {
+                                final role = c.authorRole;
+                                final isEng = role == 'engineer';
+                                final isTech = role == 'technician';
+                                late final Color chipBg;
+                                late final Color chipFg;
+                                late final String chipLabel;
+                                if (isEng) {
+                                  chipBg = const Color(0xFF0EA5E9).withAlpha(40);
+                                  chipFg = const Color(0xFF38BDF8);
+                                  chipLabel = l10n.t('engineer');
+                                } else if (isTech) {
+                                  chipBg = const Color(0xFFF59E0B).withAlpha(45);
+                                  chipFg = const Color(0xFFFBBF24);
+                                  chipLabel = l10n.t('role_technician');
+                                } else {
+                                  chipBg = const Color(0xFF10B981).withAlpha(40);
+                                  chipFg = const Color(0xFF34D399);
+                                  chipLabel = l10n.t('requester');
+                                }
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
                                   ),
-                                ),
-                              ),
+                                  decoration: BoxDecoration(
+                                    color: chipBg,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    chipLabel,
+                                    style: TextStyle(
+                                      color: chipFg,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                );
+                              }(),
                             ],
                           ),
                         ),

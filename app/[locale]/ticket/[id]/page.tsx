@@ -46,7 +46,13 @@ type TicketDetail = {
   inspectionChecklist?: Array<{ id: string; label: string; checked: boolean; comment?: string; weight?: string }>;
   assignedEngineerId?: string | null;
   assignedEngineerName?: string | null;
-  comments?: Array<{ id: string; authorName: string; body: string; createdAt: string; authorRole: 'engineer' | 'requester' }>;
+  comments?: Array<{
+    id: string;
+    authorName: string;
+    body: string;
+    createdAt: string;
+    authorRole: 'engineer' | 'technician' | 'requester';
+  }>;
 };
 
 export default function PublicTicketPage() {
@@ -429,27 +435,36 @@ export default function PublicTicketPage() {
                   Comments
                 </h2>
                 <div className="space-y-3">
-                  {ticket.comments.map((c) => (
+                  {ticket.comments.map((c) => {
+                    const isEng = c.authorRole === 'engineer';
+                    const isTech = c.authorRole === 'technician';
+                    const cardClass = isEng
+                      ? 'border-cyan-500/30 bg-cyan-500/10'
+                      : isTech
+                        ? 'border-amber-500/30 bg-amber-500/10'
+                        : 'border-emerald-500/30 bg-emerald-500/10';
+                    const chipClass = isEng
+                      ? 'bg-cyan-500/30 text-cyan-300'
+                      : isTech
+                        ? 'bg-amber-500/30 text-amber-200'
+                        : 'bg-emerald-500/30 text-emerald-300';
+                    const chipLabel = isEng ? 'Engineer' : isTech ? 'Technician' : 'Requester';
+                    return (
                     <div
                       key={c.id}
-                      className={`rounded-xl border p-3 text-sm ${
-                        c.authorRole === 'engineer'
-                          ? 'border-cyan-500/30 bg-cyan-500/10'
-                          : 'border-emerald-500/30 bg-emerald-500/10'
-                      }`}
+                      className={`rounded-xl border p-3 text-sm ${cardClass}`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-white">{c.authorName}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          c.authorRole === 'engineer' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-emerald-500/30 text-emerald-300'
-                        }`}>
-                          {c.authorRole === 'engineer' ? 'Engineer' : 'Requester'}
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${chipClass}`}>
+                          {chipLabel}
                         </span>
                         <span className="text-xs text-gray-500">{formatDate(c.createdAt)}</span>
                       </div>
                       <p className="text-gray-300 whitespace-pre-wrap">{c.body}</p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}

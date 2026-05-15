@@ -366,17 +366,27 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   /// Workspace maintenance: join or leave `maintenanceCrewIds` (technician only; server enforces).
-  Future<List<String>?> postMaintenanceCrewAction(String ticketId, String action) async {
+  /// On failure, [message] may contain the server error (English) or null on network error.
+  Future<({List<String>? crew, String? message})> postMaintenanceCrewAction(
+    String ticketId,
+    String action,
+  ) async {
     try {
       final data = await _api.post(
         ApiConfig.ticketMaintenanceCrew(ticketId),
         body: {'action': action},
       );
       if (data['success'] == true && data['maintenanceCrewIds'] is List) {
-        return (data['maintenanceCrewIds'] as List).map((e) => e.toString()).toList();
+        final crew =
+            (data['maintenanceCrewIds'] as List).map((e) => e.toString()).toList();
+        return (crew: crew, message: null);
+      }
+      final msg = data['message'];
+      if (msg is String && msg.trim().isNotEmpty) {
+        return (crew: null, message: msg.trim());
       }
     } catch (_) {}
-    return null;
+    return (crew: null, message: null);
   }
 
   String? lastTicketCreateMessage;
