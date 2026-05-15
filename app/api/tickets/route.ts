@@ -29,6 +29,7 @@ import {
 } from '@/lib/technique-specialization-tags';
 import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
 import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-rows';
+import { normalizeQFieldProjectsFromCreateBody, qfieldProjectsToJsonValue } from '@/lib/qfield-projects';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -869,6 +870,31 @@ export async function POST(req: NextRequest) {
     if (isMaintenanceTicket && maintenanceReason) {
       companyPayloadObj.maintenanceReason = maintenanceReason;
     }
+
+    const qfieldFromBody = normalizeQFieldProjectsFromCreateBody(body.qfieldProjects);
+    if (qfieldFromBody.length > 0) {
+      const creatorId = payload?.requesterId ?? null;
+      if (creatorId) {
+        let byName: string | null = null;
+        try {
+          const cr = await prisma.ticketRequester.findUnique({
+            where: { id: creatorId },
+            select: { name: true, username: true },
+          });
+          byName = ((cr?.name as string) || (cr?.username as string) || '').trim() || null;
+        } catch {
+          /* ignore */
+        }
+        for (const p of qfieldFromBody) {
+          for (const r of p.revisions) {
+            if (!r.byRequesterId) r.byRequesterId = creatorId;
+            if (!r.byName && byName) r.byName = byName;
+          }
+        }
+      }
+      companyPayloadObj.qfieldProjects = qfieldProjectsToJsonValue(qfieldFromBody);
+    }
+
     const companyPayload = JSON.stringify(companyPayloadObj);
 
     const serviceSlug = ticketUsesQcServiceSlug

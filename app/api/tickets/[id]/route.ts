@@ -13,6 +13,7 @@ import {
   readMaintenanceAwaitingSince,
   readMaintenanceRejectReason,
 } from '@/lib/maintenance-requester-confirmation';
+import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
 
 const prisma = _prisma as any;
 
@@ -74,6 +75,7 @@ export async function GET(
       let status = row.status ?? 'PENDING';
       let embeddedChecklistTemplateId: string | null = null;
       let parsedCompany: unknown = {};
+      let qfieldProjectsCoordinator: QFieldProjectStored[] = [];
       try {
         parsedCompany = typeof row.company === 'string' ? JSON.parse(row.company) : {};
         const parsed = parsedCompany as Record<string, unknown>;
@@ -85,6 +87,7 @@ export async function GET(
           if (typeof parsed.checklistTemplateId === 'string' && parsed.checklistTemplateId.trim()) {
             embeddedChecklistTemplateId = parsed.checklistTemplateId.trim();
           }
+          qfieldProjectsCoordinator = parseQFieldProjectsFromCompanyJson(parsed);
         }
       } catch {
         /* ignore */
@@ -122,6 +125,7 @@ export async function GET(
           resubmitReason: row.resubmitReason ?? null,
           resubmittedAt: row.resubmittedAt ?? null,
           requesterId: row.requesterId ?? null,
+          qfieldProjects: qfieldProjectsCoordinator,
         },
       });
     } catch (err) {
@@ -347,6 +351,7 @@ export async function GET(
     let completedAt: string | null = row.completedAt ? String(row.completedAt) : null;
     let designSpecifications: string | null = null;
     let attachmentUrls: string[] = [];
+    let qfieldProjects: QFieldProjectStored[] = [];
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
     let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; result?: string; comment?: string }> = [];
@@ -425,6 +430,7 @@ export async function GET(
         conflictReportComment = typeof parsed.conflictReportComment === 'string' ? parsed.conflictReportComment : null;
         conflictReportedAt = typeof parsed.conflictReportedAt === 'string' ? parsed.conflictReportedAt : null;
         conflictResolvedAt = typeof parsed.conflictResolvedAt === 'string' ? parsed.conflictResolvedAt : null;
+        qfieldProjects = parseQFieldProjectsFromCompanyJson(parsed as Record<string, unknown>);
       }
       // Fallback: extract inspection result when COMPLETED (handles alternate company JSON structure)
       if (status === 'COMPLETED' && !inspectionResult && typeof parsed.inspectionResult === 'string') {
@@ -528,6 +534,7 @@ export async function GET(
         assignedTeam,
         designSpecifications,
         attachmentUrls,
+        qfieldProjects,
         company: companyName,
         inspectionResult,
         inspectionComments,

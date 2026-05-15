@@ -29,6 +29,7 @@ import '../widgets/evidence_upload_widget.dart';
 import 'ncr_resubmit_screen.dart';
 import 'conflict_detail_screen.dart';
 import 'attachment_viewer_screen.dart';
+import 'ticket_qfield_workspace_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final String ticketId;
@@ -75,6 +76,34 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (uid == null || !t.isMaintenance) return false;
     if (t.assignedEngineerId == uid) return true;
     return t.maintenanceCrewIds.contains(uid);
+  }
+
+  bool _canManageQField(Ticket t) {
+    final auth = context.read<AuthProvider>();
+    final uid = auth.user?.id;
+    if (uid == null) return false;
+    if (t.requesterId == uid) return true;
+    if (t.assignedEngineerId == uid) return true;
+    if (t.maintenanceCrewIds.contains(uid)) return true;
+    final role = auth.user!.role.toUpperCase();
+    final wsId = context.read<PrivateCompanyProvider>().workspace?.id;
+    final isWsTicket =
+        t.assignmentScope == 'PRIVATE_COMPANY_STAFF' && t.privateCompanyId != null;
+    if (isWsTicket) {
+      if (wsId == null || wsId != t.privateCompanyId) return false;
+      return role == 'ENGINEER' ||
+          role == 'QUALITY_ENGINEER' ||
+          role == 'SUPERVISION_ENGINEER' ||
+          role == 'TECHNICIAN' ||
+          role == 'MANAGER' ||
+          role == 'COORDINATOR';
+    }
+    if (role == 'ENGINEER' ||
+        role == 'QUALITY_ENGINEER' ||
+        role == 'SUPERVISION_ENGINEER') {
+      return true;
+    }
+    return false;
   }
 
   bool _canSubmitMaintenanceCompletion() {
@@ -2056,6 +2085,86 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               t.designSpecifications!,
               style: TextStyle(
                   color: Colors.white.withAlpha(180), fontSize: 14),
+            ),
+          ),
+        ]),
+      ],
+      if (t.qfieldProjects.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('ticket_qfield_card_title'), [
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.t('ticket_qfield_card_subtitle'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(160),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...t.qfieldProjects.take(4).map(
+                      (p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.layers_outlined,
+                                size: 18, color: Color(0xFF00D4AA)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                p.title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                if (t.qfieldProjects.length > 4)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      l10n.t('ticket_qfield_n_more', {
+                        'count': '${t.qfieldProjects.length - 4}',
+                      }),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(120),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      foregroundColor: const Color(0xFF05051A),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => TicketQFieldWorkspaceScreen(
+                            ticketId: t.id,
+                            initialTicket: t,
+                            canWrite: _canManageQField(t),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.map_rounded, size: 20),
+                    label: Text(l10n.t('ticket_qfield_open')),
+                  ),
+                ),
+              ],
             ),
           ),
         ]),

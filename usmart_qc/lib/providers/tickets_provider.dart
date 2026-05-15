@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../models/ticket.dart';
+import '../models/qfield_project.dart';
 import '../models/stats.dart';
 import '../models/company_dashboard_summary.dart';
 import '../models/comment.dart';
@@ -423,6 +424,8 @@ class TicketsProvider extends ChangeNotifier {
     bool resubmitToRequester = false,
     /// Workspace owner / coordinator only: narrow ticket to one department (API validates).
     String? privateCompanyTargetDepartmentId,
+    /// Optional QField / GIS packages (uploaded via [uploadTicketQfield]); stored separately from photos/PDF.
+    List<Map<String, dynamic>>? qfieldProjects,
   }) async {
     lastTicketCreateMessage = null;
     try {
@@ -445,6 +448,9 @@ class TicketsProvider extends ChangeNotifier {
       }
       if (attachmentUrls != null && attachmentUrls.isNotEmpty) {
         body['attachmentUrls'] = attachmentUrls;
+      }
+      if (qfieldProjects != null && qfieldProjects.isNotEmpty) {
+        body['qfieldProjects'] = qfieldProjects;
       }
       if (maintenanceReason != null && maintenanceReason.trim().isNotEmpty) {
         body['maintenanceReason'] = maintenanceReason.trim();
@@ -807,6 +813,54 @@ class TicketsProvider extends ChangeNotifier {
       }
     } catch (_) {}
     return false;
+  }
+
+  /// QField / GeoPackage / project zip — no image compression; uses dedicated upload route (larger limit).
+  Future<String?> uploadQFieldPackageFromBytes(List<int> bytes, String filename) async {
+    try {
+      return await _api.uploadFileFromBytes(
+        ApiConfig.uploadTicketQfield,
+        bytes,
+        filename,
+      );
+    } catch (_) {}
+    return null;
+  }
+
+  Future<String?> uploadQFieldPackageFromPath(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
+      final name = filePath.split(RegExp(r'[\\/]')).last;
+      return uploadQFieldPackageFromBytes(bytes, name);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Returns updated projects on success.
+  Future<({bool ok, String? message, List<QFieldProject>? projects})> postTicketQFieldAction(
+    String ticketId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketQFieldProjects(ticketId),
+        body: body,
+      );
+      if (data['success'] == true && data['qfieldProjects'] is List) {
+        final list = (data['qfieldProjects'] as List)
+            .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+            .toList();
+        return (ok: true, message: null, projects: list);
+      }
+      final msg = data['message'];
+      if (msg is String && msg.trim().isNotEmpty) {
+        return (ok: false, message: msg.trim(), projects: null);
+      }
+    } catch (_) {}
+    return (ok: false, message: null, projects: null);
   }
 
   // ─── Upload file ───

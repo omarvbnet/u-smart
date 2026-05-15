@@ -38,6 +38,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _submitting = false;
   bool _uploading = false;
   final List<String> _attachmentUrls = [];
+  final List<Map<String, String>> _qfieldDrafts = [];
   String? _selectedChecklistId;
   /// 'PRIVATE_COMPANY' = restrict to my workspace staff, 'GLOBAL' = open to all engineers
   String _assignmentScope = 'PRIVATE_COMPANY';
@@ -177,6 +178,19 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       siteLongitude: coordLng,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
+      qfieldProjects: () {
+        if (_qfieldDrafts.isEmpty) return null;
+        return _qfieldDrafts
+            .where((e) => (e['url'] ?? '').trim().isNotEmpty)
+            .map((e) {
+          final url = e['url']!.trim();
+          final fileName = (e['fileName'] ?? '').trim();
+          final title = (e['title'] ?? '').trim();
+          final m = <String, dynamic>{'url': url, 'fileName': fileName};
+          if (title.isNotEmpty) m['title'] = title;
+          return m;
+        }).toList();
+      }(),
       checklistTemplateId: _selectedChecklistId,
       assignmentScope: scopeForApi,
       privateCompanyTargetDepartmentId:
@@ -500,6 +514,77 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     setState(() => _attachmentUrls.removeAt(index));
   }
 
+  void _removeQFieldDraft(int index) {
+    setState(() => _qfieldDrafts.removeAt(index));
+  }
+
+  Future<void> _pickAndUploadQField(AppLocalizations l10n) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['qgz', 'zip', 'gpkg', 'qgs'],
+      allowMultiple: false,
+      withData: true,
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final bytes = file.bytes;
+    final path = file.path;
+    final filename = file.name;
+    if (filename.isEmpty) return;
+    final provider = context.read<TicketsProvider>();
+    setState(() => _uploading = true);
+    try {
+      String? url;
+      if (bytes != null && bytes.isNotEmpty) {
+        url = await provider.uploadQFieldPackageFromBytes(bytes, filename);
+      } else if (path != null && path.isNotEmpty) {
+        url = await provider.uploadQFieldPackageFromPath(path);
+      }
+      if (url == null || !mounted) {
+        if (mounted) _showError(l10n.t('upload_failed'));
+        return;
+      }
+      final baseTitle = filename.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      final titleCtrl = TextEditingController(text: baseTitle.isEmpty ? filename : baseTitle);
+      final title = await showDialog<String>(
+        context: context,
+        builder: (ctx) {
+          final loc = AppLocalizations.of(ctx);
+          return AlertDialog(
+            backgroundColor: const Color(0xFF12122A),
+            title: Text(loc.t('qfield_project_title'),
+                style: const TextStyle(color: Colors.white, fontSize: 16)),
+            content: TextField(
+              controller: titleCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: filename,
+                hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, ''),
+                child: Text(loc.t('cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, titleCtrl.text.trim()),
+                child: Text(loc.t('ok')),
+              ),
+            ],
+          );
+        },
+      );
+      titleCtrl.dispose();
+      if (!mounted) return;
+      final t = (title == null || title.isEmpty) ? filename : title;
+      setState(() => _qfieldDrafts.add({'url': url!, 'fileName': filename, 'title': t}));
+    } catch (_) {
+      if (mounted) _showError(l10n.t('upload_failed'));
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -677,6 +762,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           _buildDesignSpecsField(l10n),
           const SizedBox(height: 16),
           _buildAttachmentsSection(l10n),
+          const SizedBox(height: 16),
+          _buildQFieldSection(l10n),
           const SizedBox(height: 36),
           SizedBox(
             width: double.infinity,
@@ -1287,6 +1374,87 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               );
             }).toList(),
           ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildQFieldSection(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('qfield_add_package').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.t('qfield_package_hint'),
+          style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12),
+        ),
+        const SizedBox(height: 10),
+        Material(
+          color: const Color(0xFF00D4AA).withAlpha(22),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: _uploading ? null : () => _pickAndUploadQField(l10n),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.map_rounded, color: Color(0xFF00D4AA), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      l10n.t('qfield_add_package'),
+                      style: const TextStyle(
+                        color: Color(0xFF00D4AA),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.cloud_upload_outlined,
+                      color: Colors.white.withAlpha(160), size: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_qfieldDrafts.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ..._qfieldDrafts.asMap().entries.map((e) {
+            final i = e.key;
+            final d = e.value;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(12),
+                child: ListTile(
+                  leading: const Icon(Icons.layers_rounded, color: Color(0xFF6C63FF)),
+                  title: Text(
+                    d['title'] ?? d['fileName'] ?? '',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    d['fileName'] ?? '',
+                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4757)),
+                    onPressed: () => _removeQFieldDraft(i),
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ],
     );

@@ -1,3 +1,5 @@
+import 'qfield_project.dart';
+
 class ChecklistHistoryEntry {
   final String at;
   final List<Map<String, dynamic>> inspectionChecklist;
@@ -78,6 +80,8 @@ class Ticket {
   final String? completedAt;
   final String? designSpecifications;
   final List<String> attachmentUrls;
+  /// QField / QGIS mobile project packages (company JSON `qfieldProjects`).
+  final List<QFieldProject> qfieldProjects;
   final String? inspectionResult;
   final String? inspectionComments;
   final String? ncrReason;
@@ -149,6 +153,7 @@ class Ticket {
     this.completedAt,
     this.designSpecifications,
     this.attachmentUrls = const [],
+    this.qfieldProjects = const [],
     this.inspectionResult,
     this.inspectionComments,
     this.ncrReason,
@@ -247,6 +252,13 @@ class Ticket {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      qfieldProjects: () {
+        final raw = json['qfieldProjects'];
+        if (raw is! List) return <QFieldProject>[];
+        return raw
+            .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }(),
       inspectionResult: json['inspectionResult'] as String?,
       inspectionComments: json['inspectionComments'] as String?,
       ncrReason: json['ncrReason'] as String?,

@@ -50,6 +50,7 @@ class ApiConfig {
   static const String tickets = '/api/tickets';
   static const String ticketStats = '/api/tickets/stats';
   static String ticketDetail(String id) => '/api/tickets/$id';
+  static String ticketQFieldProjects(String id) => '/api/tickets/$id/qfield-projects';
   static String ticketStatus(String id) => '/api/tickets/$id/status';
   static String ticketAssign(String id) => '/api/tickets/$id/assign';
   static String ticketMaintenanceCrew(String id) =>
@@ -79,6 +80,7 @@ class ApiConfig {
   static String ticketChecklistTemplate(String ticketId) =>
       '/api/tickets/$ticketId/checklist-template';
   static const String uploadTicketAttachment = '/api/upload/ticket-attachment';
+  static const String uploadTicketQfield = '/api/upload/ticket-qfield';
 
   static const String conflicts = '/api/conflicts';
   static String conflictDetail(String id) => '/api/conflicts/$id';

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { commentAuthorDisplayRole } from '@/lib/ticket-comment-author-role';
+import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
 
 const prisma = _prisma as any;
 
@@ -82,6 +83,7 @@ export async function GET(
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
     let assignedEngineerId: string | null = null;
     let assignedEngineerName: string | null = null;
+    let qfieldProjectsShare: QFieldProjectStored[] = [];
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -111,6 +113,7 @@ export async function GET(
         ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
           ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
           : [];
+        qfieldProjectsShare = parseQFieldProjectsFromCompanyJson(parsed as Record<string, unknown>);
       }
       assignedEngineerId = typeof (parsed as { assignedEngineerId?: string }).assignedEngineerId === 'string' ? (parsed as { assignedEngineerId: string }).assignedEngineerId : null;
       assignedEngineerName = typeof (parsed as { assignedEngineerName?: string }).assignedEngineerName === 'string' ? (parsed as { assignedEngineerName: string }).assignedEngineerName : null;
@@ -179,6 +182,7 @@ export async function GET(
         assignedTeam,
         designSpecifications,
         attachmentUrls,
+        qfieldProjects: qfieldProjectsShare,
         inspectionResult,
         inspectionComments,
         inspectionChecklist,
