@@ -1627,6 +1627,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       // ─── NEEDS_EDIT banner: notify field staff coordinator wants edits ───
       if ((isEngineer || _isTechnician) &&
           isMyTicket &&
+          !t.isCompleted &&
           t.workflowState == 'NEEDS_EDIT') ...[
         const SizedBox(height: 12),
         _needsEditBanner(t, l10n),
@@ -2085,6 +2086,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         CommentsWidget(
           comments: _comments,
           loading: _loadingComments,
+          allowAdd: !t.isCompleted,
           onAdd: _addComment,
         ),
       ),

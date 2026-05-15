@@ -898,6 +898,21 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     }
   }
 
+  /// XLSX snapshot: tool inventory, assignments, movement-derived notes (API role-scoped).
+  Future<List<int>?> downloadWarehouseToolsExport({
+    bool toolsOnly = true,
+    String? departmentId,
+  }) async {
+    final q = <String, String>{};
+    if (!toolsOnly) q['toolsOnly'] = '0';
+    final d = departmentId?.trim();
+    if (d != null && d.isNotEmpty) q['departmentId'] = d;
+    return _api.getBytes(
+      ApiConfig.privateCompanyWarehouseToolsExport,
+      query: q.isEmpty ? null : q,
+    );
+  }
+
   void reset() {
     _dashboard = null;
     _materials = const [];

@@ -8,12 +8,22 @@ const prisma = _prisma as any;
 /**
  * GET /api/provisor-private-company/warehouse/staff-search?q=...
  *
- * Warehouse keepers / owners only. Searches workspace staff by username or
- * phone (substring match, case-insensitive for username).
+ * Warehouse keepers, owners, managers, and coordinators. Searches workspace
+ * staff by username, phone, or name (substring match).
  */
 export async function GET(req: NextRequest) {
-  const guard = await warehouseGuard(req, { requireMutate: true });
+  const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
+  if (!guard.canMutateWarehouse && !guard.canAssignFromWarehouse) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          'Only warehouse staff and department managers/coordinators can search for assignment targets.',
+      },
+      { status: 403 }
+    );
+  }
   const q = (new URL(req.url).searchParams.get('q') ?? '').trim();
   if (q.length < 2) {
     return NextResponse.json(

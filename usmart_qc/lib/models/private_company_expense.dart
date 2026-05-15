@@ -79,6 +79,8 @@ class ExpenseAnalyticsSnapshot {
   ExpenseAnalyticsSnapshot({
     required this.scope,
     required this.days,
+    this.periodFrom,
+    this.periodTo,
     this.provinceFilter,
     this.departmentId,
     this.summaryTotalAmount = 0,
@@ -93,6 +95,9 @@ class ExpenseAnalyticsSnapshot {
 
   final String scope;
   final int days;
+  /// API `from` / `to` (YYYY-MM-DD) when using a calendar range.
+  final String? periodFrom;
+  final String? periodTo;
   final String? provinceFilter;
   final String? departmentId;
   final double summaryTotalAmount;
@@ -109,6 +114,8 @@ class ExpenseAnalyticsSnapshot {
     return ExpenseAnalyticsSnapshot(
       scope: json['scope'] as String? ?? 'self',
       days: (json['days'] as num?)?.toInt() ?? 90,
+      periodFrom: json['from'] as String?,
+      periodTo: json['to'] as String?,
       provinceFilter: json['provinceFilter'] as String?,
       departmentId: json['departmentId'] as String?,
       summaryTotalAmount:

@@ -29,7 +29,12 @@ Future<void> refreshWorkspaceFieldStaffAnalytics(BuildContext context) async {
   await Future.wait([
     pc.checkWorkspaceSiteArrival(),
     pc.fetchKpis(days: 365),
-    pc.fetchExpenseAnalytics(days: 90),
+    () {
+      final n = DateTime.now();
+      final end = DateTime(n.year, n.month, n.day);
+      final start = end.subtract(const Duration(days: 89));
+      return pc.fetchExpenseAnalytics(from: start, to: end);
+    }(),
     wh.refreshMaterialRequests('mine'),
     wh.loadStaffMaterialBudgets(),
   ]);

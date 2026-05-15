@@ -418,7 +418,13 @@ class TicketsProvider extends ChangeNotifier {
     try {
       final data = await _api.get(ApiConfig.ticketDetail(id));
       if (data['success'] == true && data['ticket'] != null) {
-        return Ticket.fromJson(data['ticket'] as Map<String, dynamic>);
+        final ticket = Ticket.fromJson(data['ticket'] as Map<String, dynamic>);
+        final i = _tickets.indexWhere((e) => e.id == id);
+        if (i >= 0) {
+          _tickets = List<Ticket>.from(_tickets)..[i] = ticket;
+          notifyListeners();
+        }
+        return ticket;
       }
     } catch (_) {}
     return null;

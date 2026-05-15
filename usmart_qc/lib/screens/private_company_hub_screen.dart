@@ -4614,6 +4614,7 @@ class _WarehouseTab extends StatefulWidget {
 class _WarehouseTabState extends State<_WarehouseTab>
     with SingleTickerProviderStateMixin {
   late final TabController _subTabs;
+  bool _exportingTools = false;
 
   @override
   void initState() {
@@ -4863,11 +4864,63 @@ class _WarehouseTabState extends State<_WarehouseTab>
     editCtrl.dispose();
   }
 
+  Future<void> _exportWarehouseToolsReport() async {
+    if (_exportingTools) return;
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final pc = context.read<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
+    setState(() => _exportingTools = true);
+    final bytes = await wh.downloadWarehouseToolsExport(
+      toolsOnly: true,
+      departmentId: pc.isOwner ? null : pc.myDepartmentId,
+    );
+    if (!mounted) return;
+    setState(() => _exportingTools = false);
+    final messenger = ScaffoldMessenger.of(context);
+    if (bytes == null || bytes.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('pc_warehouse_tools_export_failed')),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+      return;
+    }
+    try {
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/warehouse-tools-${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      await File(path).writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: l10n.t('pc_warehouse_tools_export'),
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('export_success')),
+          backgroundColor: const Color(0xFF00D4AA),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('pc_warehouse_tools_export_failed')),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
     final pc = context.watch<PrivateCompanyProvider>();
-    final canManage = pc.canManageWarehouse;
+    final keeperManage = pc.canManageWarehouse;
+    final assignTools = pc.canAssignWarehouseToolsToStaff;
+    final exportTools = pc.canExportWarehouseToolsReport;
+    final dashboardCatalog = keeperManage || assignTools;
     final l10n = AppLocalizations.of(context);
     return Column(
       children: [
@@ -4950,6 +5003,33 @@ class _WarehouseTabState extends State<_WarehouseTab>
             ),
           ),
         ],
+        if (exportTools) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: OutlinedButton.icon(
+              onPressed: _exportingTools ? null : _exportWarehouseToolsReport,
+              icon: _exportingTools
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF8B83FF),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.table_chart_outlined,
+                      size: 18,
+                      color: Color(0xFF8B83FF),
+                    ),
+              label: Text(l10n.t('pc_warehouse_tools_export')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF8B83FF),
+                side: const BorderSide(color: Color(0xFF6C63FF)),
+              ),
+            ),
+          ),
+        ],
         Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           decoration: BoxDecoration(
@@ -4992,10 +5072,13 @@ class _WarehouseTabState extends State<_WarehouseTab>
           child: TabBarView(
             controller: _subTabs,
             children: [
-              _WarehouseDashboardView(canManage: canManage),
-              _WarehouseInventoryView(canManage: canManage),
-              _WarehouseRequestsView(canManage: canManage),
-              _WarehouseMaterialsView(canManage: canManage),
+              _WarehouseDashboardView(canManage: dashboardCatalog),
+              _WarehouseInventoryView(
+                keeperManage: keeperManage,
+                assignToolsFromStock: assignTools,
+              ),
+              _WarehouseRequestsView(canManage: keeperManage),
+              _WarehouseMaterialsView(canManage: dashboardCatalog),
               _WarehouseActivityView(),
               _WarehouseBudgetsView(workspace: widget.workspace),
             ],
@@ -6142,8 +6225,12 @@ class _WarehouseDashboardView extends StatelessWidget {
 // ─── Inventory sub-tab ─────────────────────────────────────────────────────
 
 class _WarehouseInventoryView extends StatefulWidget {
-  const _WarehouseInventoryView({required this.canManage});
-  final bool canManage;
+  const _WarehouseInventoryView({
+    required this.keeperManage,
+    required this.assignToolsFromStock,
+  });
+  final bool keeperManage;
+  final bool assignToolsFromStock;
 
   @override
   State<_WarehouseInventoryView> createState() =>
@@ -6152,6 +6239,9 @@ class _WarehouseInventoryView extends StatefulWidget {
 
 class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
   final _search = TextEditingController();
+
+  bool get _inventoryElevated =>
+      widget.keeperManage || widget.assignToolsFromStock;
 
   @override
   void dispose() {
@@ -6213,7 +6303,7 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
                 onPressed: () => _openFilters(context),
                 icon: const Icon(Icons.tune_rounded, size: 20),
               ),
-              if (widget.canManage) ...[
+              if (widget.keeperManage) ...[
                 const SizedBox(width: 6),
                 IconButton(
                   tooltip: 'Stock items',
@@ -6282,7 +6372,7 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
                         child: Text(
                           wh.hasAnyFilter
                               ? 'No items match the current filters.'
-                              : (widget.canManage
+                              : (_inventoryElevated
                                   ? 'Stock your first item to get started.'
                                   : 'You don\'t hold any items right now.'),
                           textAlign: TextAlign.center,
@@ -6300,7 +6390,8 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
                       final item = wh.items[i];
                       return _InventoryRow(
                         item: item,
-                        canManage: widget.canManage,
+                        keeperManage: widget.keeperManage,
+                        inventoryElevated: _inventoryElevated,
                       );
                     },
                   ),
@@ -6353,16 +6444,21 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
 }
 
 class _InventoryRow extends StatelessWidget {
-  const _InventoryRow({required this.item, required this.canManage});
+  const _InventoryRow({
+    required this.item,
+    required this.keeperManage,
+    required this.inventoryElevated,
+  });
   final WarehouseItem item;
-  final bool canManage;
+  final bool keeperManage;
+  final bool inventoryElevated;
 
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor(item.status);
     return _GlassCard(
       child: InkWell(
-        onTap: () => _openActions(context, item, canManage),
+        onTap: () => _openActions(context, item, keeperManage),
         borderRadius: BorderRadius.circular(18),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
@@ -6412,7 +6508,7 @@ class _InventoryRow extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (canManage)
+                  if (inventoryElevated)
                     const Icon(Icons.more_horiz_rounded,
                         color: Colors.white54, size: 20),
                 ],
@@ -6475,14 +6571,14 @@ class _InventoryRow extends StatelessWidget {
     );
   }
 
-  void _openActions(BuildContext context, WarehouseItem item, bool canManage) {
+  void _openActions(BuildContext context, WarehouseItem item, bool keeperManage) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ItemActionsSheet(
         item: item,
-        canManage: canManage,
+        keeperManage: keeperManage,
         anchorContext: context,
       ),
     );
@@ -8670,11 +8766,11 @@ class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
 class _ItemActionsSheet extends StatelessWidget {
   const _ItemActionsSheet({
     required this.item,
-    required this.canManage,
+    required this.keeperManage,
     required this.anchorContext,
   });
   final WarehouseItem item;
-  final bool canManage;
+  final bool keeperManage;
   final BuildContext anchorContext;
 
   @override
@@ -8688,17 +8784,29 @@ class _ItemActionsSheet extends StatelessWidget {
         item.status == MaterialItemStatus.assigned;
     final isHolder = item.assignedToId != null &&
         pc.workspace?.staff.any((s) => s.id == item.assignedToId) == true;
-    final canAssign = canManage &&
-        (item.status == MaterialItemStatus.inWarehouse ||
-            item.status == MaterialItemStatus.assigned);
+    final toolRow = item.isToolTagged;
+    final mgrAssign = pc.canAssignWarehouseToolsToStaff;
+    final canAssignFromStock = item.status == MaterialItemStatus.inWarehouse &&
+        (keeperManage || (mgrAssign && toolRow));
+    final canKeeperReassign = keeperManage &&
+        item.status == MaterialItemStatus.assigned;
+    final canPeerTransfer = pc.canPeerTransferWarehouseTool &&
+        uid != null &&
+        item.assignedToId == uid &&
+        item.handoverConfirmedAt != null &&
+        !item.returnPending &&
+        item.status == MaterialItemStatus.assigned &&
+        toolRow;
+    final canAssign =
+        canAssignFromStock || canKeeperReassign || canPeerTransfer;
     final canReturn = item.status == MaterialItemStatus.assigned;
     final canUse = item.status == MaterialItemStatus.assigned ||
-        (canManage && item.status == MaterialItemStatus.inWarehouse);
+        (keeperManage && item.status == MaterialItemStatus.inWarehouse);
     final canFieldReportDamagedOrLost = uid != null &&
         item.assignedToId == uid &&
         item.status == MaterialItemStatus.assigned &&
         pc.canRecordWarehouseMaterialOnTicket &&
-        !canManage;
+        !keeperManage;
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF0A0A1F),
@@ -8905,7 +9013,7 @@ class _ItemActionsSheet extends StatelessWidget {
                     final staffId = await _pickStaff(
                       anchorContext,
                       currentHolderId: item.assignedToId,
-                      useApiSearch: canManage,
+                      useApiSearch: keeperManage || pc.canAssignWarehouseToolsToStaff,
                     );
                     if (staffId == null) return;
                     if (!anchorContext.mounted) return;
@@ -8918,7 +9026,7 @@ class _ItemActionsSheet extends StatelessWidget {
                     }
                   },
                 ),
-              if (canManage &&
+              if (keeperManage &&
                   item.status == MaterialItemStatus.assigned &&
                   item.handoverConfirmedAt != null &&
                   !item.returnPending &&
@@ -8951,7 +9059,7 @@ class _ItemActionsSheet extends StatelessWidget {
                   },
                 ),
               if (canReturn &&
-                  (!canManage || item.assignedToId == uid) &&
+                  (!keeperManage || item.assignedToId == uid) &&
                   !item.returnPending)
                 _ActionTile(
                   icon: Icons.assignment_return_rounded,
@@ -9101,7 +9209,7 @@ class _ItemActionsSheet extends StatelessWidget {
                   },
                 ),
               ],
-              if (canManage) ...[
+              if (keeperManage) ...[
                 _ActionTile(
                   icon: Icons.report_problem_rounded,
                   label: 'Mark as damaged',

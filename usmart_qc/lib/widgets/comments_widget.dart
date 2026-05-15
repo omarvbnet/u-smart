@@ -7,12 +7,14 @@ class CommentsWidget extends StatefulWidget {
   final List<TicketComment> comments;
   final bool loading;
   final Future<void> Function(String body) onAdd;
+  final bool allowAdd;
 
   const CommentsWidget({
     super.key,
     required this.comments,
     required this.loading,
     required this.onAdd,
+    this.allowAdd = true,
   });
 
   @override
@@ -219,6 +221,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
               ),
             ),
           ),
+        if (widget.allowAdd) ...[
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -279,6 +282,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
             ],
           ),
         ),
+        ],
       ],
     );
   }

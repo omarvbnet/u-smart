@@ -77,10 +77,16 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** POST — create a new material (catalog entry). Manager-level only. */
+/** GET — create a new material (catalog entry). */
 export async function POST(req: NextRequest) {
-  const guard = await warehouseGuard(req, { requireMutate: true });
+  const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
+  if (!guard.canCreateWarehouseCatalog) {
+    return NextResponse.json(
+      { success: false, message: 'You cannot create catalog materials.' },
+      { status: 403 }
+    );
+  }
   const body = await req.json().catch(() => ({}));
   const name = normalizeName(body?.name);
   if (!name) {
@@ -123,8 +129,14 @@ export async function POST(req: NextRequest) {
 
 /** PATCH — update a catalog entry. */
 export async function PATCH(req: NextRequest) {
-  const guard = await warehouseGuard(req, { requireMutate: true });
+  const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
+  if (!guard.canCreateWarehouseCatalog) {
+    return NextResponse.json(
+      { success: false, message: 'You cannot update catalog materials.' },
+      { status: 403 }
+    );
+  }
   const body = await req.json().catch(() => ({}));
   const id = typeof body?.id === 'string' ? body.id.trim() : '';
   if (!id) {

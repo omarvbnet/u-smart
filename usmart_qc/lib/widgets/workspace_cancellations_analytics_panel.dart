@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -17,8 +18,47 @@ class WorkspaceCancellationsAnalyticsPanel extends StatefulWidget {
 
 class _WorkspaceCancellationsAnalyticsPanelState
     extends State<WorkspaceCancellationsAnalyticsPanel> {
-  int _days = 90;
+  late DateTime _rangeStart;
+  late DateTime _rangeEnd;
   bool _bootstrapped = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final n = DateTime.now();
+    final today = DateTime(n.year, n.month, n.day);
+    _rangeEnd = today;
+    _rangeStart = today.subtract(const Duration(days: 89));
+  }
+
+  Future<void> _pickDateRange(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: DateTimeRange(start: _rangeStart, end: _rangeEnd),
+      builder: (ctx, child) {
+        return Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: ThemeData.dark().colorScheme.copyWith(
+                  primary: const Color(0xFFFF6B81),
+                  onPrimary: Colors.white,
+                  surface: const Color(0xFF12122A),
+                  onSurface: Colors.white,
+                ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _rangeStart = DateTime(picked.start.year, picked.start.month, picked.start.day);
+      _rangeEnd = DateTime(picked.end.year, picked.end.month, picked.end.day);
+    });
+    await _refresh();
+  }
 
   @override
   void didChangeDependencies() {
@@ -29,7 +69,10 @@ class _WorkspaceCancellationsAnalyticsPanelState
   }
 
   Future<void> _refresh() {
-    return context.read<PrivateCompanyProvider>().fetchCancellationAnalytics(days: _days);
+    return context.read<PrivateCompanyProvider>().fetchCancellationAnalytics(
+          from: _rangeStart,
+          to: _rangeEnd,
+        );
   }
 
   static Widget _glass({required Widget child}) {
@@ -127,38 +170,38 @@ class _WorkspaceCancellationsAnalyticsPanelState
         children: [
           Expanded(
             child: _glass(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.date_range_rounded, size: 18, color: Colors.white.withValues(alpha: 0.7)),
-                    const SizedBox(width: 8),
-                    Text(
-                      l10n.t('pc_expenses_days'),
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 11),
-                    ),
-                    const Spacer(),
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _days,
-                        dropdownColor: const Color(0xFF12122A),
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                        items: [30, 90, 180, 365]
-                            .map(
-                              (d) => DropdownMenuItem(
-                                value: d,
-                                child: Text(l10n.t('pc_kpi_days_short', {'n': '$d'})),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _pickDateRange(context),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      children: [
+                        Icon(Icons.date_range_rounded, size: 18, color: Colors.white.withValues(alpha: 0.7)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.t('pc_analytics_date_range_label'),
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 10),
                               ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setState(() => _days = v);
-                          _refresh();
-                        },
-                      ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${DateFormat.yMMMd().format(_rangeStart)} – ${DateFormat.yMMMd().format(_rangeEnd)}',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.edit_calendar_rounded, size: 20, color: Colors.white.withValues(alpha: 0.45)),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

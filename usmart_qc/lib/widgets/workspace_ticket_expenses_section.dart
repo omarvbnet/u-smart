@@ -222,7 +222,8 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
                           .join(' · '),
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11),
                     ),
-                    trailing: _canAdd || context.read<PrivateCompanyProvider>().canManageStaff
+                    trailing: !widget.ticket.isCompleted &&
+                            (_canAdd || context.read<PrivateCompanyProvider>().canManageStaff)
                         ? IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54),
                             onPressed: () => _deleteLine(e),

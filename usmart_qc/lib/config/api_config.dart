@@ -130,6 +130,8 @@ class ApiConfig {
       '/api/provisor-private-company/expenses/settings';
   static const String privateCompanyExpenses =
       '/api/provisor-private-company/expenses';
+  static const String privateCompanyExpensesExport =
+      '/api/provisor-private-company/expenses/export';
   static const String privateCompanyExpensesAnalytics =
       '/api/provisor-private-company/expenses/analytics';
   static String privateCompanyExpenseDetail(String id) =>
@@ -165,6 +167,8 @@ class ApiConfig {
       '/api/provisor-private-company/warehouse/ticket-material-summary';
   static const String privateCompanyWarehouseKeeperTracking =
       '/api/provisor-private-company/warehouse/keeper-tracking';
+  static const String privateCompanyWarehouseToolsExport =
+      '/api/provisor-private-company/warehouse/tools/export';
   static const String privateCompanyWarehouseStaffSearch =
       '/api/provisor-private-company/warehouse/staff-search';
   static const String privateCompanyWarehouseMaterialUseReasons =

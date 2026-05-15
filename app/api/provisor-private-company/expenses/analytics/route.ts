@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { expensesGuard, loadExpenseSettings, serializeExpenseSettings } from '@/lib/private-company-expenses';
+import {
+  parseAnalyticsPeriod,
+  analyticsPeriodBadRequest,
+  ymdUTC,
+  inclusiveUtcDayCount,
+} from '@/lib/private-company-analytics-range';
 import { normalizeProvince } from '@/lib/private-company-warehouse';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,8 +31,9 @@ function finalizeAgg(agg: Agg) {
 }
 
 /**
- * GET /api/provisor-private-company/expenses/analytics?days=90&province=&departmentId=&staffId=
+ * GET /api/provisor-private-company/expenses/analytics?from=yyyy-MM-dd&to=yyyy-MM-dd&days=90&province=&departmentId=&staffId=
  * Owner: all rollups. Manager/coordinator: department scoped. Staff: self only.
+ * Prefer `from` + `to` (inclusive); otherwise `days` rolling window (default 90).
  */
 export async function GET(req: NextRequest) {
   const guard = await expensesGuard(req);
@@ -36,16 +43,20 @@ export async function GET(req: NextRequest) {
   const settings = settingsRow ? serializeExpenseSettings(settingsRow) : { enabled: false, reasons: [] };
 
   const url = new URL(req.url);
+  const hasExplicitRange =
+    !!(url.searchParams.get('from')?.trim() && url.searchParams.get('to')?.trim());
   const daysRaw = Number(url.searchParams.get('days') ?? '90');
-  const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 730) : 90;
-  const since = new Date(Date.now() - days * 86400000);
+  const daysFallback = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 730) : 90;
+  const periodParsed = parseAnalyticsPeriod(url);
+  if (!periodParsed.ok) return analyticsPeriodBadRequest(periodParsed.message);
+  const { from: rangeFrom, to: rangeTo } = periodParsed;
   const provinceFilter = normalizeProvince(url.searchParams.get('province'));
   let departmentId = url.searchParams.get('departmentId')?.trim() || null;
   const staffIdFilter = url.searchParams.get('staffId')?.trim() || null;
 
   const where: Record<string, unknown> = {
     companyId: guard.companyId,
-    createdAt: { gte: since },
+    createdAt: { gte: rangeFrom, lte: rangeTo },
   };
   if (provinceFilter) where.ticketProvince = provinceFilter;
   if (staffIdFilter) where.staffRequesterId = staffIdFilter;
@@ -239,10 +250,16 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.totalAmount - a.totalAmount)
     .slice(0, 100);
 
+  const daysOut = hasExplicitRange
+    ? inclusiveUtcDayCount(rangeFrom, rangeTo)
+    : daysFallback;
+
   return NextResponse.json({
     success: true,
     scope,
-    days,
+    days: daysOut,
+    from: ymdUTC(rangeFrom),
+    to: ymdUTC(rangeTo),
     provinceFilter,
     departmentId,
     staffId: staffIdFilter,

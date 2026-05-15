@@ -168,6 +168,37 @@ class PrivateCompanyProvider extends ChangeNotifier {
         role == 'WORKER';
   }
 
+  /// Assign units from warehouse stock (+ browse assignment search). Owners,
+  /// keepers, managers, and coordinators (API restricts managers to tool SKUs).
+  bool get canAssignWarehouseToolsToStaff {
+    if (!hasWorkspace || !isApproved) return false;
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final r = _resolvedRole;
+    return r == 'WAREHOUSE_KEEPER' || r == 'MANAGER' || r == 'COORDINATOR';
+  }
+
+  /// Peer handoff of tool stock already assigned to this user (after handover confirm).
+  bool get canPeerTransferWarehouseTool {
+    if (!hasWorkspace || !isApproved || !isStaff) return false;
+    final r = _resolvedRole;
+    return r == 'ENGINEER' ||
+        r == 'TECHNICIAN' ||
+        r == 'WORKER' ||
+        r == 'QUALITY_ENGINEER' ||
+        r == 'SUPERVISION_ENGINEER';
+  }
+
+  /// Excel export of tool inventory (workspace owner or department manager/coordinator).
+  bool get canExportWarehouseToolsReport {
+    if (!hasWorkspace || !isApproved) return false;
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final r = _resolvedRole;
+    if (r != 'MANAGER' && r != 'COORDINATOR') return false;
+    return myDepartmentId != null && myDepartmentId!.isNotEmpty;
+  }
+
   /// True for managers/coordinators (non-owner) — they are scoped to their own
   /// department and may only grant the ENGINEER / TECHNICIAN / WORKER roles.
   bool get isDepartmentManager {
@@ -400,6 +431,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   Future<void> fetchExpenseAnalytics({
     int days = 90,
+    DateTime? from,
+    DateTime? to,
     String? province,
     String? departmentId,
     String? staffId,
@@ -408,7 +441,15 @@ class PrivateCompanyProvider extends ChangeNotifier {
     _expenseAnalyticsLoading = true;
     notifyListeners();
     try {
-      final query = <String, String>{'days': '${days.clamp(1, 730)}'};
+      final query = <String, String>{};
+      if (from != null && to != null) {
+        String ymd(DateTime d) =>
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        query['from'] = ymd(from);
+        query['to'] = ymd(to);
+      } else {
+        query['days'] = '${days.clamp(1, 730)}';
+      }
       final p = province?.trim();
       if (p != null && p.isNotEmpty) query['province'] = p;
       final d = departmentId?.trim();
@@ -427,8 +468,33 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  /// XLSX of all expense lines in [from]–[to] (inclusive calendar days, UTC on server).
+  /// Owners see workspace-wide data; managers/coordinators are department-scoped by the API.
+  /// Optional filters match the expense analytics panel (province / department).
+  Future<List<int>?> downloadTicketExpensesExport({
+    required DateTime from,
+    required DateTime to,
+    String? province,
+    String? departmentId,
+  }) async {
+    if (!canManageStaff || !hasWorkspace || !isApproved) return null;
+    String ymd(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final query = <String, String>{
+      'from': ymd(from),
+      'to': ymd(to),
+    };
+    final p = province?.trim();
+    if (p != null && p.isNotEmpty) query['province'] = p;
+    final d = departmentId?.trim();
+    if (d != null && d.isNotEmpty) query['departmentId'] = d;
+    return _api.getBytes(ApiConfig.privateCompanyExpensesExport, query: query);
+  }
+
   Future<void> fetchCancellationAnalytics({
     int days = 90,
+    DateTime? from,
+    DateTime? to,
     String? province,
     String? departmentId,
   }) async {
@@ -437,7 +503,15 @@ class PrivateCompanyProvider extends ChangeNotifier {
     _cancellationAnalyticsLoading = true;
     notifyListeners();
     try {
-      final query = <String, String>{'days': '${days.clamp(1, 730)}'};
+      final query = <String, String>{};
+      if (from != null && to != null) {
+        String ymd(DateTime d) =>
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        query['from'] = ymd(from);
+        query['to'] = ymd(to);
+      } else {
+        query['days'] = '${days.clamp(1, 730)}';
+      }
       final p = province?.trim();
       if (p != null && p.isNotEmpty) query['province'] = p;
       final d = departmentId?.trim();

@@ -105,6 +105,8 @@ class CancellationAnalyticsSnapshot {
   CancellationAnalyticsSnapshot({
     this.scope = 'workspace',
     this.days = 90,
+    this.periodFrom,
+    this.periodTo,
     this.totalCancelled = 0,
     this.configuredReasons = const [],
     this.byReason = const [],
@@ -115,6 +117,8 @@ class CancellationAnalyticsSnapshot {
 
   final String scope;
   final int days;
+  final String? periodFrom;
+  final String? periodTo;
   final int totalCancelled;
   final List<String> configuredReasons;
   final List<CancellationReasonCount> byReason;
@@ -128,6 +132,8 @@ class CancellationAnalyticsSnapshot {
     return CancellationAnalyticsSnapshot(
       scope: json['scope'] as String? ?? 'workspace',
       days: (json['days'] as num?)?.toInt() ?? 90,
+      periodFrom: json['from'] as String?,
+      periodTo: json['to'] as String?,
       totalCancelled: (json['totalCancelled'] as num?)?.toInt() ?? 0,
       configuredReasons: reasons is List
           ? reasons.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList()

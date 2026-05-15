@@ -196,6 +196,7 @@ class WarehouseItem {
     required this.quantity,
     required this.materialId,
     this.materialName,
+    this.materialCategory,
     this.materialColor,
     this.materialUnit,
     this.materialTracking = MaterialTracking.serial,
@@ -223,6 +224,7 @@ class WarehouseItem {
   final int quantity;
   final String materialId;
   final String? materialName;
+  final String? materialCategory;
   final String? materialColor;
   final String? materialUnit;
   final MaterialTracking materialTracking;
@@ -251,6 +253,13 @@ class WarehouseItem {
   bool get returnPending =>
       status == MaterialItemStatus.assigned && returnRequestedAt != null;
 
+  /// Heuristic for “tools” workflows: category or material name contains “tool”.
+  bool get isToolTagged {
+    final c = (materialCategory ?? '').toLowerCase();
+    final n = (materialName ?? '').toLowerCase();
+    return c.contains('tool') || n.contains('tool');
+  }
+
   bool get supportsPartialConsumption => materialSupportsPartialConsumption(
         tracking: materialTracking,
         unit: materialUnit,
@@ -269,6 +278,7 @@ class WarehouseItem {
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       materialId: json['materialId'] as String? ?? material?['id'] as String? ?? '',
       materialName: material?['name'] as String?,
+      materialCategory: material?['category'] as String?,
       materialColor: material?['color'] as String?,
       materialUnit: material?['unit'] as String?,
       materialTracking: _trackingFromString(material?['tracking'] as String?),

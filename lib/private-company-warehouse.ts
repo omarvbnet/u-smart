@@ -26,6 +26,35 @@ export const CAN_VIEW_ALL_WAREHOUSE_INVENTORY_ROLES = new Set([
 ]);
 
 /**
+ * Department managers/coordinators may assign tool-tagged catalog units that are
+ * already in the warehouse to staff in their own department (same checks as
+ * keepers for budgets), and maintain tool catalog entries (create/patch).
+ */
+export const CAN_ASSIGN_FROM_WAREHOUSE_ROLES = new Set(['MANAGER', 'COORDINATOR']);
+
+/**
+ * Field roles that may transfer an item already assigned to them to another
+ * staff member in the same department after they have confirmed handover.
+ */
+export const CAN_PEER_TRANSFER_WAREHOUSE_ITEM_ROLES = new Set([
+  'ENGINEER',
+  'TECHNICIAN',
+  'WORKER',
+  'QUALITY_ENGINEER',
+  'SUPERVISION_ENGINEER',
+]);
+
+/** True when category or material name is tagged as a tool (case-insensitive). */
+export function isToolTaggedMaterial(
+  category: string | null | undefined,
+  materialName: string | null | undefined
+): boolean {
+  const c = String(category ?? '').toLowerCase();
+  const n = String(materialName ?? '').toLowerCase();
+  return c.includes('tool') || n.includes('tool');
+}
+
+/**
  * Roles that can record material consumption against a maintenance ticket
  * they are working on.
  */
@@ -86,6 +115,18 @@ export type WarehouseGuardSuccess = {
   canViewAllWarehouseInventory: boolean;
   canUseOnTicket: boolean;
   /**
+   * Assign from IN_WAREHOUSE, stock new serials (when combined with routes), create/patch
+   * tool catalog — owner, warehouse keeper, manager, coordinator.
+   */
+  canAssignFromWarehouse: boolean;
+  /**
+   * Create or update catalog rows (materials POST/PATCH). Same role set as
+   * [canAssignFromWarehouse].
+   */
+  canCreateWarehouseCatalog: boolean;
+  /** XLSX snapshot export for managers/coordinators and owners. */
+  canExportWarehouseTools: boolean;
+  /**
    * @deprecated Use canMutateWarehouse — kept for gradual migration in routes.
    */
   canManage: boolean;
@@ -144,6 +185,13 @@ export async function warehouseGuard(
   }
 
   const canMutateWarehouse = isOwner || CAN_MUTATE_WAREHOUSE_ROLES.has(actorRole);
+  const assignFromWarehouseExtra =
+    !isOwner && CAN_ASSIGN_FROM_WAREHOUSE_ROLES.has(actorRole);
+  const canAssignFromWarehouse = canMutateWarehouse || assignFromWarehouseExtra;
+  const canCreateWarehouseCatalog = canAssignFromWarehouse;
+  const canExportWarehouseTools =
+    isOwner ||
+    (!isOwner && CAN_ASSIGN_FROM_WAREHOUSE_ROLES.has(actorRole));
   const canViewWarehouse = true;
   const canViewAllWarehouseInventory =
     isOwner || CAN_VIEW_ALL_WAREHOUSE_INVENTORY_ROLES.has(actorRole);
@@ -167,6 +215,9 @@ export async function warehouseGuard(
     canViewWarehouse,
     canViewAllWarehouseInventory,
     canUseOnTicket,
+    canAssignFromWarehouse,
+    canCreateWarehouseCatalog,
+    canExportWarehouseTools,
     canManage: canMutateWarehouse,
   };
 }

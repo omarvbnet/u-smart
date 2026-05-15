@@ -9,7 +9,8 @@ const MANAGER_ROLES = new Set(['MANAGER', 'COORDINATOR']);
 
 /**
  * DELETE /api/provisor-private-company/expenses/[id]
- * Submitter may delete own line before ticket is completed; managers/owner anytime.
+ * Submitter may delete own line before ticket is completed; managers/owner
+ * may delete until the ticket is completed (then all deletes are blocked).
  */
 export async function DELETE(
   req: NextRequest,
@@ -32,18 +33,19 @@ export async function DELETE(
     return NextResponse.json({ success: false, message: 'Expense not found.' }, { status: 404 });
   }
 
+  if (String(row.ticket?.status ?? '').toUpperCase() === 'COMPLETED') {
+    return NextResponse.json(
+      { success: false, message: 'Cannot delete expenses on a completed ticket.' },
+      { status: 400 }
+    );
+  }
+
   const isManager = guard.isOwner || MANAGER_ROLES.has(guard.actorRole);
   const isOwnerLine = row.staffRequesterId === guard.requesterId;
   if (!isManager && !isOwnerLine) {
     return NextResponse.json(
       { success: false, message: 'You can only delete your own expense entries.' },
       { status: 403 }
-    );
-  }
-  if (!isManager && String(row.ticket?.status ?? '').toUpperCase() === 'COMPLETED') {
-    return NextResponse.json(
-      { success: false, message: 'Cannot delete expenses on a completed ticket.' },
-      { status: 400 }
     );
   }
   if (

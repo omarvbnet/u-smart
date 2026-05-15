@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import {
+  CAN_PEER_TRANSFER_WAREHOUSE_ITEM_ROLES,
   CAN_USE_MATERIALS_ON_TICKET_ROLES,
+  isToolTaggedMaterial,
   logMovement,
   warehouseGuard,
 } from '@/lib/private-company-warehouse';
@@ -265,7 +267,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       returnRequestedAt: true,
       returnRequestedById: true,
       returnRequestNote: true,
-      material: { select: { id: true, name: true, tracking: true, unit: true } },
+      material: {
+        select: { id: true, name: true, tracking: true, unit: true, category: true },
+      },
     },
   });
   if (!item) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
@@ -278,13 +282,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     item.assignedToId === guard.requesterId &&
     CAN_USE_MATERIALS_ON_TICKET_ROLES.has(guard.actorRole);
 
+  const peerTransferEligible =
+    action === 'transfer' &&
+    !guard.canMutateWarehouse &&
+    item.status === 'ASSIGNED' &&
+    item.assignedToId === guard.requesterId &&
+    !!item.handoverConfirmedAt &&
+    !item.returnRequestedAt &&
+    CAN_PEER_TRANSFER_WAREHOUSE_ITEM_ROLES.has(guard.actorRole) &&
+    isToolTaggedMaterial(item.material.category, item.material.name);
+
+  const managerCoordAssignEligible =
+    action === 'assign' &&
+    !guard.canMutateWarehouse &&
+    guard.canAssignFromWarehouse &&
+    item.status === 'IN_WAREHOUSE' &&
+    isToolTaggedMaterial(item.material.category, item.material.name);
+
   if (
     (action === 'assign' ||
       action === 'transfer' ||
       action === 'damage' ||
       action === 'lose') &&
     !guard.canMutateWarehouse &&
-    !staffSelfDamageOrLoss
+    !staffSelfDamageOrLoss &&
+    !peerTransferEligible &&
+    !managerCoordAssignEligible
   ) {
     return NextResponse.json(
       {
@@ -624,13 +647,54 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
       const recipient = await prisma.ticketRequester.findFirst({
         where: { id: toStaffId, privateCompanyId: guard.companyId },
-        select: { id: true },
+        select: { id: true, privateCompanyDepartmentId: true },
       });
       if (!recipient) {
         return NextResponse.json(
           { success: false, message: 'Recipient is not a member of this workspace.' },
           { status: 400 }
         );
+      }
+      if (managerCoordAssignEligible) {
+        if (guard.actorRole === 'MANAGER' || guard.actorRole === 'COORDINATOR') {
+          if (
+            !guard.actorDepartmentId ||
+            recipient.privateCompanyDepartmentId !== guard.actorDepartmentId
+          ) {
+            return NextResponse.json(
+              {
+                success: false,
+                message:
+                  'You can only assign tools to staff members in your department.',
+              },
+              { status: 403 }
+            );
+          }
+        }
+      }
+      if (peerTransferEligible) {
+        if (toStaffId === guard.requesterId) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Choose another staff member to receive this tool.',
+            },
+            { status: 400 }
+          );
+        }
+        if (
+          !guard.actorDepartmentId ||
+          recipient.privateCompanyDepartmentId !== guard.actorDepartmentId
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'You can only transfer tools to colleagues in the same department.',
+            },
+            { status: 403 }
+          );
+        }
       }
       if (item.status === 'USED' || item.status === 'RETIRED' || item.status === 'LOST') {
         return NextResponse.json(

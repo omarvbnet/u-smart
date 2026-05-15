@@ -4,6 +4,12 @@ import { cancellationsGuard } from '@/lib/private-company-cancellations';
 import { loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
 import { CANCELLATION_REASON_KEY, readCancellationFromParsed } from '@/lib/ticket-cancellation';
 import { normalizeProvince } from '@/lib/private-company-warehouse';
+import {
+  parseAnalyticsPeriod,
+  analyticsPeriodBadRequest,
+  ymdUTC,
+  inclusiveUtcDayCount,
+} from '@/lib/private-company-analytics-range';
 import { assignedStaffIdFromCompanyJson, parseTicketCompanyJson } from '@/lib/private-company-kpi';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,7 +30,8 @@ function bumpReason(agg: Map<string, ReasonAgg>, reason: string, ticketId: strin
 }
 
 /**
- * GET /api/provisor-private-company/cancellations/analytics?days=90&province=&departmentId=
+ * GET /api/provisor-private-company/cancellations/analytics?from=&to=&days=90&province=&departmentId=
+ * Prefer `from` + `to` (inclusive); otherwise rolling `days` window (default 90).
  */
 export async function GET(req: NextRequest) {
   const guard = await cancellationsGuard(req);
@@ -34,9 +41,13 @@ export async function GET(req: NextRequest) {
   const settings = { reasons: policy.cancellationReasons };
 
   const url = new URL(req.url);
+  const hasExplicitRange =
+    !!(url.searchParams.get('from')?.trim() && url.searchParams.get('to')?.trim());
   const daysRaw = Number(url.searchParams.get('days') ?? '90');
-  const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 730) : 90;
-  const since = new Date(Date.now() - days * 86400000);
+  const daysFallback = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 730) : 90;
+  const periodParsed = parseAnalyticsPeriod(url);
+  if (!periodParsed.ok) return analyticsPeriodBadRequest(periodParsed.message);
+  const { from: rangeFrom, to: rangeTo } = periodParsed;
   const provinceFilter = normalizeProvince(url.searchParams.get('province'));
   let departmentId = url.searchParams.get('departmentId')?.trim() || null;
 
@@ -78,7 +89,7 @@ export async function GET(req: NextRequest) {
         privateCompanyId: guard.companyId,
         assignmentScope: 'PRIVATE_COMPANY_STAFF',
         status: 'CANCELLED',
-        updatedAt: { gte: since },
+        updatedAt: { gte: rangeFrom, lte: rangeTo },
       },
       select: {
         id: true,
@@ -180,10 +191,16 @@ export async function GET(req: NextRequest) {
   const finalizeReasonMap = (m: Map<string, ReasonAgg>) =>
     [...m.values()].sort((a, b) => b.ticketCount - a.ticketCount);
 
+  const daysOut = hasExplicitRange
+    ? inclusiveUtcDayCount(rangeFrom, rangeTo)
+    : daysFallback;
+
   return NextResponse.json({
     success: true,
     scope,
-    days,
+    days: daysOut,
+    from: ymdUTC(rangeFrom),
+    to: ymdUTC(rangeTo),
     provinceFilter,
     settings,
     totalCancelled: cases.length,

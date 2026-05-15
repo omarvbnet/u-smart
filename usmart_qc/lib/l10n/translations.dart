@@ -18,7 +18,7 @@ const Map<String, String> _en = {
   'login_send_otp': 'Send verification code',
   'login_otp_hint': '6-digit code',
   'login_verify_sign_in': 'Sign in with code',
-  'login_use_password': 'Use username or email & password',
+  'login_use_password': 'Use Your Whatsapp Phone Number ',
   'login_use_email_otp': 'Sign in with your phone number',
   'login_or_divider': 'OR',
   'private_role_login_button': 'Private role sign-in',
@@ -36,7 +36,8 @@ const Map<String, String> _en = {
   'login_failed': 'Login failed',
   'invalid_login_credentials': 'Invalid username, email, or password',
   'forgot_password': 'Forgot password?',
-  'forgot_password_hint': 'Enter username or email to receive a verification code',
+  'forgot_password_hint':
+      'Enter username or email to receive a verification code',
   'send_code': 'Send code',
   'verify_code': 'Verify',
   'new_password': 'New password',
@@ -63,7 +64,8 @@ const Map<String, String> _en = {
   'invalid_email_format': 'Enter a valid email address',
   'registration_request_tertiary': 'Legacy: request admin approval instead',
   'update_password': 'Update password',
-  'update_password_hint': 'We will send a verification code to your email before updating',
+  'update_password_hint':
+      'We will send a verification code to your email before updating',
   'temporary_password_hint': 'Temporary password (from email)',
   'password_recovery_sheet_hint':
       'Enter the temporary password we emailed you, then choose a new password.',
@@ -185,7 +187,8 @@ const Map<String, String> _en = {
       'This checklist will be applied to the ticket once it is opened.',
   'ticket_assignment_scope': 'Assign to',
   'scope_private_company': 'My company staff',
-  'scope_private_company_hint': 'Only my workspace engineers/technicians can take it.',
+  'scope_private_company_hint':
+      'Only my workspace engineers/technicians can take it.',
   'scope_global': 'All system staff',
   'scope_global_hint': 'Open to every Provisor engineer/technician.',
   'ticket_target_department': 'Target department (optional)',
@@ -195,13 +198,16 @@ const Map<String, String> _en = {
   'quick_fill': 'QUICK FILL',
   'ticket_province': 'Province',
   'ticket_province_hint': 'Select governorate',
-  'ticket_province_required': 'Select a province, or pick a saved site from quick fill',
+  'ticket_province_required':
+      'Select a province, or pick a saved site from quick fill',
   'ticket_province_from_site': 'Province (from saved site)',
   'ticket_site_coordinates': 'Site coordinates (optional)',
-  'ticket_site_coordinates_hint': 'Latitude and longitude help staff navigate (Waze / maps). Use the map button or type e.g. 33.315200, 44.366100',
+  'ticket_site_coordinates_hint':
+      'Latitude and longitude help staff navigate (Waze / maps). Use the map button or type e.g. 33.315200, 44.366100',
   'ticket_pick_on_map': 'Map',
   'ticket_clear_site_link': 'Change site',
-  'ticket_coords_invalid': 'Enter coordinates as: latitude, longitude (two numbers)',
+  'ticket_coords_invalid':
+      'Enter coordinates as: latitude, longitude (two numbers)',
   'site_search_by_id': 'Search by site ID',
   'site_create_ticket_here': 'New QC ticket for this site',
   'site_name': 'Site Name',
@@ -255,20 +261,26 @@ const Map<String, String> _en = {
   'pc_ws_material_use_reasons': 'Material audit reasons (use / damage / lost)',
   'pc_ticket_expenses_settings': 'Ticket expenses',
   'pc_ticket_expenses_title': 'Ticket expenses',
-  'pc_ticket_expenses_hint': 'Add your costs for this job before completing the ticket.',
+  'pc_ticket_expenses_hint':
+      'Add your costs for this job before completing the ticket.',
   'pc_expenses_enable': 'Enable ticket expenses (all ticket types)',
-  'pc_expenses_coordinator_hint': 'Ask a manager to approve enabling expenses for this workspace.',
-  'pc_expenses_activation_pending': 'A coordinator requested activation — managers can approve below.',
+  'pc_expenses_coordinator_hint':
+      'Ask a manager to approve enabling expenses for this workspace.',
+  'pc_expenses_activation_pending':
+      'A coordinator requested activation — managers can approve below.',
   'pc_expenses_approve': 'Approve activation',
   'pc_expenses_request_activation': 'Request activation',
   'pc_expenses_reason_add_hint': 'Add expense reason (fuel, tools, …)',
-  'pc_expenses_not_enabled': 'Ticket expenses are off. Owner, manager, or coordinator can enable them under Warehouse.',
+  'pc_expenses_not_enabled':
+      'Ticket expenses are off. Owner, manager, or coordinator can enable them under Warehouse.',
   'pc_expenses_analytics_title': 'Ticket expenses',
-  'pc_expenses_analytics_hint': 'Rollups by province, department, and staff. Tap a ticket to open it.',
+  'pc_expenses_analytics_hint':
+      'Rollups by province, department, and staff. Tap a ticket to open it.',
   'pc_cancellation_settings': 'Cancellation reasons',
   'pc_cancellation_reason_add_hint': 'Add a cancellation reason',
   'pc_cancellation_analytics_title': 'Cancellations by reason',
-  'pc_cancellation_analytics_hint': 'Cancelled tickets in the selected period, by reason, department, and province.',
+  'pc_cancellation_analytics_hint':
+      'Cancelled tickets in the selected period, by reason, department, and province.',
   'pc_cancellation_total': 'Cancelled tickets',
   'pc_cancellation_by_reason': 'By reason',
   'pc_cancellation_by_department': 'By department',
@@ -277,6 +289,9 @@ const Map<String, String> _en = {
       'Reason labels are configured in the web admin under Ticket cancel / resubmit.',
   'pc_ws_cancellation_reasons_saved': 'Cancellation reasons saved.',
   'pc_expenses_days': 'Period',
+  'pc_analytics_date_range_label': 'Date range (tap to change)',
+  'pc_expenses_export_uses_period':
+      'Export uses the selected date range and the province / department filters above.',
   'pc_expenses_filter_province': 'Province',
   'pc_expenses_filter_department': 'Department',
   'pc_expenses_all_provinces': 'All provinces',
@@ -289,12 +304,21 @@ const Map<String, String> _en = {
   'pc_expenses_amount': 'Amount',
   'pc_expenses_reason': 'Reason',
   'pc_expenses_note_optional': 'Note (optional)',
-  'pc_expenses_no_reasons': 'No reasons configured yet — ask your manager to add expense reasons.',
+  'pc_expenses_no_reasons':
+      'No reasons configured yet — ask your manager to add expense reasons.',
   'pc_expenses_add_line': 'Add expense',
   'pc_ticket_expenses_validation':
       'Enter a positive amount and select an expense reason.',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} lines · {{tickets}} tickets',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} lines',
+  'pc_expenses_export_excel': 'Export Excel',
+  'pc_expenses_export_subtitle':
+      'Choose dates. Province and department filters above apply to the file.',
+  'pc_expenses_export_failed': 'Could not export expenses.',
+  'pc_warehouse_tools_export': 'Export tools (Excel)',
+  'pc_warehouse_tools_export_hint':
+      'Staff, serials, status, condition, and recent movement notes for tool SKUs.',
+  'pc_warehouse_tools_export_failed': 'Could not export tools report.',
   'pc_ws_material_reason_add_hint': 'New reason label',
   'pc_ws_material_reasons_saved': 'Material reasons saved.',
   'pc_ws_material_reasons_save_failed': 'Could not save material reasons.',
@@ -306,7 +330,8 @@ const Map<String, String> _en = {
   'before_photos_hint': 'Add photos of the site before maintenance',
   'after_photos': 'After photos',
   'maint_complete_title': 'COMPLETE MAINTENANCE',
-  'maint_complete_hint': 'Add 4–6 before and 4–6 after photos, then tap Complete.',
+  'maint_complete_hint':
+      'Add 4–6 before and 4–6 after photos, then tap Complete.',
   'maint_complete_send_confirm': 'Send to requester to confirm',
   'maint_sent_for_confirmation':
       'Sent to the requester. They can confirm or report an issue; if they take no action for 40 minutes, the ticket completes automatically.',
@@ -318,9 +343,11 @@ const Map<String, String> _en = {
   'maint_rejection_note': 'Requester feedback: {reason}',
   'maint_conflict_reason_required': 'Reason for conflict is required',
   'maint_conflict_images_required': 'At least one image is required',
-  'maint_conflict_form_hint': 'Report a conflict with this maintenance work. You have 24 hours after completion.',
+  'maint_conflict_form_hint':
+      'Report a conflict with this maintenance work. You have 24 hours after completion.',
   'maint_conflict_reason': 'Reason for conflict',
-  'maint_conflict_reason_hint': 'Describe why the maintenance result is not satisfactory',
+  'maint_conflict_reason_hint':
+      'Describe why the maintenance result is not satisfactory',
   'maint_conflict_images': 'Evidence images',
   'maint_conflict_images_hint': 'Add photos as proof of the issue',
   're_maintain': 'Re-maintain',
@@ -330,14 +357,17 @@ const Map<String, String> _en = {
   'upload_failed': 'Failed to upload file',
   'ticket_qfield_workspace': 'QField workspace',
   'ticket_qfield_card_title': 'QField & map projects',
-  'ticket_qfield_card_subtitle': 'Open in QField, track revisions, and sync field updates.',
+  'ticket_qfield_card_subtitle':
+      'Open in QField, track revisions, and sync field updates.',
   'ticket_qfield_open': 'Open workspace',
   'ticket_qfield_hero_title': 'Field GIS packages',
-  'ticket_qfield_hero_body': 'Download or open packages in QField. Field staff can post new revisions with a short note.',
+  'ticket_qfield_hero_body':
+      'Download or open packages in QField. Field staff can post new revisions with a short note.',
   'ticket_qfield_hero_site': 'Site',
   'ticket_qfield_empty': 'No QField packages on this ticket.',
   'qfield_add_package': 'Add QField package',
-  'qfield_package_hint': 'QGIS project (.qgz), GeoPackage (.gpkg), or .zip — up to ~90 MB.',
+  'qfield_package_hint':
+      'QGIS project (.qgz), GeoPackage (.gpkg), or .zip — up to ~90 MB.',
   'qfield_open_external': 'Open',
   'qfield_copy_link': 'Copy link',
   'qfield_share': 'Share',
@@ -358,8 +388,10 @@ const Map<String, String> _en = {
   'qfield_meta_saved': 'Details updated',
   'ticket_qfield_n_more': '+{{count}} more',
   'qfield_map_title': 'Map preview',
-  'qfield_map_no_preview': 'No vector geometry was extracted. You can still place a field pin if you have access.',
-  'qfield_map_tap_place_pin': 'Tap the map to place or move the red field pin, add an optional note, then save.',
+  'qfield_map_no_preview':
+      'No vector geometry was extracted. You can still place a field pin if you have access.',
+  'qfield_map_tap_place_pin':
+      'Tap the map to place or move the red field pin, add an optional note, then save.',
   'qfield_map_note_hint': 'Note for this map pin (optional)',
   'qfield_map_save_pin': 'Save map pin',
   'qfield_map_clear_pin': 'Clear',
@@ -398,7 +430,8 @@ const Map<String, String> _en = {
   'accept': 'Accept',
   'reject': 'Reject',
   'design_specifications': 'Design Specifications',
-  'design_specs_hint': 'Describe specifications, requirements, or inspection notes...',
+  'design_specs_hint':
+      'Describe specifications, requirements, or inspection notes...',
   'add_attachments': 'Attachments',
   'add_attachments_hint': 'Add specification files or images',
   'add_image': 'Image',
@@ -512,7 +545,8 @@ const Map<String, String> _en = {
   'conflict_cases': 'Conflict Cases',
   'previous_conflict': 'Previous Conflict',
   'no_conflicts': 'No conflict cases',
-  'no_conflicts_desc': 'Conflicts appear when inspection results are not accepted, NCR, or accepted with comments.',
+  'no_conflicts_desc':
+      'Conflicts appear when inspection results are not accepted, NCR, or accepted with comments.',
   'report_conflict_confirm': 'Report this ticket as a conflict?',
   'conflict_reported': 'Conflict reported successfully',
   'conflict_report_failed': 'Failed to report conflict',
@@ -522,11 +556,13 @@ const Map<String, String> _en = {
   'resolve_conflict': 'Resolve Conflict',
   'conflict_resolved': 'Conflict resolved. Engineer and company notified.',
   'conflict_resolve_failed': 'Failed to resolve conflict',
-  'conflict_load_failed': 'Failed to open conflict. Please check your connection and try again.',
+  'conflict_load_failed':
+      'Failed to open conflict. Please check your connection and try again.',
   'conflict_description': 'Conflict Description',
   'conflict_evidence': 'Evidence',
   'conflict_description_hint': 'Describe the conflict and attach evidence',
-  'resolution_re_inspection': 'Re-inspection required. Engineer must redo the inspection.',
+  'resolution_re_inspection':
+      'Re-inspection required. Engineer must redo the inspection.',
   'resolution_keep_same': 'Keep same. Original result confirmed.',
   'resolution_changed_to': 'Result changed to',
   'tap_to_view_details': 'Tap to view details',
@@ -536,7 +572,8 @@ const Map<String, String> _en = {
   'privacy_policy_title': 'Privacy & Terms',
   'privacy_agree': 'I agree to the Privacy Policy and Terms of Service',
   'privacy_view_full': 'View full policy',
-  'privacy_agree_required': 'You must agree to the Privacy Policy and Terms to sign in',
+  'privacy_agree_required':
+      'You must agree to the Privacy Policy and Terms to sign in',
   'privacy_section_1_title': '1. Information We Collect',
   'privacy_section_1_body':
       'Provisor collects information you provide when creating an account, submitting tickets, or using inspection and maintenance features. This may include your name, email, phone number, company details, location data (when you choose to share it), and files you upload.',
@@ -573,7 +610,8 @@ const Map<String, String> _en = {
   'reg_province_hint': 'Select province',
   'reg_province_required': 'Please select a province',
   'reg_evidence_label': 'Evidence for identification',
-  'reg_evidence_hint': 'ID card, passport, or company certificate (PDF, JPEG, PNG)',
+  'reg_evidence_hint':
+      'ID card, passport, or company certificate (PDF, JPEG, PNG)',
   'reg_file_uploaded': 'File uploaded',
   'reg_remove': 'Remove',
   'reg_uploading': 'Uploading...',
@@ -610,11 +648,13 @@ const Map<String, String> _en = {
   'site_map_use_location': 'Use my location',
   'site_map_confirm': 'Confirm',
   'site_map_attribution': 'OpenStreetMap contributors © CARTO',
-  'site_coords_invalid': 'Invalid coordinates. Use format: lat, lng (e.g. 33.3152, 44.3661)',
+  'site_coords_invalid':
+      'Invalid coordinates. Use format: lat, lng (e.g. 33.3152, 44.3661)',
   'site_share_title': 'Share site',
   'site_share_tab_user': 'Invite user',
   'site_share_tab_visitor': 'Visitor link',
-  'site_visitor_intro': 'Public read-only preview on the web. Pick when the link is valid.',
+  'site_visitor_intro':
+      'Public read-only preview on the web. Pick when the link is valid.',
   'site_visitor_valid_from': 'Accessible from',
   'site_visitor_valid_until': 'Until (expiry)',
   'site_visitor_create_link': 'Create link',
@@ -632,8 +672,7 @@ const Map<String, String> _en = {
   'site_shared_badge': 'Shared · {{owner}}',
   'site_remove_share': 'Remove from my list',
   'site_remove_share_title': 'Remove shared site?',
-  'site_remove_share_confirm':
-      'Stop showing "{{name}}" in your shared sites?',
+  'site_remove_share_confirm': 'Stop showing "{{name}}" in your shared sites?',
   'site_remove_share_done': 'Removed from your list',
   'site_import_menu': 'Import sites',
   'site_import_json': 'JSON file',
@@ -666,7 +705,8 @@ const Map<String, String> _en = {
   'analytics_workspace_performance': 'Workspace performance',
   'analytics_workspace_performance_hint':
       'Private-company tickets assigned to you: counts, task time, and time-to-site (same rules as the hub Performance tab).',
-  'analytics_kpi_period': 'Last {{days}} days · {{n}} workspace tickets in sample',
+  'analytics_kpi_period':
+      'Last {{days}} days · {{n}} workspace tickets in sample',
   'analytics_kpi_assigned': 'Assigned',
   'analytics_kpi_completed': 'Completed',
   'analytics_kpi_task_hours': 'Task hours',
@@ -675,10 +715,13 @@ const Map<String, String> _en = {
   'analytics_kpi_resubmission_hours': 'Resubmission hours',
   'analytics_kpi_avg_arrival': 'Avg arrival',
   'analytics_kpi_crew_joins': 'Crew joins',
-  'analytics_kpi_empty': 'No KPI row for your account in this period (no matching assigned tickets).',
-  'analytics_kpi_unavailable': 'Performance data could not be loaded. Pull to refresh.',
+  'analytics_kpi_empty':
+      'No KPI row for your account in this period (no matching assigned tickets).',
+  'analytics_kpi_unavailable':
+      'Performance data could not be loaded. Pull to refresh.',
   'analytics_material_requests': 'Material requests',
-  'analytics_material_requests_hint': 'Warehouse requests you submitted (newest first).',
+  'analytics_material_requests_hint':
+      'Warehouse requests you submitted (newest first).',
   'analytics_material_requests_empty': 'You have no material requests yet.',
   'engineer_cl_archived': 'Archived (my templates)',
   'engineer_cl_unarchive': 'Restore',
@@ -702,7 +745,8 @@ const Map<String, String> _en = {
       'Assigned tickets in the window divided by calendar days — workload rate for comparisons.',
   'pc_kpi_intro_owner':
       'Rollups by department and by staff, from workspace-assigned tickets in the selected window.',
-  'pc_kpi_intro_manager': 'KPIs for people in your department only (flat list).',
+  'pc_kpi_intro_manager':
+      'KPIs for people in your department only (flat list).',
   'pc_kpi_intro_self': 'Your assigned workspace tickets only.',
   'pc_kpi_days_short': '{{n}} d',
   'pc_kpi_tickets_in_window': 'Tickets in window: {{count}}',
@@ -732,7 +776,8 @@ const Map<String, String> _en = {
   'pc_kpi_error_subtitle': 'Pull to refresh or check your connection.',
   'pc_kpi_unavailable': 'Performance metrics are unavailable.',
   'analytics_performance_insights': 'Performance insights',
-  'analytics_performance_insights_hint': 'KPIs tailored to your workspace role and time window.',
+  'analytics_performance_insights_hint':
+      'KPIs tailored to your workspace role and time window.',
   'pc_ws_tab_warehouse': 'Warehouse',
   'pc_dept_maintenance_dispatch_title': 'Maintenance routing',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -800,7 +845,7 @@ const Map<String, String> _ar = {
   'login_send_otp': 'إرسال رمز التحقق',
   'login_otp_hint': 'رمز مكوّن من 6 أرقام',
   'login_verify_sign_in': 'تسجيل الدخول بالرمز',
-  'login_use_password': 'استخدام البريد الإلكتروني أو اسم المستخدم وكلمة المرور',
+  'login_use_password': 'أستخدم رقم هاتفك المربوط بالواتساب',
   'login_use_email_otp': 'تسجيل الدخول برقم هاتفك',
   'login_or_divider': 'أو',
   'private_role_login_button': 'تسجيل دخول الدور الخاص',
@@ -818,7 +863,8 @@ const Map<String, String> _ar = {
   'login_failed': 'فشل تسجيل الدخول',
   'invalid_login_credentials': 'اسم مستخدم أو بريد أو كلمة مرور غير صحيحة',
   'forgot_password': 'نسيت كلمة المرور؟',
-  'forgot_password_hint': 'أدخل اسم المستخدم أو البريد الإلكتروني لاستلام رمز التحقق',
+  'forgot_password_hint':
+      'أدخل اسم المستخدم أو البريد الإلكتروني لاستلام رمز التحقق',
   'send_code': 'إرسال الرمز',
   'verify_code': 'تحقق',
   'new_password': 'كلمة المرور الجديدة',
@@ -952,24 +998,25 @@ const Map<String, String> _ar = {
   'ticket_failed': 'فشل إنشاء التذكرة',
   'attach_checklist_optional': 'إرفاق قائمة فحص',
   'no_checklist_selected': 'بدون قائمة فحص (تخطي)',
-  'checklist_attached_hint':
-      'سيتم تطبيق قائمة الفحص على التذكرة عند فتحها.',
+  'checklist_attached_hint': 'سيتم تطبيق قائمة الفحص على التذكرة عند فتحها.',
   'ticket_assignment_scope': 'الإسناد إلى',
   'scope_private_company': 'موظفو شركتي',
-  'scope_private_company_hint':
-      'مهندسو/فنيو مساحة عملي فقط يمكنهم استلامها.',
+  'scope_private_company_hint': 'مهندسو/فنيو مساحة عملي فقط يمكنهم استلامها.',
   'scope_global': 'جميع موظفي النظام',
   'scope_global_hint': 'متاحة لجميع مهندسي/فنيي بروفايزر.',
   'ticket_target_department': 'القسم المستهدف (اختياري)',
-  'ticket_target_department_hint': 'كل الأقسام افتراضياً، أو حصر التذكرة على قسم واحد.',
+  'ticket_target_department_hint':
+      'كل الأقسام افتراضياً، أو حصر التذكرة على قسم واحد.',
   'ticket_all_departments': 'كل الأقسام',
   'quick_fill': 'ملء سريع',
   'ticket_province': 'المحافظة',
   'ticket_province_hint': 'اختر المحافظة',
-  'ticket_province_required': 'اختر المحافظة أو اختر موقعاً محفوظاً من الملء السريع',
+  'ticket_province_required':
+      'اختر المحافظة أو اختر موقعاً محفوظاً من الملء السريع',
   'ticket_province_from_site': 'المحافظة (من الموقع المحفوظ)',
   'ticket_site_coordinates': 'إحداثيات الموقع (اختياري)',
-  'ticket_site_coordinates_hint': 'خط العرض وخط الطول تساعد على التوجيه. استخدم الخريطة أو اكتب مثال: 33.315200, 44.366100',
+  'ticket_site_coordinates_hint':
+      'خط العرض وخط الطول تساعد على التوجيه. استخدم الخريطة أو اكتب مثال: 33.315200, 44.366100',
   'ticket_pick_on_map': 'خريطة',
   'ticket_clear_site_link': 'تغيير الموقع',
   'ticket_coords_invalid': 'أدخل الإحداثيات: خط العرض، خط الطول (رقمان)',
@@ -1047,7 +1094,8 @@ const Map<String, String> _ar = {
   'maint_rejection_note': 'ملاحظة المُقدّم: {reason}',
   'maint_conflict_reason_required': 'سبب التعارض مطلوب',
   'maint_conflict_images_required': 'مطلوب صورة واحدة على الأقل',
-  'maint_conflict_form_hint': 'الإبلاغ عن تعارض مع عمل الصيانة. لديك 24 ساعة بعد الإكمال.',
+  'maint_conflict_form_hint':
+      'الإبلاغ عن تعارض مع عمل الصيانة. لديك 24 ساعة بعد الإكمال.',
   'maint_conflict_reason': 'سبب التعارض',
   'maint_conflict_reason_hint': 'صف لماذا نتيجة الصيانة غير مرضية',
   'maint_conflict_images': 'صور الأدلة',
@@ -1059,14 +1107,17 @@ const Map<String, String> _ar = {
   'upload_failed': 'فشل تحميل الملف',
   'ticket_qfield_workspace': 'مساحة عمل QField',
   'ticket_qfield_card_title': 'مشاريع QField والخرائط',
-  'ticket_qfield_card_subtitle': 'افتح في QField، تتبع الإصدارات، وحدّث الحزم من الميدان.',
+  'ticket_qfield_card_subtitle':
+      'افتح في QField، تتبع الإصدارات، وحدّث الحزم من الميدان.',
   'ticket_qfield_open': 'فتح مساحة العمل',
   'ticket_qfield_hero_title': 'حزم GIS ميدانية',
-  'ticket_qfield_hero_body': 'حمّل أو افتح الحزم في QField. يمكن للفريق إضافة إصدارات جديدة مع ملاحظة قصيرة.',
+  'ticket_qfield_hero_body':
+      'حمّل أو افتح الحزم في QField. يمكن للفريق إضافة إصدارات جديدة مع ملاحظة قصيرة.',
   'ticket_qfield_hero_site': 'الموقع',
   'ticket_qfield_empty': 'لا توجد حزم QField على هذه التذكرة.',
   'qfield_add_package': 'إضافة حزمة QField',
-  'qfield_package_hint': 'مشروع QGIS (.qgz) أو GeoPackage (.gpkg) أو .zip — حتى نحو 90 ميجابايت.',
+  'qfield_package_hint':
+      'مشروع QGIS (.qgz) أو GeoPackage (.gpkg) أو .zip — حتى نحو 90 ميجابايت.',
   'qfield_open_external': 'فتح',
   'qfield_copy_link': 'نسخ الرابط',
   'qfield_share': 'مشاركة',
@@ -1087,8 +1138,10 @@ const Map<String, String> _ar = {
   'qfield_meta_saved': 'تم تحديث التفاصيل',
   'ticket_qfield_n_more': '+{{count}} أخرى',
   'qfield_map_title': 'معاينة الخريطة',
-  'qfield_map_no_preview': 'لم يُستخرج هندسة متجهة. يمكنك وضع دبوس ميداني إن كان لديك صلاحية.',
-  'qfield_map_tap_place_pin': 'اضغط على الخريطة لوضع أو نقل الدبوس الأحمر، ثم احفظ.',
+  'qfield_map_no_preview':
+      'لم يُستخرج هندسة متجهة. يمكنك وضع دبوس ميداني إن كان لديك صلاحية.',
+  'qfield_map_tap_place_pin':
+      'اضغط على الخريطة لوضع أو نقل الدبوس الأحمر، ثم احفظ.',
   'qfield_map_note_hint': 'ملاحظة للدبوس (اختياري)',
   'qfield_map_save_pin': 'حفظ الدبوس',
   'qfield_map_clear_pin': 'مسح',
@@ -1237,7 +1290,8 @@ const Map<String, String> _ar = {
   'conflict_cases': 'حالات التعارض',
   'previous_conflict': 'التعارض السابق',
   'no_conflicts': 'لا توجد حالات تعارض',
-  'no_conflicts_desc': 'تظهر التعارضات عند عدم قبول نتائج الفحص أو NCR أو القبول مع تعليقات.',
+  'no_conflicts_desc':
+      'تظهر التعارضات عند عدم قبول نتائج الفحص أو NCR أو القبول مع تعليقات.',
   'report_conflict_confirm': 'الإبلاغ عن هذه التذكرة كتعارض؟',
   'conflict_reported': 'تم الإبلاغ عن التعارض بنجاح',
   'conflict_report_failed': 'فشل الإبلاغ عن التعارض',
@@ -1261,9 +1315,11 @@ const Map<String, String> _ar = {
   'privacy_policy_title': 'الخصوصية والشروط',
   'privacy_agree': 'أوافق على سياسة الخصوصية وشروط الاستخدام',
   'privacy_view_full': 'عرض السياسة الكاملة',
-  'privacy_agree_required': 'يجب الموافقة على سياسة الخصوصية والشروط لتسجيل الدخول',
+  'privacy_agree_required':
+      'يجب الموافقة على سياسة الخصوصية والشروط لتسجيل الدخول',
   'privacy_section_1_title': '1. المعلومات التي نجمعها',
-  'privacy_section_1_body': 'يجمع Provisor المعلومات التي تقدمها عند إنشاء حساب أو إرسال تذاكر.',
+  'privacy_section_1_body':
+      'يجمع Provisor المعلومات التي تقدمها عند إنشاء حساب أو إرسال تذاكر.',
   'privacy_section_2_title': '2. كيفية استخدام معلوماتك',
   'privacy_section_2_body': 'نستخدم معلوماتك لتشغيل التطبيق ومعالجة التذاكر.',
   'privacy_section_3_title': '3. مشاركة البيانات',
@@ -1293,7 +1349,8 @@ const Map<String, String> _ar = {
   'reg_province_hint': 'اختر المحافظة',
   'reg_province_required': 'يرجى اختيار المحافظة',
   'reg_evidence_label': 'إثبات الهوية',
-  'reg_evidence_hint': 'بطاقة الهوية أو جواز السفر أو شهادة الشركة (PDF، JPEG، PNG)',
+  'reg_evidence_hint':
+      'بطاقة الهوية أو جواز السفر أو شهادة الشركة (PDF، JPEG، PNG)',
   'reg_file_uploaded': 'تم رفع الملف',
   'reg_remove': 'إزالة',
   'reg_uploading': 'جاري الرفع...',
@@ -1339,7 +1396,8 @@ const Map<String, String> _ar = {
   'site_visitor_valid_until': 'حتى (انتهاء)',
   'site_visitor_create_link': 'إنشاء الرابط',
   'site_visitor_creating': 'جاري الإنشاء…',
-  'site_visitor_link_created': 'تم إنشاء الرابط — نُسخت العنوان افتراضياً للحافظة',
+  'site_visitor_link_created':
+      'تم إنشاء الرابط — نُسخت العنوان افتراضياً للحافظة',
   'site_visitor_pick_dates': 'حدد وقت البداية والانتهاء.',
   'site_share_action': 'مشاركة',
   'site_share_hint': 'اسم مستخدم أو بريد المستلم',
@@ -1395,7 +1453,8 @@ const Map<String, String> _ar = {
   'analytics_kpi_empty': 'لا صف أداء لحسابك في هذه الفترة (لا تذاكر مطابقة).',
   'analytics_kpi_unavailable': 'تعذر تحميل بيانات الأداء. اسحب للتحديث.',
   'analytics_material_requests': 'طلبات المواد',
-  'analytics_material_requests_hint': 'طلبات المستودع التي أرسلتها (الأحدث أولاً).',
+  'analytics_material_requests_hint':
+      'طلبات المستودع التي أرسلتها (الأحدث أولاً).',
   'analytics_material_requests_empty': 'لا توجد طلبات مواد بعد.',
   'engineer_cl_archived': 'مؤرشفة (قوالبي)',
   'engineer_cl_unarchive': 'استعادة',
@@ -1430,7 +1489,8 @@ const Map<String, String> _ar = {
   'pc_kpi_your_performance': 'أداؤك',
   'pc_kpi_show_all_provinces': 'عرض كل المحافظات',
   'pc_kpi_province_filter': 'المحافظة: {{province}}',
-  'pc_kpi_province_summary': '{{staff}} موظف · {{tickets}} تذكرة · {{completed}} مكتمل',
+  'pc_kpi_province_summary':
+      '{{staff}} موظف · {{tickets}} تذكرة · {{completed}} مكتمل',
   'pc_kpi_stat_assigned_tickets': 'تذاكر معيّنة',
   'pc_kpi_stat_completed': 'مكتمل',
   'pc_kpi_stat_total_task_hours': 'إجمالي ساعات المهمة',
@@ -1447,13 +1507,16 @@ const Map<String, String> _ar = {
   'pc_kpi_error_subtitle': 'اسحب للتحديث أو تحقق من الاتصال.',
   'pc_kpi_unavailable': 'مؤشرات الأداء غير متاحة.',
   'analytics_performance_insights': 'رؤى الأداء',
-  'analytics_performance_insights_hint': 'مؤشرات وفق دورك في مساحة العمل والفترة الزمنية.',
+  'analytics_performance_insights_hint':
+      'مؤشرات وفق دورك في مساحة العمل والفترة الزمنية.',
   'pc_ticket_expenses_settings': 'مصاريف التذكرة',
   'pc_ticket_expenses_title': 'مصاريف التذكرة',
   'pc_ticket_expenses_hint': 'أضف تكاليفك لهذه المهمة قبل إكمال التذكرة.',
   'pc_expenses_enable': 'تفعيل مصاريف التذاكر (جميع أنواع التذاكر)',
-  'pc_expenses_coordinator_hint': 'اطلب من المدير الموافقة على تفعيل المصاريف لهذه المساحة.',
-  'pc_expenses_activation_pending': 'طلب المنسّق التفعيل — يمكن للمديرين الموافقة أدناه.',
+  'pc_expenses_coordinator_hint':
+      'اطلب من المدير الموافقة على تفعيل المصاريف لهذه المساحة.',
+  'pc_expenses_activation_pending':
+      'طلب المنسّق التفعيل — يمكن للمديرين الموافقة أدناه.',
   'pc_expenses_approve': 'الموافقة على التفعيل',
   'pc_expenses_request_activation': 'طلب التفعيل',
   'pc_expenses_reason_add_hint': 'أضف سبب مصروف (وقود، أدوات، …)',
@@ -1474,6 +1537,9 @@ const Map<String, String> _ar = {
   'pc_cancellation_admin_reasons_hint':
       'تُعد تسميات الأسباب في لوحة الويب ضمن سياسة إلغاء التذكرة وإعادة الإرسال.',
   'pc_expenses_days': 'الفترة',
+  'pc_analytics_date_range_label': 'نطاق التاريخ (اضغط للتغيير)',
+  'pc_expenses_export_uses_period':
+      'يستخدم التصدير نطاق التاريخ المحدد وفلاتر المحافظة / القسم أعلاه.',
   'pc_expenses_filter_province': 'المحافظة',
   'pc_expenses_filter_department': 'القسم',
   'pc_expenses_all_provinces': 'كل المحافظات',
@@ -1486,17 +1552,27 @@ const Map<String, String> _ar = {
   'pc_expenses_amount': 'المبلغ',
   'pc_expenses_reason': 'السبب',
   'pc_expenses_note_optional': 'ملاحظة (اختياري)',
-  'pc_expenses_no_reasons': 'لا توجد أسباب مُعدّة بعد — اطلب من المدير إضافة أسباب المصروف.',
+  'pc_expenses_no_reasons':
+      'لا توجد أسباب مُعدّة بعد — اطلب من المدير إضافة أسباب المصروف.',
   'pc_expenses_add_line': 'إضافة مصروف',
   'pc_ticket_expenses_validation': 'أدخل مبلغاً موجباً واختر سبب المصروف.',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} بند · {{tickets}} تذكرة',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} بند',
+  'pc_expenses_export_excel': 'تصدير Excel',
+  'pc_expenses_export_subtitle':
+      'اختر التواريخ. تُطبَّق عوامل تصفية المحافظة والقسم أعلاه على الملف.',
+  'pc_expenses_export_failed': 'تعذر تصدير المصاريف.',
+  'pc_warehouse_tools_export': 'تصدير الأدوات (Excel)',
+  'pc_warehouse_tools_export_hint':
+      'الموظفون، والأرقام التسلسلية، والحالة، وآخر الملاحظات للأدوات.',
+  'pc_warehouse_tools_export_failed': 'تعذر تصدير تقرير الأدوات.',
   'pc_ws_tab_warehouse': 'المستودع',
   'pc_dept_maintenance_dispatch_title': 'توجيه الصيانة',
   'pc_dept_maintenance_dispatch_subtitle':
       'لهذا القسم: إما أن يلتقط الفنيون المهام المعلّقة من «متاح»، أو يعيّن المنسّقون/المهندسون الفني أولاً. تبقى قواعد المحافظة ونوع المهمة سارية.',
   'pc_dispatch_direct': 'مباشرة إلى مجموعة الفنيين',
-  'pc_dispatch_direct_desc': 'يمكن للفنيين المطالبة بالصيانة المعلّقة من «متاح» عند السماح.',
+  'pc_dispatch_direct_desc':
+      'يمكن للفنيين المطالبة بالصيانة المعلّقة من «متاح» عند السماح.',
   'pc_dispatch_engineer': 'المنسّق يعيّن أولاً',
   'pc_dispatch_engineer_desc':
       'المهندسون أو المديرون أو المنسّقون في هذا القسم يختارون الفني قبل بدء العمل.',
@@ -1573,9 +1649,11 @@ const Map<String, String> _ku = {
   'signup_submit': 'تۆمارکردن و چوونەژوورەوە',
   'login_sign_in': 'چوونەژوورەوە',
   'login_failed': 'چوونەژوورەوە سەرکەوتوو نەبوو',
-  'invalid_login_credentials': 'ناوی بەکارهێنەر، ئیمەیڵ یان ووشەی نهێنی ڕاست نییە',
+  'invalid_login_credentials':
+      'ناوی بەکارهێنەر، ئیمەیڵ یان ووشەی نهێنی ڕاست نییە',
   'forgot_password': 'وشەی نهێنیت لەبیرچووەتەوە؟',
-  'forgot_password_hint': 'ناوی بەکارهێنەر یان ئیمەیڵ بنووسە بۆ وەرگرتنی کۆدی پشتڕاستکردنەوە',
+  'forgot_password_hint':
+      'ناوی بەکارهێنەر یان ئیمەیڵ بنووسە بۆ وەرگرتنی کۆدی پشتڕاستکردنەوە',
   'send_code': 'ناردنی کۆد',
   'verify_code': 'پشتڕاستکردنەوە',
   'new_password': 'وشەی نهێنی نوێ',
@@ -1602,7 +1680,8 @@ const Map<String, String> _ku = {
   'invalid_email_format': 'ناونیشانی ئیمەیڵی دروست بنووسە',
   'registration_request_tertiary': 'ڕێگای کۆن: داواکردنی ڕێگەپێدانی بەڕێوەبەر',
   'update_password': 'نوێکردنەوەی وشەی نهێنی',
-  'update_password_hint': 'پێش نوێکردنەوە کۆدێکی پشتڕاستکردنەوە دەنێرین بۆ ئیمەیڵەکەت',
+  'update_password_hint':
+      'پێش نوێکردنەوە کۆدێکی پشتڕاستکردنەوە دەنێرین بۆ ئیمەیڵەکەت',
   'temporary_password_hint': 'وشەی نهێنی کاتی (لە ئیمەیڵ)',
   'password_recovery_sheet_hint':
       'وشەی نهێنی کاتی بنووسە کەمان بۆ ئیمەیڵەکەت ناردووە، پاشان وشەیەکی نوێ هەڵبژێرە.',
@@ -1612,9 +1691,11 @@ const Map<String, String> _ku = {
   'sending': 'ناردن...',
   'updating': 'نوێکردنەوە...',
   'use_my_phone': 'ژمارەی مۆبایلەکەم بەکاربهێنە',
-  'use_my_phone_ios_hint': 'پڕکردنەوەی خۆکارانی تەلەفۆن لەم ئامێرەدا بەردەست نییە',
+  'use_my_phone_ios_hint':
+      'پڕکردنەوەی خۆکارانی تەلەفۆن لەم ئامێرەدا بەردەست نییە',
   'reg_email_verify_title': 'ئیمەیڵەکەت پشتڕاست بکەرەوە',
-  'reg_email_verify_hint': 'کۆدێکی ٦ ژمارەیی دەنێرین بۆ پشتڕاستکردنەوەی ئیمەیڵەکەت',
+  'reg_email_verify_hint':
+      'کۆدێکی ٦ ژمارەیی دەنێرین بۆ پشتڕاستکردنەوەی ئیمەیڵەکەت',
   'reg_send_otp': 'ناردنی کۆد',
   'reg_verify_otp': 'پشتڕاستکردنەوەی کۆد',
   'reg_code_placeholder': 'کۆدی ٦ ژمارە بنووسە',
@@ -1718,15 +1799,18 @@ const Map<String, String> _ku = {
   'scope_global': 'هەموو ستافی سیستەم',
   'scope_global_hint': 'بۆ هەموو ئەندازیار/تەکنیکارەکانی پروڤایزەر.',
   'ticket_target_department': 'بەشی ئامانج (ئارەزوومەندانە)',
-  'ticket_target_department_hint': 'بە شێوەی بنەڕەت هەموو بەشەکان، یان تەنها یەک بەش.',
+  'ticket_target_department_hint':
+      'بە شێوەی بنەڕەت هەموو بەشەکان، یان تەنها یەک بەش.',
   'ticket_all_departments': 'هەموو بەشەکان',
   'quick_fill': 'پڕکردنەوەی خێرا',
   'ticket_province': 'پارێزگا',
   'ticket_province_hint': 'پارێزگا هەڵبژێرە',
-  'ticket_province_required': 'پارێزگا هەڵبژێرە یان شوێنێکی پاشەکەوتکراو لە پڕکردنەوەی خێرا هەڵبژێرە',
+  'ticket_province_required':
+      'پارێزگا هەڵبژێرە یان شوێنێکی پاشەکەوتکراو لە پڕکردنەوەی خێرا هەڵبژێرە',
   'ticket_province_from_site': 'پارێزگا (لە شوێنی پاشەکەوتکراو)',
   'ticket_site_coordinates': 'کۆئۆردیناتی شوێن (ئارەزوومەندانە)',
-  'ticket_site_coordinates_hint': 'پانی و درێژی یارمەتیدەرە بۆ ڕێنوێنی. نەخشە بەکاربهێنە یان بنووسە وەک: 33.315200, 44.366100',
+  'ticket_site_coordinates_hint':
+      'پانی و درێژی یارمەتیدەرە بۆ ڕێنوێنی. نەخشە بەکاربهێنە یان بنووسە وەک: 33.315200, 44.366100',
   'ticket_pick_on_map': 'نەخشە',
   'ticket_clear_site_link': 'گۆڕینی شوێن',
   'ticket_coords_invalid': 'کۆئۆردینات بنووسە: پانی، درێژی (دوو ژمارە)',
@@ -1780,10 +1864,12 @@ const Map<String, String> _ku = {
   'maint_use_material_title': 'تۆمارکردنی بەکارهێنان لەسەر ئەم تیکێتە',
   'maint_material_reason_label': 'هۆکار',
   'maint_material_optional_note': 'تێبینی (ئارەزوومەندانە)',
-  'pc_ws_material_use_reasons': 'هۆکارەکانی وردبینی ماددە (بەکارهێنان / زیان / ونبوون)',
+  'pc_ws_material_use_reasons':
+      'هۆکارەکانی وردبینی ماددە (بەکارهێنان / زیان / ونبوون)',
   'pc_ws_material_reason_add_hint': 'ناونیشانی هۆکارێکی نوێ',
   'pc_ws_material_reasons_saved': 'هۆکارەکانی ماددە پاشەکەوت کراون.',
-  'pc_ws_material_reasons_save_failed': 'پاشەکەوتکردنی هۆکارەکان سەرکەوتوو نەبوو.',
+  'pc_ws_material_reasons_save_failed':
+      'پاشەکەوتکردنی هۆکارەکان سەرکەوتوو نەبوو.',
   'pc_ticket_workspace_materials': 'ماددەکانی ناوخۆی کار',
   'maint_material_use_recorded': 'بەکارهێنانی ماددە لەسەر ئەم تیکێتە تۆمارکرا.',
   'maint_material_use_failed': 'تۆمارکردنی بەکارهێنان سەرکەوتوو نەبوو.',
@@ -1792,7 +1878,8 @@ const Map<String, String> _ku = {
   'before_photos_hint': 'وێنەی شوێنەکە زیاد بکە پێش چاککردنەوە',
   'after_photos': 'وێنەکانی دوای چاککردنەوە',
   'maint_complete_title': 'تەواوکردنی چاککردنەوە',
-  'maint_complete_hint': '4–6 وێنەی پێش و 4–6 دوای زیاد بکە، پاشان دەستنیشان بکە تەواو.',
+  'maint_complete_hint':
+      '4–6 وێنەی پێش و 4–6 دوای زیاد بکە، پاشان دەستنیشان بکە تەواو.',
   'maint_complete_send_confirm': 'بنێرە بۆ داواکار بۆ پشتڕاستکردنەوە',
   'maint_sent_for_confirmation':
       'نێردرا بۆ داواکار. دەتوانێت پشتڕاستی بکاتەوە یان کێشە ڕابگەیەنێت؛ ئەگەر لە 40 خولەکدا هیچ نەکات تیکێت بە شێوەی ئۆتۆماتیکی تەواو دەبێت.',
@@ -1804,7 +1891,8 @@ const Map<String, String> _ku = {
   'maint_rejection_note': 'تێبینی داواکار: {reason}',
   'maint_conflict_reason_required': 'هۆکاری ناکۆکی پێویستە',
   'maint_conflict_images_required': 'لانیکەم وێنەیەک پێویستە',
-  'maint_conflict_form_hint': 'ناکۆکی لەگەڵ ئەم کاری چاککردنەوەیە ڕاپۆرت بکە. ٢٤ کاتژمێرت هەیە دوای تەواوبوون.',
+  'maint_conflict_form_hint':
+      'ناکۆکی لەگەڵ ئەم کاری چاککردنەوەیە ڕاپۆرت بکە. ٢٤ کاتژمێرت هەیە دوای تەواوبوون.',
   'maint_conflict_reason': 'هۆکاری ناکۆکی',
   'maint_conflict_reason_hint': 'باس بکە بۆچی ئەنجامی چاککردنەوە بەخش نییە',
   'maint_conflict_images': 'وێنەکانی بەڵگە',
@@ -1816,14 +1904,17 @@ const Map<String, String> _ku = {
   'upload_failed': 'بارکردنی فایل سەرکەوتوو نەبوو',
   'ticket_qfield_workspace': 'ناوچەی کارکردنی QField',
   'ticket_qfield_card_title': 'پڕۆژەکانی QField و نەخشە',
-  'ticket_qfield_card_subtitle': ' لە QField بیکەرەوە، وەشانەکان ببینە، نوێکردنەوەکان تۆمار بکە.',
+  'ticket_qfield_card_subtitle':
+      ' لە QField بیکەرەوە، وەشانەکان ببینە، نوێکردنەوەکان تۆمار بکە.',
   'ticket_qfield_open': 'کردنەوەی ناوچەی کار',
   'ticket_qfield_hero_title': 'پاکێجی GISی مەیدان',
-  'ticket_qfield_hero_body': 'پاکێجەکان لە QField بکەرەوە یان دایانگرە. ستاف دەتوانێت وەشانی نوێ لەگەڵ تێبینی کورت زیاد بکات.',
+  'ticket_qfield_hero_body':
+      'پاکێجەکان لە QField بکەرەوە یان دایانگرە. ستاف دەتوانێت وەشانی نوێ لەگەڵ تێبینی کورت زیاد بکات.',
   'ticket_qfield_hero_site': 'شوێن',
   'ticket_qfield_empty': 'هیچ پاکێجی QField لەسەر ئەم تیکێتە نییە.',
   'qfield_add_package': 'زیادکردنی پاکێجی QField',
-  'qfield_package_hint': 'پڕۆژەی QGIS (.qgz)، GeoPackage (.gpkg)، یان .zip — تا نزیکەی 90 مێگابایت.',
+  'qfield_package_hint':
+      'پڕۆژەی QGIS (.qgz)، GeoPackage (.gpkg)، یان .zip — تا نزیکەی 90 مێگابایت.',
   'qfield_open_external': 'کردنەوە',
   'qfield_copy_link': 'لینک کۆپی بکە',
   'qfield_share': 'هاوبەشی بکە',
@@ -1844,8 +1935,10 @@ const Map<String, String> _ku = {
   'qfield_meta_saved': 'وردەکارییەکان نوێکرانەوە',
   'ticket_qfield_n_more': '+{{count}} زیاتر',
   'qfield_map_title': 'پێشبینینی نەخشە',
-  'qfield_map_no_preview': 'هیچ شێوەیەک دەرنەهات. دەتوانیت پینێکی مەیدان دابنێیت ئەگەر مۆڵەتت هەبێت.',
-  'qfield_map_tap_place_pin': 'پەنجە لەسەر نەخشە بنێ بۆ پین، تێبینی دابنێ، پاشەکەوت بکە.',
+  'qfield_map_no_preview':
+      'هیچ شێوەیەک دەرنەهات. دەتوانیت پینێکی مەیدان دابنێیت ئەگەر مۆڵەتت هەبێت.',
+  'qfield_map_tap_place_pin':
+      'پەنجە لەسەر نەخشە بنێ بۆ پین، تێبینی دابنێ، پاشەکەوت بکە.',
   'qfield_map_note_hint': 'تێبینی پین (ئارەزوومەندانە)',
   'qfield_map_save_pin': 'پین پاشەکەوت بکە',
   'qfield_map_clear_pin': 'سڕینەوە',
@@ -1884,7 +1977,8 @@ const Map<String, String> _ku = {
   'accept': 'قبوڵکردن',
   'reject': 'ڕەتکردنەوە',
   'design_specifications': 'تایبەتمەندییەکانی دیزاین',
-  'design_specs_hint': 'تایبەتمەندییەکان یان داواکارییەکان یان تێبینی پشکنین باس بکە...',
+  'design_specs_hint':
+      'تایبەتمەندییەکان یان داواکارییەکان یان تێبینی پشکنین باس بکە...',
   'add_attachments': 'هاوپێچەکان',
   'add_attachments_hint': 'فایلی تایبەتمەندی یان وێنە زیاد بکە',
   'add_image': 'وێنە',
@@ -1926,7 +2020,8 @@ const Map<String, String> _ku = {
   'ncr_resolving_comments_required': 'ڕەخنەی چارەسەرکردن پێویستە',
   'ncr_evidence_label': 'بەڵگە',
   'ncr_evidence_required': 'لانیکەم وێنەیەکی بەڵگە پێویستە',
-  'ncr_evidence_required_hint': 'وێنە یان فایل وەک بەڵگەی چارەسەرکردن هاوپێچ بکە',
+  'ncr_evidence_required_hint':
+      'وێنە یان فایل وەک بەڵگەی چارەسەرکردن هاوپێچ بکە',
   'resubmitted_evidence': 'بەڵگەی دووبارەناردنەوە',
   'inspection_time': 'کاتی پشکنین',
   'inspection_hours': '{{h}} ک',
@@ -1948,7 +2043,8 @@ const Map<String, String> _ku = {
   'admin_resubmit_for_edit': 'دووبارەناردنەوە لە بەڕێوەبەر بۆ دەستکاری',
   'ncr_rework_comment_hint': 'باس بکە چی پێویستە چاک بکرێتەوە...',
   'ncr_rework_sent': 'پێشنیارەکانی دووبارەکارکردنەوە نێردرا بۆ داواکار',
-  'ncr_approved_reinspect': 'پەسەندکراو — لیستەکە دووبارە کرایەوە بۆ پشکنینی دووبارە',
+  'ncr_approved_reinspect':
+      'پەسەندکراو — لیستەکە دووبارە کرایەوە بۆ پشکنینی دووبارە',
   'ncr_waiting_engineer': 'چاوەڕوانی بڕیاری بەڕێوەبەر',
   'ncr_waiting_manager': 'چاوەڕوانی بڕیاری بەڕێوەبەر',
   'ncr_resubmit_records': 'مێژووی دووبارەناردنەوەی نەگونجاو',
@@ -1996,7 +2092,8 @@ const Map<String, String> _ku = {
   'conflict_cases': 'کەیسەکانی ناکۆکی',
   'previous_conflict': 'ناکۆکیی پێشوو',
   'no_conflicts': 'هیچ کەیسی ناکۆکی نییە',
-  'no_conflicts_desc': 'ناکۆکییەکان دەردەکەون کە ئەنجامەکانی پشکنین قبوڵ نەکراون، NCR، یان قبوڵکراو لەگەڵ ڕەخنە.',
+  'no_conflicts_desc':
+      'ناکۆکییەکان دەردەکەون کە ئەنجامەکانی پشکنین قبوڵ نەکراون، NCR، یان قبوڵکراو لەگەڵ ڕەخنە.',
   'report_conflict_confirm': 'ئەم تیکێتە وەک ناکۆکی ڕاپۆرت بکەیت؟',
   'conflict_reported': 'ناکۆکی بە سەرکەوتوویی ڕاپۆرت کرا',
   'conflict_report_failed': 'ڕاپۆرتی ناکۆکی سەرکەوتوو نەبوو',
@@ -2004,13 +2101,16 @@ const Map<String, String> _ku = {
   're_inspection': 'دووبارەپشکنین',
   'keep_same': 'وەک خۆی بهێڵەوە',
   'resolve_conflict': 'چارەسەری ناکۆکی',
-  'conflict_resolved': 'ناکۆکی چارەسەر کرا. ئەندازیار و کۆمپانیا ئاگادار کرانەوە.',
+  'conflict_resolved':
+      'ناکۆکی چارەسەر کرا. ئەندازیار و کۆمپانیا ئاگادار کرانەوە.',
   'conflict_resolve_failed': 'چارەسەری ناکۆکی سەرکەوتوو نەبوو',
-  'conflict_load_failed': 'کرانەوەی ناکۆکی سەرکەوتوو نەبوو. پەیوەندی بپشکنە و دووبارە هەوڵبدەرەوە.',
+  'conflict_load_failed':
+      'کرانەوەی ناکۆکی سەرکەوتوو نەبوو. پەیوەندی بپشکنە و دووبارە هەوڵبدەرەوە.',
   'conflict_description': 'وەسفی ناکۆکی',
   'conflict_evidence': 'بەڵگە',
   'conflict_description_hint': 'ناکۆکی وەسف بکە و بەڵگە هاوپێچ بکە',
-  'resolution_re_inspection': 'دووبارەپشکنین پێویستە. ئەندازیار دەبێت دووبارە پشکنین بکاتەوە.',
+  'resolution_re_inspection':
+      'دووبارەپشکنین پێویستە. ئەندازیار دەبێت دووبارە پشکنین بکاتەوە.',
   'resolution_keep_same': 'وەک خۆی بهێڵەوە. ئەنجامی ئەسڵی پشتڕاستکرایەوە.',
   'resolution_changed_to': 'ئەنجام گۆڕدرا بۆ',
   'tap_to_view_details': 'تەنها بۆ بینینی وردەکارییەکان',
@@ -2020,17 +2120,22 @@ const Map<String, String> _ku = {
   'privacy_policy_title': 'تایبەتمەندی و مەرجەکان',
   'privacy_agree': 'ڕازیم بە سیاسەتی تایبەتمەندی و مەرجەکانی بەکارهێنان',
   'privacy_view_full': 'بینینی سیاسەتی تەواو',
-  'privacy_agree_required': 'پێویستە ڕازیت بە سیاسەتی تایبەتمەندی و مەرجەکان بکەیت بۆ چوونەژوورەوە',
+  'privacy_agree_required':
+      'پێویستە ڕازیت بە سیاسەتی تایبەتمەندی و مەرجەکان بکەیت بۆ چوونەژوورەوە',
   'privacy_section_1_title': '1. زانیاری کە کۆدەکەینەوە',
-  'privacy_section_1_body': 'Provisor زانیاری کۆدەکاتەوە کە دەیخەیتەڕوو کاتێک ئەکاونت دروست دەکەیت.',
+  'privacy_section_1_body':
+      'Provisor زانیاری کۆدەکاتەوە کە دەیخەیتەڕوو کاتێک ئەکاونت دروست دەکەیت.',
   'privacy_section_2_title': '2. چۆن زانیاریەکەت بەکار دەهێنین',
-  'privacy_section_2_body': 'زانیاریەکەت بەکار دەهێنین بۆ ڕێکخستنی تیکێتەکان و پشکنینەکان.',
+  'privacy_section_2_body':
+      'زانیاریەکەت بەکار دەهێنین بۆ ڕێکخستنی تیکێتەکان و پشکنینەکان.',
   'privacy_section_3_title': '3. هاوبەشکردنی زانیاری',
   'privacy_section_3_body': 'زانیاری کەسی نافروشین.',
   'privacy_section_4_title': '4. پاراستن',
-  'privacy_section_4_body': 'هەنگاوە گونجاویانە دەنێین بۆ پاراستنی زانیاریەکەت.',
+  'privacy_section_4_body':
+      'هەنگاوە گونجاویانە دەنێین بۆ پاراستنی زانیاریەکەت.',
   'privacy_section_5_title': '5. هەڵبژاردنەکانت',
-  'privacy_section_5_body': 'دەتوانیت پرۆفایلەکەت نوێ بکەیتەوە و چوونەدەرەوە لە هەر کاتێکدا.',
+  'privacy_section_5_body':
+      'دەتوانیت پرۆفایلەکەت نوێ بکەیتەوە و چوونەدەرەوە لە هەر کاتێکدا.',
   'reg_request_title': 'داوای تۆمارکردن',
   'reg_evidence_required': 'بەڵگەی ناسنامە پێویستە',
   'reg_submit_failed': 'ناردنی داواکە سەرکەوتوو نەبوو',
@@ -2052,7 +2157,8 @@ const Map<String, String> _ku = {
   'reg_province_hint': 'پارێزگا هەڵبژێرە',
   'reg_province_required': 'تکایە پارێزگا هەڵبژێرە',
   'reg_evidence_label': 'بەڵگەی ناسنامە',
-  'reg_evidence_hint': 'کارتی ناسنامە، پاسپۆرت، یان بڕوانامەی کۆمپانیا (PDF، JPEG، PNG)',
+  'reg_evidence_hint':
+      'کارتی ناسنامە، پاسپۆرت، یان بڕوانامەی کۆمپانیا (PDF، JPEG، PNG)',
   'reg_file_uploaded': 'فایل بارکرا',
   'reg_remove': 'لابردن',
   'reg_uploading': 'بارکردندا...',
@@ -2093,7 +2199,8 @@ const Map<String, String> _ku = {
   'site_share_title': 'هاوبەشی کردنی شوێن',
   'site_share_tab_user': 'بزراندنی بەکارهێنەر',
   'site_share_tab_visitor': 'بەستەری سەردانیکەر',
-  'site_visitor_intro': 'پێشاندانی گشتی تەنها بۆ خوێندنەوە لە وێب، کاتەکە دیاری بکە.',
+  'site_visitor_intro':
+      'پێشاندانی گشتی تەنها بۆ خوێندنەوە لە وێب، کاتەکە دیاری بکە.',
   'site_visitor_valid_from': 'دەتوانێت ببینێت لە',
   'site_visitor_valid_until': 'تا (کۆتایی)',
   'site_visitor_create_link': 'دروستکردنی بەستەر',
@@ -2167,7 +2274,8 @@ const Map<String, String> _ku = {
   'engineer_cl_apply_failed': 'قاڵب هەڵبژێرە یان یەکێک دروست بکە.',
   'pc_ws_export_data': 'هەناردەکردنی شوێنی کار (JSON)',
   'pc_ws_export_failed': 'هەناردەکردن سەرکەوتوو نەبوو',
-  'pc_ws_export_shared': 'هەناردەکردن ئامادەیە — ئەپێک هەڵبژێرە بۆ پاشەکەوت یان هاوبەشکردن',
+  'pc_ws_export_shared':
+      'هەناردەکردن ئامادەیە — ئەپێک هەڵبژێرە بۆ پاشەکەوت یان هاوبەشکردن',
   'pc_ws_tab_overview': 'پێشبینین',
   'pc_ws_tab_departments': 'بەشەکان',
   'pc_ws_tab_staff': 'کارمەندان',
@@ -2215,7 +2323,8 @@ const Map<String, String> _ku = {
   'pc_expenses_enable': 'خەرجی تیکێت چالاک بکە (هەموو جۆرەکانی تیکێت)',
   'pc_expenses_coordinator_hint':
       'داوا لە بەڕێوەبەر بکە ڕێگە بە خەرجی ئەم شوێنی کارە بدات.',
-  'pc_expenses_activation_pending': 'هەماهەنگکەر داوای چالاککردنی کرد — بەڕێوەبەر دەتوانن لێرە پەسەند بکەن.',
+  'pc_expenses_activation_pending':
+      'هەماهەنگکەر داوای چالاککردنی کرد — بەڕێوەبەر دەتوانن لێرە پەسەند بکەن.',
   'pc_expenses_approve': 'پەسەندکردنی چالاککردن',
   'pc_expenses_request_activation': 'داوای چالاککردن',
   'pc_expenses_reason_add_hint': 'هۆکاری خەرجی زیاد بکە (سووتەمەنی، ئامێر، …)',
@@ -2236,6 +2345,9 @@ const Map<String, String> _ku = {
   'pc_cancellation_admin_reasons_hint':
       'پێناسەی هۆکارەکان لە ئەدمینی وێب بۆ سیاسەی هەڵوەشاندنەوە و دووبارە ناردنەوە دابنرێن.',
   'pc_expenses_days': 'ماوە',
+  'pc_analytics_date_range_label': 'ماوەی بەروار (دەست لێ بدە بۆ گۆڕین)',
+  'pc_expenses_export_uses_period':
+      'هەناردەکردن ماوەی دیاریکراو و فلتەرەکانی پارێزگا / بەشی سەرەوە بەکاردەهێنێت.',
   'pc_expenses_filter_province': 'پارێزگا',
   'pc_expenses_filter_department': 'بەش',
   'pc_expenses_all_provinces': 'هەموو پارێزگاکان',
@@ -2254,12 +2366,21 @@ const Map<String, String> _ku = {
   'pc_ticket_expenses_validation': 'بڕێکی دروست بنووسە و هۆکارێک هەڵبژێرە.',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} هێڵ · {{tickets}} تیکێت',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} هێڵ',
+  'pc_expenses_export_excel': 'هەناردەی Excel',
+  'pc_expenses_export_subtitle':
+      'بەروار هەڵبژێرە. فلتەرەکانی پارێزگا و بەش سەرەوە کاریان پێدەکەن لە فایلەکە.',
+  'pc_expenses_export_failed': 'نەتوانرا خەرجی هەناردە بکرێت.',
+  'pc_warehouse_tools_export': 'هەناردەی ئامێرەکان (Excel)',
+  'pc_warehouse_tools_export_hint':
+      'کارمەند، زنجیرەیی، دۆخ، و تێبینی نوێیات بۆ ئامێرەکان.',
+  'pc_warehouse_tools_export_failed': 'نەتوانرا ڕاپۆرتی ئامێر هەناردە بکرێت.',
   'pc_ws_tab_warehouse': 'کۆگا',
   'pc_dept_maintenance_dispatch_title': 'ڕێڕەوی چاککردنەوە',
   'pc_dept_maintenance_dispatch_subtitle':
       'بۆ ئەم بەشە: یان تەکنیسینەکان لە «بەردەست» دەست دەکەن، یان پێشتر بەڕێوەبەر/ئەندازیار تەکنیسین دیاری دەکات. یاساکانی پارێزگا و جۆری کار هەر دەمێننەوە.',
   'pc_dispatch_direct': 'ڕاستەوخۆ بۆ کۆمەڵی تەکنیسین',
-  'pc_dispatch_direct_desc': 'تەکنیسین دەتوانن لە «بەردەست» خۆیان دیاری بکەن کاتێک ڕێگەپێدراون.',
+  'pc_dispatch_direct_desc':
+      'تەکنیسین دەتوانن لە «بەردەست» خۆیان دیاری بکەن کاتێک ڕێگەپێدراون.',
   'pc_dispatch_engineer': 'پێشتر بەڕێوەبەر دیاری دەکات',
   'pc_dispatch_engineer_desc':
       'ئەندازیار، بەڕێوەبەر، یان هەماهەنگکەر لەم بەشە تەکنیسین هەڵدەبژێرێت پێش دەستپێکردن.',
@@ -2338,14 +2459,16 @@ const Map<String, String> _tr = {
   'login_failed': 'Giriş başarısız',
   'invalid_login_credentials': 'Geçersiz kullanıcı adı, e-posta veya şifre',
   'forgot_password': 'Şifremi unuttum?',
-  'forgot_password_hint': 'Doğrulama kodu almak için kullanıcı adı veya e-posta girin',
+  'forgot_password_hint':
+      'Doğrulama kodu almak için kullanıcı adı veya e-posta girin',
   'send_code': 'Kod gönder',
   'verify_code': 'Doğrula',
   'new_password': 'Yeni şifre',
   'reset_password': 'Şifreyi sıfırla',
   'code_sent': 'Kod e-postanıza gönderildi',
   'requester_otp_sent': 'Doğrulama kodu gönderildi.',
-  'requester_otp_sent_whatsapp': 'Doğrulama kodu gönderildi. WhatsApp\'ı kontrol edin.',
+  'requester_otp_sent_whatsapp':
+      'Doğrulama kodu gönderildi. WhatsApp\'ı kontrol edin.',
   'requester_otp_sent_sms': 'Doğrulama kodu SMS ile gönderildi.',
   'invalid_code': 'Geçersiz veya süresi dolmuş kod',
   'phone_not_registered_title': 'Numara kayıtlı değil',
@@ -2365,7 +2488,8 @@ const Map<String, String> _tr = {
   'invalid_email_format': 'Geçerli bir e-posta adresi girin',
   'registration_request_tertiary': 'Eski yöntem: yönetici onayı iste',
   'update_password': 'Şifreyi güncelle',
-  'update_password_hint': 'Güncellemeden önce e-postanıza bir doğrulama kodu göndereceğiz',
+  'update_password_hint':
+      'Güncellemeden önce e-postanıza bir doğrulama kodu göndereceğiz',
   'temporary_password_hint': 'Geçici şifre (e-postadan)',
   'password_recovery_sheet_hint':
       'E-postanıza gönderdiğimiz geçici şifreyi girin, ardından yeni bir şifre seçin.',
@@ -2375,9 +2499,11 @@ const Map<String, String> _tr = {
   'sending': 'Gönderiliyor...',
   'updating': 'Güncelleniyor...',
   'use_my_phone': 'Telefon numaramı kullan',
-  'use_my_phone_ios_hint': 'Bu cihazda telefon otomatik doldurma kullanılamıyor',
+  'use_my_phone_ios_hint':
+      'Bu cihazda telefon otomatik doldurma kullanılamıyor',
   'reg_email_verify_title': 'E-postanızı doğrulayın',
-  'reg_email_verify_hint': 'E-postanızı doğrulamak için 6 haneli bir kod göndereceğiz',
+  'reg_email_verify_hint':
+      'E-postanızı doğrulamak için 6 haneli bir kod göndereceğiz',
   'reg_send_otp': 'Kod gönder',
   'reg_verify_otp': 'Kodu doğrula',
   'reg_code_placeholder': '6 haneli kodu girin',
@@ -2487,10 +2613,12 @@ const Map<String, String> _tr = {
   'quick_fill': 'HIZLI DOLDUR',
   'ticket_province': 'İl',
   'ticket_province_hint': 'İl seçin',
-  'ticket_province_required': 'Bir il seçin veya hızlı doldurmadan kayıtlı bir saha seçin',
+  'ticket_province_required':
+      'Bir il seçin veya hızlı doldurmadan kayıtlı bir saha seçin',
   'ticket_province_from_site': 'İl (kayıtlı sahadan)',
   'ticket_site_coordinates': 'Saha koordinatları (isteğe bağlı)',
-  'ticket_site_coordinates_hint': 'Enlem ve boylem navigasyon için yardımcıdır. Harita düğmesini kullanın veya örn. 33.315200, 44.366100 yazın',
+  'ticket_site_coordinates_hint':
+      'Enlem ve boylem navigasyon için yardımcıdır. Harita düğmesini kullanın veya örn. 33.315200, 44.366100 yazın',
   'ticket_pick_on_map': 'Harita',
   'ticket_clear_site_link': 'Sahayı değiştir',
   'ticket_coords_invalid': 'Koordinatları girin: enlem, boylem (iki sayı)',
@@ -2544,7 +2672,8 @@ const Map<String, String> _tr = {
   'maint_use_material_title': 'Bu bilette kullanımı kaydet',
   'maint_material_reason_label': 'Sebep',
   'maint_material_optional_note': 'İsteğe bağlı not',
-  'pc_ws_material_use_reasons': 'Malzeme denetim sebepleri (kullanım / hasar / kayıp)',
+  'pc_ws_material_use_reasons':
+      'Malzeme denetim sebepleri (kullanım / hasar / kayıp)',
   'pc_ws_material_reason_add_hint': 'Yeni sebep etiketi',
   'pc_ws_material_reasons_saved': 'Malzeme sebepleri kaydedildi.',
   'pc_ws_material_reasons_save_failed': 'Malzeme sebepleri kaydedilemedi.',
@@ -2556,7 +2685,8 @@ const Map<String, String> _tr = {
   'before_photos_hint': 'Bakımdan önce site fotoğrafları ekleyin',
   'after_photos': 'Sonraki fotoğraflar',
   'maint_complete_title': 'BAKIMI TAMAMLA',
-  'maint_complete_hint': '4–6 önce ve 4–6 sonra fotoğraf ekleyin, ardından Tamamla\'ya dokunun.',
+  'maint_complete_hint':
+      '4–6 önce ve 4–6 sonra fotoğraf ekleyin, ardından Tamamla\'ya dokunun.',
   'maint_complete_send_confirm': 'Talep sahibine onay için gönder',
   'maint_sent_for_confirmation':
       'Talep sahibine gönderildi. Onaylayabilir veya sorun bildirebilir; 40 dakika içinde işlem olmazsa talep otomatik tamamlanır.',
@@ -2568,9 +2698,11 @@ const Map<String, String> _tr = {
   'maint_rejection_note': 'Talep sahibi notu: {reason}',
   'maint_conflict_reason_required': 'Çatışma nedeni zorunludur',
   'maint_conflict_images_required': 'En az bir görsel gerekli',
-  'maint_conflict_form_hint': 'Bu bakım işiyle ilgili çatışma bildirin. Tamamlamadan sonra 24 saatiniz var.',
+  'maint_conflict_form_hint':
+      'Bu bakım işiyle ilgili çatışma bildirin. Tamamlamadan sonra 24 saatiniz var.',
   'maint_conflict_reason': 'Çatışma nedeni',
-  'maint_conflict_reason_hint': 'Bakım sonucunun neden tatmin edici olmadığını açıklayın',
+  'maint_conflict_reason_hint':
+      'Bakım sonucunun neden tatmin edici olmadığını açıklayın',
   'maint_conflict_images': 'Kanıt görselleri',
   'maint_conflict_images_hint': 'Sorunun kanıtı olarak fotoğraflar ekleyin',
   're_maintain': 'Yeniden bakım',
@@ -2580,14 +2712,17 @@ const Map<String, String> _tr = {
   'upload_failed': 'Dosya yüklenemedi',
   'ticket_qfield_workspace': 'QField çalışma alanı',
   'ticket_qfield_card_title': 'QField ve harita projeleri',
-  'ticket_qfield_card_subtitle': 'QField’da açın, sürümleri izleyin, sahadan güncel paketler yükleyin.',
+  'ticket_qfield_card_subtitle':
+      'QField’da açın, sürümleri izleyin, sahadan güncel paketler yükleyin.',
   'ticket_qfield_open': 'Çalışma alanını aç',
   'ticket_qfield_hero_title': 'Saha GIS paketleri',
-  'ticket_qfield_hero_body': 'Paketleri QField’da indirip açın. Ekip kısa notla yeni sürüm yükleyebilir.',
+  'ticket_qfield_hero_body':
+      'Paketleri QField’da indirip açın. Ekip kısa notla yeni sürüm yükleyebilir.',
   'ticket_qfield_hero_site': 'Saha',
   'ticket_qfield_empty': 'Bu bilette QField paketi yok.',
   'qfield_add_package': 'QField paketi ekle',
-  'qfield_package_hint': 'QGIS projesi (.qgz), GeoPackage (.gpkg) veya .zip — yaklaşık 90 MB’a kadar.',
+  'qfield_package_hint':
+      'QGIS projesi (.qgz), GeoPackage (.gpkg) veya .zip — yaklaşık 90 MB’a kadar.',
   'qfield_open_external': 'Aç',
   'qfield_copy_link': 'Bağlantıyı kopyala',
   'qfield_share': 'Paylaş',
@@ -2608,8 +2743,10 @@ const Map<String, String> _tr = {
   'qfield_meta_saved': 'Ayrıntılar güncellendi',
   'ticket_qfield_n_more': '+{{count}} daha',
   'qfield_map_title': 'Harita önizleme',
-  'qfield_map_no_preview': 'Vektör çıkarılamadı. Yetkiniz varsa yine de haritada pin bırakabilirsiniz.',
-  'qfield_map_tap_place_pin': 'Haritaya dokunarak kırmızı pini yerleştirin veya taşıyın, not ekleyip kaydedin.',
+  'qfield_map_no_preview':
+      'Vektör çıkarılamadı. Yetkiniz varsa yine de haritada pin bırakabilirsiniz.',
+  'qfield_map_tap_place_pin':
+      'Haritaya dokunarak kırmızı pini yerleştirin veya taşıyın, not ekleyip kaydedin.',
   'qfield_map_note_hint': 'Pin notu (isteğe bağlı)',
   'qfield_map_save_pin': 'Pini kaydet',
   'qfield_map_clear_pin': 'Temizle',
@@ -2648,7 +2785,8 @@ const Map<String, String> _tr = {
   'accept': 'Kabul',
   'reject': 'Reddet',
   'design_specifications': 'Tasarım Spesifikasyonları',
-  'design_specs_hint': 'Spesifikasyonları, gereksinimleri veya denetim notlarını açıklayın...',
+  'design_specs_hint':
+      'Spesifikasyonları, gereksinimleri veya denetim notlarını açıklayın...',
   'add_attachments': 'Ekler',
   'add_attachments_hint': 'Spesifikasyon dosyaları veya görseller ekleyin',
   'add_image': 'Görsel',
@@ -2678,7 +2816,8 @@ const Map<String, String> _tr = {
   'request_edit': 'Personelden düzenleme iste',
   'request_edit_hint': 'Personelin ne değiştirmesi gerektiğini açıklayın...',
   'edit_request_sent': 'Düzenleme isteği personele gönderildi.',
-  'resubmitted_by_staff': 'Personel koordinatör incelemesi için yeniden gönderdi',
+  'resubmitted_by_staff':
+      'Personel koordinatör incelemesi için yeniden gönderdi',
   'action_failed': 'İşlem başarısız. Lütfen tekrar deneyin.',
   'status_timeline': 'Durum Zaman Çizelgesi',
   'ncr_resubmission': 'Uyumsuzluk Yeniden Gönderimi',
@@ -2690,7 +2829,8 @@ const Map<String, String> _tr = {
   'ncr_resolving_comments_required': 'Çözüm açıklamaları gerekli',
   'ncr_evidence_label': 'Kanıt',
   'ncr_evidence_required': 'En az bir kanıt görseli gerekli',
-  'ncr_evidence_required_hint': 'Çözüm kanıtı olarak fotoğraf veya dosya ekleyin',
+  'ncr_evidence_required_hint':
+      'Çözüm kanıtı olarak fotoğraf veya dosya ekleyin',
   'resubmitted_evidence': 'YENİDEN GÖNDERİLEN KANIT',
   'inspection_time': 'Denetim süresi',
   'inspection_hours': '{{h}} s',
@@ -2761,7 +2901,8 @@ const Map<String, String> _tr = {
   'conflict_cases': 'Uyuşmazlık Durumları',
   'previous_conflict': 'Önceki Uyuşmazlık',
   'no_conflicts': 'Uyuşmazlık durumu yok',
-  'no_conflicts_desc': 'Uyuşmazlıklar denetim sonuçları kabul edilmediğinde, NCR veya yorumlarla kabul edildiğinde görünür.',
+  'no_conflicts_desc':
+      'Uyuşmazlıklar denetim sonuçları kabul edilmediğinde, NCR veya yorumlarla kabul edildiğinde görünür.',
   'report_conflict_confirm': 'Bu bilet uyuşmazlık olarak bildirilsin mi?',
   'conflict_reported': 'Uyuşmazlık başarıyla bildirildi',
   'conflict_report_failed': 'Uyuşmazlık bildirilemedi',
@@ -2769,13 +2910,16 @@ const Map<String, String> _tr = {
   're_inspection': 'Yeniden Denetim',
   'keep_same': 'Aynı Kalsın',
   'resolve_conflict': 'Uyuşmazlığı Çöz',
-  'conflict_resolved': 'Uyuşmazlık çözüldü. Mühendis ve şirket bilgilendirildi.',
+  'conflict_resolved':
+      'Uyuşmazlık çözüldü. Mühendis ve şirket bilgilendirildi.',
   'conflict_resolve_failed': 'Uyuşmazlık çözülemedi',
-  'conflict_load_failed': 'Uyuşmazlık açılamadı. Bağlantınızı kontrol edip tekrar deneyin.',
+  'conflict_load_failed':
+      'Uyuşmazlık açılamadı. Bağlantınızı kontrol edip tekrar deneyin.',
   'conflict_description': 'Uyuşmazlık Açıklaması',
   'conflict_evidence': 'Kanıt',
   'conflict_description_hint': 'Uyuşmazlığı açıklayın ve kanıt ekleyin',
-  'resolution_re_inspection': 'Yeniden denetim gerekli. Mühendis denetimi tekrarlamalı.',
+  'resolution_re_inspection':
+      'Yeniden denetim gerekli. Mühendis denetimi tekrarlamalı.',
   'resolution_keep_same': 'Aynı kalsın. Orijinal sonuç onaylandı.',
   'resolution_changed_to': 'Sonuç değiştirildi:',
   'tap_to_view_details': 'Detayları görmek için dokunun',
@@ -2785,17 +2929,22 @@ const Map<String, String> _tr = {
   'privacy_policy_title': 'Gizlilik ve Koşullar',
   'privacy_agree': 'Gizlilik Politikası ve Hizmet Koşullarını kabul ediyorum',
   'privacy_view_full': 'Tam politikayı görüntüle',
-  'privacy_agree_required': 'Giriş yapmak için Gizlilik Politikası ve Koşulları kabul etmelisiniz',
+  'privacy_agree_required':
+      'Giriş yapmak için Gizlilik Politikası ve Koşulları kabul etmelisiniz',
   'privacy_section_1_title': '1. Topladığımız Bilgiler',
-  'privacy_section_1_body': 'Provisor, hesap oluştururken veya bilet gönderirken sağladığınız bilgileri toplar.',
+  'privacy_section_1_body':
+      'Provisor, hesap oluştururken veya bilet gönderirken sağladığınız bilgileri toplar.',
   'privacy_section_2_title': '2. Bilgilerinizi Nasıl Kullanıyoruz',
-  'privacy_section_2_body': 'Bilgilerinizi uygulamayı çalıştırmak ve biletleri işlemek için kullanıyoruz.',
+  'privacy_section_2_body':
+      'Bilgilerinizi uygulamayı çalıştırmak ve biletleri işlemek için kullanıyoruz.',
   'privacy_section_3_title': '3. Veri Paylaşımı',
   'privacy_section_3_body': 'Kişisel verilerinizi satmıyoruz.',
   'privacy_section_4_title': '4. Güvenlik',
-  'privacy_section_4_body': 'Verilerinizi korumak için makul önlemler alıyoruz.',
+  'privacy_section_4_body':
+      'Verilerinizi korumak için makul önlemler alıyoruz.',
   'privacy_section_5_title': '5. Seçimleriniz',
-  'privacy_section_5_body': 'Profilinizi güncelleyebilir ve istediğiniz zaman çıkış yapabilirsiniz.',
+  'privacy_section_5_body':
+      'Profilinizi güncelleyebilir ve istediğiniz zaman çıkış yapabilirsiniz.',
   'reg_request_title': 'Kayıt Talebi',
   'reg_evidence_required': 'Kimlik kanıtı gerekli',
   'reg_submit_failed': 'Talep gönderilemedi',
@@ -2817,7 +2966,8 @@ const Map<String, String> _tr = {
   'reg_province_hint': 'İl seçin',
   'reg_province_required': 'Lütfen bir il seçin',
   'reg_evidence_label': 'Kimlik kanıtı',
-  'reg_evidence_hint': 'Kimlik kartı, pasaport veya şirket sertifikası (PDF, JPEG, PNG)',
+  'reg_evidence_hint':
+      'Kimlik kartı, pasaport veya şirket sertifikası (PDF, JPEG, PNG)',
   'reg_file_uploaded': 'Dosya yüklendi',
   'reg_remove': 'Kaldır',
   'reg_uploading': 'Yükleniyor...',
@@ -2858,12 +3008,14 @@ const Map<String, String> _tr = {
   'site_share_title': 'Siteyi paylaş',
   'site_share_tab_user': 'Kullanıcı daveti',
   'site_share_tab_visitor': 'Ziyaretçi bağlantısı',
-  'site_visitor_intro': 'Web’de zaman sınırlı salt okunur önizleme. Başlangıç ve bitişi seçin.',
+  'site_visitor_intro':
+      'Web’de zaman sınırlı salt okunur önizleme. Başlangıç ve bitişi seçin.',
   'site_visitor_valid_from': 'Geçerlilik başlangıcı',
   'site_visitor_valid_until': 'Bitiş (sona erer)',
   'site_visitor_create_link': 'Bağlantı oluştur',
   'site_visitor_creating': 'Oluşturuluyor…',
-  'site_visitor_link_created': 'Bağlantı oluşturuldu — varsayılan adres panoya kopyalandı',
+  'site_visitor_link_created':
+      'Bağlantı oluşturuldu — varsayılan adres panoya kopyalandı',
   'site_visitor_pick_dates': 'Başlangıç ve bitiş zamanını seçin.',
   'site_share_action': 'Paylaş',
   'site_share_hint': 'Alıcı kullanıcı adı veya e-posta',
@@ -2917,10 +3069,13 @@ const Map<String, String> _tr = {
   'analytics_kpi_avg_task': 'Ort. görev',
   'analytics_kpi_arrival_hours': 'Varış saatleri',
   'analytics_kpi_avg_arrival': 'Ort. varış',
-  'analytics_kpi_empty': 'Bu dönemde hesabınız için KPI satırı yok (eşleşen atanan talep yok).',
-  'analytics_kpi_unavailable': 'Performans verisi yüklenemedi. Yenilemek için çekin.',
+  'analytics_kpi_empty':
+      'Bu dönemde hesabınız için KPI satırı yok (eşleşen atanan talep yok).',
+  'analytics_kpi_unavailable':
+      'Performans verisi yüklenemedi. Yenilemek için çekin.',
   'analytics_material_requests': 'Malzeme talepleri',
-  'analytics_material_requests_hint': 'Gönderdiğiniz depo talepleri (en yeni üstte).',
+  'analytics_material_requests_hint':
+      'Gönderdiğiniz depo talepleri (en yeni üstte).',
   'analytics_material_requests_empty': 'Henüz malzeme talebiniz yok.',
   'engineer_cl_archived': 'Arşivlenen (benim şablonlarım)',
   'engineer_cl_unarchive': 'Geri al',
@@ -2932,7 +3087,8 @@ const Map<String, String> _tr = {
   'engineer_cl_apply_failed': 'Önce bir şablon seçin veya oluşturun.',
   'pc_ws_export_data': 'Çalışma alanını dışa aktar (JSON)',
   'pc_ws_export_failed': 'Dışa aktarma başarısız',
-  'pc_ws_export_shared': 'Dışa aktarma hazır — kaydetmek veya paylaşmak için bir uygulama seçin',
+  'pc_ws_export_shared':
+      'Dışa aktarma hazır — kaydetmek veya paylaşmak için bir uygulama seçin',
   'pc_ws_tab_overview': 'Genel bakış',
   'pc_ws_tab_departments': 'Departmanlar',
   'pc_ws_tab_staff': 'Personel',
@@ -2943,7 +3099,8 @@ const Map<String, String> _tr = {
       'Penceredeki atanan talepler ÷ takvim günleri — karşılaştırma için iş yükü oranı.',
   'pc_kpi_intro_owner':
       'Seçilen pencerede çalışma alanına atanan taleplerden departman ve personele göre özetler.',
-  'pc_kpi_intro_manager': 'Yalnızca departmanınızdaki kişiler için KPI’lar (düz liste).',
+  'pc_kpi_intro_manager':
+      'Yalnızca departmanınızdaki kişiler için KPI’lar (düz liste).',
   'pc_kpi_intro_self': 'Yalnızca size atanan çalışma alanı talepleri.',
   'pc_kpi_days_short': '{{n}} g',
   'pc_kpi_tickets_in_window': 'Penceredeki talepler: {{count}}',
@@ -2970,17 +3127,21 @@ const Map<String, String> _tr = {
   'pc_kpi_empty_subtitle':
       'Göstergeler, varış ve görev süresi için durum geçmişi olan atanan taleplerden hesaplanır.',
   'pc_kpi_error_title': 'KPI’lar yüklenemedi',
-  'pc_kpi_error_subtitle': 'Yenilemek için çekin veya bağlantınızı kontrol edin.',
+  'pc_kpi_error_subtitle':
+      'Yenilemek için çekin veya bağlantınızı kontrol edin.',
   'pc_kpi_unavailable': 'Performans metrikleri kullanılamıyor.',
   'analytics_performance_insights': 'Performans özeti',
-  'analytics_performance_insights_hint': 'Rolünüze ve zaman penceresine göre KPI’lar.',
+  'analytics_performance_insights_hint':
+      'Rolünüze ve zaman penceresine göre KPI’lar.',
   'pc_ticket_expenses_settings': 'Bilet giderleri',
   'pc_ticket_expenses_title': 'Bilet giderleri',
-  'pc_ticket_expenses_hint': 'Bu işi tamamlamadan önce oluşan maliyetlerinizi ekleyin.',
+  'pc_ticket_expenses_hint':
+      'Bu işi tamamlamadan önce oluşan maliyetlerinizi ekleyin.',
   'pc_expenses_enable': 'Bilet giderlerini aç (tüm bilet türleri)',
   'pc_expenses_coordinator_hint':
       'Bu çalışma alanında giderleri etkinleştirmek için bir yöneticiden onay isteyin.',
-  'pc_expenses_activation_pending': 'Koordinatör etkinleştirme istedi — yöneticiler aşağıdan onaylayabilir.',
+  'pc_expenses_activation_pending':
+      'Koordinatör etkinleştirme istedi — yöneticiler aşağıdan onaylayabilir.',
   'pc_expenses_approve': 'Etkinleştirmeyi onayla',
   'pc_expenses_request_activation': 'Etkinleştirme iste',
   'pc_expenses_reason_add_hint': 'Gider nedeni ekleyin (yakıt, araç gereç, …)',
@@ -3001,6 +3162,9 @@ const Map<String, String> _tr = {
   'pc_cancellation_admin_reasons_hint':
       'Neden metinleri web yönetiminde bilet iptal / yeniden gönderim politikasında yapılandırılır.',
   'pc_expenses_days': 'Dönem',
+  'pc_analytics_date_range_label': 'Tarih aralığı (değiştirmek için dokunun)',
+  'pc_expenses_export_uses_period':
+      'Dışa aktarma, seçilen tarih aralığını ve yukarıdaki il / departman süzgeçlerini kullanır.',
   'pc_expenses_filter_province': 'İl',
   'pc_expenses_filter_department': 'Departman',
   'pc_expenses_all_provinces': 'Tüm iller',
@@ -3016,9 +3180,18 @@ const Map<String, String> _tr = {
   'pc_expenses_no_reasons':
       'Henüz gerekçe yok — yöneticinizden gider nedenleri eklemesini isteyin.',
   'pc_expenses_add_line': 'Gider satırı ekle',
-  'pc_ticket_expenses_validation': 'Geçerli bir tutar girin ve bir neden seçin.',
+  'pc_ticket_expenses_validation':
+      'Geçerli bir tutar girin ve bir neden seçin.',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} satır · {{tickets}} bilet',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} satır',
+  'pc_expenses_export_excel': 'Excel dışa aktar',
+  'pc_expenses_export_subtitle':
+      'Tarihleri seçin. Üstteki il ve departman süzgeçleri dosyaya uygulanır.',
+  'pc_expenses_export_failed': 'Giderler dışa aktarılamadı.',
+  'pc_warehouse_tools_export': 'Araçları dışa aktar (Excel)',
+  'pc_warehouse_tools_export_hint':
+      'Personel, seri numarası, durum ve araç kalemleri için son hareket notları.',
+  'pc_warehouse_tools_export_failed': 'Araç raporu dışa aktarılamadı.',
   'pc_ws_tab_warehouse': 'Depo',
   'pc_dept_maintenance_dispatch_title': 'Bakım yönlendirmesi',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -3030,8 +3203,7 @@ const Map<String, String> _tr = {
   'pc_dispatch_engineer_desc':
       'Bu departmandaki mühendis, yönetici veya koordinatör işe başlamadan teknisyeni seçer.',
   'maint_assign_technician': 'Teknisyen ata',
-  'maint_assign_technician_empty':
-      'Bilet iline uyan veya aktif teknisyen yok.',
+  'maint_assign_technician_empty': 'Bilet iline uyan veya aktif teknisyen yok.',
   'pc_dept_workspace_field_crew_title': 'Çok kişilik saha ekibi',
   'pc_dept_workspace_field_crew_desc':
       'Mühendis, yönetici, koordinatör ve teknisyenler açıkken aynı çalışma alanı biletinize (bakım veya QC denetimi) ek ekip olarak katılabilir. Katılımda yakınlık yarıçapı kullanılır.',
