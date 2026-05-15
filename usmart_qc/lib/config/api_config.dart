@@ -51,6 +51,7 @@ class ApiConfig {
   static const String ticketStats = '/api/tickets/stats';
   static String ticketDetail(String id) => '/api/tickets/$id';
   static String ticketQFieldProjects(String id) => '/api/tickets/$id/qfield-projects';
+  static String ticketQFieldMapPreview(String id) => '/api/tickets/$id/qfield-map-preview';
   static String ticketStatus(String id) => '/api/tickets/$id/status';
   static String ticketAssign(String id) => '/api/tickets/$id/assign';
   static String ticketMaintenanceCrew(String id) =>

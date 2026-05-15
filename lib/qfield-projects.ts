@@ -12,6 +12,15 @@ export type QFieldRevisionStored = {
   note?: string | null;
 };
 
+export type QFieldMapAnnotationStored = {
+  latitude: number;
+  longitude: number;
+  note?: string | null;
+  updatedAt: string;
+  byRequesterId?: string | null;
+  byName?: string | null;
+};
+
 export type QFieldProjectStored = {
   id: string;
   title: string;
@@ -22,6 +31,8 @@ export type QFieldProjectStored = {
   createdAt: string;
   updatedAt: string;
   revisions: QFieldRevisionStored[];
+  /** Optional field pin / note placed on the in-app map (WGS84). */
+  mapAnnotation?: QFieldMapAnnotationStored | null;
 };
 
 export function newQfieldEntityId(): string {
@@ -67,7 +78,25 @@ export function parseQFieldProjectsFromCompanyJson(parsed: Record<string, unknow
         });
       }
     }
-    out.push({ id, title: title || fileName, description, currentUrl, fileName, createdAt, updatedAt, revisions });
+    let mapAnnotation: QFieldMapAnnotationStored | null = null;
+    const ma = item.mapAnnotation;
+    if (ma && typeof ma === 'object' && !Array.isArray(ma)) {
+      const m = ma as Record<string, unknown>;
+      const lat = typeof m.latitude === 'number' ? m.latitude : typeof m.latitude === 'string' ? parseFloat(m.latitude) : NaN;
+      const lng = typeof m.longitude === 'number' ? m.longitude : typeof m.longitude === 'string' ? parseFloat(m.longitude) : NaN;
+      const updatedAt = typeof m.updatedAt === 'string' ? m.updatedAt : '';
+      if (Number.isFinite(lat) && Number.isFinite(lng) && updatedAt) {
+        mapAnnotation = {
+          latitude: lat,
+          longitude: lng,
+          note: typeof m.note === 'string' ? m.note : null,
+          updatedAt,
+          byRequesterId: typeof m.byRequesterId === 'string' ? m.byRequesterId : null,
+          byName: typeof m.byName === 'string' ? m.byName : null,
+        };
+      }
+    }
+    out.push({ id, title: title || fileName, description, currentUrl, fileName, createdAt, updatedAt, revisions, mapAnnotation });
   }
   return out;
 }
@@ -81,6 +110,7 @@ export function qfieldProjectsToJsonValue(projects: QFieldProjectStored[]): unkn
     fileName: p.fileName,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
+    mapAnnotation: p.mapAnnotation ?? null,
     revisions: p.revisions.map((r) => ({
       id: r.id,
       url: r.url,
@@ -116,6 +146,7 @@ export function normalizeQFieldProjectsFromCreateBody(raw: unknown): QFieldProje
       fileName,
       createdAt: now,
       updatedAt: now,
+      mapAnnotation: null,
       revisions: [
         {
           id: revId,

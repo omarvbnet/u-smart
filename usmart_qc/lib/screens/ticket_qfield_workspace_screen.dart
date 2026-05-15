@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
+import '../widgets/qfield_project_map_sheet.dart';
 
 /// Field workspace for QField / QGIS project packages on a ticket (read + optional write).
 class TicketQFieldWorkspaceScreen extends StatefulWidget {
@@ -86,6 +87,29 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
 
   Future<void> _shareLink(String url, String label) async {
     await Share.share('${label.trim()}\n${_resolveUrl(url)}');
+  }
+
+  void _openMapSheet(QFieldProject p) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.9,
+        minChildSize: 0.45,
+        maxChildSize: 0.96,
+        builder: (_, __) => QFieldProjectMapSheet(
+          ticketId: widget.ticketId,
+          project: p,
+          ticket: _ticket,
+          canWrite: widget.canWrite,
+          onSaved: () {
+            _load();
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _uploadRevision(QFieldProject project) async {
@@ -473,6 +497,11 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
                     icon: Icons.share_rounded,
                     label: l10n.t('qfield_share'),
                     onTap: busy ? null : () => _shareLink(p.currentUrl, p.title),
+                  ),
+                  _chipButton(
+                    icon: Icons.map_outlined,
+                    label: l10n.t('qfield_map_title'),
+                    onTap: busy ? null : () => _openMapSheet(p),
                   ),
                   if (widget.canWrite) ...[
                     _chipButton(

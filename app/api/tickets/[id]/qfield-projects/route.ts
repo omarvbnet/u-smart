@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
-  if (!['add_revision', 'update_meta'].includes(action)) {
+  if (!['add_revision', 'update_meta', 'set_map_annotation'].includes(action)) {
     return NextResponse.json({ success: false, message: 'Invalid action' }, { status: 400 });
   }
 
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       projects[idx].description = description.length > 0 ? description : null;
     }
     projects[idx].updatedAt = new Date().toISOString();
-  } else {
+  } else if (action === 'add_revision') {
     const url = typeof body.url === 'string' ? body.url.trim() : '';
     const fileName = typeof body.fileName === 'string' ? body.fileName.trim() : '';
     if (!url || !fileName) {
@@ -102,6 +102,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     projects[idx].currentUrl = url;
     projects[idx].fileName = fileName;
     projects[idx].updatedAt = at;
+  } else {
+    const clear = body.clear === true;
+    if (clear) {
+      projects[idx].mapAnnotation = null;
+    } else {
+      const latRaw = body.latitude;
+      const lngRaw = body.longitude;
+      const lat =
+        typeof latRaw === 'number' ? latRaw : typeof latRaw === 'string' ? parseFloat(latRaw) : NaN;
+      const lng =
+        typeof lngRaw === 'number' ? lngRaw : typeof lngRaw === 'string' ? parseFloat(lngRaw) : NaN;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return NextResponse.json(
+          { success: false, message: 'latitude and longitude must be numbers' },
+          { status: 400 }
+        );
+      }
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return NextResponse.json(
+          { success: false, message: 'Coordinates out of valid WGS84 range' },
+          { status: 400 }
+        );
+      }
+      const me = await prisma.ticketRequester.findUnique({
+        where: { id: auth.payload.requesterId },
+        select: { name: true, username: true },
+      });
+      const byName = ((me?.name as string) || (me?.username as string) || '').trim() || null;
+      const noteMap = typeof body.note === 'string' ? body.note.trim() : '';
+      const at = new Date().toISOString();
+      projects[idx].mapAnnotation = {
+        latitude: lat,
+        longitude: lng,
+        note: noteMap.length > 0 ? noteMap : null,
+        updatedAt: at,
+        byRequesterId: auth.payload.requesterId,
+        byName,
+      };
+    }
+    projects[idx].updatedAt = new Date().toISOString();
   }
 
   parsed.qfieldProjects = qfieldProjectsToJsonValue(projects);

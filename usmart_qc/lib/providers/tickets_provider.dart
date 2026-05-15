@@ -863,6 +863,13 @@ class TicketsProvider extends ChangeNotifier {
     return (ok: false, message: null, projects: null);
   }
 
+  Future<Map<String, dynamic>?> fetchQFieldMapPreview(String ticketId, String projectId) async {
+    return _api.getSafe(
+      ApiConfig.ticketQFieldMapPreview(ticketId),
+      query: {'projectId': projectId},
+    );
+  }
+
   // ─── Upload file ───
   /// Returns URL on success, or null on failure.
   /// Raster images are resized (max edge 1920) and JPEG-compressed (~medium) before upload.

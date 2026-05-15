@@ -1,3 +1,32 @@
+class QFieldMapAnnotation {
+  final double latitude;
+  final double longitude;
+  final String? note;
+  final String updatedAt;
+  final String? byRequesterId;
+  final String? byName;
+
+  QFieldMapAnnotation({
+    required this.latitude,
+    required this.longitude,
+    this.note,
+    required this.updatedAt,
+    this.byRequesterId,
+    this.byName,
+  });
+
+  factory QFieldMapAnnotation.fromJson(Map<String, dynamic> json) {
+    return QFieldMapAnnotation(
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      note: json['note'] as String?,
+      updatedAt: json['updatedAt'] as String? ?? '',
+      byRequesterId: json['byRequesterId'] as String?,
+      byName: json['byName'] as String?,
+    );
+  }
+}
+
 class QFieldRevision {
   final String id;
   final String url;
@@ -39,6 +68,7 @@ class QFieldProject {
   final String createdAt;
   final String updatedAt;
   final List<QFieldRevision> revisions;
+  final QFieldMapAnnotation? mapAnnotation;
 
   QFieldProject({
     required this.id,
@@ -49,6 +79,7 @@ class QFieldProject {
     required this.createdAt,
     required this.updatedAt,
     this.revisions = const [],
+    this.mapAnnotation,
   });
 
   factory QFieldProject.fromJson(Map<String, dynamic> json) {
@@ -66,6 +97,9 @@ class QFieldProject {
               .map((e) => QFieldRevision.fromJson(e as Map<String, dynamic>))
               .toList()
           : const [],
+      mapAnnotation: json['mapAnnotation'] is Map<String, dynamic>
+          ? QFieldMapAnnotation.fromJson(json['mapAnnotation'] as Map<String, dynamic>)
+          : null,
     );
   }
 }
