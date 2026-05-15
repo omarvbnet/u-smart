@@ -50,6 +50,39 @@ const ENVELOPE_BYTES: Record<number, number> = {
 };
 
 /**
+ * SpatiaLite internal BLOB: START 0x00, endian, SRID, MBR, 0x7C, then WKB type + payload (not prefixed
+ * with a second endian byte). Trailing 0xFE is stripped. @see gaia-gis SpatiaLite BLOB-Geometry.
+ */
+function spatialiteInternalBlobToWkb(buf: Uint8Array): Uint8Array | null {
+  if (buf.length < 44) return null;
+  if (buf[0] !== 0x00) return null;
+  const endianMark = buf[1];
+  if (endianMark !== 0x00 && endianMark !== 0x01 && endianMark !== 0x80 && endianMark !== 0x81) {
+    return null;
+  }
+  if (buf[38] !== 0x7c) return null;
+
+  let end = buf.length;
+  if (end > 0 && buf[end - 1] === 0xfe) end -= 1;
+  const body = buf.subarray(39, end);
+  if (body.length < 5) return null;
+
+  const readU32 = (le: boolean): number => {
+    const v = new DataView(body.buffer, body.byteOffset, body.byteLength);
+    return v.getUint32(0, le);
+  };
+  const le = endianMark === 0x01 || endianMark === 0x81;
+  const gtype = readU32(le);
+  if (gtype >= 1000000) return null;
+
+  const wkbEndian: 0 | 1 = le ? 1 : 0;
+  const out = new Uint8Array(1 + body.length);
+  out[0] = wkbEndian;
+  out.set(body, 1);
+  return out;
+}
+
+/**
  * Strip GeoPackage binary header so WKB parsers (wkx) receive standard geometry bytes.
  * @see https://www.geopackage.org/spec/#gpb_format
  */
@@ -58,7 +91,10 @@ function geopackageBlobToWkb(buf: Uint8Array): Uint8Array | null {
   const isGpkgHeader =
     buf[0] === GPKG_GEOM_MAGIC[0] && buf[1] === GPKG_GEOM_MAGIC[1];
   if (!isGpkgHeader) {
-    // Plain OGC WKB (first byte is 0 or 1 = endianness)
+    const sl = spatialiteInternalBlobToWkb(buf);
+    if (sl) return sl;
+    // Plain OGC WKB (first byte is 0 or 1 = endianness) — not SpatiaLite (byte0 is also 0x00 there)
+    if (buf.length >= 39 && buf[0] === 0x00 && buf[38] === 0x7c) return null;
     if (buf[0] === 0 || buf[0] === 1) return buf;
     return null;
   }

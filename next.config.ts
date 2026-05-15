@@ -4,6 +4,13 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
+  // sql.js loads sql-wasm.wasm at runtime; ensure it is copied into the serverless bundle (Vercel).
+  outputFileTracingIncludes: {
+    '/api/tickets/[id]/qfield-map-preview': [
+      './node_modules/sql.js/dist/sql-wasm.wasm',
+      './public/vendor/sql-wasm.wasm',
+    ],
+  },
   async headers() {
     return [
       {
