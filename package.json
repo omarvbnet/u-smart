@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && prisma migrate deploy && node scripts/copy-sqljs-wasm.mjs && next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "npx prisma db seed"
+    "seed": "npx prisma db seed",
+    "postinstall": "node scripts/copy-sqljs-wasm.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

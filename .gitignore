@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sql.js WASM copied by postinstall for QField map preview API
+public/vendor/sql-wasm.wasm

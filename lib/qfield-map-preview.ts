@@ -73,10 +73,6 @@ function geopackageBlobToWkb(buf: Uint8Array): Uint8Array | null {
   return buf.subarray(wkbOffset);
 }
 
-function readUint32At(buf: Uint8Array, off: number, littleEndian: boolean): number {
-  return new DataView(buf.buffer, buf.byteOffset + off, 4).getUint32(0, littleEndian);
-}
-
 /**
  * Parse SQLite / GeoPackage / SpatiaLite geometry BLOB to GeoJSON (WKB + GeoPackage envelope + byte scan).
  */
@@ -103,12 +99,9 @@ function parseGeometryBlobToGeoJson(
   const b = tryParse(buf);
   if (b) return b;
 
-  const scanEnd = Math.min(80, buf.length - 9);
+  const scanEnd = Math.min(192, buf.length - 9);
   for (let i = 0; i <= scanEnd; i++) {
     if (buf[i] !== 0 && buf[i] !== 1) continue;
-    const le = buf[i] === 1;
-    const t = readUint32At(buf, i + 1, le);
-    if (t < 1 || t > 1000) continue;
     const g = tryParse(buf.subarray(i));
     if (g) return g;
   }
@@ -146,6 +139,17 @@ function tryParseWktGeometry(wkt: string): GeoJsonGeometry | null {
   }
 
   m = /^POLYGON(?:\s+Z|\s+M|\s+ZM)?\s*\(\s*\(\s*(.+)\s*\)\s*\)\s*$/i.exec(s);
+  if (m) {
+    const coords = parseWktCoordinatePairs(m[1]!);
+    if (coords.length >= 3) {
+      const a = coords[0]!;
+      const b = coords[coords.length - 1]!;
+      if (a[0] !== b[0] || a[1] !== b[1]) coords.push([a[0], a[1]]);
+      return { type: 'Polygon', coordinates: [coords] };
+    }
+  }
+
+  m = /^POLYGON(?:\s+Z|\s+M|\s+ZM)?\s*\(\s*([^()]+)\s*\)\s*$/i.exec(s);
   if (m) {
     const coords = parseWktCoordinatePairs(m[1]!);
     if (coords.length >= 3) {
@@ -413,30 +417,30 @@ async function initSqlJsForGeopackage() {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const { createRequire } = await import('node:module');
-    let loaded = false;
-    for (const base of [join(process.cwd(), 'package.json'), join(process.cwd(), '..', 'package.json')]) {
+    const loadWasmFile = (wasmPath: string): boolean => {
       try {
-        const require = createRequire(base);
-        const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
         const raw = readFileSync(wasmPath);
         const u8 = new Uint8Array(raw);
         opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-        loaded = true;
-        break;
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    let loaded = false;
+    if (loadWasmFile(join(process.cwd(), 'public', 'vendor', 'sql-wasm.wasm'))) loaded = true;
+    for (const base of [join(process.cwd(), 'package.json'), join(process.cwd(), '..', 'package.json')]) {
+      if (loaded) break;
+      try {
+        const require = createRequire(base);
+        const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+        loaded = loadWasmFile(wasmPath);
       } catch {
         /* try next */
       }
     }
     if (!loaded) {
-      try {
-        const wasmPath = join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-        const raw = readFileSync(wasmPath);
-        const u8 = new Uint8Array(raw);
-        opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-        loaded = true;
-      } catch {
-        /* fall through */
-      }
+      loaded = loadWasmFile(join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'));
     }
     if (!loaded) {
       try {
@@ -1236,7 +1240,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   if (gpkgOk === 0 && shpOk === 0 && extentAdded) {
     msg += ` Archive listing: ${summarizeVectorishFiles(keys)} (paths found in zip).`;
   }
-  msg += ' Each feature includes package, layer, and source.';
+  msg += ' Map fields: package / layer / source.';
 
   return {
     geojson: { type: 'FeatureCollection', features: merged },

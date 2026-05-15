@@ -8,6 +8,48 @@ import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 
+/// Long server preview lines: split on "Archive listing:" and "Map fields:" for readable rows.
+class _PreviewHintText extends StatelessWidget {
+  const _PreviewHintText({required this.text});
+
+  final String text;
+  static const String _archiveSep = 'Archive listing:';
+  static const String _mapFieldsSep = 'Map fields:';
+
+  @override
+  Widget build(BuildContext context) {
+    final baseStyle = TextStyle(color: Colors.white.withAlpha(160), fontSize: 12, height: 1.35);
+    final subStyle = baseStyle.copyWith(fontSize: 11, color: Colors.white.withAlpha(200));
+
+    final chunks = <String>[];
+    var rest = text.trim();
+    final ai = rest.indexOf(_archiveSep);
+    if (ai > 0) {
+      chunks.add(rest.substring(0, ai).trim());
+      rest = rest.substring(ai).trim();
+    }
+    final mi = rest.indexOf(_mapFieldsSep);
+    if (mi > 0) {
+      chunks.add(rest.substring(0, mi).trim());
+      rest = rest.substring(mi).trim();
+    }
+    if (rest.isNotEmpty) chunks.add(rest);
+
+    if (chunks.length <= 1) {
+      return Text(text, style: baseStyle);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var j = 0; j < chunks.length; j++) ...[
+          if (j > 0) const SizedBox(height: 4),
+          Text(chunks[j], style: j == 0 ? baseStyle : subStyle),
+        ],
+      ],
+    );
+  }
+}
+
 /// Bottom-sheet map: GeoJSON preview from server + ticket site + editable field pin.
 class QFieldProjectMapSheet extends StatefulWidget {
   const QFieldProjectMapSheet({
@@ -559,10 +601,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (_hint != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Text(
-                  _hint!,
-                  style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12),
-                ),
+                child: _PreviewHintText(text: _hint!),
               ),
             if (!_loading) _layerLegend(l10n),
             if (_loading)
