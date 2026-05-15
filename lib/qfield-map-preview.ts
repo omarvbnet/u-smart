@@ -1,8 +1,10 @@
 /**
  * Best-effort map preview for QField packages: GeoPackage vectors (correct GeoPackage BLOB → WKB),
- * GeoJSON sidecars in archives, or QGIS canvas extent from .qgz / .zip.
+ * ESRI Shapefile (.shp) lines/polygons/points, GeoJSON sidecars, or QGIS canvas extent from .qgz / .zip.
  * ZIP bundles may include both `layers.gpkg` and nested `.qgz` (QGIS project archives); nested `.qgz`
- * are opened and their inner `.gpkg` / `.qgs` / GeoJSON are merged into one preview.
+ * are opened and their inner `.gpkg` / `.shp` / `.qgs` / GeoJSON are merged into one preview.
+ * Canvas extent from `.qgs` is appended only when no vector features were extracted (extent is often in
+ * project CRS and would otherwise appear as a lone rectangle on the basemap).
  * Coordinates are assumed WGS84 where possible; other CRS may appear mis-placed (open in QField for accuracy).
  */
 
@@ -135,6 +137,207 @@ function pickQgsExtentKey(keys: string[]): string | undefined {
     .sort((a, b) => a.length - b.length);
   const preferred = qgs.find((k) => /(^|\/)project\.qgs$/i.test(k.replace(/\\/g, '/')));
   return preferred ?? qgs[0];
+}
+
+/** Prefer vectors inside unpacked `.qgz/` (project data) before short root paths. */
+function sortArchivePathsForVectors(a: string, b: string): number {
+  const pa = a.replace(/\\/g, '/').toLowerCase().includes('.qgz/');
+  const pb = b.replace(/\\/g, '/').toLowerCase().includes('.qgz/');
+  if (pa !== pb) return pa ? -1 : 1;
+  return a.length - b.length;
+}
+
+function readInt32BE(buf: Uint8Array, off: number): number {
+  return (
+    (buf[off]! << 24) | (buf[off + 1]! << 16) | (buf[off + 2]! << 8) | buf[off + 3]!
+  );
+}
+
+function readInt32LE(buf: Uint8Array, off: number): number {
+  return new DataView(buf.buffer, buf.byteOffset + off, 4).getInt32(0, true);
+}
+
+function readFloat64LE(buf: Uint8Array, off: number): number {
+  return new DataView(buf.buffer, buf.byteOffset + off, 8).getFloat64(0, true);
+}
+
+const SHP_MAGIC = 9994;
+
+/**
+ * Minimal ESRI Shapefile geometry scan (routes / lines / polygons). No .dbf attributes.
+ */
+function extractEsriShapefileFeatures(
+  bytes: Uint8Array,
+  opts: { maxFeatures: number; packagePath: string }
+): { features: GeoJsonFeature[]; bounds: QFieldMapBounds | null } {
+  const features: GeoJsonFeature[] = [];
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  const expandBounds = (lon: number, lat: number) => {
+    if (!inWgsLikeRange(lon, lat)) return;
+    west = Math.min(west, lon);
+    east = Math.max(east, lon);
+    south = Math.min(south, lat);
+    north = Math.max(north, lat);
+  };
+  const shortName = opts.packagePath.split('/').pop() ?? opts.packagePath;
+
+  if (bytes.length < 112) return { features: [], bounds: null };
+  if (readInt32BE(bytes, 0) !== SHP_MAGIC) return { features: [], bounds: null };
+
+  const fileWords = readInt32BE(bytes, 24);
+  const fileLen = fileWords * 2;
+  if (fileLen < 100 || fileLen > bytes.length) return { features: [], bounds: null };
+
+  let off = 100;
+  const maxPtsPerGeom = 8000;
+
+  while (off + 8 <= bytes.length && features.length < opts.maxFeatures) {
+    const contentWords = readInt32BE(bytes, off + 4);
+    const contentBytes = contentWords * 2;
+    off += 8;
+    if (contentBytes < 4 || off + contentBytes > bytes.length) break;
+    const recEnd = off + contentBytes;
+    const shapeType = readInt32LE(bytes, off);
+
+    let geom: GeoJsonGeometry | null = null;
+    if (shapeType === 1) {
+      if (contentBytes >= 20) {
+        const x = readFloat64LE(bytes, off + 4);
+        const y = readFloat64LE(bytes, off + 12);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          expandBounds(x, y);
+          geom = { type: 'Point', coordinates: [x, y] };
+        }
+      }
+    } else if (shapeType === 3 || shapeType === 13) {
+      const base = off + 4;
+      if (contentBytes < 44) {
+        off = recEnd;
+        continue;
+      }
+      const numParts = readInt32LE(bytes, base + 32);
+      const numPoints = readInt32LE(bytes, base + 36);
+      if (numParts < 1 || numPoints < 2 || numParts > 50000 || numPoints > 500000) {
+        off = recEnd;
+        continue;
+      }
+      let idx = base + 40;
+      const partIdx: number[] = [];
+      for (let p = 0; p < numParts; p++) {
+        partIdx.push(readInt32LE(bytes, idx));
+        idx += 4;
+      }
+      const xyStart = idx;
+      const lines: [number, number][][] = [];
+      for (let p = 0; p < numParts; p++) {
+        const start = partIdx[p] ?? 0;
+        const end = p + 1 < numParts ? partIdx[p + 1]! : numPoints;
+        const cap = Math.min(end, start + maxPtsPerGeom);
+        const ring: [number, number][] = [];
+        for (let i = start; i < cap; i++) {
+          const o = xyStart + i * 16;
+          if (o + 16 > recEnd) break;
+          const x = readFloat64LE(bytes, o);
+          const y = readFloat64LE(bytes, o + 8);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            expandBounds(x, y);
+            ring.push([x, y]);
+          }
+        }
+        if (ring.length >= 2) lines.push(ring);
+      }
+      if (lines.length === 1) geom = { type: 'LineString', coordinates: lines[0]! };
+      else if (lines.length > 1) geom = { type: 'MultiLineString', coordinates: lines };
+    } else if (shapeType === 5 || shapeType === 15) {
+      const base = off + 4;
+      if (contentBytes < 44) {
+        off = recEnd;
+        continue;
+      }
+      const numParts = readInt32LE(bytes, base + 32);
+      const numPoints = readInt32LE(bytes, base + 36);
+      if (numParts < 1 || numPoints < 3 || numParts > 50000 || numPoints > 500000) {
+        off = recEnd;
+        continue;
+      }
+      let idx = base + 40;
+      const partIdx: number[] = [];
+      for (let p = 0; p < numParts; p++) {
+        partIdx.push(readInt32LE(bytes, idx));
+        idx += 4;
+      }
+      const xyStart = idx;
+      const rings: [number, number][][] = [];
+      for (let p = 0; p < numParts; p++) {
+        const start = partIdx[p] ?? 0;
+        const end = p + 1 < numParts ? partIdx[p + 1]! : numPoints;
+        const cap = Math.min(end, start + maxPtsPerGeom);
+        const ring: [number, number][] = [];
+        for (let i = start; i < cap; i++) {
+          const o = xyStart + i * 16;
+          if (o + 16 > recEnd) break;
+          const x = readFloat64LE(bytes, o);
+          const y = readFloat64LE(bytes, o + 8);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            expandBounds(x, y);
+            ring.push([x, y]);
+          }
+        }
+        if (ring.length >= 3) {
+          const a = ring[0]!;
+          const b = ring[ring.length - 1]!;
+          if (a[0] !== b[0] || a[1] !== b[1]) ring.push([a[0], a[1]]);
+          rings.push(ring);
+        }
+      }
+      if (rings.length === 1) geom = { type: 'Polygon', coordinates: rings };
+      else if (rings.length > 1) geom = { type: 'MultiPolygon', coordinates: rings.map((r) => [r]) };
+    }
+
+    if (geom) {
+      features.push({
+        type: 'Feature',
+        properties: {
+          layer: shortName.replace(/\.shp$/i, ''),
+          package: shortName,
+          packagePath: opts.packagePath,
+          source: 'shapefile',
+        },
+        geometry: geom,
+      });
+    }
+    off = recEnd;
+  }
+
+  const bounds: QFieldMapBounds | null =
+    west !== Infinity && south !== Infinity && east !== -Infinity && north !== -Infinity
+      ? { west, south, east, north }
+      : null;
+
+  return { features, bounds };
+}
+
+async function initSqlJsForGeopackage() {
+  const initSqlJs = (await import('sql.js')).default;
+  const opts: Parameters<typeof initSqlJs>[0] = {};
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    try {
+      const { readFileSync } = await import('node:fs');
+      const { join } = await import('node:path');
+      const wasmPath = join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+      const raw = readFileSync(wasmPath);
+      const u8 = new Uint8Array(raw);
+      opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+    } catch {
+      opts.locateFile = (file: string) => `https://sqljs.org/dist/${file}`;
+    }
+  } else {
+    opts.locateFile = (file: string) => `https://sqljs.org/dist/${file}`;
+  }
+  return initSqlJs(opts);
 }
 
 function isFiniteCoord(n: number): boolean {
@@ -290,6 +493,11 @@ type SqlJsStmt = {
 
 type SqlJsDb = { prepare: (sql: string) => SqlJsStmt };
 
+function sqliteTypeLooksBlobGeometry(typ: string): boolean {
+  const u = String(typ).toUpperCase().trim();
+  return u === 'BLOB' || u === 'GEOMETRY' || u === '' || u.includes('BLOB');
+}
+
 /**
  * When gpkg_geometry_columns is missing or empty, infer feature tables + geometry BLOB columns.
  */
@@ -303,7 +511,8 @@ function discoverGeometryColumnsFallback(db: SqlJsDb, quoteId: (ident: string) =
     out.push({ t: table, c: col });
   };
 
-  const blobGeomNames = /^(geom|geometry|wkb_geometry|the_geom|shape|Geometry)$/i;
+  const blobGeomNames = /^(geom|geometry|wkb_geometry|the_geom|shape|Geometry|SHAPE)$/i;
+  const looseGeom = /(geom|geometry|wkb|shape)/i;
 
   const tryTable = (table: string) => {
     if (!table || table.startsWith('gpkg_') || table.startsWith('rtree_')) return;
@@ -319,14 +528,15 @@ function discoverGeometryColumnsFallback(db: SqlJsDb, quoteId: (ident: string) =
     while (stmt.step()) {
       const row = stmt.getAsObject() as { name?: string; type?: string };
       const name = row.name != null ? String(row.name) : '';
-      const typ = row.type != null ? String(row.type).toUpperCase() : '';
-      if (!name || typ !== 'BLOB') continue;
-      if (blobGeomNames.test(name)) {
+      const typ = row.type != null ? String(row.type) : '';
+      if (!name) continue;
+      if (!sqliteTypeLooksBlobGeometry(typ)) continue;
+      if (blobGeomNames.test(name) || looseGeom.test(name)) {
         add(table, name);
         foundNamed = true;
-        break;
+      } else {
+        blobCandidates.push(name);
       }
-      blobCandidates.push(name);
     }
     stmt.free();
     if (!foundNamed && blobCandidates.length === 1) {
@@ -412,13 +622,10 @@ async function extractGpkgVectorFeatures(
   const shortName = opts.packagePath.split('/').pop() ?? opts.packagePath;
 
   try {
-    const initSqlJs = (await import('sql.js')).default;
     const wkxMod = await import('wkx');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wkx = wkxMod as any;
-    const SQL = await initSqlJs({
-      locateFile: (file: string) => `https://sqljs.org/dist/${file}`,
-    });
+    const SQL = await initSqlJsForGeopackage();
     const db = new SQL.Database(bytes);
 
     const quoteId = (ident: string) => ident.replace(/"/g, '""');
@@ -552,16 +759,23 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   const keys = Object.keys(files);
   const gpkgKeys = keys
     .filter((k) => k.toLowerCase().endsWith('.gpkg'))
-    .sort((a, b) => a.length - b.length);
+    .sort(sortArchivePathsForVectors);
+
+  const shpKeysAll = keys
+    .filter((k) => k.toLowerCase().endsWith('.shp'))
+    .sort(sortArchivePathsForVectors);
 
   const merged: GeoJsonFeature[] = [];
   let unionBounds: QFieldMapBounds | null = null;
   let remaining = MAX_FEATURES_TOTAL;
   let gpkgOk = 0;
   let gpkgSkipped = 0;
+  let shpOk = 0;
+  let shpSkipped = 0;
 
   if (gpkgKeys.length > 0) {
-    const budgetEach = Math.max(40, Math.floor(MAX_FEATURES_TOTAL / Math.min(gpkgKeys.length, 8)));
+    const divisor = Math.min(gpkgKeys.length + shpKeysAll.length, 8);
+    const budgetEach = Math.max(40, Math.floor(MAX_FEATURES_TOTAL / Math.max(1, divisor)));
     for (const path of gpkgKeys) {
       if (remaining <= 0) break;
       const take = Math.min(remaining, budgetEach);
@@ -591,7 +805,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
         const x = k.toLowerCase();
         return x.endsWith('.geojson') || x.endsWith('.json');
       })
-      .sort((a, b) => a.length - b.length);
+      .sort(sortArchivePathsForVectors);
 
     for (const path of jsonKeys) {
       if (remaining <= 0) break;
@@ -606,9 +820,35 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     }
   }
 
+  if (remaining > 0 && shpKeysAll.length > 0) {
+    const divisor = Math.min(shpKeysAll.length, 6);
+    const budgetEach = Math.max(25, Math.ceil(remaining / Math.max(1, divisor)));
+    for (const path of shpKeysAll) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, budgetEach);
+      const sBytes = files[path];
+      if (!sBytes || sBytes.length < 112) {
+        shpSkipped++;
+        continue;
+      }
+      const { features: shpFeats, bounds: shpBounds } = extractEsriShapefileFeatures(sBytes, {
+        maxFeatures: take,
+        packagePath: path.replace(/\\/g, '/'),
+      });
+      if (shpFeats.length > 0) {
+        merged.push(...shpFeats);
+        shpOk++;
+        unionBounds = mergeBounds(unionBounds, shpBounds);
+        remaining -= shpFeats.length;
+      } else {
+        shpSkipped++;
+      }
+    }
+  }
+
   const qgsKey = pickQgsExtentKey(keys);
   let extentAdded = false;
-  if (qgsKey) {
+  if (merged.length === 0 && qgsKey) {
     try {
       const xml = strFromU8(files[qgsKey], true);
       const ext = parseQgsCanvasExtent(xml);
@@ -631,9 +871,11 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     const hint =
       gpkgKeys.length > 0
         ? 'Archive contained .gpkg file(s) but no readable vector geometries (empty tables, unknown binary layout, or CRS outside WGS84-like bounds for map extent). Add .geojson layers or open in QField.'
-        : outerHadQgz && qgzNestedOpened === 0
-          ? 'Archive contains .qgz project file(s) but they could not be opened as a ZIP (or gzip-wrapped ZIP). Re-save from QGIS as .qgz or include root layers.gpkg.'
-          : 'No .gpkg layers, no GeoJSON sidecars, and no readable .qgs canvas extent found in the archive (after opening nested .qgz if present).';
+        : shpKeysAll.length > 0
+          ? 'Archive contained .shp file(s) but no readable line/polygon/point records (or unsupported shape types).'
+          : outerHadQgz && qgzNestedOpened === 0
+            ? 'Archive contains .qgz project file(s) but they could not be opened as a ZIP (or gzip-wrapped ZIP). Re-save from QGIS as .qgz or include root layers.gpkg.'
+            : 'No .gpkg / .shp layers, no GeoJSON sidecars, and no readable .qgs canvas extent found in the archive (after opening nested .qgz if present).';
     return { geojson: null, bounds: null, message: hint };
   }
 
@@ -648,9 +890,17 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
       `${gpkgOk} GeoPackage${gpkgOk > 1 ? 's' : ''} (${gpkgKeys.length} file${gpkgKeys.length > 1 ? 's' : ''} scanned)`
     );
   }
-  if (extentAdded) parts.push('project canvas extent');
-  if (gpkgSkipped > 0 && gpkgOk === 0 && !extentAdded) {
-    parts.push(`${gpkgSkipped} package(s) had no readable layers`);
+  if (shpOk > 0) {
+    parts.push(
+      `${shpOk} shapefile layer${shpOk > 1 ? 's' : ''} (${shpKeysAll.length} .shp scanned)`
+    );
+  }
+  if (extentAdded) parts.push('project canvas extent (fallback — map CRS may differ from WGS84)');
+  if (gpkgSkipped > 0 && gpkgOk === 0 && !extentAdded && shpOk === 0) {
+    parts.push(`${gpkgSkipped} GeoPackage(s) had no readable layers`);
+  }
+  if (shpSkipped > 0 && shpOk === 0 && gpkgOk === 0 && !extentAdded) {
+    parts.push(`${shpSkipped} shapefile(s) had no readable geometries`);
   }
 
   const msg = `Archive “${archiveLabel}”: ${parts.join(' + ')} — ${merged.length} map object(s). Layers use GeoJSON properties package, layer, and source.`;
@@ -698,7 +948,7 @@ export async function extractQfieldMapPreviewFromBytes(
   return {
     geojson: null,
     bounds: null,
-    message: 'Map preview supports .gpkg, .qgz, .zip (root or nested .gpkg + nested .qgz + optional .geojson/.json FeatureCollections + optional .qgs), or plain .qgs.',
+    message: 'Map preview supports .gpkg, .qgz, .zip (root or nested .gpkg + .shp + nested .qgz + optional .geojson/.json FeatureCollections; .qgs extent is used only when no vectors are found), or plain .qgs.',
   };
 }
 
