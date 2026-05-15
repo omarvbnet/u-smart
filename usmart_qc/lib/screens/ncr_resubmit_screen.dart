@@ -318,7 +318,7 @@ class _NcrResubmitScreenState extends State<NcrResubmitScreen> {
                         final source = choice == 1 ? ImageSource.gallery : ImageSource.camera;
                         final picked = await _picker.pickImage(
                           source: source,
-                          imageQuality: 80,
+                          imageQuality: 72,
                           maxWidth: 1920,
                           maxHeight: 1920,
                         );

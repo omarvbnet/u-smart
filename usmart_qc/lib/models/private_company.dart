@@ -454,6 +454,7 @@ class PrivateCompanyDepartmentKpi {
     required this.departmentName,
     required this.ticketsAssigned,
     required this.completedTickets,
+    required this.avgTicketAssignmentsPerDay,
     required this.totalTaskHours,
     this.avgTaskHours,
     required this.totalArrivalHours,
@@ -464,6 +465,7 @@ class PrivateCompanyDepartmentKpi {
   final String departmentName;
   final int ticketsAssigned;
   final int completedTickets;
+  final double avgTicketAssignmentsPerDay;
   final double totalTaskHours;
   final double? avgTaskHours;
   final double totalArrivalHours;
@@ -475,6 +477,8 @@ class PrivateCompanyDepartmentKpi {
       departmentName: json['departmentName'] as String? ?? '—',
       ticketsAssigned: (json['ticketsAssigned'] as num?)?.toInt() ?? 0,
       completedTickets: (json['completedTickets'] as num?)?.toInt() ?? 0,
+      avgTicketAssignmentsPerDay:
+          (json['avgTicketAssignmentsPerDay'] as num?)?.toDouble() ?? 0,
       totalTaskHours: (json['totalTaskHours'] as num?)?.toDouble() ?? 0,
       avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
       totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,
@@ -494,6 +498,7 @@ class PrivateCompanyStaffKpi {
     this.departmentName,
     required this.ticketsAssigned,
     required this.completedTickets,
+    required this.avgTicketAssignmentsPerDay,
     required this.totalTaskHours,
     this.avgTaskHours,
     required this.totalArrivalHours,
@@ -508,6 +513,7 @@ class PrivateCompanyStaffKpi {
   final String? departmentName;
   final int ticketsAssigned;
   final int completedTickets;
+  final double avgTicketAssignmentsPerDay;
   final double totalTaskHours;
   final double? avgTaskHours;
   final double totalArrivalHours;
@@ -523,6 +529,8 @@ class PrivateCompanyStaffKpi {
       departmentName: json['departmentName'] as String?,
       ticketsAssigned: (json['ticketsAssigned'] as num?)?.toInt() ?? 0,
       completedTickets: (json['completedTickets'] as num?)?.toInt() ?? 0,
+      avgTicketAssignmentsPerDay:
+          (json['avgTicketAssignmentsPerDay'] as num?)?.toDouble() ?? 0,
       totalTaskHours: (json['totalTaskHours'] as num?)?.toDouble() ?? 0,
       avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
       totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,

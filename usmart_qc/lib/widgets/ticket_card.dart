@@ -34,14 +34,18 @@ class TicketCard extends StatelessWidget {
     }
   }
 
-  String _techniqueKey(String t) {
-    final lower = t.toLowerCase();
+  String _techniqueKey(Ticket ticket) {
+    if (ticket.isMaintenance) {
+      final lower = ticket.technique.toLowerCase();
+      if (lower == 'fiber_route') return 'maint_fiber_route';
+      if (lower == 'fiber_site') return 'maint_fiber_site';
+      if (lower == 'electrical') return 'maint_electrical';
+      if (lower == 'telecom') return 'maint_telecom';
+      if (lower == 'ftth') return 'maint_ftth';
+      return 'maint_technique_maintenance';
+    }
+    final t = ticket.technique;
     final upper = t.toUpperCase().replaceAll(' ', '_');
-    if (lower == 'fiber_route') return 'maint_fiber_route';
-    if (lower == 'fiber_site') return 'maint_fiber_site';
-    if (lower == 'electrical') return 'maint_electrical';
-    if (lower == 'telecom') return 'maint_telecom';
-    if (lower == 'ftth') return 'maint_ftth';
     if (upper.contains('INSPECTION')) return 'tech_inspection';
     if (upper.contains('SUPERVISION')) return 'tech_supervision';
     if (upper.contains('BUILDING')) return 'tech_building';
@@ -136,7 +140,7 @@ class TicketCard extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       _chip(Icons.build_outlined,
-                          l10n.t(_techniqueKey(ticket.technique))),
+                          l10n.t(_techniqueKey(ticket))),
                       _chip(
                           Icons.access_time_rounded,
                           DateFormat('MMM d, HH:mm')

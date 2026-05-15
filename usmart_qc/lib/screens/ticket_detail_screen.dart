@@ -28,7 +28,6 @@ import '../widgets/checklist_widget.dart';
 import '../widgets/evidence_upload_widget.dart';
 import 'ncr_resubmit_screen.dart';
 import 'conflict_detail_screen.dart';
-import 'report_maintenance_conflict_screen.dart';
 import 'attachment_viewer_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
@@ -673,7 +672,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _pickAndUploadFromGallery() async {
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 80,
+      imageQuality: 72,
       maxWidth: 1920,
       maxHeight: 1920,
     );
@@ -683,7 +682,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _pickAndUploadFromCamera() async {
     final picked = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 80,
+      imageQuality: 72,
       maxWidth: 1920,
       maxHeight: 1920,
     );
@@ -1877,12 +1876,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ncrResubmitRecordsSection(t, l10n),
       ],
 
-      // Conflict button: QC (ncr/not_accepted/accepted_with_comments) or Maintenance (24h window)
+      // Conflict button: QC inspection disputes only (not maintenance tickets).
       if (!isEngineer &&
           t.isCompleted &&
           !t.conflictReported &&
-          ((t.isConflictResult) ||
-              (t.isMaintenance && _isWithin24hOfCompletion(t)))) ...[
+          t.isConflictResult &&
+          !t.isMaintenance) ...[
         const SizedBox(height: 16),
         _conflictButton(t, l10n),
       ],
@@ -2504,10 +2503,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _pickAndAddMaintenanceImage(bool isBefore) async {
     setState(() => _uploading = true);
     try {
-      final XFile? file = await _picker.pickImage(source: ImageSource.camera);
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 75,
+      );
       if (file == null || !mounted) return;
       final provider = context.read<TicketsProvider>();
-      final url = await provider.uploadFile(file.path);
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+      final filename = 'maint_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final url = await provider.uploadFileFromBytes(bytes, filename);
       if (url != null && mounted) {
         setState(() {
           if (isBefore) {
@@ -3257,16 +3264,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return r;
   }
 
-  bool _isWithin24hOfCompletion(Ticket t) {
-    if (t.completedAt == null || t.completedAt!.isEmpty) return false;
-    final completed = DateTime.tryParse(t.completedAt!);
-    if (completed == null) return false;
-    return DateTime.now().difference(completed).inMilliseconds <= 24 * 60 * 60 * 1000;
-  }
-
   Widget _conflictButton(Ticket t, AppLocalizations l10n) {
     return GestureDetector(
-      onTap: () => t.isMaintenance ? _reportMaintenanceConflict(t, l10n) : _reportConflict(t, l10n),
+      onTap: () => _reportConflict(t, l10n),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
@@ -3277,31 +3277,28 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.max,
           children: [
             const Icon(Icons.report_problem_rounded,
                 color: Color(0xFFFBBF24), size: 22),
             const SizedBox(width: 10),
-            Text(
-              l10n.t('report_conflict'),
-              style: const TextStyle(
-                color: Color(0xFFFBBF24),
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+            Flexible(
+              child: Text(
+                l10n.t('report_conflict'),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFFBBF24),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _reportMaintenanceConflict(Ticket t, AppLocalizations l10n) async {
-    final ok = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => ReportMaintenanceConflictScreen(ticketId: t.id),
-      ),
-    );
-    if (ok == true && mounted) await _load();
   }
 
   Future<void> _reportConflict(Ticket t, AppLocalizations l10n) async {

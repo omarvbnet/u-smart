@@ -218,6 +218,7 @@ const Map<String, String> _en = {
   'maint_electrical': 'Electrical',
   'maint_telecom': 'Telecom',
   'maint_ftth': 'FTTH',
+  'maint_technique_maintenance': 'Maintenance',
   'maint_reason': 'Reason for maintenance',
   'maint_reason_hint': 'Describe why maintenance is needed',
   'maint_reason_required': 'Reason for maintenance is required',
@@ -586,6 +587,9 @@ const Map<String, String> _en = {
   'pc_ws_tab_staff': 'Staff',
   'pc_ws_tab_checklists': 'Checklists',
   'pc_ws_tab_performance': 'Performance',
+  'pc_kpi_avg_assignments_per_day': 'Avg assignments / day',
+  'pc_kpi_avg_assignments_per_day_hint':
+      'Assigned tickets in the window divided by calendar days — workload rate for comparisons.',
   'pc_ws_tab_warehouse': 'Warehouse',
   'pc_dept_maintenance_dispatch_title': 'Maintenance routing',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -847,6 +851,7 @@ const Map<String, String> _ar = {
   'maint_electrical': 'كهرباء',
   'maint_telecom': 'اتصالات',
   'maint_ftth': 'FTTH',
+  'maint_technique_maintenance': 'صيانة',
   'maint_reason': 'سبب الصيانة',
   'maint_reason_hint': 'صف لماذا تحتاج الصيانة',
   'maint_reason_required': 'سبب الصيانة مطلوب',
@@ -1204,6 +1209,9 @@ const Map<String, String> _ar = {
   'pc_ws_tab_staff': 'الموظفون',
   'pc_ws_tab_checklists': 'قوائم التحقق',
   'pc_ws_tab_performance': 'الأداء',
+  'pc_kpi_avg_assignments_per_day': 'متوسط الإسناد / يوم',
+  'pc_kpi_avg_assignments_per_day_hint':
+      'التذاكر المعيّنة في الفترة مقسومة على عدد أيام التقويم — معدل عبء للمقارنة.',
   'pc_ws_tab_warehouse': 'المستودع',
   'pc_dept_maintenance_dispatch_title': 'توجيه الصيانة',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -1464,6 +1472,7 @@ const Map<String, String> _ku = {
   'maint_electrical': 'کارەبا',
   'maint_telecom': 'تەلەکۆم',
   'maint_ftth': 'FTTH',
+  'maint_technique_maintenance': 'چاککردنەوە',
   'maint_reason': 'هۆکاری چاککردنەوە',
   'maint_reason_hint': 'باس بکە بۆچی چاککردنەوە پێویستە',
   'maint_reason_required': 'هۆکاری چاککردنەوە پێویستە',
@@ -1824,6 +1833,9 @@ const Map<String, String> _ku = {
   'pc_ws_tab_staff': 'کارمەندان',
   'pc_ws_tab_checklists': 'لیستی پشکنین',
   'pc_ws_tab_performance': 'ئەداء',
+  'pc_kpi_avg_assignments_per_day': 'تێکڕای دیاریکردن / ڕۆژ',
+  'pc_kpi_avg_assignments_per_day_hint':
+      'تیکێتە دیاریکراوەکان لە ماوەکە دابەش بە ڕۆژەکانی ڕۆژژمێر — ڕێژەی بار بۆ بەراورد.',
   'pc_ws_tab_warehouse': 'کۆگا',
   'pc_dept_maintenance_dispatch_title': 'ڕێڕەوی چاککردنەوە',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -2085,6 +2097,7 @@ const Map<String, String> _tr = {
   'maint_electrical': 'Elektrik',
   'maint_telecom': 'Telekom',
   'maint_ftth': 'FTTH',
+  'maint_technique_maintenance': 'Bakım',
   'maint_reason': 'Bakım nedeni',
   'maint_reason_hint': 'Bakımın neden gerekli olduğunu açıklayın',
   'maint_reason_required': 'Bakım nedeni zorunludur',
@@ -2446,6 +2459,9 @@ const Map<String, String> _tr = {
   'pc_ws_tab_staff': 'Personel',
   'pc_ws_tab_checklists': 'Kontrol listeleri',
   'pc_ws_tab_performance': 'Performans',
+  'pc_kpi_avg_assignments_per_day': 'Günlük ort. atama',
+  'pc_kpi_avg_assignments_per_day_hint':
+      'Penceredeki atanan talepler ÷ takvim günleri — karşılaştırma için iş yükü oranı.',
   'pc_ws_tab_warehouse': 'Depo',
   'pc_dept_maintenance_dispatch_title': 'Bakım yönlendirmesi',
   'pc_dept_maintenance_dispatch_subtitle':

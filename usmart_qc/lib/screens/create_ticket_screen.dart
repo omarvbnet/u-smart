@@ -436,8 +436,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   Future<void> _pickAndUploadImage() async {
     final xFile = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 2048,
-      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 72,
     );
     if (!mounted || xFile == null) return;
     final provider = context.read<TicketsProvider>();

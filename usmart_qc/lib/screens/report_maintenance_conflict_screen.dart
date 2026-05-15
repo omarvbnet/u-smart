@@ -29,7 +29,12 @@ class _ReportMaintenanceConflictScreenState
   final _picker = ImagePicker();
 
   Future<void> _pickImage() async {
-    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final x = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 72,
+    );
     if (!mounted || x == null) return;
     final provider = context.read<TicketsProvider>();
     final path = x.path;

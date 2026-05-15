@@ -151,6 +151,8 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
                     spacing: 10,
                     runSpacing: 8,
                     children: [
+                      _miniStat(l10n.t('pc_kpi_avg_assignments_per_day'),
+                          row.avgTicketAssignmentsPerDay.toStringAsFixed(2)),
                       _miniStat(l10n.t('analytics_kpi_assigned'), '${row.ticketsAssigned}'),
                       _miniStat(l10n.t('analytics_kpi_completed'), '${row.completedTickets}'),
                       _miniStat(l10n.t('analytics_kpi_task_hours'), _fmtHours(row.totalTaskHours)),

@@ -4016,6 +4016,7 @@ class _KpisTabState extends State<_KpisTab> {
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
     if (!pc.canViewKpis) {
       return Center(
         child: Text(
@@ -4087,6 +4088,11 @@ class _KpisTabState extends State<_KpisTab> {
                           style: TextStyle(
                               color: Colors.white.withAlpha(140), fontSize: 11),
                         ),
+                        Text(
+                          l10n.t('pc_kpi_avg_assignments_per_day_hint'),
+                          style: TextStyle(
+                              color: Colors.white.withAlpha(100), fontSize: 10),
+                        ),
                         const SizedBox(height: 12),
                         if (pc.isOwner &&
                             pc.kpiSnapshot!.byDepartment.isNotEmpty) ...[
@@ -4111,6 +4117,10 @@ class _KpisTabState extends State<_KpisTab> {
                                         const SizedBox(height: 6),
                                         _KpiStatRow(
                                             'Assigned tickets', '${d.ticketsAssigned}'),
+                                        _KpiStatRow(
+                                          l10n.t('pc_kpi_avg_assignments_per_day'),
+                                          '${d.avgTicketAssignmentsPerDay}',
+                                        ),
                                         _KpiStatRow('Completed', '${d.completedTickets}'),
                                         _KpiStatRow('Total task hours',
                                             '${d.totalTaskHours} h'),
@@ -4177,6 +4187,10 @@ class _KpisTabState extends State<_KpisTab> {
                                             ),
                                           ),
                                         const SizedBox(height: 8),
+                                        _KpiStatRow(
+                                          l10n.t('pc_kpi_avg_assignments_per_day'),
+                                          '${s.avgTicketAssignmentsPerDay}',
+                                        ),
                                         _KpiStatRow(
                                             'Completed', '${s.completedTickets}'),
                                         _KpiStatRow('Total task hours',

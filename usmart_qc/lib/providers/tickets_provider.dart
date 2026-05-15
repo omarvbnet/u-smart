@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -12,6 +13,7 @@ import '../models/evidence.dart';
 import '../models/inspection_checklist.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import '../utils/image_upload_compress.dart';
 
 class TicketsProvider extends ChangeNotifier {
   final ApiService _api;
@@ -787,16 +789,27 @@ class TicketsProvider extends ChangeNotifier {
 
   // ─── Upload file ───
   /// Returns URL on success, or null on failure.
+  /// Raster images are resized (max edge 1920) and JPEG-compressed (~medium) before upload.
   Future<String?> uploadFile(String filePath) async {
-    return _api.uploadFile(ApiConfig.uploadTicketAttachment, filePath);
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
+      final name = filePath.split(RegExp(r'[\\/]')).last;
+      return uploadFileFromBytes(bytes, name);
+    } catch (_) {
+      return _api.uploadFile(ApiConfig.uploadTicketAttachment, filePath);
+    }
   }
 
   /// Upload from bytes (e.g. when file_picker returns null path on web).
   Future<String?> uploadFileFromBytes(List<int> bytes, String filename) async {
+    final out = compressRasterForUpload(Uint8List.fromList(bytes), filename);
     return _api.uploadFileFromBytes(
       ApiConfig.uploadTicketAttachment,
-      bytes,
-      filename,
+      out.bytes,
+      out.filename,
     );
   }
 

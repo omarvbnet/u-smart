@@ -43,7 +43,9 @@ function emptyAgg(): StaffAgg {
   };
 }
 
-function finalizeStaffRow(meta: StaffMeta, a: StaffAgg) {
+function finalizeStaffRow(meta: StaffMeta, a: StaffAgg, days: number) {
+  const avgTicketAssignmentsPerDay =
+    days > 0 ? Math.round((a.ticketsAssigned / days) * 100) / 100 : 0;
   return {
     staffId: meta.id,
     name: meta.name?.trim() || meta.username,
@@ -53,6 +55,7 @@ function finalizeStaffRow(meta: StaffMeta, a: StaffAgg) {
     departmentName: meta.departmentName,
     ticketsAssigned: a.ticketsAssigned,
     completedTickets: a.completedTickets,
+    avgTicketAssignmentsPerDay,
     totalTaskHours: Math.round(a.taskSumH * 100) / 100,
     avgTaskHours: a.taskN > 0 ? Math.round((a.taskSumH / a.taskN) * 100) / 100 : null,
     totalArrivalHours: Math.round(a.arrivalSumH * 100) / 100,
@@ -254,7 +257,7 @@ export async function GET(req: NextRequest) {
     for (const [id, agg] of perStaff) {
       const meta = staffMeta.get(id);
       if (!meta) continue;
-      byStaffRaw.push(finalizeStaffRow(meta, agg));
+      byStaffRaw.push(finalizeStaffRow(meta, agg, days));
     }
     byStaffRaw.sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
   } else if (MANAGER_ROLES.has(role) && actorDepartmentId) {
@@ -262,7 +265,7 @@ export async function GET(req: NextRequest) {
     for (const [id, agg] of perStaff) {
       const meta = staffMeta.get(id);
       if (!meta || meta.departmentId !== actorDepartmentId) continue;
-      byStaffRaw.push(finalizeStaffRow(meta, agg));
+      byStaffRaw.push(finalizeStaffRow(meta, agg, days));
     }
     byStaffRaw.sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
   } else {
@@ -270,7 +273,7 @@ export async function GET(req: NextRequest) {
     const selfId = auth.payload.requesterId;
     const meta = staffMeta.get(selfId);
     if (meta) {
-      byStaffRaw = [finalizeStaffRow(meta, perStaff.get(selfId) ?? emptyAgg())];
+      byStaffRaw = [finalizeStaffRow(meta, perStaff.get(selfId) ?? emptyAgg(), days)];
     } else {
       byStaffRaw = [];
     }
@@ -281,6 +284,7 @@ export async function GET(req: NextRequest) {
     departmentName: string;
     ticketsAssigned: number;
     completedTickets: number;
+    avgTicketAssignmentsPerDay: number;
     totalTaskHours: number;
     avgTaskHours: number | null;
     totalArrivalHours: number;
@@ -294,6 +298,8 @@ export async function GET(req: NextRequest) {
         departmentName: d.departmentName,
         ticketsAssigned: d.ticketsAssigned,
         completedTickets: d.completedTickets,
+        avgTicketAssignmentsPerDay:
+          days > 0 ? Math.round((d.ticketsAssigned / days) * 100) / 100 : 0,
         totalTaskHours: Math.round(d.taskSumH * 100) / 100,
         avgTaskHours: d.taskN > 0 ? Math.round((d.taskSumH / d.taskN) * 100) / 100 : null,
         totalArrivalHours: Math.round(d.arrivalSumH * 100) / 100,
@@ -313,6 +319,8 @@ export async function GET(req: NextRequest) {
       taskHours:
         'Per completed ticket: hours from first ON_SITE/IN_PROGRESS log to completion.',
       arrivalHours: 'Per ticket: hours from ticket creation until first ON_SITE/IN_PROGRESS log.',
+      avgTicketAssignmentsPerDay:
+        'Assigned ticket count in the window divided by the number of calendar days in the window (smooth workload rate).',
     },
   });
 }
