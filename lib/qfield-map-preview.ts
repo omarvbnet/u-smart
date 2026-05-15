@@ -324,14 +324,35 @@ async function initSqlJsForGeopackage() {
   const initSqlJs = (await import('sql.js')).default;
   const opts: Parameters<typeof initSqlJs>[0] = {};
   if (typeof process !== 'undefined' && process.versions?.node) {
-    try {
-      const { readFileSync } = await import('node:fs');
-      const { join } = await import('node:path');
-      const wasmPath = join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-      const raw = readFileSync(wasmPath);
-      const u8 = new Uint8Array(raw);
-      opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-    } catch {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { createRequire } = await import('node:module');
+    let loaded = false;
+    for (const base of [join(process.cwd(), 'package.json'), join(process.cwd(), '..', 'package.json')]) {
+      try {
+        const require = createRequire(base);
+        const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+        const raw = readFileSync(wasmPath);
+        const u8 = new Uint8Array(raw);
+        opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+        loaded = true;
+        break;
+      } catch {
+        /* try next */
+      }
+    }
+    if (!loaded) {
+      try {
+        const wasmPath = join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+        const raw = readFileSync(wasmPath);
+        const u8 = new Uint8Array(raw);
+        opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+        loaded = true;
+      } catch {
+        /* fall through */
+      }
+    }
+    if (!loaded) {
       opts.locateFile = (file: string) => `https://sqljs.org/dist/${file}`;
     }
   } else {
@@ -451,6 +472,151 @@ function parseQgsCanvasExtent(xml: string): QFieldMapBounds | null {
   const north = parseFloat(m[4]);
   if (![west, south, east, north].every(isFiniteCoord)) return null;
   return { west, south, east, north };
+}
+
+function normArchiveKey(s: string): string {
+  return s.replace(/\\/g, '/').replace(/\/+/g, '/');
+}
+
+function normalizeRelativePathSegments(path: string): string {
+  const parts = path.replace(/\\/g, '/').split('/').filter((p) => p && p !== '.');
+  const stack: string[] = [];
+  for (const p of parts) {
+    if (p === '..') stack.pop();
+    else stack.push(p);
+  }
+  return stack.join('/');
+}
+
+function buildNormKeyToOriginal(keys: string[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const k of keys) {
+    const n = normArchiveKey(k);
+    if (!m.has(n)) m.set(n, k);
+  }
+  return m;
+}
+
+function resolveQgsVectorPathToArchiveKey(
+  qgsDirNorm: string,
+  pathPartRaw: string,
+  normToOriginal: Map<string, string>
+): string | null {
+  let p = pathPartRaw.replace(/&amp;/g, '&').replace(/&lt;/g, '<').trim();
+  if (!p || /^https?:\/\//i.test(p)) return null;
+  try {
+    p = decodeURIComponent(p);
+  } catch {
+    /* */
+  }
+  p = p.replace(/^file:\/\//i, '');
+  if (/^[a-z]:[/\\]/i.test(p)) p = p.replace(/\\/g, '/');
+  p = p.replace(/\\/g, '/');
+  const combined =
+    qgsDirNorm && !p.startsWith('/') && !/^[a-z]:\//i.test(p)
+      ? normalizeRelativePathSegments(`${qgsDirNorm}/${p.replace(/^\.\//, '')}`)
+      : normalizeRelativePathSegments(p.replace(/^\.\//, ''));
+  if (normToOriginal.has(combined)) return normToOriginal.get(combined)!;
+  for (const [nk, orig] of normToOriginal) {
+    if (nk === combined || nk.endsWith(`/${combined}`)) return orig;
+  }
+  const leaf = combined.split('/').pop() ?? combined;
+  const hits: string[] = [];
+  for (const [nk, orig] of normToOriginal) {
+    if (nk === leaf || nk.endsWith(`/${leaf}`)) hits.push(orig);
+  }
+  if (hits.length === 1) return hits[0]!;
+  if (hits.length > 1) {
+    const prefer = hits.find((o) => normArchiveKey(o).startsWith(qgsDirNorm));
+    return prefer ?? hits[0]!;
+  }
+  return null;
+}
+
+/** First file path to .gpkg / .shp / .sqlite / .db inside a QGIS <datasource> block. */
+function firstVectorFilePathFromDatasourceBlock(raw: string): string | null {
+  const noCdata = raw
+    .replace(/^\s*<!\[CDATA\[/i, '')
+    .replace(/\]\]>\s*$/i, '')
+    .trim();
+  const main = noCdata.split('|')[0]!.trim();
+  const dbnameM = main.match(/dbname\s*=\s*['"]([^'"]+)['"]/i);
+  if (dbnameM && /\.(gpkg|shp|sqlite|db)$/i.test(dbnameM[1]!)) return dbnameM[1]!.trim();
+  const head = main.replace(/^["']|["']$/g, '').replace(/^file:\/\//i, '').trim();
+  if (
+    /\.(gpkg|shp|sqlite|db)$/i.test(head) &&
+    !/^(postgres|postgresql|service|dbname|http)/i.test(head)
+  ) {
+    return head;
+  }
+  const quoted = main.match(/['"]([^'"]+\.(gpkg|shp|sqlite|db))['"]/i);
+  if (quoted) return quoted[1]!.trim();
+  const bare = main.match(/([^\s'"|<>]+\.(gpkg|shp|sqlite|db))\b/i);
+  if (bare) return bare[1]!.replace(/\\/g, '/').trim();
+  return null;
+}
+
+/**
+ * Paths to vector files referenced by any .qgs in the archive (relative paths resolved from each .qgs folder).
+ */
+function collectQgsDatasourceVectorKeys(
+  keys: string[],
+  files: Record<string, Uint8Array>
+): { gpkg: string[]; shp: string[] } {
+  const normToOrig = buildNormKeyToOriginal(keys);
+  const gpkg: string[] = [];
+  const shp: string[] = [];
+  const seenG = new Set<string>();
+  const seenS = new Set<string>();
+  const pushUnique = (arr: string[], seen: Set<string>, origKey: string) => {
+    const n = normArchiveKey(origKey);
+    if (seen.has(n) || !files[origKey]) return;
+    seen.add(n);
+    arr.push(origKey);
+  };
+
+  for (const qgk of keys) {
+    if (!qgk.toLowerCase().endsWith('.qgs')) continue;
+    if (qgk.toLowerCase().includes('backup')) continue;
+    const bytes = files[qgk];
+    if (!bytes) continue;
+    let xml: string;
+    try {
+      xml = strFromU8(bytes, true);
+    } catch {
+      continue;
+    }
+    const qgsDir = normArchiveKey(qgk).replace(/\/[^/]+$/, '');
+    const lower = xml.toLowerCase();
+    let pos = 0;
+    while (pos < xml.length) {
+      const a = lower.indexOf('<datasource>', pos);
+      if (a === -1) break;
+      const b = lower.indexOf('</datasource>', a);
+      if (b === -1) break;
+      const block = xml.slice(a + '<datasource>'.length, b);
+      const pathPart = firstVectorFilePathFromDatasourceBlock(block);
+      if (pathPart) {
+        const hit = resolveQgsVectorPathToArchiveKey(qgsDir, pathPart, normToOrig);
+        if (hit) {
+          const low = hit.toLowerCase();
+          if (low.endsWith('.shp')) pushUnique(shp, seenS, hit);
+          else pushUnique(gpkg, seenG, hit);
+        }
+      }
+      pos = b + 1;
+    }
+  }
+  return { gpkg, shp };
+}
+
+function summarizeVectorishFiles(keys: string[]): string {
+  const n = (suffix: string) => keys.filter((k) => k.toLowerCase().endsWith(suffix)).length;
+  const sqlite = keys.filter((k) => {
+    const x = k.toLowerCase();
+    return (x.endsWith('.sqlite') || x.endsWith('.db')) && !x.includes('-wal');
+  }).length;
+  return `${n('.gpkg')} .gpkg, ${n('.shp')} .shp, ${sqlite} .sqlite/.db`;
 }
 
 function boundsToPolygonFeature(bounds: QFieldMapBounds, extraProps?: Record<string, unknown>): GeoJsonFeature {
@@ -631,18 +797,37 @@ async function extractGpkgVectorFeatures(
     const quoteId = (ident: string) => ident.replace(/"/g, '""');
 
     const loadGeometryTables = (): { t: string; c: string }[] => {
+      const seen = new Set<string>();
       const tables: { t: string; c: string }[] = [];
+      const push = (t: string, c: string) => {
+        const k = `${t}\0${c}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        tables.push({ t, c });
+      };
       try {
         const stmt = db.prepare(
           'SELECT table_name AS t, column_name AS c FROM gpkg_geometry_columns'
         );
         while (stmt.step()) {
           const row = stmt.getAsObject() as { t?: string; c?: string };
-          if (row.t && row.c) tables.push({ t: String(row.t), c: String(row.c) });
+          if (row.t && row.c) push(String(row.t), String(row.c));
         }
         stmt.free();
       } catch {
-        /* missing or invalid gpkg_geometry_columns */
+        /* not a GeoPackage registry */
+      }
+      try {
+        const stmt = db.prepare(
+          "SELECT f_table_name AS t, f_geometry_column AS c FROM geometry_columns WHERE typeof(f_table_name)='text' AND typeof(f_geometry_column)='text' LIMIT 48"
+        );
+        while (stmt.step()) {
+          const row = stmt.getAsObject() as { t?: string; c?: string };
+          if (row.t && row.c) push(String(row.t), String(row.c));
+        }
+        stmt.free();
+      } catch {
+        /* not SpatiaLite */
       }
       if (tables.length > 0) return tables;
       return discoverGeometryColumnsFallback(db, quoteId);
@@ -757,13 +942,36 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   const qgzNestedOpened = expanded.qgzOpened;
 
   const keys = Object.keys(files);
+  const refVec = collectQgsDatasourceVectorKeys(keys, files);
+
   const gpkgKeys = keys
     .filter((k) => k.toLowerCase().endsWith('.gpkg'))
+    .sort(sortArchivePathsForVectors);
+
+  const sqliteVectorKeys = keys
+    .filter((k) => {
+      const x = k.toLowerCase();
+      return (x.endsWith('.sqlite') || x.endsWith('.db')) && !x.includes('-wal');
+    })
     .sort(sortArchivePathsForVectors);
 
   const shpKeysAll = keys
     .filter((k) => k.toLowerCase().endsWith('.shp'))
     .sort(sortArchivePathsForVectors);
+
+  const nk = (s: string) => normArchiveKey(s);
+  const gpkgKeysOrdered = [
+    ...refVec.gpkg,
+    ...gpkgKeys.filter((k) => !refVec.gpkg.some((r) => nk(r) === nk(k))),
+    ...sqliteVectorKeys.filter(
+      (k) =>
+        !refVec.gpkg.some((r) => nk(r) === nk(k)) && !gpkgKeys.some((g) => nk(g) === nk(k))
+    ),
+  ];
+  const shpKeysOrdered = [
+    ...refVec.shp,
+    ...shpKeysAll.filter((k) => !refVec.shp.some((r) => nk(r) === nk(k))),
+  ];
 
   const merged: GeoJsonFeature[] = [];
   let unionBounds: QFieldMapBounds | null = null;
@@ -773,10 +981,10 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   let shpOk = 0;
   let shpSkipped = 0;
 
-  if (gpkgKeys.length > 0) {
-    const divisor = Math.min(gpkgKeys.length + shpKeysAll.length, 8);
+  if (gpkgKeysOrdered.length > 0) {
+    const divisor = Math.min(gpkgKeysOrdered.length + shpKeysOrdered.length, 8);
     const budgetEach = Math.max(40, Math.floor(MAX_FEATURES_TOTAL / Math.max(1, divisor)));
-    for (const path of gpkgKeys) {
+    for (const path of gpkgKeysOrdered) {
       if (remaining <= 0) break;
       const take = Math.min(remaining, budgetEach);
       const gBytes = files[path];
@@ -820,10 +1028,10 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     }
   }
 
-  if (remaining > 0 && shpKeysAll.length > 0) {
-    const divisor = Math.min(shpKeysAll.length, 6);
+  if (remaining > 0 && shpKeysOrdered.length > 0) {
+    const divisor = Math.min(shpKeysOrdered.length, 6);
     const budgetEach = Math.max(25, Math.ceil(remaining / Math.max(1, divisor)));
-    for (const path of shpKeysAll) {
+    for (const path of shpKeysOrdered) {
       if (remaining <= 0) break;
       const take = Math.min(remaining, budgetEach);
       const sBytes = files[path];
@@ -869,9 +1077,9 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
 
   if (merged.length === 0) {
     const hint =
-      gpkgKeys.length > 0
-        ? 'Archive contained .gpkg file(s) but no readable vector geometries (empty tables, unknown binary layout, or CRS outside WGS84-like bounds for map extent). Add .geojson layers or open in QField.'
-        : shpKeysAll.length > 0
+      gpkgKeysOrdered.length > 0
+        ? 'Archive contained .gpkg / .sqlite file(s) but no readable vector geometries (empty tables, unknown binary layout, or CRS outside WGS84-like bounds for map extent). Add .geojson layers or open in QField.'
+        : shpKeysOrdered.length > 0
           ? 'Archive contained .shp file(s) but no readable line/polygon/point records (or unsupported shape types).'
           : outerHadQgz && qgzNestedOpened === 0
             ? 'Archive contains .qgz project file(s) but they could not be opened as a ZIP (or gzip-wrapped ZIP). Re-save from QGIS as .qgz or include root layers.gpkg.'
@@ -887,15 +1095,17 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   }
   if (gpkgOk > 0) {
     parts.push(
-      `${gpkgOk} GeoPackage${gpkgOk > 1 ? 's' : ''} (${gpkgKeys.length} file${gpkgKeys.length > 1 ? 's' : ''} scanned)`
+      `${gpkgOk} spatial DB layer source(s) (${gpkgKeysOrdered.length} .gpkg/.sqlite/.db scanned)`
     );
   }
   if (shpOk > 0) {
     parts.push(
-      `${shpOk} shapefile layer${shpOk > 1 ? 's' : ''} (${shpKeysAll.length} .shp scanned)`
+      `${shpOk} shapefile layer${shpOk > 1 ? 's' : ''} (${shpKeysOrdered.length} .shp scanned)`
     );
   }
-  if (extentAdded) parts.push('project canvas extent (fallback — map CRS may differ from WGS84)');
+  if (extentAdded) {
+    parts.push('project canvas extent (fallback - map CRS may differ from WGS84)');
+  }
   if (gpkgSkipped > 0 && gpkgOk === 0 && !extentAdded && shpOk === 0) {
     parts.push(`${gpkgSkipped} GeoPackage(s) had no readable layers`);
   }
@@ -903,7 +1113,11 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     parts.push(`${shpSkipped} shapefile(s) had no readable geometries`);
   }
 
-  const msg = `Archive “${archiveLabel}”: ${parts.join(' + ')} — ${merged.length} map object(s). Layers use GeoJSON properties package, layer, and source.`;
+  let msg = `Archive "${archiveLabel}": ${parts.join(' + ')} - ${merged.length} map object(s).`;
+  if (gpkgOk === 0 && shpOk === 0 && extentAdded) {
+    msg += ` Archive listing: ${summarizeVectorishFiles(keys)}.`;
+  }
+  msg += ' Each feature has properties: package, layer, source.';
 
   return {
     geojson: { type: 'FeatureCollection', features: merged },
