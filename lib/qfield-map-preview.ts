@@ -73,6 +73,48 @@ function geopackageBlobToWkb(buf: Uint8Array): Uint8Array | null {
   return buf.subarray(wkbOffset);
 }
 
+function readUint32At(buf: Uint8Array, off: number, littleEndian: boolean): number {
+  return new DataView(buf.buffer, buf.byteOffset + off, 4).getUint32(0, littleEndian);
+}
+
+/**
+ * Parse SQLite / GeoPackage / SpatiaLite geometry BLOB to GeoJSON (WKB + GeoPackage envelope + byte scan).
+ */
+function parseGeometryBlobToGeoJson(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  wkx: any,
+  buf: Uint8Array
+): GeoJsonGeometry | null {
+  const tryParse = (chunk: Uint8Array): GeoJsonGeometry | null => {
+    if (!chunk || chunk.length < 5) return null;
+    try {
+      const g = wkx.Geometry.parse(chunk).toGeoJSON() as GeoJsonGeometry | null;
+      return g || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const wkbStripped = geopackageBlobToWkb(buf);
+  if (wkbStripped) {
+    const a = tryParse(wkbStripped);
+    if (a) return a;
+  }
+  const b = tryParse(buf);
+  if (b) return b;
+
+  const scanEnd = Math.min(80, buf.length - 9);
+  for (let i = 0; i <= scanEnd; i++) {
+    if (buf[i] !== 0 && buf[i] !== 1) continue;
+    const le = buf[i] === 1;
+    const t = readUint32At(buf, i + 1, le);
+    if (t < 1 || t > 1000) continue;
+    const g = tryParse(buf.subarray(i));
+    if (g) return g;
+  }
+  return null;
+}
+
 /** QGIS .qgz is normally a ZIP (PK…); some builds gzip-wrap an inner ZIP. */
 function tryUnzipArchiveBytes(data: Uint8Array): Record<string, Uint8Array> | null {
   if (!data || data.length < 22) return null;
@@ -611,12 +653,24 @@ function collectQgsDatasourceVectorKeys(
 }
 
 function summarizeVectorishFiles(keys: string[]): string {
-  const n = (suffix: string) => keys.filter((k) => k.toLowerCase().endsWith(suffix)).length;
+  const countEnds = (suffix: string) => keys.filter((k) => k.toLowerCase().endsWith(suffix)).length;
+  const gpkg = countEnds('.gpkg');
+  const shp = countEnds('.shp');
   const sqlite = keys.filter((k) => {
     const x = k.toLowerCase();
     return (x.endsWith('.sqlite') || x.endsWith('.db')) && !x.includes('-wal');
   }).length;
-  return `${n('.gpkg')} .gpkg, ${n('.shp')} .shp, ${sqlite} .sqlite/.db`;
+  const gWord =
+    gpkg === 0 ? 'no GeoPackage files' : gpkg === 1 ? 'one GeoPackage file' : `${gpkg} GeoPackage files`;
+  const sWord =
+    shp === 0 ? 'no shapefiles' : shp === 1 ? 'one shapefile' : `${shp} shapefiles`;
+  const qWord =
+    sqlite === 0
+      ? 'no SQLite databases'
+      : sqlite === 1
+        ? 'one SQLite database'
+        : `${sqlite} SQLite databases`;
+  return `${gWord}, ${sWord}, ${qWord}`;
 }
 
 function boundsToPolygonFeature(bounds: QFieldMapBounds, extraProps?: Record<string, unknown>): GeoJsonFeature {
@@ -819,7 +873,7 @@ async function extractGpkgVectorFeatures(
       }
       try {
         const stmt = db.prepare(
-          "SELECT f_table_name AS t, f_geometry_column AS c FROM geometry_columns WHERE typeof(f_table_name)='text' AND typeof(f_geometry_column)='text' LIMIT 48"
+          "SELECT f_table_name AS t, f_geometry_column AS c FROM geometry_columns WHERE typeof(f_table_name)='text' AND typeof(f_geometry_column)='text' LIMIT 120"
         );
         while (stmt.step()) {
           const row = stmt.getAsObject() as { t?: string; c?: string };
@@ -861,22 +915,7 @@ async function extractGpkgVectorFeatures(
         if (!raw) continue;
         const buf = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
         if (buf.length < 5) continue;
-        const wkb = geopackageBlobToWkb(buf);
-        let geom: GeoJsonGeometry | null = null;
-        if (wkb && wkb.length >= 5) {
-          try {
-            geom = wkx.Geometry.parse(wkb).toGeoJSON() as GeoJsonGeometry | null;
-          } catch {
-            /* try full blob below */
-          }
-        }
-        if (!geom && buf.length >= 5) {
-          try {
-            geom = wkx.Geometry.parse(buf).toGeoJSON() as GeoJsonGeometry | null;
-          } catch {
-            /* invalid */
-          }
-        }
+        const geom = parseGeometryBlobToGeoJson(wkx, buf);
         if (!geom) continue;
         expandFromGeometry(geom);
         features.push({
@@ -1115,7 +1154,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
 
   let msg = `Archive "${archiveLabel}": ${parts.join(' + ')} - ${merged.length} map object(s).`;
   if (gpkgOk === 0 && shpOk === 0 && extentAdded) {
-    msg += ` Archive listing: ${summarizeVectorishFiles(keys)}.`;
+    msg += ` Archive listing: ${summarizeVectorishFiles(keys)} (paths found in zip).`;
   }
   msg += ' Each feature has properties: package, layer, source.';
 
