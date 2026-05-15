@@ -115,6 +115,50 @@ function parseGeometryBlobToGeoJson(
   return null;
 }
 
+function parseWktCoordinatePairs(inner: string): [number, number][] {
+  const out: [number, number][] = [];
+  for (const ch of inner.split(',')) {
+    const parts = ch.trim().split(/\s+/);
+    const x = parseFloat(parts[0] ?? '');
+    const y = parseFloat(parts[1] ?? '');
+    if (Number.isFinite(x) && Number.isFinite(y)) out.push([x, y]);
+  }
+  return out;
+}
+
+/** QGIS / SQLite may store geometries as WKT in TEXT columns. */
+function tryParseWktGeometry(wkt: string): GeoJsonGeometry | null {
+  const s = wkt.trim();
+  if (!s.length) return null;
+  if (/^POINT(?:\s+Z|\s+M|\s+ZM)?\s+EMPTY$/i.test(s)) return null;
+
+  let m = /^POINT(?:\s+Z|\s+M|\s+ZM)?\(\s*([-0-9.eE+]+)\s+([-0-9.eE+]+)/i.exec(s);
+  if (m) {
+    const x = parseFloat(m[1]!);
+    const y = parseFloat(m[2]!);
+    if (Number.isFinite(x) && Number.isFinite(y)) return { type: 'Point', coordinates: [x, y] };
+  }
+
+  m = /^LINESTRING(?:\s+Z|\s+M|\s+ZM)?\s*\(\s*(.+)\s*\)\s*$/i.exec(s);
+  if (m) {
+    const coords = parseWktCoordinatePairs(m[1]!);
+    if (coords.length >= 2) return { type: 'LineString', coordinates: coords };
+  }
+
+  m = /^POLYGON(?:\s+Z|\s+M|\s+ZM)?\s*\(\s*\(\s*(.+)\s*\)\s*\)\s*$/i.exec(s);
+  if (m) {
+    const coords = parseWktCoordinatePairs(m[1]!);
+    if (coords.length >= 3) {
+      const a = coords[0]!;
+      const b = coords[coords.length - 1]!;
+      if (a[0] !== b[0] || a[1] !== b[1]) coords.push([a[0], a[1]]);
+      return { type: 'Polygon', coordinates: [coords] };
+    }
+  }
+
+  return null;
+}
+
 /** QGIS .qgz is normally a ZIP (PK…); some builds gzip-wrap an inner ZIP. */
 function tryUnzipArchiveBytes(data: Uint8Array): Record<string, Uint8Array> | null {
   if (!data || data.length < 22) return null;
@@ -395,10 +439,33 @@ async function initSqlJsForGeopackage() {
       }
     }
     if (!loaded) {
-      opts.locateFile = (file: string) => `https://sqljs.org/dist/${file}`;
+      try {
+        const require = createRequire(join(process.cwd(), 'package.json'));
+        const { version } = require('sql.js/package.json') as { version: string };
+        const url = `https://unpkg.com/sql.js@${version}/dist/sql-wasm.wasm`;
+        const r = await fetch(url, { redirect: 'follow' });
+        if (r.ok) {
+          const ab = await r.arrayBuffer();
+          const u8 = new Uint8Array(ab);
+          opts.wasmBinary = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+          loaded = true;
+        }
+      } catch {
+        /* */
+      }
+    }
+    if (!loaded) {
+      let ver = '1.14.1';
+      try {
+        const require = createRequire(join(process.cwd(), 'package.json'));
+        ver = (require('sql.js/package.json') as { version: string }).version;
+      } catch {
+        /* */
+      }
+      opts.locateFile = (file: string) => `https://unpkg.com/sql.js@${ver}/dist/${file}`;
     }
   } else {
-    opts.locateFile = (file: string) => `https://sqljs.org/dist/${file}`;
+    opts.locateFile = (file: string) => `https://unpkg.com/sql.js@1.14.1/dist/${file}`;
   }
   return initSqlJs(opts);
 }
@@ -735,7 +802,8 @@ function discoverGeometryColumnsFallback(db: SqlJsDb, quoteId: (ident: string) =
   const looseGeom = /(geom|geometry|wkb|shape)/i;
 
   const tryTable = (table: string) => {
-    if (!table || table.startsWith('gpkg_') || table.startsWith('rtree_')) return;
+    if (!table || table.startsWith('gpkg_') || table.startsWith('rtree_') || table.startsWith('idx_'))
+      return;
     const safe = quoteId(table);
     let stmt: SqlJsStmt;
     try {
@@ -750,7 +818,12 @@ function discoverGeometryColumnsFallback(db: SqlJsDb, quoteId: (ident: string) =
       const name = row.name != null ? String(row.name) : '';
       const typ = row.type != null ? String(row.type) : '';
       if (!name) continue;
-      if (!sqliteTypeLooksBlobGeometry(typ)) continue;
+      const tu = typ.toUpperCase().trim();
+      const blobish = sqliteTypeLooksBlobGeometry(typ);
+      const textGeom =
+        (tu === 'TEXT' || tu === 'VARCHAR' || tu === 'CHARACTER' || tu === 'CLOB') &&
+        (blobGeomNames.test(name) || looseGeom.test(name));
+      if (!blobish && !textGeom) continue;
       if (blobGeomNames.test(name) || looseGeom.test(name)) {
         add(table, name);
         foundNamed = true;
@@ -873,7 +946,7 @@ async function extractGpkgVectorFeatures(
       }
       try {
         const stmt = db.prepare(
-          "SELECT f_table_name AS t, f_geometry_column AS c FROM geometry_columns WHERE typeof(f_table_name)='text' AND typeof(f_geometry_column)='text' LIMIT 120"
+          "SELECT f_table_name AS t, f_geometry_column AS c FROM geometry_columns WHERE typeof(f_table_name)='text' AND typeof(f_geometry_column)='text' AND f_table_name NOT GLOB 'sqlite*' AND f_table_name NOT GLOB 'idx_*' LIMIT 120"
         );
         while (stmt.step()) {
           const row = stmt.getAsObject() as { t?: string; c?: string };
@@ -898,7 +971,7 @@ async function extractGpkgVectorFeatures(
 
     for (const { t: table, c: geomCol } of tables) {
       if (features.length >= opts.maxFeatures) break;
-      if (table.startsWith('gpkg_') || table.startsWith('rtree_')) continue;
+      if (table.startsWith('gpkg_') || table.startsWith('rtree_') || table.startsWith('idx_')) continue;
       const safeTable = quoteId(table);
       const safeCol = quoteId(geomCol);
       const q = `SELECT "${safeCol}" AS g FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL LIMIT ${perTableLimit}`;
@@ -910,12 +983,18 @@ async function extractGpkgVectorFeatures(
       }
       while (s.step()) {
         if (features.length >= opts.maxFeatures) break;
-        const row = s.getAsObject() as { g?: Uint8Array | ArrayBuffer };
+        const row = s.getAsObject() as { g?: unknown };
         const raw = row.g;
-        if (!raw) continue;
-        const buf = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
-        if (buf.length < 5) continue;
-        const geom = parseGeometryBlobToGeoJson(wkx, buf);
+        if (raw == null) continue;
+        let geom: GeoJsonGeometry | null = null;
+        if (typeof raw === 'string') {
+          geom = tryParseWktGeometry(raw);
+        } else if (raw instanceof Uint8Array) {
+          if (raw.length >= 5) geom = parseGeometryBlobToGeoJson(wkx, raw);
+        } else if (raw instanceof ArrayBuffer) {
+          const buf = new Uint8Array(raw);
+          if (buf.length >= 5) geom = parseGeometryBlobToGeoJson(wkx, buf);
+        }
         if (!geom) continue;
         expandFromGeometry(geom);
         features.push({
@@ -1152,11 +1231,12 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     parts.push(`${shpSkipped} shapefile(s) had no readable geometries`);
   }
 
-  let msg = `Archive "${archiveLabel}": ${parts.join(' + ')} - ${merged.length} map object(s).`;
+  const objectPhrase = merged.length === 1 ? 'one map object' : `${merged.length} map objects`;
+  let msg = `Archive "${archiveLabel}": ${parts.join(' + ')} - ${objectPhrase}.`;
   if (gpkgOk === 0 && shpOk === 0 && extentAdded) {
     msg += ` Archive listing: ${summarizeVectorishFiles(keys)} (paths found in zip).`;
   }
-  msg += ' Each feature has properties: package, layer, source.';
+  msg += ' Each feature includes package, layer, and source.';
 
   return {
     geojson: { type: 'FeatureCollection', features: merged },
