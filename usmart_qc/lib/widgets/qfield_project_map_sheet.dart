@@ -355,6 +355,85 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     return out;
   }
 
+  Widget _layerLegend(AppLocalizations l10n) {
+    final fc = _geojson;
+    if (fc == null) return const SizedBox.shrink();
+    final feats = fc['features'];
+    if (feats is! List) return const SizedBox.shrink();
+
+    const maxChips = 20;
+    final seen = <String>{};
+    final chips = <Widget>[];
+
+    for (final f in feats) {
+      if (chips.length >= maxChips) break;
+      if (f is! Map<String, dynamic>) continue;
+      final props = f['properties'];
+      if (props is! Map<String, dynamic>) continue;
+      final kind = props['kind']?.toString();
+      late final String label;
+      late final String dedupeKey;
+
+      if (kind == 'qgis_project_extent') {
+        final pf = props['projectFile']?.toString() ?? '';
+        label = '${l10n.t('qfield_map_extent')}${pf.isNotEmpty ? ': $pf' : ''}';
+        dedupeKey = 'extent|$pf';
+      } else {
+        final pkg = props['package']?.toString() ?? '';
+        final layer = props['layer']?.toString() ?? '';
+        if (layer.isEmpty && pkg.isEmpty) continue;
+        dedupeKey = '$pkg|$layer';
+        label = pkg.isNotEmpty ? '$pkg › $layer' : layer;
+      }
+      if (!seen.add(dedupeKey)) continue;
+      chips.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(22),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withAlpha(40)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withAlpha(220),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.t('qfield_map_layers'),
+            style: TextStyle(
+              color: Colors.white.withAlpha(200),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: chips,
+          ),
+        ],
+      ),
+    );
+  }
+
   static List<LatLng> _ringToLatLng(List<dynamic> ring) {
     final pts = <LatLng>[];
     for (final p in ring) {
@@ -485,6 +564,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                   style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12),
                 ),
               ),
+            if (!_loading) _layerLegend(l10n),
             if (_loading)
               const Padding(
                 padding: EdgeInsets.all(40),
