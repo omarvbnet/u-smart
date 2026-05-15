@@ -805,16 +805,220 @@ class _WorkspaceHeader extends StatelessWidget {
 
 // ─── Overview tab ──────────────────────────────────────────────────────────
 
-class _OverviewTab extends StatelessWidget {
+class _OverviewExpensesCard extends StatelessWidget {
+  const _OverviewExpensesCard({required this.pc, required this.l10n});
+
+  final PrivateCompanyProvider pc;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final snap = pc.expenseAnalytics;
+    final loading = pc.expenseAnalyticsLoading;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF12122A).withAlpha(220),
+        border: Border.all(color: Colors.white.withAlpha(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.payments_rounded, color: Color(0xFF00D4AA), size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.t('pc_overview_expenses_title'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              if (loading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00D4AA)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l10n.t('pc_overview_expenses_hint', {'days': '${snap?.days ?? 90}'}),
+            style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12, height: 1.35),
+          ),
+          if (snap != null && !loading) ...[
+            const SizedBox(height: 12),
+            Text(
+              '${l10n.t('pc_expenses_total')}: ${snap.summaryTotalAmount.toStringAsFixed(2)} IQD · '
+              '${snap.summaryExpenseCount} ${l10n.t('pc_expenses_lines').toLowerCase()} · '
+              '${snap.summaryTicketCount} ${l10n.t('pc_expenses_tickets').toLowerCase()}',
+              style: const TextStyle(
+                color: Color(0xFF00D4AA),
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            if (snap.byReason.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                l10n.t('pc_overview_expenses_by_reason'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              ...snap.byReason.take(20).map((r) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          r.reason,
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${r.totalAmount.toStringAsFixed(2)} IQD',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '×${r.expenseCount}',
+                        style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              if (snap.byReason.length > 20)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('…', style: TextStyle(color: Colors.white.withAlpha(100))),
+                ),
+            ],
+            if (snap.byProvinceReasons.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                l10n.t('pc_overview_expenses_by_province'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              ...snap.byProvinceReasons.take(12).map((p) {
+                return Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.white24),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: const EdgeInsets.only(bottom: 8),
+                    collapsedIconColor: Colors.white54,
+                    iconColor: Colors.white70,
+                    title: Text(
+                      p.province.isEmpty ? '—' : p.province,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${p.totalAmount.toStringAsFixed(2)} IQD · ${p.expenseCount} ${l10n.t('pc_expenses_lines').toLowerCase()}',
+                      style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
+                    ),
+                    children: [
+                      if (p.reasons.isEmpty)
+                        Text(
+                          '—',
+                          style: TextStyle(color: Colors.white.withAlpha(100), fontSize: 12),
+                        )
+                      else
+                        ...p.reasons.map((r) {
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    r.reason,
+                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  '${r.totalAmount.toStringAsFixed(2)} IQD',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '×${r.expenseCount}',
+                                  style: TextStyle(color: Colors.white.withAlpha(100), fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+          if (snap == null && !loading)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                l10n.t('pc_kpi_error_subtitle'),
+                style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewTab extends StatefulWidget {
   const _OverviewTab({required this.workspace});
+
   final PrivateCompanyWorkspace workspace;
+
+  @override
+  State<_OverviewTab> createState() => _OverviewTabState();
+}
+
+class _OverviewTabState extends State<_OverviewTab> {
+  bool _expenseBootstrap = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_expenseBootstrap) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    if (!_pcHubShowsExpensesTab(pc)) return;
+    _expenseBootstrap = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<PrivateCompanyProvider>().fetchExpenseAnalytics(days: 90);
+    });
+  }
 
   void _openBroadcast(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _BroadcastSheet(workspace: workspace),
+      builder: (_) => _BroadcastSheet(workspace: widget.workspace),
     );
   }
 
@@ -822,6 +1026,7 @@ class _OverviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
     final l10n = AppLocalizations.of(context);
+    final workspace = widget.workspace;
     final byRole = <String, int>{};
     for (final s in workspace.staff) {
       byRole[s.role] = (byRole[s.role] ?? 0) + 1;
@@ -831,8 +1036,7 @@ class _OverviewTab extends StatelessWidget {
       children: [
         if (pc.canBroadcastNotifications) ...[
           _GradientButton(
-            onPressed:
-                pc.submitting ? null : () => _openBroadcast(context),
+            onPressed: pc.submitting ? null : () => _openBroadcast(context),
             label: 'Send notification',
             icon: Icons.campaign_rounded,
             stretch: true,
@@ -940,6 +1144,10 @@ class _OverviewTab extends StatelessWidget {
               );
             }).toList(),
           ),
+        ],
+        if (_pcHubShowsExpensesTab(pc)) ...[
+          const SizedBox(height: 22),
+          _OverviewExpensesCard(pc: pc, l10n: l10n),
         ],
         const SizedBox(height: 22),
         const _SectionTitle('Recent staff'),
@@ -4716,7 +4924,8 @@ class _KpiStatRow extends StatelessWidget {
 // Sub-tabs (6 or 7):
 //   • Dashboard — aggregate counters + recent activity
 //   • Inventory — stock search / filters; tools Excel export; tool assignment from stock
-//   • Add tools — materials catalog (managers create catalog lines / tools)
+//   • Tools — staff tools catalog (serial-focused add flow; category fixed as Tools)
+//   • Materials — consumables / parts (bulk or serial; Excel import)
 //   • Request tools — material requests (staff submit; keepers review)
 //   • Reasons — material-use preset reasons (owners / managers / coordinators only)
 //   • Activity — full movement log
@@ -4729,17 +4938,201 @@ class _KpiStatRow extends StatelessWidget {
 //   • Engineer / technician / worker: assigned inventory and their movements
 // ═════════════════════════════════════════════════════════════════════════════
 
+class _WorkspaceTechniqueExpenseTile extends StatefulWidget {
+  const _WorkspaceTechniqueExpenseTile({
+    required this.row,
+    required this.l10n,
+    required this.pc,
+  });
+
+  final Map<String, dynamic> row;
+  final AppLocalizations l10n;
+  final PrivateCompanyProvider pc;
+
+  @override
+  State<_WorkspaceTechniqueExpenseTile> createState() => _WorkspaceTechniqueExpenseTileState();
+}
+
+class _WorkspaceTechniqueExpenseTileState extends State<_WorkspaceTechniqueExpenseTile> {
+  late bool _on;
+  late List<String> _reasons;
+  final TextEditingController _addCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromRow();
+  }
+
+  void _syncFromRow() {
+    _on = widget.row['on'] == true;
+    _reasons = List<String>.from(
+      (widget.row['reasons'] as List<dynamic>? ?? const []).map((e) => e.toString()),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _WorkspaceTechniqueExpenseTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.row['id'] != widget.row['id']) {
+      _syncFromRow();
+    }
+  }
+
+  @override
+  void dispose() {
+    _addCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final ok = await widget.pc.patchExpenseSettings(
+      techniquePatch: {
+        'techniqueId': widget.row['id'],
+        'ticketExpensesEnabled': _on,
+        'reasons': _reasons,
+      },
+    );
+    if (!mounted) return;
+    if (ok) {
+      widget.row['on'] = _on;
+      widget.row['reasons'] = List<String>.from(_reasons);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.l10n.t('pc_expenses_save_type')),
+          backgroundColor: const Color(0xFF00D4AA),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = widget.row['label'] as String? ?? '';
+    final category = widget.row['category'] as String? ?? '';
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      collapsedIconColor: Colors.white54,
+      iconColor: Colors.white70,
+      title: Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        category,
+        style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+      ),
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            widget.l10n.t('pc_expenses_allow_for_this_type'),
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          value: _on,
+          onChanged: widget.pc.submitting ? null : (v) => setState(() => _on = v),
+        ),
+        ..._reasons.map(
+          (r) => ListTile(
+            dense: true,
+            title: Text(r, style: const TextStyle(color: Colors.white, fontSize: 13)),
+            trailing: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 18),
+              onPressed: widget.pc.submitting
+                  ? null
+                  : () => setState(() => _reasons = [..._reasons]..remove(r)),
+            ),
+          ),
+        ),
+        TextField(
+          controller: _addCtrl,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          enabled: !widget.pc.submitting,
+          decoration: InputDecoration(
+            hintText: widget.l10n.t('pc_expenses_reason_add_hint'),
+            hintStyle: TextStyle(color: Colors.white.withAlpha(80)),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF), size: 20),
+              onPressed: widget.pc.submitting
+                  ? null
+                  : () {
+                      final s = _addCtrl.text.trim();
+                      if (s.isEmpty) return;
+                      if (_reasons.any((x) => x.toLowerCase() == s.toLowerCase())) return;
+                      setState(() {
+                        _reasons = [..._reasons, s];
+                        _addCtrl.clear();
+                      });
+                    },
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            onPressed: widget.pc.submitting ? null : _save,
+            child: Text(widget.l10n.t('pc_expenses_save_type')),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 Future<void> _showTicketExpensesSettingsDialog(BuildContext context) async {
   final pc = context.read<PrivateCompanyProvider>();
   final l10n = AppLocalizations.of(context);
-  final initial = List<String>.from(pc.workspace?.ticketExpenseReasons ?? const []);
+  final snap = await pc.fetchExpenseSettingsDetail();
+  if (!context.mounted) return;
+  if (snap == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.t('pc_expenses_export_failed')),
+        backgroundColor: const Color(0xFFFF4757),
+      ),
+    );
+    return;
+  }
+
+  Map<String, dynamic> settingsMap = {};
+  final rawSettings = snap['settings'];
+  if (rawSettings is Map) {
+    settingsMap = Map<String, dynamic>.from(rawSettings);
+  }
+
+  final initial = (settingsMap['reasons'] as List<dynamic>?)
+          ?.map((e) => e.toString().trim())
+          .where((s) => s.isNotEmpty)
+          .toList() ??
+      <String>[];
   final editCtrl = TextEditingController();
   var live = List<String>.from(initial);
-  var enabled = pc.workspace?.ticketExpensesEnabled == true;
-  final pending = pc.workspace?.ticketExpensesActivationPending == true;
+  var enabled = settingsMap['enabled'] == true;
+  final pending = settingsMap['activationPending'] == true;
   final role = (pc.membership.role ?? '').toUpperCase();
   final isCoordinator = role == 'COORDINATOR';
   final canEnableDirect = pc.isOwner || role == 'MANAGER';
+
+  final techniques = <Map<String, dynamic>>[];
+  for (final raw in (snap['techniques'] as List<dynamic>? ?? [])) {
+    if (raw is! Map) continue;
+    final m = Map<String, dynamic>.from(raw);
+    final id = m['id']?.toString() ?? '';
+    if (id.isEmpty) continue;
+    final reasons = (m['ticketExpenseReasons'] as List<dynamic>?)
+            ?.map((e) => e.toString().trim())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        <String>[];
+    techniques.add({
+      'id': id,
+      'label': (m['labelEn'] ?? m['labelAr'] ?? m['slug']).toString(),
+      'category': (m['category'] ?? '').toString(),
+      'on': m['ticketExpensesEnabled'] != false,
+      'reasons': List<String>.from(reasons),
+    });
+  }
 
   await showDialog<void>(
     context: context,
@@ -4811,6 +5204,39 @@ Future<void> _showTicketExpensesSettingsDialog(BuildContext context) async {
                     ),
                   ),
                 ),
+                if (techniques.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.t('pc_expenses_by_ticket_type'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.t('pc_expenses_type_defaults_hint'),
+                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11, height: 1.3),
+                  ),
+                  const SizedBox(height: 8),
+                  ListenableBuilder(
+                    listenable: pc,
+                    builder: (context, _) {
+                      return Column(
+                        children: techniques
+                            .map(
+                              (row) => _WorkspaceTechniqueExpenseTile(
+                                row: row,
+                                l10n: l10n,
+                                pc: pc,
+                              ),
+                            )
+                            .toList(),
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -4845,7 +5271,7 @@ Future<void> _showTicketExpensesSettingsDialog(BuildContext context) async {
                 await pc.patchExpenseSettings(
                   reasons: live,
                   enabled: enabled,
-                  disable: !enabled && pc.workspace?.ticketExpensesEnabled == true,
+                  disable: !enabled && (settingsMap['enabled'] == true),
                 );
               } else {
                 await pc.patchExpenseSettings(reasons: live);
@@ -4877,7 +5303,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
   bool _exportingTools = false;
 
   int _warehouseSubTabCount(PrivateCompanyProvider pc) =>
-      6 + (pc.canManageStaff ? 1 : 0);
+      7 + (pc.canManageStaff ? 1 : 0);
 
   void _syncWarehouseSubTabs(PrivateCompanyProvider pc) {
     final n = _warehouseSubTabCount(pc);
@@ -4889,11 +5315,11 @@ class _WarehouseTabState extends State<_WarehouseTab>
     _subTabs = TabController(length: n, vsync: this);
     int newIndex;
     if (n > oldLen) {
-      newIndex = prevIndex >= 4 ? prevIndex + 1 : prevIndex;
+      newIndex = prevIndex >= 5 ? prevIndex + 1 : prevIndex;
     } else {
-      if (prevIndex == 4) {
-        newIndex = 4;
-      } else if (prevIndex > 4) {
+      if (prevIndex == 5) {
+        newIndex = 5;
+      } else if (prevIndex > 5) {
         newIndex = prevIndex - 1;
       } else {
         newIndex = prevIndex;
@@ -4922,7 +5348,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
   @override
   void initState() {
     super.initState();
-    _subTabs = TabController(length: 6, vsync: this);
+    _subTabs = TabController(length: 7, vsync: this);
   }
 
   Future<void> _exportWarehouseToolsReport() async {
@@ -5083,8 +5509,12 @@ class _WarehouseTabState extends State<_WarehouseTab>
                 text: l10n.t('pc_wh_tab_inventory'),
               ),
               Tab(
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
-                text: l10n.t('pc_wh_tab_add_tools'),
+                icon: const Icon(Icons.handyman_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_tools'),
+              ),
+              Tab(
+                icon: const Icon(Icons.category_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_materials'),
               ),
               Tab(
                 icon: const Icon(Icons.post_add_rounded, size: 16),
@@ -5118,7 +5548,8 @@ class _WarehouseTabState extends State<_WarehouseTab>
                 exportingTools: _exportingTools,
                 onExportTools: _exportWarehouseToolsReport,
               ),
-              _WarehouseMaterialsView(canManage: dashboardCatalog),
+              _WarehouseMaterialsView(canManage: dashboardCatalog, toolsCatalogOnly: true),
+              _WarehouseMaterialsView(canManage: dashboardCatalog, toolsCatalogOnly: false),
               _WarehouseRequestsView(canManage: keeperManage),
               if (showReasons) const _WarehouseMaterialReasonsView(),
               _WarehouseActivityView(),
@@ -7657,14 +8088,26 @@ class _MaterialRequestDetailSheet extends StatelessWidget {
 // ─── Materials sub-tab ─────────────────────────────────────────────────────
 
 class _WarehouseMaterialsView extends StatefulWidget {
-  const _WarehouseMaterialsView({required this.canManage});
+  const _WarehouseMaterialsView({
+    required this.canManage,
+    required this.toolsCatalogOnly,
+  });
   final bool canManage;
+  /// `true` — staff tools only (tool-tagged catalog rows). `false` — consumable materials only.
+  final bool toolsCatalogOnly;
 
   @override
   State<_WarehouseMaterialsView> createState() => _WarehouseMaterialsViewState();
 }
 
 class _WarehouseMaterialsViewState extends State<_WarehouseMaterialsView> {
+  List<WarehouseMaterial> _visibleMaterials(PrivateCompanyWarehouseProvider wh) {
+    if (widget.toolsCatalogOnly) {
+      return wh.materials.where((m) => m.isToolTagged).toList();
+    }
+    return wh.materials.where((m) => !m.isToolTagged).toList();
+  }
+
   Future<void> _pickAndImportExcel(BuildContext context) async {
     final pick = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -7684,29 +8127,45 @@ class _WarehouseMaterialsViewState extends State<_WarehouseMaterialsView> {
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final l10n = AppLocalizations.of(context);
+    final visible = _visibleMaterials(wh);
+    final intro = widget.toolsCatalogOnly
+        ? l10n.t('pc_wh_tools_catalog_intro')
+        : l10n.t('pc_wh_materials_catalog_intro');
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            intro,
+            style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12, height: 1.35),
+          ),
+        ),
         if (widget.canManage)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             child: Wrap(
               alignment: WrapAlignment.end,
               spacing: 10,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
-                  onPressed: wh.submitting ? null : () => _pickAndImportExcel(context),
-                  icon: const Icon(Icons.upload_file_rounded, color: Color(0xFF38BDF8)),
-                  label: const Text('Import Excel / CSV'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withAlpha(60)),
+                if (!widget.toolsCatalogOnly)
+                  OutlinedButton.icon(
+                    onPressed: wh.submitting ? null : () => _pickAndImportExcel(context),
+                    icon: const Icon(Icons.upload_file_rounded, color: Color(0xFF38BDF8)),
+                    label: Text(l10n.t('pc_wh_import_materials_only')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white.withAlpha(60)),
+                    ),
                   ),
-                ),
                 _GradientButton(
                   onPressed: () => _openEditor(context),
-                  label: 'Add material',
-                  icon: Icons.add_box_rounded,
+                  label: widget.toolsCatalogOnly
+                      ? l10n.t('pc_wh_editor_add_tool')
+                      : l10n.t('pc_wh_editor_material_title_new'),
+                  icon: widget.toolsCatalogOnly ? Icons.handyman_rounded : Icons.add_box_rounded,
                 ),
               ],
             ),
@@ -7716,34 +8175,40 @@ class _WarehouseMaterialsViewState extends State<_WarehouseMaterialsView> {
             onRefresh: wh.refreshMaterials,
             color: const Color(0xFF38BDF8),
             backgroundColor: const Color(0xFF12122A),
-            child: wh.materials.isEmpty
+            child: visible.isEmpty
                 ? ListView(
                     padding: const EdgeInsets.all(24),
                     children: [
-                      const SizedBox(height: 60),
-                      const Center(
-                        child: Icon(Icons.category_rounded,
-                            color: Colors.white24, size: 72),
+                      const SizedBox(height: 40),
+                      Center(
+                        child: Icon(
+                          widget.toolsCatalogOnly ? Icons.handyman_rounded : Icons.category_rounded,
+                          color: Colors.white24,
+                          size: 72,
+                        ),
                       ),
                       const SizedBox(height: 14),
                       Center(
                         child: Text(
-                          widget.canManage
-                              ? 'Define your first material to start stocking.'
-                              : 'No materials in the catalog yet.',
+                          widget.toolsCatalogOnly
+                              ? (widget.canManage
+                                  ? l10n.t('pc_wh_tools_catalog_empty_manage')
+                                  : l10n.t('pc_wh_tools_catalog_empty'))
+                              : (widget.canManage
+                                  ? l10n.t('pc_wh_materials_catalog_empty_manage')
+                                  : l10n.t('pc_wh_materials_catalog_empty')),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white.withAlpha(160), fontSize: 13),
+                          style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
                         ),
                       ),
                     ],
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: wh.materials.length,
+                    itemCount: visible.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
-                      final m = wh.materials[i];
+                      final m = visible[i];
                       return _MaterialRow(
                         material: m,
                         canManage: widget.canManage,
@@ -7761,7 +8226,7 @@ class _WarehouseMaterialsViewState extends State<_WarehouseMaterialsView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _MaterialEditorSheet(),
+      builder: (_) => _MaterialEditorSheet(catalogToolMode: widget.toolsCatalogOnly),
     );
   }
 }
@@ -7788,7 +8253,11 @@ class _MaterialRow extends StatelessWidget {
                 border: Border.all(color: color.withAlpha(80)),
               ),
               alignment: Alignment.center,
-              child: Icon(Icons.category_rounded, color: color, size: 20),
+              child: Icon(
+                    material.isToolTagged ? Icons.handyman_rounded : Icons.category_rounded,
+                    color: color,
+                    size: 20,
+                  ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -7855,8 +8324,10 @@ class _MaterialRow extends StatelessWidget {
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (_) =>
-                            _MaterialEditorSheet(existing: material),
+                        builder: (_) => _MaterialEditorSheet(
+                              existing: material,
+                              catalogToolMode: material.isToolTagged,
+                            ),
                       );
                       break;
                     case 'delete':
@@ -8391,8 +8862,13 @@ Future<bool?> _confirm(BuildContext context, String title, String body) {
 // ─── Sheets: Material editor / Stock items / Item actions / Filters ───────
 
 class _MaterialEditorSheet extends StatefulWidget {
-  const _MaterialEditorSheet({this.existing});
+  const _MaterialEditorSheet({
+    this.existing,
+    this.catalogToolMode = false,
+  });
   final WarehouseMaterial? existing;
+  /// Staff tools catalog: category fixed to `Tools`, serial tracking only.
+  final bool catalogToolMode;
 
   @override
   State<_MaterialEditorSheet> createState() => _MaterialEditorSheetState();
@@ -8405,6 +8881,8 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
   final _unit = TextEditingController();
   MaterialTracking _tracking = MaterialTracking.serial;
 
+  static const String _toolCategoryValue = 'Tools';
+
   @override
   void initState() {
     super.initState();
@@ -8415,6 +8893,9 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
       _category.text = e.category ?? '';
       _unit.text = e.unit ?? '';
       _tracking = e.tracking;
+    } else if (widget.catalogToolMode) {
+      _category.text = _toolCategoryValue;
+      _tracking = MaterialTracking.serial;
     }
   }
 
@@ -8431,21 +8912,25 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
     final wh = context.read<PrivateCompanyWarehouseProvider>();
     final name = _name.text.trim();
     if (name.isEmpty) return;
+    final tool = widget.catalogToolMode;
+    final categoryOut = tool ? _toolCategoryValue : _category.text.trim();
+    final trackingOut =
+        tool ? materialTrackingApi(MaterialTracking.serial) : materialTrackingApi(_tracking);
     final ok = widget.existing == null
         ? await wh.createMaterial(
             name: name,
             description: _description.text,
-            category: _category.text,
+            category: categoryOut,
             unit: _unit.text,
-            tracking: materialTrackingApi(_tracking),
+            tracking: trackingOut,
           )
         : await wh.updateMaterial(
             widget.existing!.id,
             name: name,
             description: _description.text,
-            category: _category.text,
+            category: categoryOut,
             unit: _unit.text,
-            tracking: materialTrackingApi(_tracking),
+            tracking: trackingOut,
           );
     if (ok && mounted) Navigator.pop(context);
   }
@@ -8453,7 +8938,16 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final l10n = AppLocalizations.of(context);
     final isEdit = widget.existing != null;
+    final tool = widget.catalogToolMode;
+    final title = tool
+        ? (isEdit
+            ? l10n.t('pc_wh_editor_tool_title_edit')
+            : l10n.t('pc_wh_editor_tool_title_new'))
+        : (isEdit
+            ? l10n.t('pc_wh_editor_material_title_edit')
+            : l10n.t('pc_wh_editor_material_title_new'));
     return Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -8482,7 +8976,7 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  isEdit ? 'Edit material' : 'Add material',
+                  title,
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -8492,71 +8986,121 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
                 _DarkField(
                   controller: _name,
                   label: 'Name *',
-                  hint: 'Cat6 Cable',
-                  icon: Icons.category_rounded,
+                  hint: tool ? l10n.t('pc_wh_editor_tool_name_hint') : 'Cat6 Cable',
+                  icon: tool ? Icons.handyman_rounded : Icons.category_rounded,
                 ),
                 const SizedBox(height: 12),
                 _DarkField(
                   controller: _description,
-                  label: 'Description',
+                  label: l10n.t('pc_ws_description'),
                   hint: 'Optional notes for your team',
                   icon: Icons.notes_rounded,
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DarkField(
-                        controller: _category,
-                        label: 'Category',
-                        hint: 'Cable, Tool, …',
-                        icon: Icons.label_outline_rounded,
-                      ),
+                if (tool) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF12122A),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withAlpha(24)),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _DarkField(
-                        controller: _unit,
-                        label: 'Unit',
-                        hint: 'pcs / m / kg',
-                        icon: Icons.straighten_rounded,
-                      ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.label_outline_rounded, color: Color(0xFF00D4AA), size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.t('pc_wh_editor_catalog_kind'),
+                                style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+                              ),
+                              Text(
+                                l10n.t('pc_wh_editor_tool_category_locked'),
+                                style: const TextStyle(
+                                    color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  _DarkField(
+                    controller: _unit,
+                    label: 'Unit (optional)',
+                    hint: 'pcs / ea',
+                    icon: Icons.straighten_rounded,
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DarkField(
+                          controller: _category,
+                          label: 'Category',
+                          hint: 'Cable, parts, …',
+                          icon: Icons.label_outline_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DarkField(
+                          controller: _unit,
+                          label: 'Unit',
+                          hint: 'pcs / m / kg',
+                          icon: Icons.straighten_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 18),
                 const _SectionTitle('Tracking *'),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    GestureDetector(
-                      onTap: () =>
-                          setState(() => _tracking = MaterialTracking.serial),
-                      child: _ChipBox(
-                        label: 'Serial-numbered',
-                        selected: _tracking == MaterialTracking.serial,
-                        color: const Color(0xFF38BDF8),
+                if (tool)
+                  _ChipBox(
+                    label: 'Serial-numbered',
+                    selected: true,
+                    color: const Color(0xFF38BDF8),
+                  )
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _tracking = MaterialTracking.serial),
+                        child: _ChipBox(
+                          label: 'Serial-numbered',
+                          selected: _tracking == MaterialTracking.serial,
+                          color: const Color(0xFF38BDF8),
+                        ),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () =>
-                          setState(() => _tracking = MaterialTracking.bulk),
-                      child: _ChipBox(
-                        label: 'Bulk (by quantity)',
-                        selected: _tracking == MaterialTracking.bulk,
-                        color: const Color(0xFFFFA53A),
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _tracking = MaterialTracking.bulk),
+                        child: _ChipBox(
+                          label: 'Bulk (by quantity)',
+                          selected: _tracking == MaterialTracking.bulk,
+                          color: const Color(0xFFFFA53A),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 6),
                 Text(
-                  _tracking == MaterialTracking.serial
-                      ? 'Each unit has a unique serial. You will type or scan a serial per item.'
-                      : 'Tracked by quantity only — useful for cable on a reel, screws, etc.',
+                  tool
+                      ? l10n.t('pc_wh_editor_tool_tracking_note')
+                      : (_tracking == MaterialTracking.serial
+                          ? 'Each unit has a unique serial. You will type or scan a serial per item.'
+                          : 'Tracked by quantity only — useful for cable on a reel, screws, etc.'),
                   style: TextStyle(
                       color: Colors.white.withAlpha(140), fontSize: 11.5),
                 ),
@@ -8565,7 +9109,13 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
                   onPressed: wh.submitting ? null : _submit,
                   label: wh.submitting
                       ? 'Saving…'
-                      : (isEdit ? 'Save changes' : 'Add material'),
+                      : (isEdit
+                          ? (tool
+                              ? l10n.t('pc_wh_editor_save_tool')
+                              : 'Save changes')
+                          : (tool
+                              ? l10n.t('pc_wh_editor_add_tool')
+                              : 'Add material')),
                   icon: Icons.save_rounded,
                   stretch: true,
                 ),

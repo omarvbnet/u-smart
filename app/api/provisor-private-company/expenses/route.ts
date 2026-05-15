@@ -5,7 +5,6 @@ import {
   canStaffSubmitExpenseOnTicket,
   expenseRowToJson,
   expensesGuard,
-  loadExpenseSettings,
   parseExpenseAmount,
 } from '@/lib/private-company-expenses';
 import { normalizeProvince } from '@/lib/private-company-warehouse';
@@ -116,23 +115,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'reason is required.' }, { status: 400 });
   }
 
-  const settings = await loadExpenseSettings(guard.companyId);
-  const allowedReasons = Array.isArray(settings?.ticketExpenseReasons)
-    ? (settings.ticketExpenseReasons as string[]).map((s) => s.trim()).filter(Boolean)
-    : [];
-  if (allowedReasons.length > 0) {
-    const hit = allowedReasons.find((r) => r.toLowerCase() === reason.toLowerCase());
-    if (!hit) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `reason must be one of: ${allowedReasons.join(', ')}`,
-        },
-        { status: 400 }
-      );
-    }
-  }
-
   const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) || null : null;
   const currency =
     typeof body?.currency === 'string' && body.currency.trim()
@@ -149,6 +131,7 @@ export async function POST(req: NextRequest) {
       assignmentScope: true,
       province: true,
       privateCompanyTargetDepartmentId: true,
+      technique: true,
     },
   });
   if (!ticket) {
@@ -158,6 +141,20 @@ export async function POST(req: NextRequest) {
   const gate = await canStaffSubmitExpenseOnTicket(guard.requesterId, ticket, guard.companyId);
   if (!gate.ok) {
     return NextResponse.json({ success: false, message: gate.message }, { status: gate.status });
+  }
+
+  const allowedReasons = gate.allowedReasons;
+  if (allowedReasons.length > 0) {
+    const hit = allowedReasons.find((r) => r.toLowerCase() === reason.toLowerCase());
+    if (!hit) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `reason must be one of: ${allowedReasons.join(', ')}`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const me = await prisma.ticketRequester.findUnique({

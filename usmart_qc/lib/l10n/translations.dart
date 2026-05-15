@@ -263,7 +263,7 @@ const Map<String, String> _en = {
   'pc_ticket_expenses_title': 'Ticket expenses',
   'pc_ticket_expenses_hint':
       'Add your costs for this job before completing the ticket.',
-  'pc_expenses_enable': 'Enable ticket expenses (all ticket types)',
+  'pc_expenses_enable': 'Enable ticket expenses (workspace)',
   'pc_expenses_coordinator_hint':
       'Ask a manager to approve enabling expenses for this workspace.',
   'pc_expenses_activation_pending':
@@ -271,11 +271,21 @@ const Map<String, String> _en = {
   'pc_expenses_approve': 'Approve activation',
   'pc_expenses_request_activation': 'Request activation',
   'pc_expenses_reason_add_hint': 'Add expense reason (fuel, tools, …)',
+  'pc_expenses_by_ticket_type': 'Per ticket type',
+  'pc_expenses_type_defaults_hint':
+      'If you leave a type’s list empty, the workspace reasons above apply.',
+  'pc_expenses_save_type': 'Save for this type',
+  'pc_expenses_allow_for_this_type': 'Allow expenses for this type',
+  'pc_expenses_reason_freeform': 'Reason (type any text)',
   'pc_expenses_not_enabled':
       'Ticket expenses are off. Owner, manager, or coordinator can enable them under Warehouse.',
   'pc_expenses_analytics_title': 'Ticket expenses',
   'pc_expenses_analytics_hint':
       'Rollups by province, department, and staff. Tap a ticket to open it.',
+  'pc_overview_expenses_title': 'Ticket expenses overview',
+  'pc_overview_expenses_hint': 'Last {{days}} days (scoped to your workspace role).',
+  'pc_overview_expenses_by_reason': 'By expense reason',
+  'pc_overview_expenses_by_province': 'By province (tap to see reasons)',
   'pc_cancellation_settings': 'Cancellation reasons',
   'pc_cancellation_reason_add_hint': 'Add a cancellation reason',
   'pc_cancellation_analytics_title': 'Cancellations by reason',
@@ -308,7 +318,7 @@ const Map<String, String> _en = {
       'No reasons configured yet — ask your manager to add expense reasons.',
   'pc_expenses_add_line': 'Add expense',
   'pc_ticket_expenses_validation':
-      'Enter a positive amount and select an expense reason.',
+      'Enter a positive amount and an expense reason (choose from the list or type your own).',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} lines · {{tickets}} tickets',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} lines',
   'pc_expenses_export_excel': 'Export Excel',
@@ -818,11 +828,32 @@ const Map<String, String> _en = {
       'You only see warehouse data for materials assigned to you. Managers, coordinators, warehouse keepers, and the owner see the full workspace.',
   'pc_wh_tab_dashboard': 'Dashboard',
   'pc_wh_tab_inventory': 'Inventory',
-  'pc_wh_tab_add_tools': 'Add tools',
+  'pc_wh_tab_tools': 'Tools',
+  'pc_wh_tab_materials': 'Materials',
   'pc_wh_tab_request_tools': 'Request tools',
   'pc_wh_tab_reasons': 'Reasons',
   'pc_wh_tab_activity': 'Activity',
   'pc_wh_tab_budgets': 'Budgets',
+  'pc_wh_tools_catalog_intro':
+      'Register assignable equipment (serial-tracked). Separate from consumable materials.',
+  'pc_wh_tools_catalog_empty': 'No staff tools in the catalog yet.',
+  'pc_wh_tools_catalog_empty_manage': 'Add a tool type, then stock units from Inventory.',
+  'pc_wh_materials_catalog_intro':
+      'Consumables and parts (bulk or serial). Use import for large material lists.',
+  'pc_wh_materials_catalog_empty': 'No materials in the catalog yet.',
+  'pc_wh_materials_catalog_empty_manage': 'Add a material or import a spreadsheet.',
+  'pc_wh_editor_tool_title_new': 'Add staff tool',
+  'pc_wh_editor_tool_title_edit': 'Edit staff tool',
+  'pc_wh_editor_material_title_new': 'Add material',
+  'pc_wh_editor_material_title_edit': 'Edit material',
+  'pc_wh_editor_tool_tracking_note':
+      'Tools use serial numbers so each unit can be assigned to staff and traced.',
+  'pc_wh_editor_tool_category_locked': 'Tools (fixed)',
+  'pc_wh_editor_tool_name_hint': 'e.g. Impact drill DW5470',
+  'pc_wh_editor_save_tool': 'Save tool',
+  'pc_wh_editor_add_tool': 'Add tool',
+  'pc_wh_import_materials_only': 'Import Excel / CSV',
+  'pc_wh_editor_catalog_kind': 'Catalog',
   'pc_wh_reasons_subtitle':
       'Preset reasons staff pick when logging material use on tickets (warehouse withdrawals).',
   'pc_wh_reasons_no_access':
@@ -1528,7 +1559,7 @@ const Map<String, String> _ar = {
   'pc_ticket_expenses_settings': 'مصاريف التذكرة',
   'pc_ticket_expenses_title': 'مصاريف التذكرة',
   'pc_ticket_expenses_hint': 'أضف تكاليفك لهذه المهمة قبل إكمال التذكرة.',
-  'pc_expenses_enable': 'تفعيل مصاريف التذاكر (جميع أنواع التذاكر)',
+  'pc_expenses_enable': 'تفعيل مصاريف التذاكر (مساحة العمل)',
   'pc_expenses_coordinator_hint':
       'اطلب من المدير الموافقة على تفعيل المصاريف لهذه المساحة.',
   'pc_expenses_activation_pending':
@@ -1536,11 +1567,21 @@ const Map<String, String> _ar = {
   'pc_expenses_approve': 'الموافقة على التفعيل',
   'pc_expenses_request_activation': 'طلب التفعيل',
   'pc_expenses_reason_add_hint': 'أضف سبب مصروف (وقود، أدوات، …)',
+  'pc_expenses_by_ticket_type': 'حسب نوع التذكرة',
+  'pc_expenses_type_defaults_hint':
+      'إذا تركت قائمة نوع معيّن فارغة، تُستخدم أسباب مساحة العمل أعلاه.',
+  'pc_expenses_save_type': 'حفظ لهذا النوع',
+  'pc_expenses_allow_for_this_type': 'السماح بالمصاريف لهذا النوع',
+  'pc_expenses_reason_freeform': 'السبب (أي نص)',
   'pc_expenses_not_enabled':
       'مصاريف التذاكر غير مفعّلة. يمكن للمالك أو المدير أو المنسّق تفعيلها من المستودع.',
   'pc_expenses_analytics_title': 'مصاريف التذاكر',
   'pc_expenses_analytics_hint':
       'ملخصات حسب المحافظة والقسم والموظف. انقر تذكرة لفتحها.',
+  'pc_overview_expenses_title': 'نظرة عامة على مصاريف التذاكر',
+  'pc_overview_expenses_hint': 'آخر {{days}} يومًا (حسب صلاحية دورك في مساحة العمل).',
+  'pc_overview_expenses_by_reason': 'حسب سبب المصروف',
+  'pc_overview_expenses_by_province': 'حسب المحافظة (اضغط لعرض الأسباب)',
   'pc_cancellation_settings': 'أسباب الإلغاء',
   'pc_cancellation_reason_add_hint': 'أضف سبب إلغاء',
   'pc_cancellation_analytics_title': 'الإلغاءات حسب السبب',
@@ -1571,7 +1612,8 @@ const Map<String, String> _ar = {
   'pc_expenses_no_reasons':
       'لا توجد أسباب مُعدّة بعد — اطلب من المدير إضافة أسباب المصروف.',
   'pc_expenses_add_line': 'إضافة مصروف',
-  'pc_ticket_expenses_validation': 'أدخل مبلغاً موجباً واختر سبب المصروف.',
+  'pc_ticket_expenses_validation':
+      'أدخل مبلغاً موجباً وسبب المصروف (اختر من القائمة أو اكتب أي نص).',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} بند · {{tickets}} تذكرة',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} بند',
   'pc_expenses_export_excel': 'تصدير Excel',
@@ -1621,11 +1663,31 @@ const Map<String, String> _ar = {
       'تعرض لك بيانات المستودع للمواد المعيّنة لك فقط. المديرون والمنسّقون وأمناء المستودع ومالك مساحة العمل يرون كامل المساحة.',
   'pc_wh_tab_dashboard': 'لوحة التحكم',
   'pc_wh_tab_inventory': 'المخزون',
-  'pc_wh_tab_add_tools': 'إضافة أدوات',
+  'pc_wh_tab_tools': 'الأدوات',
+  'pc_wh_tab_materials': 'المواد',
   'pc_wh_tab_request_tools': 'طلب أدوات',
   'pc_wh_tab_reasons': 'الأسباب',
   'pc_wh_tab_activity': 'النشاط',
   'pc_wh_tab_budgets': 'الميزانيات',
+  'pc_wh_tools_catalog_intro':
+      'تسجيل معدات قابلة للإسناد (متتبعة بالرقم التسلسلي). منفصلة عن المواد الاستهلاكية.',
+  'pc_wh_tools_catalog_empty': 'لا توجد أدوات للموظفين في القائمة بعد.',
+  'pc_wh_tools_catalog_empty_manage': 'أضف نوع أداة، ثم أدخل وحدات من المخزون.',
+  'pc_wh_materials_catalog_intro':
+      'مواد استهلاكية وقطع (كمية أو تسلسل). استخدم الاستيراد للقوائم الكبيرة.',
+  'pc_wh_materials_catalog_empty': 'لا توجد مواد في القائمة بعد.',
+  'pc_wh_materials_catalog_empty_manage': 'أضف مادة أو استورد جدولاً.',
+  'pc_wh_editor_tool_title_new': 'إضافة أداة للموظفين',
+  'pc_wh_editor_tool_title_edit': 'تعديل أداة',
+  'pc_wh_editor_material_title_new': 'إضافة مادة',
+  'pc_wh_editor_material_title_edit': 'تعديل مادة',
+  'pc_wh_editor_tool_tracking_note':
+      'الأدوات تُتبع بالرقم التسلسلي لإسناد كل وحدة لموظف وتتبعها.',
+  'pc_wh_editor_tool_category_locked': 'أدوات (ثابت)',
+  'pc_wh_editor_tool_name_hint': 'مثال: مثقاب صدم DW5470',
+  'pc_wh_editor_save_tool': 'حفظ الأداة',
+  'pc_wh_editor_add_tool': 'إضافة أداة',
+  'pc_wh_import_materials_only': 'استيراد Excel / CSV',
   'pc_wh_reasons_subtitle':
       'أسباب جاهزة يختارها الموظفون عند تسجيل استخدام المادة في التذاكر (سحب من المستودع).',
   'pc_wh_reasons_no_access':
@@ -2351,7 +2413,7 @@ const Map<String, String> _ku = {
   'pc_ticket_expenses_settings': 'خەرجی تیکێت',
   'pc_ticket_expenses_title': 'خەرجی تیکێت',
   'pc_ticket_expenses_hint': 'پێش تەواوکردنی تیکێت، تێچووی ئەم کارە زیاد بکە.',
-  'pc_expenses_enable': 'خەرجی تیکێت چالاک بکە (هەموو جۆرەکانی تیکێت)',
+  'pc_expenses_enable': 'خەرجی تیکێت چالاک بکە (شوێنی کار)',
   'pc_expenses_coordinator_hint':
       'داوا لە بەڕێوەبەر بکە ڕێگە بە خەرجی ئەم شوێنی کارە بدات.',
   'pc_expenses_activation_pending':
@@ -2359,11 +2421,21 @@ const Map<String, String> _ku = {
   'pc_expenses_approve': 'پەسەندکردنی چالاککردن',
   'pc_expenses_request_activation': 'داوای چالاککردن',
   'pc_expenses_reason_add_hint': 'هۆکاری خەرجی زیاد بکە (سووتەمەنی، ئامێر، …)',
+  'pc_expenses_by_ticket_type': 'بەپێی جۆری تیکێت',
+  'pc_expenses_type_defaults_hint':
+      'ئەگەر لیستی جۆرێک بەتاڵ بێت، هۆکارەکانی سەرەوە بۆ شوێنی کار بەکاردێن.',
+  'pc_expenses_save_type': 'پاشەکەوت بۆ ئەم جۆرە',
+  'pc_expenses_allow_for_this_type': 'ڕێگە بە خەرجی بۆ ئەم جۆرە',
+  'pc_expenses_reason_freeform': 'هۆکار (هەر دەقێک)',
   'pc_expenses_not_enabled':
       'خەرجی تیکێت دەرەخستراوە. خاوەن، بەڕێوەبەر یان هەماهەنگکەر لە کۆگا دەتوانن چالاکی بکەن.',
   'pc_expenses_analytics_title': 'خەرجی تیکێتەکان',
   'pc_expenses_analytics_hint':
       'کورتە بەپێی پارێزگا و بەش و کارمەند. کرتە لە تیکێت بکە بۆ کردنەوە.',
+  'pc_overview_expenses_title': 'پێشبینینی خەرجی تیکێت',
+  'pc_overview_expenses_hint': 'دوایین {{days}} ڕۆژ (بەپێی ڕۆڵی تۆ لە شوێنی کار).',
+  'pc_overview_expenses_by_reason': 'بەپێی هۆکاری خەرجی',
+  'pc_overview_expenses_by_province': 'بەپێی پارێزگا (کرتە بکە بۆ هۆکارەکان)',
   'pc_cancellation_settings': 'هۆکارەکانی هەڵوەشاندنەوە',
   'pc_cancellation_reason_add_hint': 'هۆکارێکی هەڵوەشاندنەوە زیاد بکە',
   'pc_cancellation_analytics_title': 'هەڵوەشاندنەوە بەپێی هۆکار',
@@ -2394,7 +2466,7 @@ const Map<String, String> _ku = {
   'pc_expenses_no_reasons':
       'هێشتا هۆکار دیاری نەکراوە —داوا لە بەڕێوەبەر بکە هۆکاری خەرجی زیاد بکات.',
   'pc_expenses_add_line': 'زیادکردنی خەرجی',
-  'pc_ticket_expenses_validation': 'بڕێکی دروست بنووسە و هۆکارێک هەڵبژێرە.',
+  'pc_ticket_expenses_validation': 'بڕێکی دروست بنووسە و هۆکار بنووسە (لیست یان دەق).',
   'pc_expenses_staff_rollup_subtitle': '{{lines}} هێڵ · {{tickets}} تیکێت',
   'pc_expenses_ticket_rollup_subtitle': '{{status}} · {{lines}} هێڵ',
   'pc_expenses_export_excel': 'هەناردەی Excel',
@@ -2444,11 +2516,32 @@ const Map<String, String> _ku = {
       'تەنها زانیاری کۆگا بۆ ئەو کەرەستانە دەبینیت کە بۆ تۆ دیاریکراون. بەڕێوەبەر و هەماهەنگکەر و پارێزەری کۆگا و خاوەنی workspace هەمووی دەبینن.',
   'pc_wh_tab_dashboard': 'داشبۆرد',
   'pc_wh_tab_inventory': 'کۆگا',
-  'pc_wh_tab_add_tools': 'زیادکردنی ئامێر',
+  'pc_wh_tab_tools': 'ئامێرەکان',
+  'pc_wh_tab_materials': 'کەرەستەکان',
   'pc_wh_tab_request_tools': 'داواکردنی ئامێر',
   'pc_wh_tab_reasons': 'هۆکارەکان',
   'pc_wh_tab_activity': 'چالاکی',
   'pc_wh_tab_budgets': 'بودجە',
+  'pc_wh_tools_catalog_intro':
+      'تۆمارکردنی ئامێری دیاریکراو بۆ کارمەند (بە زنجیرە ژمارە). جیا لە ماددە بەکارهێندراوەکان.',
+  'pc_wh_tools_catalog_empty': 'هێشتا هیچ ئامێری کارمەند لە کاتالۆگدا نییە.',
+  'pc_wh_tools_catalog_empty_manage': 'جۆری ئامێر زیاد بکە، دواتر یەکەکان لە کۆگا تۆمار بکە.',
+  'pc_wh_materials_catalog_intro':
+      'ماددە بەکارهێندراو و پارچە ( کەڵەکە یان زنجیرە). بۆ لیستی گەورە ئیمپۆرت بەکاربهێنە.',
+  'pc_wh_materials_catalog_empty': 'هێشتا ماددە لە کاتالۆگدا نییە.',
+  'pc_wh_materials_catalog_empty_manage': 'ماددە زیاد بکە یان لە Excel بیهێنە.',
+  'pc_wh_editor_tool_title_new': 'زیادکردنی ئامێری کارمەند',
+  'pc_wh_editor_tool_title_edit': 'دەستکاری ئامێر',
+  'pc_wh_editor_material_title_new': 'زیادکردنی ماددە',
+  'pc_wh_editor_material_title_edit': 'دەستکاری ماددە',
+  'pc_wh_editor_tool_tracking_note':
+      'ئامێرەکان بە ژمارەی زنجیرەیی دەبن تا هەر یەکە بۆ کارمەند دیاری بکرێت.',
+  'pc_wh_editor_tool_category_locked': 'ئامێر (جێگیر)',
+  'pc_wh_editor_tool_name_hint': 'نمونە: مەکینەی دڕاندن DW5470',
+  'pc_wh_editor_save_tool': 'پاشەکەوتکردنی ئامێر',
+  'pc_wh_editor_add_tool': 'زیادکردنی ئامێر',
+  'pc_wh_import_materials_only': 'هێنانی Excel / CSV',
+  'pc_wh_editor_catalog_kind': 'جۆر',
   'pc_wh_reasons_subtitle':
       'هۆکارە ئامادەکان کارمەند هەڵدەبژێرێت کاتێک بەکارهێنانی ماددە لە تیکێت تۆمار دەکات (ڕاکێشان لە کۆگا).',
   'pc_wh_reasons_no_access':
@@ -3196,6 +3289,10 @@ const Map<String, String> _tr = {
   'pc_expenses_analytics_title': 'Bilet giderleri',
   'pc_expenses_analytics_hint':
       'İl, departman ve personele göre özetler. Açmak için bir bilete dokunun.',
+  'pc_overview_expenses_title': 'Bilet giderleri özeti',
+  'pc_overview_expenses_hint': 'Son {{days}} gün (çalışma alanı rolünüze göre).',
+  'pc_overview_expenses_by_reason': 'Gider nedeni',
+  'pc_overview_expenses_by_province': 'İle göre (nedenler için dokunun)',
   'pc_cancellation_settings': 'İptal nedenleri',
   'pc_cancellation_reason_add_hint': 'İptal nedeni ekleyin',
   'pc_cancellation_analytics_title': 'Nedene göre iptaller',
@@ -3276,11 +3373,32 @@ const Map<String, String> _tr = {
       'Yalnızca size atanmış malzemelere ait depo verilerini görürsünüz. Yöneticiler, koordinatörler, depo sorumluları ve çalışma alanı sahibi tüm alanı görür.',
   'pc_wh_tab_dashboard': 'Özet',
   'pc_wh_tab_inventory': 'Envanter',
-  'pc_wh_tab_add_tools': 'Araç ekle',
+  'pc_wh_tab_tools': 'Araçlar',
+  'pc_wh_tab_materials': 'Malzemeler',
   'pc_wh_tab_request_tools': 'Araç talep et',
   'pc_wh_tab_reasons': 'Nedenler',
   'pc_wh_tab_activity': 'Hareketler',
   'pc_wh_tab_budgets': 'Bütçeler',
+  'pc_wh_tools_catalog_intro':
+      'Personele atanabilir ekipman (seri ile). Sarf malzemelerden ayrı tutulur.',
+  'pc_wh_tools_catalog_empty': 'Katalogda henüz personel aracı yok.',
+  'pc_wh_tools_catalog_empty_manage': 'Önce araç tipi ekleyin; birimleri Envanter’den stoklayın.',
+  'pc_wh_materials_catalog_intro':
+      'Sarf ve yedek parça (toplu veya seri). Büyük listeler için içe aktarın.',
+  'pc_wh_materials_catalog_empty': 'Katalogda henüz malzeme yok.',
+  'pc_wh_materials_catalog_empty_manage': 'Malzeme ekleyin veya tablo içe aktarın.',
+  'pc_wh_editor_tool_title_new': 'Personel aracı ekle',
+  'pc_wh_editor_tool_title_edit': 'Aracı düzenle',
+  'pc_wh_editor_material_title_new': 'Malzeme ekle',
+  'pc_wh_editor_material_title_edit': 'Malzemeyi düzenle',
+  'pc_wh_editor_tool_tracking_note':
+      'Araçlar seri numaralıdır; her birim personele atanır ve izlenir.',
+  'pc_wh_editor_tool_category_locked': 'Araçlar (sabit)',
+  'pc_wh_editor_tool_name_hint': 'örn. Darbeli matkap DW5470',
+  'pc_wh_editor_save_tool': 'Aracı kaydet',
+  'pc_wh_editor_add_tool': 'Araç ekle',
+  'pc_wh_import_materials_only': 'Excel / CSV içe aktar',
+  'pc_wh_editor_catalog_kind': 'Tür',
   'pc_wh_reasons_subtitle':
       'Biletlerde malzeme kullanımı (depodan çekme) kaydedilirken personelin seçtiği hazır nedenler.',
   'pc_wh_reasons_no_access':

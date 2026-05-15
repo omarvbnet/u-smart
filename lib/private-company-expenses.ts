@@ -9,6 +9,7 @@ import {
   parseTicketCompanyJson,
   ticketFieldStaffInvolvesRequester,
 } from '@/lib/private-company-kpi';
+import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -145,6 +146,66 @@ export function serializeExpenseSettings(row: {
   };
 }
 
+export type EffectiveTicketExpensePolicy = { enabled: boolean; reasons: string[] };
+
+/**
+ * Workspace master switch + per–ticket-type (technique) row: effective enabled flag and preset reasons.
+ * When the technique’s reason list is empty, workspace defaults apply.
+ */
+export async function resolveEffectiveTicketExpensePolicy(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prismaClient: any,
+  companyId: string,
+  techniqueSlug: string | null | undefined
+): Promise<EffectiveTicketExpensePolicy> {
+  const settings = await loadExpenseSettings(companyId);
+  if (!settings?.ticketExpensesEnabled) {
+    return { enabled: false, reasons: [] };
+  }
+  const companyReasons = normalizeExpenseReasons(settings.ticketExpenseReasons);
+
+  const slug = typeof techniqueSlug === 'string' ? techniqueSlug.trim() : '';
+  if (!slug) {
+    return { enabled: true, reasons: companyReasons };
+  }
+
+  const category = await lookupProvisorTechniqueCategory(prismaClient, slug, {
+    workspaceCompanyId: companyId,
+  });
+  if (!category) {
+    return { enabled: true, reasons: companyReasons };
+  }
+
+  let tech: { ticketExpensesEnabled?: boolean | null; ticketExpenseReasons?: string[] | null } | null =
+    null;
+  try {
+    tech = await prismaClient.privateCompanyTechnique.findFirst({
+      where: {
+        companyId,
+        category,
+        active: true,
+        slug: { equals: slug, mode: 'insensitive' },
+      },
+      select: { ticketExpensesEnabled: true, ticketExpenseReasons: true },
+    });
+  } catch {
+    /* legacy DB */
+  }
+
+  if (!tech) {
+    return { enabled: true, reasons: companyReasons };
+  }
+
+  const typeEnabled = tech.ticketExpensesEnabled !== false;
+  const typeReasons = normalizeExpenseReasons(tech.ticketExpenseReasons ?? []);
+  const reasons = typeReasons.length > 0 ? typeReasons : companyReasons;
+
+  return {
+    enabled: typeEnabled,
+    reasons,
+  };
+}
+
 /** Staff may add expenses when feature is on and they are lead or crew on an open ticket. */
 export async function canStaffSubmitExpenseOnTicket(
   requesterId: string,
@@ -156,12 +217,19 @@ export async function canStaffSubmitExpenseOnTicket(
     assignmentScope: string | null;
     province: string | null;
     privateCompanyTargetDepartmentId: string | null;
+    technique: string | null;
   },
   companyId: string
-): Promise<{ ok: true } | { ok: false; message: string; status: number }> {
-  const settings = await loadExpenseSettings(companyId);
-  if (!settings?.ticketExpensesEnabled) {
-    return { ok: false, message: 'Ticket expenses are not enabled for this workspace.', status: 403 };
+): Promise<
+  { ok: true; allowedReasons: string[] } | { ok: false; message: string; status: number }
+> {
+  const eff = await resolveEffectiveTicketExpensePolicy(prisma, companyId, ticket.technique);
+  if (!eff.enabled) {
+    return {
+      ok: false,
+      message: 'Ticket expenses are not enabled for this ticket or type.',
+      status: 403,
+    };
   }
   if (String(ticket.status ?? '').toUpperCase() === 'COMPLETED') {
     return { ok: false, message: 'Cannot add expenses to a completed ticket.', status: 400 };
@@ -191,7 +259,7 @@ export async function canStaffSubmitExpenseOnTicket(
       status: 403,
     };
   }
-  return { ok: true };
+  return { ok: true, allowedReasons: eff.reasons };
 }
 
 export function expenseRowToJson(row: {

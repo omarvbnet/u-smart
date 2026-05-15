@@ -13,11 +13,11 @@ class WorkspaceTicketExpensesSection extends StatefulWidget {
   const WorkspaceTicketExpensesSection({
     super.key,
     required this.ticket,
-    required this.onChanged,
+    this.onTicketUpdated,
   });
 
   final Ticket ticket;
-  final VoidCallback onChanged;
+  final ValueChanged<Ticket?>? onTicketUpdated;
 
   @override
   State<WorkspaceTicketExpensesSection> createState() => _WorkspaceTicketExpensesSectionState();
@@ -26,20 +26,22 @@ class WorkspaceTicketExpensesSection extends StatefulWidget {
 class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpensesSection> {
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  final _reasonFreeformCtrl = TextEditingController();
   String? _reason;
 
   @override
   void dispose() {
     _amountCtrl.dispose();
     _noteCtrl.dispose();
+    _reasonFreeformCtrl.dispose();
     super.dispose();
   }
 
   List<String> get _reasons {
+    final fromTicket = widget.ticket.workspaceTicketExpenseReasons;
+    if (fromTicket.isNotEmpty) return fromTicket;
     final pc = context.read<PrivateCompanyProvider>();
-    final fromWs = pc.workspace?.ticketExpenseReasons ?? const [];
-    if (fromWs.isNotEmpty) return fromWs;
-    return const [];
+    return pc.workspace?.ticketExpenseReasons ?? const [];
   }
 
   bool get _canAdd {
@@ -74,9 +76,10 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
     if (ok) {
       _amountCtrl.clear();
       _noteCtrl.clear();
+      _reasonFreeformCtrl.clear();
       setState(() => _reason = null);
-      await context.read<TicketsProvider>().fetchTicketDetail(widget.ticket.id);
-      widget.onChanged();
+      final updated = await context.read<TicketsProvider>().fetchTicketDetail(widget.ticket.id);
+      widget.onTicketUpdated?.call(updated);
     }
   }
 
@@ -85,8 +88,8 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
     final ok = await pc.deleteTicketExpense(line.id);
     if (!mounted) return;
     if (ok) {
-      await context.read<TicketsProvider>().fetchTicketDetail(widget.ticket.id);
-      widget.onChanged();
+      final updated = await context.read<TicketsProvider>().fetchTicketDetail(widget.ticket.id);
+      widget.onTicketUpdated?.call(updated);
     }
   }
 
@@ -172,32 +175,34 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
                 ),
               ],
             ),
-            if (lines.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00D4AA).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF00D4AA).withValues(alpha: 0.25)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.summarize_rounded, color: Color(0xFF00D4AA), size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${l10n.t('pc_expenses_total')}: ${total.toStringAsFixed(2)} IQD',
-                        style: const TextStyle(
-                          color: Color(0xFF00D4AA),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                        ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00D4AA).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF00D4AA).withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.summarize_rounded, color: Color(0xFF00D4AA), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${l10n.t('pc_expenses_total')}: ${total.toStringAsFixed(2)} IQD',
+                      style: TextStyle(
+                        color: lines.isEmpty
+                            ? Colors.white.withValues(alpha: 0.55)
+                            : const Color(0xFF00D4AA),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
+            if (lines.isNotEmpty) ...[
               const SizedBox(height: 10),
               ...lines.map((e) {
                 final when = e.createdAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(e.createdAt!.toLocal()) : '';
@@ -272,24 +277,19 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
                   onChanged: (v) => setState(() => _reason = v),
                 )
               else
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.white.withValues(alpha: 0.05),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded, color: Colors.amber.withValues(alpha: 0.85), size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          l10n.t('pc_expenses_no_reasons'),
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12, height: 1.35),
-                        ),
-                      ),
-                    ],
+                TextField(
+                  controller: _reasonFreeformCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: l10n.t('pc_expenses_reason_freeform'),
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
+                    filled: true,
+                    fillColor: Colors.black.withValues(alpha: 0.2),
+                    enabledBorder: _fieldBorder(),
+                    focusedBorder: _fieldBorder().copyWith(
+                      borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+                    ),
+                    border: _fieldBorder(),
                   ),
                 ),
               const SizedBox(height: 10),

@@ -11,6 +11,7 @@ import { isWorkspaceCrewTicketTechnique } from '@/lib/workspace-maintenance-crew
 import {
   expenseRowToJson,
   loadExpenseSettings,
+  resolveEffectiveTicketExpensePolicy,
   serializeExpenseSettings,
 } from '@/lib/private-company-expenses';
 import { loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
@@ -579,17 +580,19 @@ export async function GET(
       try {
         const settingsRow = await loadExpenseSettings(privateCompanyIdVal);
         if (settingsRow) {
-          workspaceExpenseSettings = serializeExpenseSettings(settingsRow);
-        }
-        if (settingsRow?.ticketExpensesEnabled) {
-          const expenseRows = await prisma.privateCompanyTicketExpense.findMany({
-            where: { companyId: privateCompanyIdVal, ticketId: row.id },
-            orderBy: { createdAt: 'asc' },
-            include: {
-              staff: { select: { id: true, name: true, username: true } },
-            },
-          });
-          ticketExpenses = expenseRows.map(expenseRowToJson);
+          const eff = await resolveEffectiveTicketExpensePolicy(prisma, privateCompanyIdVal, row.technique);
+          const base = serializeExpenseSettings(settingsRow);
+          workspaceExpenseSettings = { ...base, enabled: eff.enabled, reasons: eff.reasons };
+          if (eff.enabled) {
+            const expenseRows = await prisma.privateCompanyTicketExpense.findMany({
+              where: { companyId: privateCompanyIdVal, ticketId: row.id },
+              orderBy: { createdAt: 'asc' },
+              include: {
+                staff: { select: { id: true, name: true, username: true } },
+              },
+            });
+            ticketExpenses = expenseRows.map(expenseRowToJson);
+          }
         }
       } catch {
         /* expenses tables may be absent on legacy DB */

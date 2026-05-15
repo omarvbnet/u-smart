@@ -75,6 +75,57 @@ class TicketExpenseLine {
   }
 }
 
+class ExpenseReasonRollup {
+  ExpenseReasonRollup({
+    required this.reason,
+    required this.totalAmount,
+    required this.expenseCount,
+    required this.ticketCount,
+  });
+
+  final String reason;
+  final double totalAmount;
+  final int expenseCount;
+  final int ticketCount;
+
+  factory ExpenseReasonRollup.fromJson(Map<String, dynamic> json) => ExpenseReasonRollup(
+        reason: json['reason'] as String? ?? '',
+        totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
+        expenseCount: (json['expenseCount'] as num?)?.toInt() ?? 0,
+        ticketCount: (json['ticketCount'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Per-province ticket expense totals plus breakdown by reason.
+class ExpenseProvinceReasonBreakdown {
+  ExpenseProvinceReasonBreakdown({
+    required this.province,
+    required this.totalAmount,
+    required this.expenseCount,
+    required this.ticketCount,
+    this.reasons = const [],
+  });
+
+  final String province;
+  final double totalAmount;
+  final int expenseCount;
+  final int ticketCount;
+  final List<ExpenseReasonRollup> reasons;
+
+  factory ExpenseProvinceReasonBreakdown.fromJson(Map<String, dynamic> json) =>
+      ExpenseProvinceReasonBreakdown(
+        province: json['province'] as String? ?? '',
+        totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
+        expenseCount: (json['expenseCount'] as num?)?.toInt() ?? 0,
+        ticketCount: (json['ticketCount'] as num?)?.toInt() ?? 0,
+        reasons: (json['reasons'] as List<dynamic>?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(ExpenseReasonRollup.fromJson)
+                .toList() ??
+            const [],
+      );
+}
+
 class ExpenseAnalyticsSnapshot {
   ExpenseAnalyticsSnapshot({
     required this.scope,
@@ -87,6 +138,8 @@ class ExpenseAnalyticsSnapshot {
     this.summaryExpenseCount = 0,
     this.summaryTicketCount = 0,
     this.byProvince = const [],
+    this.byReason = const [],
+    this.byProvinceReasons = const [],
     this.byDepartment = const [],
     this.byStaff = const [],
     this.tickets = const [],
@@ -104,6 +157,8 @@ class ExpenseAnalyticsSnapshot {
   final int summaryExpenseCount;
   final int summaryTicketCount;
   final List<ExpenseProvinceRollup> byProvince;
+  final List<ExpenseReasonRollup> byReason;
+  final List<ExpenseProvinceReasonBreakdown> byProvinceReasons;
   final List<ExpenseDepartmentRollup> byDepartment;
   final List<ExpenseStaffRollup> byStaff;
   final List<ExpenseTicketRollup> tickets;
@@ -130,6 +185,16 @@ class ExpenseAnalyticsSnapshot {
       byProvince: (json['byProvince'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map(ExpenseProvinceRollup.fromJson)
+              .toList() ??
+          const [],
+      byReason: (json['byReason'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(ExpenseReasonRollup.fromJson)
+              .toList() ??
+          const [],
+      byProvinceReasons: (json['byProvinceReasons'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(ExpenseProvinceReasonBreakdown.fromJson)
               .toList() ??
           const [],
       byDepartment: (json['byDepartment'] as List<dynamic>?)

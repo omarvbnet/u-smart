@@ -144,16 +144,17 @@ export async function GET(req: NextRequest) {
   const ws = XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  // Copy into a standalone Uint8Array — avoids `Blob` empty-body issues on some CDNs
+  // and satisfies NextResponse `BodyInit` typing (Buffer types vary by TS lib).
   const u8 = Uint8Array.from(buf);
-  const blob = new Blob([u8], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
   const slug = `${from.toISOString().slice(0, 10)}_${to.toISOString().slice(0, 10)}`;
-  return new NextResponse(blob, {
+  return new NextResponse(u8, {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="ticket-expenses-${slug}.xlsx"`,
+      'Content-Length': String(u8.byteLength),
+      'Cache-Control': 'private, no-store, max-age=0',
     },
   });
 }

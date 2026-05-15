@@ -1,4 +1,6 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
@@ -30,6 +32,8 @@ class ApiService {
         if (_requestLocaleCode != null && _requestLocaleCode!.isNotEmpty)
           'X-Provisor-Locale': _requestLocaleCode!,
         'Accept': '*/*',
+        // Prefer gzip so `dart:io` reliably decodes; brotli support varies by platform.
+        'Accept-Encoding': 'gzip',
       };
 
   Uri _uri(String path, [Map<String, String>? queryParams]) {
@@ -117,9 +121,38 @@ class ApiService {
     try {
       final response =
           await http.get(_uri(path, query), headers: _binaryGetHeaders);
-      if (response.statusCode == 200) return response.bodyBytes;
-    } catch (_) {}
-    return null;
+      if (response.statusCode != 200) {
+        if (kDebugMode) {
+          debugPrint(
+            'getBytes non-200: ${response.statusCode} $path len=${response.bodyBytes.length}',
+          );
+        }
+        return null;
+      }
+      final bytes = response.bodyBytes;
+      if (bytes.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('getBytes empty body (200): $path');
+        }
+        return null;
+      }
+      final ct = response.headers['content-type'] ?? '';
+      if (ct.toLowerCase().contains('json') &&
+          bytes.length < 4096 &&
+          String.fromCharCodes(bytes).trimLeft().startsWith('{')) {
+        if (kDebugMode) {
+          debugPrint('getBytes got JSON despite 200: $path');
+        }
+        return null;
+      }
+      return bytes;
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('getBytes error: $path $e');
+        debugPrint('$st');
+      }
+      return null;
+    }
   }
 
   Future<String?> uploadFile(String path, String filePath) async {

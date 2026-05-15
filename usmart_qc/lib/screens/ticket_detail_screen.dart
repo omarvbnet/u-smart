@@ -1653,8 +1653,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         const SizedBox(height: 12),
         WorkspaceTicketExpensesSection(
           ticket: t,
-          onChanged: () {
-            if (mounted) setState(() {});
+          onTicketUpdated: (updated) {
+            if (updated != null && mounted) setState(() => _ticket = updated);
           },
         ),
       ],
@@ -1666,6 +1666,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           _rowWithCopy(l10n.t('assigned_engineer_id'), t.assignedEngineerId!, l10n),
         _row(l10n.t('coordinator'), t.siteCoordinator ?? '-'),
         _row(l10n.t('technique_label'), _techniqueLabel(t.technique, l10n)),
+        if (t.workspaceTicketExpensesEnabled || t.ticketExpenses.isNotEmpty)
+          _row(
+            l10n.t('pc_expenses_total'),
+            '${t.ticketExpenses.fold<double>(0, (s, e) => s + e.amount).toStringAsFixed(2)} IQD',
+          ),
         _row(l10n.t('sla'), t.slaHours != null ? '${t.slaHours} ${l10n.t('hours')}' : '-'),
         _row(l10n.t('created'), fmt.format(t.createdAt)),
         if (t.completedAt != null) _row(l10n.t('section_completed'), t.completedAt!),

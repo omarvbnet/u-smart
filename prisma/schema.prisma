@@ -1445,6 +1445,10 @@ model PrivateCompanyTechnique {
   labelEn      String?
   sortOrder    Int                       @default(0)
   active       Boolean                   @default(true)
+  /// When false, ticket expenses are disabled for this workspace ticket type (workspace feature must still be on).
+  ticketExpensesEnabled Boolean          @default(true)
+  /// Per-type preset reasons; when empty, workspace `PrivateCompany.ticketExpenseReasons` apply.
+  ticketExpenseReasons   String[]         @default([])
   departmentId String?
   department   PrivateCompanyDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   createdAt    DateTime                  @default(now())

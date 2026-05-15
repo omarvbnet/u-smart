@@ -556,6 +556,16 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>?> fetchExpenseSettingsDetail() async {
+    try {
+      final res = await _api.get(ApiConfig.privateCompanyExpenseSettings);
+      if (res['success'] == true) {
+        return Map<String, dynamic>.from(res as Map);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<bool> patchExpenseSettings({
     List<String>? reasons,
     bool? enabled,
@@ -563,6 +573,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     bool approveActivation = false,
     bool rejectActivation = false,
     bool disable = false,
+    Map<String, dynamic>? techniquePatch,
   }) async {
     if (!canManageStaff) return false;
     _submitting = true;
@@ -575,6 +586,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
         if (approveActivation) 'approveActivation': true,
         if (rejectActivation) 'rejectActivation': true,
         if (disable) 'disable': true,
+        if (techniquePatch != null) 'techniquePatch': techniquePatch,
       };
       final res = await _api.patch(ApiConfig.privateCompanyExpenseSettings, body: body);
       if (res['success'] == true) {

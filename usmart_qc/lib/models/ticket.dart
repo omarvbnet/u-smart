@@ -147,6 +147,8 @@ class Ticket {
   final bool allowWorkspaceCrewJoin;
   final List<TicketExpenseLine> ticketExpenses;
   final bool workspaceTicketExpensesEnabled;
+  /// Effective preset reasons for this ticket (workspace default + per-type override from API).
+  final List<String> workspaceTicketExpenseReasons;
   final String? cancellationRequestStatus;
   final String? cancellationRequestedAt;
   final String? cancellationReason;
@@ -218,6 +220,7 @@ class Ticket {
     this.allowWorkspaceCrewJoin = false,
     this.ticketExpenses = const [],
     this.workspaceTicketExpensesEnabled = false,
+    this.workspaceTicketExpenseReasons = const [],
     this.cancellationRequestStatus,
     this.cancellationRequestedAt,
     this.cancellationReason,
@@ -379,6 +382,18 @@ class Ticket {
         final s = json['workspaceExpenseSettings'];
         if (s is Map) return s['enabled'] == true;
         return false;
+      }(),
+      workspaceTicketExpenseReasons: () {
+        final s = json['workspaceExpenseSettings'];
+        if (s is Map) {
+          final r = s['reasons'];
+          if (r is List) {
+            return List<String>.from(
+              r.map((e) => e.toString().trim()).where((x) => x.isNotEmpty),
+            );
+          }
+        }
+        return const <String>[];
       }(),
       ticketExpenses: (json['ticketExpenses'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()

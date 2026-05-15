@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
         ticketId: true,
         staffRequesterId: true,
         amount: true,
+        reason: true,
         ticketProvince: true,
         departmentId: true,
         createdAt: true,
@@ -149,6 +150,8 @@ export async function GET(req: NextRequest) {
   const byProvince = new Map<string, Agg>();
   const byDepartment = new Map<string | null, Agg>();
   const byStaff = new Map<string, Agg>();
+  const byReason = new Map<string, Agg>();
+  const byProvinceReason = new Map<string, Map<string, Agg>>();
   let totalAmount = 0;
 
   const ticketSummaries = new Map<
@@ -169,6 +172,7 @@ export async function GET(req: NextRequest) {
     ticketId: string;
     staffRequesterId: string;
     amount: number;
+    reason: string | null;
     ticketProvince: string | null;
     departmentId: string | null;
     ticket: {
@@ -214,6 +218,20 @@ export async function GET(req: NextRequest) {
 
   const byProvinceOut = [...byProvince.entries()]
     .map(([province, agg]) => ({ province, ...finalizeAgg(agg) }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const byReasonOut = [...byReason.entries()]
+    .map(([reason, agg]) => ({ reason, ...finalizeAgg(agg) }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const byProvinceReasonsOut = [...byProvinceReason.entries()]
+    .map(([province, reasonMap]) => {
+      const reasons = [...reasonMap.entries()]
+        .map(([reason, agg]) => ({ reason, ...finalizeAgg(agg) }))
+        .sort((a, b) => b.totalAmount - a.totalAmount);
+      const pAgg = byProvince.get(province) ?? { totalAmount: 0, expenseCount: 0, ticketIds: new Set() };
+      return { province, ...finalizeAgg(pAgg), reasons };
+    })
     .sort((a, b) => b.totalAmount - a.totalAmount);
 
   const byDepartmentOut =
@@ -269,7 +287,9 @@ export async function GET(req: NextRequest) {
       expenseCount: rows.length,
       ticketCount: ticketSummaries.size,
     },
-    byProvince: scope === 'workspace' ? byProvinceOut : [],
+    byProvince: byProvinceOut,
+    byReason: byReasonOut,
+    byProvinceReasons: byProvinceReasonsOut,
     byDepartment: byDepartmentOut,
     byStaff: byStaffOut,
     tickets,

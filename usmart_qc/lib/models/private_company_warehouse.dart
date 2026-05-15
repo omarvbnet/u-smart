@@ -183,6 +183,13 @@ class WarehouseMaterial {
           : null,
     );
   }
+
+  /// Same rule as the server / [WarehouseItem.isToolTagged]: category or name contains "tool".
+  bool get isToolTagged {
+    final c = (category ?? '').toLowerCase();
+    final n = name.toLowerCase();
+    return c.contains('tool') || n.contains('tool');
+  }
 }
 
 /// A single physical unit of stock identified by its serial number (or, for
