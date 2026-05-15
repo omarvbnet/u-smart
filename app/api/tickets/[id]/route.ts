@@ -7,6 +7,7 @@ import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates, embed
 import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
 import { MAINTENANCE_TECHNIQUES } from '@/lib/qc-conflict-mapper';
 import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
+import { isWorkspaceCrewTicketTechnique } from '@/lib/workspace-maintenance-crew';
 import {
   tryAutoConfirmExpiredMaintenanceAwaiting,
   readMaintenanceAwaitingSince,
@@ -164,7 +165,9 @@ export async function GET(
     const isQcPoolEngineer =
       requesterRole === 'ENGINEER' ||
       requesterRole === 'QUALITY_ENGINEER' ||
-      requesterRole === 'SUPERVISION_ENGINEER';
+      requesterRole === 'SUPERVISION_ENGINEER' ||
+      requesterRole === 'MANAGER' ||
+      requesterRole === 'COORDINATOR';
     if (isQcPoolEngineer) {
       whereClause = {
         id,
@@ -481,6 +484,25 @@ export async function GET(
     const mergedSiteCoords =
       Object.keys(embedCoordsFromJson).length > 0 ? embedCoordsFromJson : siteCoords;
 
+    const assignmentScopeVal = (row as { assignmentScope?: string | null }).assignmentScope ?? null;
+    const privateCompanyIdVal = (row as { privateCompanyId?: string | null }).privateCompanyId ?? null;
+    let allowWorkspaceCrewJoin = false;
+    if (
+      assignmentScopeVal === 'PRIVATE_COMPANY_STAFF' &&
+      privateCompanyIdVal &&
+      String(status).toUpperCase() !== 'COMPLETED'
+    ) {
+      try {
+        allowWorkspaceCrewJoin = await isWorkspaceCrewTicketTechnique(
+          prisma,
+          privateCompanyIdVal,
+          row.technique
+        );
+      } catch {
+        allowWorkspaceCrewJoin = false;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       ticket: {
@@ -491,6 +513,11 @@ export async function GET(
         technique: row.technique,
         status,
         assignmentScope: (row as { assignmentScope?: string | null }).assignmentScope ?? null,
+        privateCompanyId: (row as { privateCompanyId?: string | null }).privateCompanyId ?? null,
+        privateCompanyTargetDepartmentId:
+          (row as { privateCompanyTargetDepartmentId?: string | null }).privateCompanyTargetDepartmentId ??
+          null,
+        allowWorkspaceCrewJoin,
         createdAt: row.createdAt,
         completedAt,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),

@@ -84,3 +84,28 @@ export async function resolveInspectionChecklistTemplate(prisma: any, templateId
   }
   return { checklistTemplateId: id, checklistTemplate: null };
 }
+
+/**
+ * Job site coordinates for proximity checks: embedded on ticket JSON first,
+ * then linked Site row for the ticket requester.
+ */
+export async function resolveTicketSitePointForVisitor(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client from route handlers
+  prisma: any,
+  args: { companyJson: string | null | undefined; siteName: string | null | undefined; requesterId: string | null | undefined }
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const p = typeof args.companyJson === 'string' ? JSON.parse(args.companyJson) : {};
+    const embed = embeddedTicketSiteCoords(p);
+    if ('siteLatitude' in embed) {
+      return { lat: embed.siteLatitude, lng: embed.siteLongitude };
+    }
+  } catch {
+    /* ignore */
+  }
+  const fromSite = await resolveTicketSiteCoordinates(prisma, args.siteName ?? null, args.requesterId ?? null);
+  if ('siteLatitude' in fromSite) {
+    return { lat: fromSite.siteLatitude, lng: fromSite.siteLongitude };
+  }
+  return null;
+}

@@ -1365,10 +1365,10 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                 ),
                 if (widget.existing != null) ...[
                   const SizedBox(height: 20),
-                  const _SectionTitle('Maintenance crew'),
+                  _SectionTitle(l10n.t('pc_dept_workspace_field_crew_title')),
                   const SizedBox(height: 6),
                   Text(
-                    'Technicians can add themselves as extra crew on the same workspace maintenance ticket when this is on. Automatic proximity teaming can use the radius below.',
+                    l10n.t('pc_dept_workspace_field_crew_desc'),
                     style: TextStyle(
                       color: Colors.white.withAlpha(150),
                       fontSize: 11.5,
@@ -1378,16 +1378,16 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                   const SizedBox(height: 10),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Allow multi-technician crew',
-                      style: TextStyle(
+                    title: Text(
+                      l10n.t('pc_dept_workspace_field_crew_switch'),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     subtitle: Text(
-                      'Uses proximity radius (meters) for suggested / automatic teaming.',
+                      l10n.t('pc_dept_workspace_field_crew_switch_sub'),
                       style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
                     ),
                     value: _proxJoin,

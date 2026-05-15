@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     } else if (!fieldActor) {
       return NextResponse.json(
-        { success: false, message: 'Only the assigned technician (or crew) can complete this ticket' },
+        { success: false, message: 'Only the assigned lead or ticket crew can complete this ticket' },
         { status: 403 }
       );
     }

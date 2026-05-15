@@ -221,6 +221,11 @@ const Map<String, String> _en = {
   'maint_technique_maintenance': 'Maintenance',
   'maint_crew_join_blocked_active':
       'You have another ticket in progress (as lead or as crew). Finish it or leave that crew to join here.',
+  'maint_crew_join_location_required':
+      'Turn on location permission so we can verify you are near the job site before joining the crew.',
+  'workspace_crew_section_title': 'Field team',
+  'workspace_crew_join': 'Join as crew',
+  'workspace_crew_leave': 'Leave crew',
   'maint_crew_join_failed_generic':
       'Could not update crew. Check department “multi-technician crew”, workspace ticket type, or your account overrides.',
   'maint_reason': 'Reason for maintenance',
@@ -607,6 +612,12 @@ const Map<String, String> _en = {
   'maint_assign_technician': 'Assign technician',
   'maint_assign_technician_empty':
       'No technicians in this department match the ticket province (or they are inactive).',
+  'pc_dept_workspace_field_crew_title': 'Multi-person field crew',
+  'pc_dept_workspace_field_crew_desc':
+      'Engineers, managers, coordinators, and technicians can add themselves as extra crew on the same workspace ticket (maintenance or quality inspection) when this is on. The proximity radius is used when someone joins.',
+  'pc_dept_workspace_field_crew_switch': 'Allow multi-person crew',
+  'pc_dept_workspace_field_crew_switch_sub':
+      'Uses proximity radius (meters) to verify joins near the job site.',
   'pc_ws_screen_title': 'Private workspace',
   'pc_ws_owner_badge': 'OWNER',
   'pc_ws_manage_techniques_btn': 'Work techniques',
@@ -858,6 +869,11 @@ const Map<String, String> _ar = {
   'maint_technique_maintenance': 'صيانة',
   'maint_crew_join_blocked_active':
       'لديك تذكرة أخرى قيد التنفيذ (كفني رئيس أو ضمن الطاقم). أنهِ العمل أو اخرج من الطاقم للانضمام هنا.',
+  'maint_crew_join_location_required':
+      'فعّل إذن الموقع للتحقق من قربك من موقع العمل قبل الانضمام إلى الطاقم.',
+  'workspace_crew_section_title': 'الفريق الميداني',
+  'workspace_crew_join': 'الانضمام كطاقم',
+  'workspace_crew_leave': 'مغادرة الطاقم',
   'maint_crew_join_failed_generic':
       'تعذّر تحديث الطاقم. تحقق من تفعيل «طاقم متعدد الفنيين» في القسم، أو نوع التذكرة، أو إعدادات حسابك.',
   'maint_reason': 'سبب الصيانة',
@@ -1232,6 +1248,12 @@ const Map<String, String> _ar = {
   'maint_assign_technician': 'تعيين فني',
   'maint_assign_technician_empty':
       'لا يوجد فنيون في القسم يطابقون محافظة التذكرة (أو غير نشطين).',
+  'pc_dept_workspace_field_crew_title': 'طاقم ميداني متعدد',
+  'pc_dept_workspace_field_crew_desc':
+      'يستطيع المهندسون أو المديرون أو المنسّقون أو الفنيون الانضمام كطاقم إضافي على نفس تذكرة مساحة العمل (صيانة أو فحص جودة) عند التفعيل. يُستخدم نصف قطر القرب عند الانضمام.',
+  'pc_dept_workspace_field_crew_switch': 'السماح بطاقم متعدد الأشخاص',
+  'pc_dept_workspace_field_crew_switch_sub':
+      'يستخدم نصف قطر القرب (بالأمتار) للتحقق من الانضمام قرب موقع العمل.',
   'pc_ws_screen_title': 'مساحة العمل الخاصة',
   'pc_ws_owner_badge': 'المالك',
   'pc_ws_manage_techniques_btn': 'أنواع العمل',
@@ -1483,6 +1505,11 @@ const Map<String, String> _ku = {
   'maint_technique_maintenance': 'چاککردنەوە',
   'maint_crew_join_blocked_active':
       'تیکەتێکی تر هەیە لە کاردان (وەک سەرەکی یان ئەندامی تیم). تەواوی بکە یان لەو تیمە دەرچوە بۆ بەشداریکردن لێرە.',
+  'maint_crew_join_location_required':
+      'مۆڵەتی شوێن چالاک بکە بۆ پشکنینی نزیکبوونەوە لە شوێنی کار پێش بەشداریکردن لە تیم.',
+  'workspace_crew_section_title': 'تیمی مەیدان',
+  'workspace_crew_join': 'بەشداری وەک تیم',
+  'workspace_crew_leave': 'دەرچوون لە تیم',
   'maint_crew_join_failed_generic':
       'نەتوانرا تیم نوێ بکرێتەوە. ڕێکخستنی «تیمی چەند فەنەر» لە بەش، جۆری تیکەت، یان ڕێکخستنی هەژمار بپشکنە.',
   'maint_reason': 'هۆکاری چاککردنەوە',
@@ -1860,6 +1887,12 @@ const Map<String, String> _ku = {
   'maint_assign_technician': 'تەکنیسین دیاری بکە',
   'maint_assign_technician_empty':
       'تەکنیسین لەم بەشەدا نییە کە لەگەڵ پارێزگای تیکەتدا بگونجێت (یان چالاک نین).',
+  'pc_dept_workspace_field_crew_title': 'تیمی مەیدانی فرە کەس',
+  'pc_dept_workspace_field_crew_desc':
+      'ئەندازیار، بەڕێوەبەر، هەماهەنگکەر و تەکنیسین دەتوانن وەک تیمێکی زیادە لەسەر هەمان تیکەتی workspace (چاککردن یان پشکنینی QC) بەشداری بکەن کاتێک چالاکە. تەژەی نزیکی بەکاردێت کاتێک کەسێک بەشداری دەکات.',
+  'pc_dept_workspace_field_crew_switch': 'ڕێگە بە تیمی فرە کەس',
+  'pc_dept_workspace_field_crew_switch_sub':
+      'تەژەی نزیکی (بە مەتر) بەکاردێت بۆ پشکنینی بەشداریکردن لە نزیک شوێنی کار.',
   'pc_ws_screen_title': 'شوێنی کارکردنی تایبەت',
   'pc_ws_owner_badge': 'خاوەن',
   'pc_ws_manage_techniques_btn': 'جۆرەکانی کار',
@@ -2112,6 +2145,11 @@ const Map<String, String> _tr = {
   'maint_technique_maintenance': 'Bakım',
   'maint_crew_join_blocked_active':
       'Devam eden başka bir biletiniz var (lider veya ekip üyesi olarak). Buraya katılmadan önce onu bitirin veya ekipten ayrılın.',
+  'maint_crew_join_location_required':
+      'Ekibe katılmadan önce işyerine yakın olduğunuzu doğrulamak için konum iznini açın.',
+  'workspace_crew_section_title': 'Saha ekibi',
+  'workspace_crew_join': 'Ekibe katıl',
+  'workspace_crew_leave': 'Ekipten ayrıl',
   'maint_crew_join_failed_generic':
       'Ekip güncellenemedi. Departmanda «çok teknisyenli ekip», bilet türü veya hesap geçersiz kılmalarını kontrol edin.',
   'maint_reason': 'Bakım nedeni',
@@ -2491,6 +2529,12 @@ const Map<String, String> _tr = {
   'maint_assign_technician': 'Teknisyen ata',
   'maint_assign_technician_empty':
       'Bilet iline uyan veya aktif teknisyen yok.',
+  'pc_dept_workspace_field_crew_title': 'Çok kişilik saha ekibi',
+  'pc_dept_workspace_field_crew_desc':
+      'Mühendis, yönetici, koordinatör ve teknisyenler açıkken aynı çalışma alanı biletinize (bakım veya QC denetimi) ek ekip olarak katılabilir. Katılımda yakınlık yarıçapı kullanılır.',
+  'pc_dept_workspace_field_crew_switch': 'Çok kişilik ekibe izin ver',
+  'pc_dept_workspace_field_crew_switch_sub':
+      'İşyeri yakınında katılım doğrulaması için yakınlık yarıçapı (metre) kullanılır.',
   'pc_ws_screen_title': 'Özel çalışma alanı',
   'pc_ws_owner_badge': 'SAHİP',
   'pc_ws_manage_techniques_btn': 'İş türleri',

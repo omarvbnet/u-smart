@@ -618,22 +618,58 @@ const TEMPLATES: Record<
     }),
   },
   maintenance_crew_joined: {
-    en: (v) => ({
-      title: 'Technician joined your ticket',
-      body: `${v.name} joined the maintenance crew on ticket ${v.ticketId}.`,
-    }),
-    ar: (v) => ({
-      title: 'انضم فني إلى تذكرتك',
-      body: `${v.name} انضم إلى فريق الصيانة على التذكرة ${v.ticketId}.`,
-    }),
-    tr: (v) => ({
-      title: 'Teknisyen talebe katıldı',
-      body: `${v.name}, ${v.ticketId} numaralı bakım talebine ekip olarak katıldı.`,
-    }),
-    ku: (v) => ({
-      title: 'تەکنیسینێک بەشداری تیکەتەکەت بوو',
-      body: `${v.name} بەشداری لیژنەی چاککردن بوو لە تیکەتی ${v.ticketId}.`,
-    }),
+    en: (v) => {
+      const hasProx = Boolean(v.distanceM?.trim() && v.radiusM?.trim());
+      if (hasProx) {
+        return {
+          title: 'Colleague joined your ticket crew',
+          body: `${v.name} asked to join your ticket crew on ${v.ticketId} and was added after an on-site check: about ${v.distanceM}m from the job (workspace limit ${v.radiusM}m).`,
+        };
+      }
+      return {
+        title: 'Colleague joined your ticket crew',
+        body: `${v.name} joined the ticket crew on ${v.ticketId}.`,
+      };
+    },
+    ar: (v) => {
+      const hasProx = Boolean(v.distanceM?.trim() && v.radiusM?.trim());
+      if (hasProx) {
+        return {
+          title: 'انضم زميل إلى طاقم التذكرة',
+          body: `${v.name} طلب الانضمام إلى طاقم التذكرة ${v.ticketId} وتمت إضافته بعد التحقق من الموقع: نحو ${v.distanceM}م من الموقع (حد المساحة ${v.radiusM}م).`,
+        };
+      }
+      return {
+        title: 'انضم زميل إلى طاقم التذكرة',
+        body: `${v.name} انضم إلى طاقم التذكرة ${v.ticketId}.`,
+      };
+    },
+    tr: (v) => {
+      const hasProx = Boolean(v.distanceM?.trim() && v.radiusM?.trim());
+      if (hasProx) {
+        return {
+          title: 'Meslektaş biletinizin ekibine katıldı',
+          body: `${v.name}, ${v.ticketId} numaralı biletin ekip listesine katılmayı istedi; saha doğrulamasından sonra eklendi (işyerine yaklaşık ${v.distanceM} m, limit ${v.radiusM} m).`,
+        };
+      }
+      return {
+        title: 'Meslektaş biletinizin ekibine katıldı',
+        body: `${v.name}, ${v.ticketId} numaralı biletin ekibine katıldı.`,
+      };
+    },
+    ku: (v) => {
+      const hasProx = Boolean(v.distanceM?.trim() && v.radiusM?.trim());
+      if (hasProx) {
+        return {
+          title: 'هاوبەشێک بەشداری لیژنەی تیکەتەکەت بوو',
+          body: `${v.name} داوای بەشداریکردن لە لیژنەی تیکەتی ${v.ticketId} کرد و دوای پشکنینی شوێن زیادکرا: نزیکەی ${v.distanceM}م لە شوێنی کار (سنووری ${v.radiusM}م).`,
+        };
+      }
+      return {
+        title: 'هاوبەشێک بەشداری لیژنەی تیکەتەکەت بوو',
+        body: `${v.name} بەشداری لیژنەی تیکەتی ${v.ticketId} بوو.`,
+      };
+    },
   },
   maintenance_awaiting_your_confirm: {
     en: (v) => ({

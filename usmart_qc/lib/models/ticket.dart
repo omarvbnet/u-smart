@@ -125,7 +125,7 @@ class Ticket {
   final String? privateCompanyId;
   /// Optional department target for workspace pool visibility (null = all departments).
   final String? privateCompanyTargetDepartmentId;
-  /// Additional technician requester ids on the same maintenance ticket (workspace).
+  /// Additional workspace staff requester ids on the same ticket (`maintenanceCrewIds` in company JSON; used for maintenance and QC).
   final List<String> maintenanceCrewIds;
   /// ISO timestamp: field team sent completion for requester confirmation (maintenance).
   final String? maintenanceAwaitingRequesterSince;
@@ -134,6 +134,9 @@ class Ticket {
   /// Site coordinates from server (Sites table), when available.
   final double? siteLatitude;
   final double? siteLongitude;
+
+  /// True when API allows join/leave for workspace maintenance or inspection crew (field staff).
+  final bool allowWorkspaceCrewJoin;
 
   Ticket({
     required this.id,
@@ -183,6 +186,7 @@ class Ticket {
     this.maintenanceRequesterRejectReason,
     this.siteLatitude,
     this.siteLongitude,
+    this.allowWorkspaceCrewJoin = false,
   });
 
   bool get isPending => status == 'PENDING';
@@ -311,6 +315,7 @@ class Ticket {
       maintenanceRequesterRejectReason: json['maintenanceRequesterRejectReason'] as String?,
       siteLatitude: (json['siteLatitude'] as num?)?.toDouble(),
       siteLongitude: (json['siteLongitude'] as num?)?.toDouble(),
+      allowWorkspaceCrewJoin: json['allowWorkspaceCrewJoin'] == true,
     );
   }
 

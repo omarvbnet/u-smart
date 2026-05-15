@@ -365,16 +365,28 @@ class TicketsProvider extends ChangeNotifier {
     return null;
   }
 
-  /// Workspace maintenance: join or leave `maintenanceCrewIds` (technician only; server enforces).
+  /// Workspace tickets (maintenance or QC): join or leave `maintenanceCrewIds` (server enforces roles + proximity).
+  /// [latitude] / [longitude] are required for `join` (proximity to job site).
   /// On failure, [message] may contain the server error (English) or null on network error.
   Future<({List<String>? crew, String? message})> postMaintenanceCrewAction(
     String ticketId,
-    String action,
-  ) async {
+    String action, {
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
+      final body = <String, dynamic>{'action': action};
+      if (action == 'join' &&
+          latitude != null &&
+          longitude != null &&
+          latitude.isFinite &&
+          longitude.isFinite) {
+        body['latitude'] = latitude;
+        body['longitude'] = longitude;
+      }
       final data = await _api.post(
         ApiConfig.ticketMaintenanceCrew(ticketId),
-        body: {'action': action},
+        body: body,
       );
       if (data['success'] == true && data['maintenanceCrewIds'] is List) {
         final crew =

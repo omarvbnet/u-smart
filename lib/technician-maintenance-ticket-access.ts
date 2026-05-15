@@ -24,8 +24,8 @@ export type TechnicianMaintenanceTicketRow = {
 /**
  * Workspace + technique rules aligned with GET /api/tickets list for technicians.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function assertTechnicianMaintenanceTicketDetailAccess(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client from route handlers
   prismaAny: any,
   requesterId: string,
   workspaceId: string | null,
@@ -33,12 +33,14 @@ export async function assertTechnicianMaintenanceTicketDetailAccess(
 ): Promise<boolean> {
   const slug = String(row.technique ?? '').trim();
   const lower = slug.toLowerCase();
-  let isMaint = MAINTENANCE_TECHNIQUES.includes(lower);
-  if (!isMaint && slug) {
+  let fieldKind: 'MAINTENANCE' | 'INSPECTION_QC' | null = null;
+  if (MAINTENANCE_TECHNIQUES.includes(lower)) {
+    fieldKind = 'MAINTENANCE';
+  } else if (slug) {
     const kind = await lookupProvisorTechniqueCategory(prismaAny, slug, { workspaceCompanyId: workspaceId });
-    isMaint = kind === 'MAINTENANCE';
+    if (kind === 'MAINTENANCE' || kind === 'INSPECTION_QC') fieldKind = kind;
   }
-  if (!isMaint) return false;
+  if (!fieldKind) return false;
 
   const scope = row.assignmentScope ?? null;
   const pcId = row.privateCompanyId ?? null;
@@ -94,7 +96,7 @@ export async function assertTechnicianMaintenanceTicketDetailAccess(
     return false;
   }
 
-  if (pendingUnassigned && targetDept) {
+  if (pendingUnassigned && targetDept && fieldKind === 'MAINTENANCE') {
     try {
       const drow = await prismaAny.privateCompanyDepartment.findFirst({
         where: { id: targetDept, companyId: pcId },

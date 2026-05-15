@@ -1081,7 +1081,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ],
                     ),
                   ],
-                  if (t.isMaintenance &&
+                  if (t.allowWorkspaceCrewJoin &&
                       t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
                       t.isAssigned &&
                       !t.isCompleted) ...[
@@ -1178,13 +1178,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         !isLead &&
         !onCrew &&
         _technicianHasAnotherActiveFieldTicket(uid, t, ticketsProv.tickets);
-    final canTap = _isTechnician && uid != null && !isLead;
+    final canTap = auth.canJoinWorkspaceTicketCrew && uid != null && !isLead;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Maintenance team',
+          l10n.t('workspace_crew_section_title'),
           style: TextStyle(
             color: Colors.white.withAlpha(200),
             fontSize: 11,
@@ -1209,7 +1209,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               TextButton(
                 onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('join'),
                 child: Text(
-                  _maintenanceCrewBusy ? '…' : 'Join as crew',
+                  _maintenanceCrewBusy ? '…' : l10n.t('workspace_crew_join'),
                   style: TextStyle(color: _accentColor, fontWeight: FontWeight.w700),
                 ),
               )
@@ -1217,7 +1217,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             TextButton(
               onPressed: _maintenanceCrewBusy ? null : () => _postMaintenanceCrewAction('leave'),
               child: Text(
-                _maintenanceCrewBusy ? '…' : 'Leave crew',
+                _maintenanceCrewBusy ? '…' : l10n.t('workspace_crew_leave'),
                 style: const TextStyle(color: Color(0xFFFF9F43), fontWeight: FontWeight.w700),
               ),
             ),
@@ -1226,12 +1226,60 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
+  Future<({double lat, double lng})?> _tryGetCurrentPositionForCrew() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return null;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      final la = pos.latitude;
+      final lo = pos.longitude;
+      if (!la.isFinite || !lo.isFinite) return null;
+      return (lat: la, lng: lo);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _postMaintenanceCrewAction(String action) async {
     if (_maintenanceCrewBusy) return;
     setState(() => _maintenanceCrewBusy = true);
     try {
+      double? joinLat;
+      double? joinLng;
+      if (action == 'join') {
+        final pos = await _tryGetCurrentPositionForCrew();
+        if (!mounted) return;
+        if (pos == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context).t('maint_crew_join_location_required'),
+              ),
+            ),
+          );
+          return;
+        }
+        joinLat = pos.lat;
+        joinLng = pos.lng;
+      }
       final tp = context.read<TicketsProvider>();
-      final result = await tp.postMaintenanceCrewAction(widget.ticketId, action);
+      final result = await tp.postMaintenanceCrewAction(
+        widget.ticketId,
+        action,
+        latitude: joinLat,
+        longitude: joinLng,
+      );
       if (!mounted) return;
       if (result.crew != null) {
         final refreshed = await tp.fetchTicketDetail(widget.ticketId);

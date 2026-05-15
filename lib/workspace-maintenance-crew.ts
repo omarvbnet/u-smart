@@ -1,6 +1,6 @@
 /**
- * Workspace maintenance tickets: classify technique as maintenance and detect
- * conflicting active field work (lead or crew) for crew-join rules.
+ * Workspace tickets: maintenance + inspection (QC) technique classification and
+ * conflicting active field work (lead or extra crew) for crew-join rules.
  */
 
 import {
@@ -13,8 +13,8 @@ const LEGACY_MAINTENANCE_SLUGS = ['fiber_route', 'fiber_site', 'electrical', 'te
 
 const ACTIVE_FIELD_STATUSES = new Set(['ON_SITE', 'IN_PROGRESS']);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function isWorkspaceMaintenanceTechnique(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client from route handlers
   prisma: any,
   companyId: string,
   technique: string | null | undefined
@@ -49,6 +49,53 @@ export async function isWorkspaceMaintenanceTechnique(
   }
 }
 
+export async function isWorkspaceInspectionQcTechnique(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client from route handlers
+  prisma: any,
+  companyId: string,
+  technique: string | null | undefined
+): Promise<boolean> {
+  const slug = String(technique ?? '')
+    .trim()
+    .toLowerCase();
+  if (!slug) return false;
+  try {
+    const row = await prisma.privateCompanyTechnique.findFirst({
+      where: {
+        companyId,
+        slug,
+        category: 'INSPECTION_QC',
+        active: true,
+      },
+      select: { id: true },
+    });
+    if (row) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const prov = await prisma.provisorTechnique.findFirst({
+      where: { slug, category: 'INSPECTION_QC', active: true },
+      select: { id: true },
+    });
+    return Boolean(prov);
+  } catch {
+    return false;
+  }
+}
+
+/** Workspace pool tickets that support multi-person crew (maintenance or QC inspection). */
+export async function isWorkspaceCrewTicketTechnique(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prisma: any,
+  companyId: string,
+  technique: string | null | undefined
+): Promise<boolean> {
+  if (await isWorkspaceMaintenanceTechnique(prisma, companyId, technique)) return true;
+  if (await isWorkspaceInspectionQcTechnique(prisma, companyId, technique)) return true;
+  return false;
+}
+
 export type ActiveMaintenanceConflict = {
   conflict: true;
   message: string;
@@ -57,11 +104,11 @@ export type ActiveMaintenanceConflict = {
 export type ActiveMaintenanceOk = { conflict: false };
 
 /**
- * True if the requester is already lead or maintenance crew on another workspace
- * ticket in ON_SITE / IN_PROGRESS (excluding excludeTicketId).
+ * True if the requester is already lead assignee or in `maintenanceCrewIds` on another
+ * workspace ticket in ON_SITE / IN_PROGRESS (excluding excludeTicketId).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function findActiveMaintenanceCrewConflict(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client from route handlers
   prisma: any,
   args: { companyId: string; requesterId: string; excludeTicketId: string }
 ): Promise<ActiveMaintenanceConflict | ActiveMaintenanceOk> {
@@ -86,7 +133,7 @@ export async function findActiveMaintenanceCrewConflict(
       return {
         conflict: true,
         message:
-          'You already have an in-progress ticket as lead technician. Finish or leave that job before joining another crew.',
+          'You already have an in-progress ticket as the assigned lead. Finish or leave that job before joining another crew.',
       };
     }
     if (crew.includes(requesterId)) {

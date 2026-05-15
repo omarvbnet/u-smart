@@ -48,6 +48,10 @@ class User {
   bool get isWorker => role == 'WORKER';
   bool get isCompanyOwner => role == 'COMPANY_OWNER';
 
+  /// Private workspace: join/leave extra ticket crew (server also enforces role).
+  bool get canJoinWorkspaceTicketCrew =>
+      isTechnician || isEngineer || isManager || isCoordinator;
+
   static String _normalizeRole(dynamic raw) {
     if (raw is! String || raw.trim().isEmpty) return 'COMPANY';
     return raw.trim().toUpperCase();

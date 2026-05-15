@@ -31,6 +31,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isManager => _user?.isManager ?? false;
   bool get isTeamLeader => _user?.isTeamLeader ?? false;
   bool get isCompanyOwner => _user?.isCompanyOwner ?? false;
+  bool get canJoinWorkspaceTicketCrew => _user?.canJoinWorkspaceTicketCrew ?? false;
   bool get mustChangePassword => _user?.mustChangePassword ?? false;
 
   /// JWT + `/me` include `companyId` for coordinator-platform users (owner, coordinator, admin, technician, …).
