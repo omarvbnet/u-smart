@@ -1,10 +1,12 @@
 /**
  * Best-effort map preview for QField packages: GeoPackage vectors (correct GeoPackage BLOB → WKB),
  * GeoJSON sidecars in archives, or QGIS canvas extent from .qgz / .zip.
+ * ZIP bundles may include both `layers.gpkg` and nested `.qgz` (QGIS project archives); nested `.qgz`
+ * are opened and their inner `.gpkg` / `.qgs` / GeoJSON are merged into one preview.
  * Coordinates are assumed WGS84 where possible; other CRS may appear mis-placed (open in QField for accuracy).
  */
 
-import { strFromU8, unzipSync } from 'fflate';
+import { gunzipSync, strFromU8, unzipSync } from 'fflate';
 
 type GeoJsonGeometry =
   | { type: 'Point'; coordinates: [number, number] }
@@ -67,6 +69,72 @@ function geopackageBlobToWkb(buf: Uint8Array): Uint8Array | null {
   const wkbOffset = 8 + envBytes;
   if (buf.length <= wkbOffset) return null;
   return buf.subarray(wkbOffset);
+}
+
+/** QGIS .qgz is normally a ZIP (PK…); some builds gzip-wrap an inner ZIP. */
+function tryUnzipArchiveBytes(data: Uint8Array): Record<string, Uint8Array> | null {
+  if (!data || data.length < 22) return null;
+  const isZip = data[0] === 0x50 && data[1] === 0x4b;
+  const isGzip = data[0] === 0x1f && data[1] === 0x8b;
+  if (isZip) {
+    try {
+      return unzipSync(data, { filter: () => true }) as Record<string, Uint8Array>;
+    } catch {
+      return null;
+    }
+  }
+  if (isGzip) {
+    try {
+      const dec = gunzipSync(data);
+      if (dec.length >= 22 && dec[0] === 0x50 && dec[1] === 0x4b) {
+        return unzipSync(dec, { filter: () => true }) as Record<string, Uint8Array>;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Unpack every `.qgz` in the tree (outer ZIP already unzipped) so paths like
+ * `export.qgz/project.qgs` and `export.qgz/layers.gpkg` exist alongside root `layers.gpkg`.
+ */
+function expandNestedQgz(
+  initial: Record<string, Uint8Array>,
+  maxRounds = 8
+): { files: Record<string, Uint8Array>; qgzOpened: number } {
+  let out: Record<string, Uint8Array> = { ...initial };
+  let qgzOpened = 0;
+  for (let round = 0; round < maxRounds; round++) {
+    let added = false;
+    const additions: Record<string, Uint8Array> = {};
+    for (const path of Object.keys(out)) {
+      if (!path.toLowerCase().endsWith('.qgz')) continue;
+      const data = out[path];
+      if (!data || data.length < 22) continue;
+      const prefix = path.replace(/\\/g, '/') + '/';
+      if (Object.keys(out).some((k) => k !== path && k.startsWith(prefix))) continue;
+      const inner = tryUnzipArchiveBytes(data);
+      if (!inner || Object.keys(inner).length === 0) continue;
+      qgzOpened++;
+      added = true;
+      for (const [ik, iv] of Object.entries(inner)) {
+        additions[`${prefix}${ik.replace(/\\/g, '/')}`] = iv;
+      }
+    }
+    if (!added) break;
+    out = { ...out, ...additions };
+  }
+  return { files: out, qgzOpened };
+}
+
+function pickQgsExtentKey(keys: string[]): string | undefined {
+  const qgs = keys
+    .filter((k) => k.toLowerCase().endsWith('.qgs') && !k.toLowerCase().includes('backup'))
+    .sort((a, b) => a.length - b.length);
+  const preferred = qgs.find((k) => /(^|\/)project\.qgs$/i.test(k.replace(/\\/g, '/')));
+  return preferred ?? qgs[0];
 }
 
 function isFiniteCoord(n: number): boolean {
@@ -466,7 +534,7 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
 }
 
 /**
- * ZIP / QGZ: extract all embedded .gpkg layers + optional .qgs canvas extent into one FeatureCollection.
+ * ZIP / QGZ: extract embedded .gpkg, unpack nested .qgz (QGIS project ZIP), GeoJSON, and .qgs extent.
  */
 async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): Promise<QFieldMapPreviewResult> {
   let files: Record<string, Uint8Array>;
@@ -475,6 +543,11 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   } catch {
     return { geojson: null, bounds: null, message: 'Could not read archive (zip/qgz).' };
   }
+
+  const outerHadQgz = Object.keys(files).some((k) => k.toLowerCase().endsWith('.qgz'));
+  const expanded = expandNestedQgz(files);
+  files = expanded.files;
+  const qgzNestedOpened = expanded.qgzOpened;
 
   const keys = Object.keys(files);
   const gpkgKeys = keys
@@ -533,7 +606,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     }
   }
 
-  const qgsKey = keys.find((k) => k.toLowerCase().endsWith('.qgs') && !k.toLowerCase().includes('backup'));
+  const qgsKey = pickQgsExtentKey(keys);
   let extentAdded = false;
   if (qgsKey) {
     try {
@@ -558,11 +631,18 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     const hint =
       gpkgKeys.length > 0
         ? 'Archive contained .gpkg file(s) but no readable vector geometries (empty tables, unknown binary layout, or CRS outside WGS84-like bounds for map extent). Add .geojson layers or open in QField.'
-        : 'No .gpkg layers, no GeoJSON sidecars, and no readable .qgs canvas extent found in the archive.';
+        : outerHadQgz && qgzNestedOpened === 0
+          ? 'Archive contains .qgz project file(s) but they could not be opened as a ZIP (or gzip-wrapped ZIP). Re-save from QGIS as .qgz or include root layers.gpkg.'
+          : 'No .gpkg layers, no GeoJSON sidecars, and no readable .qgs canvas extent found in the archive (after opening nested .qgz if present).';
     return { geojson: null, bounds: null, message: hint };
   }
 
   const parts: string[] = [];
+  if (qgzNestedOpened > 0) {
+    parts.push(
+      `${qgzNestedOpened} nested QGIS project archive${qgzNestedOpened > 1 ? 's' : ''} (.qgz unpacked)`
+    );
+  }
   if (gpkgOk > 0) {
     parts.push(
       `${gpkgOk} GeoPackage${gpkgOk > 1 ? 's' : ''} (${gpkgKeys.length} file${gpkgKeys.length > 1 ? 's' : ''} scanned)`
@@ -618,7 +698,7 @@ export async function extractQfieldMapPreviewFromBytes(
   return {
     geojson: null,
     bounds: null,
-    message: 'Map preview supports .gpkg, .qgz, .zip (embedded .gpkg + optional .geojson/.json FeatureCollections + optional .qgs), or plain .qgs.',
+    message: 'Map preview supports .gpkg, .qgz, .zip (root or nested .gpkg + nested .qgz + optional .geojson/.json FeatureCollections + optional .qgs), or plain .qgs.',
   };
 }
 
