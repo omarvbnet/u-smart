@@ -116,11 +116,91 @@ export async function GET(req: NextRequest) {
     })
     .sort((a, b) => b.totalQuantity - a.totalQuantity);
 
+  const itemRows = await prisma.privateCompanyMaterialItem.findMany({
+    where: baseWhere,
+    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+    take: 500,
+    select: {
+      id: true,
+      serialNumber: true,
+      status: true,
+      quantity: true,
+      materialId: true,
+      assignedToId: true,
+      handoverConfirmedAt: true,
+      handoverRejectedAt: true,
+      handoverRejectionReason: true,
+      returnRequestedAt: true,
+      returnRequestNote: true,
+      usedAt: true,
+      material: { select: { id: true, name: true, unit: true, color: true } },
+      assignedTo: { select: { id: true, name: true, username: true, role: true } },
+      usedTicket: {
+        select: { id: true, siteName: true, technique: true, province: true },
+      },
+      movements: {
+        where: { type: 'RETURNED' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { note: true, createdAt: true },
+      },
+    },
+  });
+
+  const items = (itemRows as Array<Record<string, unknown>>).map((row) => {
+    const status = String(row.status ?? '');
+    const assigned = row.assignedTo as Record<string, unknown> | null;
+    const ticket = row.usedTicket as Record<string, unknown> | null;
+    const lastReturn = Array.isArray(row.movements)
+      ? (row.movements as Array<{ note?: string | null }>)[0]
+      : null;
+    const returnNote = lastReturn?.note ?? '';
+    let stockCondition: 'new' | 'used' | null = null;
+    if (status === 'IN_WAREHOUSE' && returnNote.includes('Return: used')) stockCondition = 'used';
+    if (status === 'IN_WAREHOUSE' && returnNote.includes('Return: new')) stockCondition = 'new';
+
+    return {
+      id: row.id,
+      serialNumber: row.serialNumber,
+      status,
+      quantity: row.quantity,
+      materialId: row.materialId,
+      materialName: (row.material as { name?: string })?.name ?? null,
+      materialUnit: (row.material as { unit?: string | null })?.unit ?? null,
+      materialColor: (row.material as { color?: string | null })?.color ?? null,
+      assignmentState:
+        status === 'ASSIGNED'
+          ? assigned
+            ? row.handoverConfirmedAt
+              ? 'assigned_confirmed'
+              : 'assigned_pending_receipt'
+            : 'assigned'
+          : status === 'IN_WAREHOUSE'
+            ? 'in_warehouse'
+            : status === 'USED'
+              ? 'used'
+              : status.toLowerCase(),
+      stockCondition,
+      assignedToId: row.assignedToId,
+      assignedToName: assigned?.name ?? assigned?.username ?? null,
+      handoverPending:
+        status === 'ASSIGNED' && !!row.assignedToId && !row.handoverConfirmedAt,
+      returnPending: !!row.returnRequestedAt,
+      handoverRejectionReason: row.handoverRejectionReason ?? null,
+      returnRequestNote: row.returnRequestNote ?? null,
+      usedAt: row.usedAt,
+      usedSiteName: ticket?.siteName ?? null,
+      usedTicketTechnique: ticket?.technique ?? null,
+      usedTicketProvince: ticket?.province ?? null,
+    };
+  });
+
   return NextResponse.json({
     success: true,
     inventoryScope: 'all' as const,
     province,
     statusTotals,
     materials,
+    items,
   });
 }

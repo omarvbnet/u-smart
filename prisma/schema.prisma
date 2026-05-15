@@ -388,6 +388,7 @@ model TicketRequester {
   materialRequestsResponded      PrivateCompanyMaterialRequest[]  @relation("MaterialRequestResponder")
   materialStaffBudgets           PrivateCompanyStaffMaterialBudget[] @relation("StaffMaterialBudget")
   materialHandoversConfirmed     PrivateCompanyMaterialItem[]        @relation("MaterialHandoverConfirmedBy")
+  materialReturnRequests         PrivateCompanyMaterialItem[]        @relation("MaterialReturnRequestedBy")
 
   @@map("ticket_requesters")
 }
@@ -1477,7 +1478,10 @@ enum PrivateCompanyMaterialMovementType {
   DAMAGED
   LOST
   ADJUSTED    // metadata/status edit
-  HANDOVER_CONFIRMED // warehouse keeper confirmed assignee received the unit(s)
+  HANDOVER_CONFIRMED // assignee confirmed physical receipt from warehouse
+  HANDOVER_REJECTED  // assignee rejected assignment (with reason)
+  RETURN_REQUESTED   // keeper/owner asked assignee to approve return
+  RETURN_REJECTED    // assignee rejected keeper return request (with reason)
 }
 
 enum PrivateCompanyMaterialRequestKind {
@@ -1559,6 +1563,14 @@ model PrivateCompanyMaterialItem {
   handoverConfirmedAt   DateTime?
   handoverConfirmedById String?
   handoverConfirmedBy   TicketRequester?                  @relation("MaterialHandoverConfirmedBy", fields: [handoverConfirmedById], references: [id], onDelete: SetNull)
+  handoverRejectedAt    DateTime?
+  handoverRejectionReason String?
+  returnRequestedAt     DateTime?
+  returnRequestedById   String?
+  returnRequestedBy     TicketRequester?                  @relation("MaterialReturnRequestedBy", fields: [returnRequestedById], references: [id], onDelete: SetNull)
+  returnRequestNote     String?
+  returnRejectedAt      DateTime?
+  returnRejectionReason String?
   movements    PrivateCompanyMaterialMovement[]
   createdAt    DateTime                          @default(now())
   updatedAt    DateTime                          @updatedAt
@@ -1570,6 +1582,7 @@ model PrivateCompanyMaterialItem {
   @@index([assignedToId])
   @@index([usedTicketId])
   @@index([handoverConfirmedById])
+  @@index([returnRequestedById])
   @@map("private_company_material_items")
 }
 

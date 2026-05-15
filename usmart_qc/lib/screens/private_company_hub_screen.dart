@@ -3997,6 +3997,7 @@ class _KpisTab extends StatefulWidget {
 
 class _KpisTabState extends State<_KpisTab> {
   int _days = 365;
+  String? _provinceFilter;
   bool _bootstrapped = false;
 
   @override
@@ -4006,12 +4007,14 @@ class _KpisTabState extends State<_KpisTab> {
     _bootstrapped = true;
     final pc = context.read<PrivateCompanyProvider>();
     if (pc.canViewKpis) {
-      pc.fetchKpis(days: _days);
+      pc.fetchKpis(days: _days, province: _provinceFilter);
     }
   }
 
-  Future<void> _refresh() =>
-      context.read<PrivateCompanyProvider>().fetchKpis(days: _days);
+  Future<void> _refresh() => context.read<PrivateCompanyProvider>().fetchKpis(
+        days: _days,
+        province: _provinceFilter,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -4093,9 +4096,98 @@ class _KpisTabState extends State<_KpisTab> {
                           style: TextStyle(
                               color: Colors.white.withAlpha(100), fontSize: 10),
                         ),
+                        if (_provinceFilter != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Province: $_provinceFilter',
+                                  style: const TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: pc.kpiLoading
+                                    ? null
+                                    : () async {
+                                        setState(() => _provinceFilter = null);
+                                        await _refresh();
+                                      },
+                                child: const Text('Show all provinces'),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 12),
+                        if (pc.kpiSnapshot!.byProvince.isNotEmpty &&
+                            _provinceFilter == null) ...[
+                          const _SectionTitle('By province'),
+                          const SizedBox(height: 8),
+                          ...pc.kpiSnapshot!.byProvince.map((p) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _GlassCard(
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: pc.kpiLoading
+                                        ? null
+                                        : () async {
+                                            setState(
+                                                () => _provinceFilter = p.province);
+                                            await _refresh();
+                                          },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.public_rounded,
+                                                  color: Color(0xFF38BDF8),
+                                                  size: 18),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  p.province,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                              const Icon(Icons.chevron_right_rounded,
+                                                  color: Colors.white38),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            '${p.staffCount} staff · ${p.ticketsAssigned} tickets · ${p.completedTickets} completed',
+                                            style: TextStyle(
+                                              color: Colors.white.withAlpha(150),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          _KpiStatRow(
+                                            l10n.t('pc_kpi_avg_assignments_per_day'),
+                                            '${p.avgTicketAssignmentsPerDay}',
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )),
+                          const SizedBox(height: 18),
+                        ],
                         if (pc.isOwner &&
-                            pc.kpiSnapshot!.byDepartment.isNotEmpty) ...[
+                            pc.kpiSnapshot!.byDepartment.isNotEmpty &&
+                            _provinceFilter == null) ...[
                           const _SectionTitle('By department'),
                           const SizedBox(height: 8),
                           ...pc.kpiSnapshot!.byDepartment.map((d) => Padding(
@@ -4147,11 +4239,13 @@ class _KpisTabState extends State<_KpisTab> {
                         ],
                         if (pc.kpiSnapshot!.byStaff.isNotEmpty) ...[
                           _SectionTitle(
-                            pc.isOwner
-                                ? 'By staff'
-                                : pc.isDepartmentManager
-                                    ? 'Staff in your department'
-                                    : 'Your performance',
+                            _provinceFilter != null
+                                ? 'Staff in $_provinceFilter'
+                                : pc.isOwner
+                                    ? 'By staff'
+                                    : pc.isDepartmentManager
+                                        ? 'Staff in your department'
+                                        : 'Your performance',
                           ),
                           const SizedBox(height: 8),
                           ...pc.kpiSnapshot!.byStaff.map((s) => Padding(
@@ -5183,6 +5277,83 @@ class _ProvinceInventorySheetState extends State<_ProvinceInventorySheet> {
       return out;
     }
 
+    final lineItems = (p['items'] as List?) ?? const [];
+    if (lineItems.isNotEmpty) {
+      out.addAll([
+        Text(
+          'Stock lines (assigned / in warehouse / used)',
+          style: TextStyle(
+            color: Colors.white.withAlpha(170),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+      ]);
+      for (final rawLine in lineItems) {
+        final line = Map<String, dynamic>.from(rawLine as Map);
+        final matName = line['materialName']?.toString() ?? '—';
+        final sn = line['serialNumber']?.toString() ?? '';
+        final qty = (line['quantity'] as num?)?.toInt() ?? 1;
+        final st = line['status']?.toString() ?? '';
+        final assignState = line['assignmentState']?.toString() ?? '';
+        final holder = line['assignedToName']?.toString();
+        final stockCond = line['stockCondition']?.toString();
+        final site = line['usedSiteName']?.toString();
+        final usedProv = line['usedTicketProvince']?.toString();
+        final pendingHo = line['handoverPending'] == true;
+        final pendingRet = line['returnPending'] == true;
+        final buf = <String>[
+          materialItemStatusLabel(materialItemStatusFromString(st)),
+          if (assignState == 'assigned_pending_receipt') 'awaiting receipt',
+          if (assignState == 'assigned_confirmed') 'received',
+          if (holder != null && holder.isNotEmpty) 'held by $holder',
+          if (stockCond == 'new') 'new (returned)',
+          if (stockCond == 'used') 'used (returned)',
+          if (st == 'USED' && site != null && site.isNotEmpty)
+            'used at site: $site${usedProv != null && usedProv.isNotEmpty ? ' ($usedProv)' : ''}',
+          if (pendingHo) 'handover pending',
+          if (pendingRet) 'return approval pending',
+        ];
+        out.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$matName · $sn ×$qty',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    buf.join(' · '),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(160),
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      out.add(const SizedBox(height: 18));
+    }
+
     for (final row in raw) {
       final m = Map<String, dynamic>.from(row as Map);
       final name = m['name']?.toString() ?? '—';
@@ -5905,8 +6076,13 @@ class _InventoryRow extends StatelessWidget {
                     ),
                   if (item.handoverPending)
                     _StaffBadge(
-                      label: 'Handover pending',
+                      label: 'Awaiting your receipt',
                       color: const Color(0xFFE11D48),
+                    ),
+                  if (item.returnPending)
+                    _StaffBadge(
+                      label: 'Return approval needed',
+                      color: const Color(0xFF38BDF8),
                     ),
                   if (item.quantity > 1)
                     _StaffBadge(
@@ -7420,6 +7596,11 @@ Color _movementColor(String type) {
       return const Color(0xFF94A3B8);
     case 'HANDOVER_CONFIRMED':
       return const Color(0xFF22C55E);
+    case 'HANDOVER_REJECTED':
+    case 'RETURN_REJECTED':
+      return const Color(0xFFFF4757);
+    case 'RETURN_REQUESTED':
+      return const Color(0xFF38BDF8);
     case 'ADJUSTED':
     default:
       return const Color(0xFF8B83FF);
@@ -7443,7 +7624,13 @@ IconData _movementIcon(String type) {
     case 'LOST':
       return Icons.help_outline_rounded;
     case 'HANDOVER_CONFIRMED':
-      return Icons.verified_user_outlined;
+      return Icons.how_to_reg_rounded;
+    case 'HANDOVER_REJECTED':
+      return Icons.block_rounded;
+    case 'RETURN_REQUESTED':
+      return Icons.outbound_rounded;
+    case 'RETURN_REJECTED':
+      return Icons.cancel_outlined;
     case 'ADJUSTED':
     default:
       return Icons.tune_rounded;
@@ -7467,7 +7654,13 @@ String _movementLabel(String type) {
     case 'LOST':
       return 'Lost';
     case 'HANDOVER_CONFIRMED':
-      return 'Keeper confirmed receipt';
+      return 'Assignee confirmed receipt';
+    case 'HANDOVER_REJECTED':
+      return 'Assignment rejected';
+    case 'RETURN_REQUESTED':
+      return 'Return requested';
+    case 'RETURN_REJECTED':
+      return 'Return rejected';
     case 'ADJUSTED':
     default:
       return 'Adjusted';
@@ -8214,7 +8407,7 @@ class _ItemActionsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              if (isAssigneeSelf)
+              if (isAssigneeSelf) ...[
                 _ActionTile(
                   icon: Icons.how_to_reg_rounded,
                   label: 'I received this — confirm handover',
@@ -8242,6 +8435,94 @@ class _ItemActionsSheet extends StatelessWidget {
                     );
                   },
                 ),
+                const SizedBox(height: 10),
+                _ActionTile(
+                  icon: Icons.block_rounded,
+                  label: 'Reject assignment (reason required)',
+                  color: const Color(0xFFFF4757),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final reason = await _promptRequiredReason(
+                      anchorContext,
+                      'Why are you rejecting this assignment?',
+                    );
+                    if (reason == null || !anchorContext.mounted) return;
+                    final success = await wh.rejectAssigneeHandover(
+                      item.id,
+                      rejectionReason: reason,
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success
+                              ? (wh.lastSuccess ?? 'Rejected.')
+                              : (wh.error ?? 'Could not reject.'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+              if (isAssigneeSelf && item.returnPending) ...[
+                const SizedBox(height: 10),
+                _ActionTile(
+                  icon: Icons.assignment_return_rounded,
+                  label: 'Approve warehouse return request',
+                  color: const Color(0xFF6C63FF),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final label =
+                        '${item.materialName ?? 'Item'} — SN ${item.serialNumber}';
+                    final pair = await _promptReturnToWarehouse(anchorContext, label);
+                    if (pair == null || pair.length < 2) return;
+                    if (!anchorContext.mounted) return;
+                    final ok = await wh.approveReturnRequest(
+                      item.id,
+                      returnCondition: pair[0],
+                      note: pair[1],
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (wh.lastSuccess ?? 'Returned.')
+                              : (wh.error ?? 'Return failed.'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _ActionTile(
+                  icon: Icons.cancel_outlined,
+                  label: 'Reject return request (reason required)',
+                  color: const Color(0xFFFF4757),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final reason = await _promptRequiredReason(
+                      anchorContext,
+                      'Why can you not return this now?',
+                    );
+                    if (reason == null || !anchorContext.mounted) return;
+                    final ok = await wh.rejectReturnRequest(
+                      item.id,
+                      rejectionReason: reason,
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (wh.lastSuccess ?? 'Return request rejected.')
+                              : (wh.error ?? 'Failed.'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
               if (isAssigneeSelf) const SizedBox(height: 10),
               if (canAssign)
                 _ActionTile(
@@ -8270,32 +8551,41 @@ class _ItemActionsSheet extends StatelessWidget {
                     }
                   },
                 ),
-              if (canManage && item.handoverPending)
+              if (canManage &&
+                  item.status == MaterialItemStatus.assigned &&
+                  item.handoverConfirmedAt != null &&
+                  !item.returnPending &&
+                  item.assignedToId != null)
                 _ActionTile(
-                  icon: Icons.verified_user_outlined,
-                  label: 'Confirm assignee received materials',
-                  color: const Color(0xFF22C55E),
+                  icon: Icons.outbound_rounded,
+                  label: 'Request return from assignee',
+                  color: const Color(0xFF38BDF8),
                   onTap: () async {
-                    final ok = await _confirm(
-                      anchorContext,
-                      'Confirm physical handover?',
-                      'Use this after the engineer or technician has received the materials from the warehouse.',
-                    );
-                    if (ok != true) return;
-                    if (!anchorContext.mounted) return;
                     Navigator.pop(context);
-                    final success =
-                        await wh.confirmOutboundHandover(item.id);
+                    final note = await _promptNote(
+                      anchorContext,
+                      'Optional note for the assignee',
+                    );
                     if (!anchorContext.mounted) return;
-                    final msg = success
-                        ? (wh.lastSuccess ?? 'Confirmed.')
-                        : (wh.error ?? 'Could not confirm.');
+                    final ok = await wh.requestReturnFromAssignee(
+                      item.id,
+                      note: note,
+                    );
+                    if (!anchorContext.mounted) return;
                     ScaffoldMessenger.of(anchorContext).showSnackBar(
-                      SnackBar(content: Text(msg)),
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (wh.lastSuccess ?? 'Request sent.')
+                              : (wh.error ?? 'Request failed.'),
+                        ),
+                      ),
                     );
                   },
                 ),
-              if (canReturn)
+              if (canReturn &&
+                  (!canManage || item.assignedToId == uid) &&
+                  !item.returnPending)
                 _ActionTile(
                   icon: Icons.assignment_return_rounded,
                   label: 'Return to warehouse',
@@ -9202,6 +9492,50 @@ Future<({bool cancelled, String? ticketId})?> _promptOptionalTicketForMaterial(
     ),
   );
   return r;
+}
+
+Future<String?> _promptRequiredReason(BuildContext context, String title) async {
+  final ctrl = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF12122A),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        style: const TextStyle(color: Colors.white),
+        maxLines: 3,
+        decoration: InputDecoration(
+          hintText: 'Required — visible in warehouse log',
+          hintStyle: TextStyle(color: Colors.white.withAlpha(80)),
+          filled: true,
+          fillColor: Colors.white10,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+        ),
+        TextButton(
+          onPressed: () {
+            final t = ctrl.text.trim();
+            if (t.isEmpty) return;
+            Navigator.pop(ctx, t);
+          },
+          child: const Text('Submit',
+              style: TextStyle(color: Color(0xFFFF4757))),
+        ),
+      ],
+    ),
+  );
+  ctrl.dispose();
+  return result;
 }
 
 Future<String?> _promptNote(BuildContext context, String title) async {

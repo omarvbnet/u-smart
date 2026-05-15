@@ -731,12 +731,43 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> confirmOutboundHandover(String itemId, {String? note}) =>
+  Future<bool> rejectAssigneeHandover(String id, {required String rejectionReason}) =>
       _itemAction(
-        itemId,
-        'confirm-handover',
+        id,
+        'reject-handover',
+        body: {'rejectionReason': rejectionReason.trim()},
+        successMessage: 'Assignment rejected. Warehouse has been notified.',
+      );
+
+  Future<bool> requestReturnFromAssignee(String id, {String? note}) =>
+      _itemAction(
+        id,
+        'request-return',
         body: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
-        successMessage: 'Receipt from assignee confirmed.',
+        successMessage: 'Return request sent to assignee.',
+      );
+
+  Future<bool> approveReturnRequest(
+    String id, {
+    String? note,
+    String returnCondition = 'new_good',
+  }) =>
+      _itemAction(
+        id,
+        'approve-return',
+        body: {
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+          'returnCondition': returnCondition,
+        },
+        successMessage: 'Return approved — item back in warehouse.',
+      );
+
+  Future<bool> rejectReturnRequest(String id, {required String rejectionReason}) =>
+      _itemAction(
+        id,
+        'reject-return',
+        body: {'rejectionReason': rejectionReason.trim()},
+        successMessage: 'Return request rejected.',
       );
 
   Future<bool> createMaterialRequest({

@@ -142,6 +142,9 @@ class WarehouseItem {
     this.updatedAt,
     this.handoverConfirmedAt,
     this.handoverConfirmedByName,
+    this.returnRequestedAt,
+    this.returnRequestNote,
+    this.handoverRejectionReason,
   });
 
   final String id;
@@ -165,12 +168,18 @@ class WarehouseItem {
   final DateTime? updatedAt;
   final DateTime? handoverConfirmedAt;
   final String? handoverConfirmedByName;
+  final DateTime? returnRequestedAt;
+  final String? returnRequestNote;
+  final String? handoverRejectionReason;
 
-  /// Assigned to someone but warehouse keeper has not confirmed physical receipt yet.
+  /// Assigned — assignee has not confirmed physical receipt yet.
   bool get handoverPending =>
       status == MaterialItemStatus.assigned &&
       assignedToId != null &&
       handoverConfirmedAt == null;
+
+  bool get returnPending =>
+      status == MaterialItemStatus.assigned && returnRequestedAt != null;
 
   factory WarehouseItem.fromJson(Map<String, dynamic> json) {
     final material = json['material'] as Map<String, dynamic>?;
@@ -208,6 +217,11 @@ class WarehouseItem {
           : null,
       handoverConfirmedByName: handoverBy?['name'] as String? ??
           handoverBy?['username'] as String?,
+      returnRequestedAt: json['returnRequestedAt'] != null
+          ? DateTime.tryParse(json['returnRequestedAt'].toString())
+          : null,
+      returnRequestNote: json['returnRequestNote'] as String?,
+      handoverRejectionReason: json['handoverRejectionReason'] as String?,
     );
   }
 }

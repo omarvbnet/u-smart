@@ -247,15 +247,18 @@ class PrivateCompanyProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> fetchKpis({int days = 365}) async {
+  Future<void> fetchKpis({int days = 365, String? province}) async {
     if (!canViewKpis) return;
     _kpiLoading = true;
     notifyListeners();
     try {
       final d = days.clamp(7, 730);
+      final query = <String, String>{'days': '$d'};
+      final p = province?.trim();
+      if (p != null && p.isNotEmpty) query['province'] = p;
       final res = await _api.getSafe(
         ApiConfig.privateCompanyKpis,
-        query: {'days': '$d'},
+        query: query,
       );
       if (res != null && res['success'] == true) {
         _kpiSnapshot = PrivateCompanyKpiSnapshot.fromJson(res);

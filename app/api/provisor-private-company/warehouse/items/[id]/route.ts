@@ -62,6 +62,9 @@ const ITEM_INCLUDE = {
   handoverConfirmedBy: {
     select: { id: true, name: true, username: true, role: true },
   },
+  returnRequestedBy: {
+    select: { id: true, name: true, username: true, role: true },
+  },
   movements: {
     orderBy: { createdAt: 'desc' as const },
     take: 50,
@@ -185,7 +188,11 @@ type Action =
   | 'use'
   | 'damage'
   | 'lose'
-  | 'confirm-handover';
+  | 'confirm-handover'
+  | 'reject-handover'
+  | 'request-return'
+  | 'approve-return'
+  | 'reject-return';
 
 /**
  * POST /api/provisor-private-company/warehouse/items/:id
@@ -199,7 +206,8 @@ type Action =
  *                                   If less than the line quantity for assign/transfer, the line
  *                                   is split: remainder stays on the source row, a new row holds
  *                                   the amount going to the recipient.
- *     returnCondition?: 'new_good' | 'used' | 'damaged'  // for return: new_good/used → IN_WAREHOUSE; damaged → DAMAGED
+ *     returnCondition?: 'new_good' | 'used' | 'damaged'  // for return / approve-return
+ *     rejectionReason?: string  // required for reject-handover / reject-return
  *   }
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -208,8 +216,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
   const action = String(body?.action ?? '').toLowerCase() as Action;
+  const rejectionReason =
+    typeof body?.rejectionReason === 'string' ? body.rejectionReason.trim() : '';
   if (
-    !['assign', 'transfer', 'return', 'use', 'damage', 'lose', 'confirm-handover'].includes(action)
+    ![
+      'assign',
+      'transfer',
+      'return',
+      'use',
+      'damage',
+      'lose',
+      'confirm-handover',
+      'reject-handover',
+      'request-return',
+      'approve-return',
+      'reject-return',
+    ].includes(action)
   ) {
     return NextResponse.json(
       { success: false, message: 'Unknown action.' },
@@ -237,6 +259,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       serialNumber: true,
       usedTicketId: true,
       handoverConfirmedAt: true,
+      handoverRejectedAt: true,
+      returnRequestedAt: true,
+      returnRequestedById: true,
+      returnRequestNote: true,
       material: { select: { id: true, name: true, tracking: true } },
     },
   });
@@ -273,21 +299,70 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     item.assignedToId === guard.requesterId &&
     !item.handoverConfirmedAt;
 
-  if (action === 'confirm-handover' && !guard.canMutateWarehouse && !assigneeSelfConfirmHandover) {
+  const assigneeSelfRejectHandover =
+    action === 'reject-handover' &&
+    item.status === 'ASSIGNED' &&
+    item.assignedToId === guard.requesterId &&
+    !item.handoverConfirmedAt;
+
+  if (action === 'confirm-handover' && !assigneeSelfConfirmHandover) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          'Only the assignee (you, if this unit is assigned to you) or a warehouse keeper can confirm physical receipt.',
+        message: 'Only the assigned recipient can confirm they received this material.',
       },
       { status: 403 }
     );
   }
+  if (action === 'reject-handover' && !assigneeSelfRejectHandover) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Only the assigned recipient can reject this assignment.',
+      },
+      { status: 403 }
+    );
+  }
+  if (action === 'request-return') {
+    if (!guard.canMutateWarehouse) {
+      return NextResponse.json(
+        { success: false, message: 'Only warehouse staff can request a return from the assignee.' },
+        { status: 403 }
+      );
+    }
+  }
+  if (action === 'approve-return' || action === 'reject-return') {
+    if (item.assignedToId !== guard.requesterId) {
+      return NextResponse.json(
+        { success: false, message: 'Only the current holder can approve or reject a return request.' },
+        { status: 403 }
+      );
+    }
+  }
   if (action === 'return') {
+    if (guard.canMutateWarehouse && item.assignedToId && item.assignedToId !== guard.requesterId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Materials assigned to staff cannot be returned by warehouse staff without the holder’s approval. Use “Request return” and wait for the assignee to approve.',
+        },
+        { status: 403 }
+      );
+    }
     if (!guard.canMutateWarehouse && item.assignedToId !== guard.requesterId) {
       return NextResponse.json(
         { success: false, message: 'You can only return items assigned to you.' },
         { status: 403 }
+      );
+    }
+    if (item.returnRequestedAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'A return is already pending approval. Use approve-return or reject-return.',
+        },
+        { status: 409 }
       );
     }
   }
@@ -345,7 +420,197 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ success: true, item: updated });
   }
 
-  switch (action) {
+  if (action === 'reject-handover') {
+    if (!rejectionReason) {
+      return NextResponse.json(
+        { success: false, message: 'rejectionReason is required when rejecting an assignment.' },
+        { status: 400 }
+      );
+    }
+    const fromStaffId = item.assignedToId;
+    const updated = await prisma.privateCompanyMaterialItem.update({
+      where: { id },
+      data: {
+        status: 'IN_WAREHOUSE',
+        assignedToId: null,
+        handoverConfirmedAt: null,
+        handoverConfirmedById: null,
+        handoverRejectedAt: new Date(),
+        handoverRejectionReason: rejectionReason,
+        returnRequestedAt: null,
+        returnRequestedById: null,
+        returnRequestNote: null,
+        returnRejectedAt: null,
+        returnRejectionReason: null,
+      },
+      include: ITEM_INCLUDE,
+    });
+    await logMovement({
+      companyId: guard.companyId,
+      itemId: id,
+      type: 'HANDOVER_REJECTED',
+      fromStaffId,
+      actorId: guard.requesterId,
+      quantity: Math.max(1, Math.floor(Number(item.quantity)) || 1),
+      note: rejectionReason,
+    });
+    const keeperIds = await idsWarehouseKeepers(guard.companyId);
+    for (const requesterId of keeperIds) {
+      if (requesterId === guard.requesterId) continue;
+      try {
+        await notifyRequesterI18n({
+          prisma,
+          type: 'material_assigned',
+          requesterId,
+          payload: {
+            key: 'material_assigned',
+            vars: {
+              materialName: item.material.name,
+              serialNumber: item.serialNumber,
+              province: `Rejected: ${rejectionReason}`,
+            },
+          },
+          data: { scope: 'private_company', companyId: guard.companyId, itemId: id },
+        });
+      } catch (e) {
+        console.error('notify handover rejected:', e);
+      }
+    }
+    return NextResponse.json({ success: true, item: updated });
+  }
+
+  if (action === 'request-return') {
+    if (item.status !== 'ASSIGNED' || !item.assignedToId) {
+      return NextResponse.json(
+        { success: false, message: 'Only assigned items can have a return requested.' },
+        { status: 409 }
+      );
+    }
+    if (!item.handoverConfirmedAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'The assignee must confirm receipt before a return can be requested.',
+        },
+        { status: 409 }
+      );
+    }
+    if (item.returnRequestedAt) {
+      return NextResponse.json(
+        { success: false, message: 'A return request is already pending for this item.' },
+        { status: 409 }
+      );
+    }
+    const updated = await prisma.privateCompanyMaterialItem.update({
+      where: { id },
+      data: {
+        returnRequestedAt: new Date(),
+        returnRequestedById: guard.requesterId,
+        returnRequestNote: note,
+        returnRejectedAt: null,
+        returnRejectionReason: null,
+      },
+      include: ITEM_INCLUDE,
+    });
+    await logMovement({
+      companyId: guard.companyId,
+      itemId: id,
+      type: 'RETURN_REQUESTED',
+      fromStaffId: item.assignedToId,
+      toStaffId: item.assignedToId,
+      actorId: guard.requesterId,
+      quantity: Math.max(1, Math.floor(Number(item.quantity)) || 1),
+      note: note ?? 'Return requested by warehouse.',
+    });
+    try {
+      await notifyRequesterI18n({
+        prisma,
+        type: 'material_assigned',
+        requesterId: item.assignedToId,
+        payload: {
+          key: 'material_assigned',
+          vars: {
+            materialName: item.material.name,
+            serialNumber: item.serialNumber,
+            province: 'Return approval needed',
+          },
+        },
+        data: { scope: 'private_company', companyId: guard.companyId, itemId: id },
+      });
+    } catch (e) {
+      console.error('notify return requested:', e);
+    }
+    return NextResponse.json({ success: true, item: updated });
+  }
+
+  if (action === 'reject-return') {
+    if (!item.returnRequestedAt) {
+      return NextResponse.json(
+        { success: false, message: 'No pending return request on this item.' },
+        { status: 409 }
+      );
+    }
+    if (!rejectionReason) {
+      return NextResponse.json(
+        { success: false, message: 'rejectionReason is required when rejecting a return request.' },
+        { status: 400 }
+      );
+    }
+    const updated = await prisma.privateCompanyMaterialItem.update({
+      where: { id },
+      data: {
+        returnRequestedAt: null,
+        returnRequestedById: null,
+        returnRequestNote: null,
+        returnRejectedAt: new Date(),
+        returnRejectionReason: rejectionReason,
+      },
+      include: ITEM_INCLUDE,
+    });
+    await logMovement({
+      companyId: guard.companyId,
+      itemId: id,
+      type: 'RETURN_REJECTED',
+      fromStaffId: item.assignedToId,
+      actorId: guard.requesterId,
+      quantity: Math.max(1, Math.floor(Number(item.quantity)) || 1),
+      note: rejectionReason,
+    });
+    const notifyId = item.returnRequestedById;
+    if (notifyId) {
+      try {
+        await notifyRequesterI18n({
+          prisma,
+          type: 'material_assigned',
+          requesterId: notifyId,
+          payload: {
+            key: 'material_assigned',
+            vars: {
+              materialName: item.material.name,
+              serialNumber: item.serialNumber,
+              province: `Return rejected: ${rejectionReason}`,
+            },
+          },
+          data: { scope: 'private_company', companyId: guard.companyId, itemId: id },
+        });
+      } catch (e) {
+        console.error('notify return rejected:', e);
+      }
+    }
+    return NextResponse.json({ success: true, item: updated });
+  }
+
+  const isApproveReturn = action === 'approve-return';
+  if (isApproveReturn && !item.returnRequestedAt) {
+    return NextResponse.json(
+      { success: false, message: 'No pending return request on this item.' },
+      { status: 409 }
+    );
+  }
+
+  const switchAction = isApproveReturn ? 'return' : action;
+
+  switch (switchAction) {
     case 'assign':
     case 'transfer': {
       const toStaffId = typeof body?.toStaffId === 'string' ? body.toStaffId.trim() : '';
@@ -421,13 +686,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             status: 'ASSIGNED',
             handoverConfirmedAt: null,
             handoverConfirmedById: null,
+            handoverRejectedAt: null,
+            handoverRejectionReason: null,
+            returnRequestedAt: null,
+            returnRequestedById: null,
+            returnRequestNote: null,
+            returnRejectedAt: null,
+            returnRejectionReason: null,
           },
           include: ITEM_INCLUDE,
         });
         await logMovement({
           companyId: guard.companyId,
           itemId: id,
-          type: action === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
+          type: switchAction === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
           fromStaffId,
           toStaffId,
           actorId: guard.requesterId,
@@ -465,13 +737,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             createdById: guard.requesterId,
             handoverConfirmedAt: null,
             handoverConfirmedById: null,
+            handoverRejectedAt: null,
+            handoverRejectionReason: null,
+            returnRequestedAt: null,
+            returnRequestedById: null,
+            returnRequestNote: null,
+            returnRejectedAt: null,
+            returnRejectionReason: null,
           },
           include: ITEM_INCLUDE,
         });
         await logMovement({
           companyId: guard.companyId,
           itemId: created.id,
-          type: action === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
+          type: switchAction === 'transfer' ? 'TRANSFERRED' : 'ASSIGNED',
           fromStaffId,
           toStaffId,
           actorId: guard.requesterId,
@@ -499,6 +778,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       });
     }
     case 'return': {
+      if (isApproveReturn && item.assignedToId !== guard.requesterId) {
+        return NextResponse.json(
+          { success: false, message: 'Only the holder can approve this return.' },
+          { status: 403 }
+        );
+      }
       const fromStaffId = item.assignedToId;
       const lineQty = Math.max(1, Math.floor(Number(item.quantity)) || 1);
       const moveQty =
@@ -517,14 +802,25 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             : 'Return: new / unused.';
       const movementNote = [extra, note].filter(Boolean).join(' | ');
 
+      const clearWorkflow = {
+        handoverConfirmedAt: null,
+        handoverConfirmedById: null,
+        handoverRejectedAt: null,
+        handoverRejectionReason: null,
+        returnRequestedAt: null,
+        returnRequestedById: null,
+        returnRequestNote: null,
+        returnRejectedAt: null,
+        returnRejectionReason: null,
+      };
+
       if (rc === 'damaged') {
         const updated = await prisma.privateCompanyMaterialItem.update({
           where: { id },
           data: {
             assignedToId: null,
             status: 'DAMAGED',
-            handoverConfirmedAt: null,
-            handoverConfirmedById: null,
+            ...clearWorkflow,
           },
           include: ITEM_INCLUDE,
         });
@@ -546,8 +842,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         data: {
           assignedToId: null,
           status: 'IN_WAREHOUSE',
-          handoverConfirmedAt: null,
-          handoverConfirmedById: null,
+          ...clearWorkflow,
         },
         include: ITEM_INCLUDE,
       });

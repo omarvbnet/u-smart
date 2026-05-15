@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
+import { normalizeProvince } from '@/lib/private-company-warehouse';
 import {
   assignedStaffIdFromCompanyJson,
   parseTicketCompanyJson,
@@ -19,8 +20,20 @@ type StaffMeta = {
   name: string | null;
   username: string;
   role: string;
+  province: string | null;
   departmentId: string | null;
   departmentName: string | null;
+};
+
+type ProvinceAgg = {
+  province: string;
+  ticketsAssigned: number;
+  completedTickets: number;
+  arrivalSumH: number;
+  arrivalN: number;
+  taskSumH: number;
+  taskN: number;
+  staffCount: number;
 };
 
 type StaffAgg = {
@@ -51,6 +64,7 @@ function finalizeStaffRow(meta: StaffMeta, a: StaffAgg, days: number) {
     name: meta.name?.trim() || meta.username,
     username: meta.username,
     role: meta.role,
+    province: meta.province,
     departmentId: meta.departmentId,
     departmentName: meta.departmentName,
     ticketsAssigned: a.ticketsAssigned,
@@ -112,8 +126,10 @@ export async function GET(req: NextRequest) {
   const role = String(me?.role ?? '').toUpperCase();
   const actorDepartmentId = me?.privateCompanyDepartmentId ?? null;
 
-  const daysRaw = Number(new URL(req.url).searchParams.get('days') ?? '365');
+  const url = new URL(req.url);
+  const daysRaw = Number(url.searchParams.get('days') ?? '365');
   const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 7), 730) : 365;
+  const provinceFilter = normalizeProvince(url.searchParams.get('province'));
   const since = new Date(Date.now() - days * 86400000);
 
   const [departments, staffList, tickets] = await Promise.all([
@@ -128,6 +144,7 @@ export async function GET(req: NextRequest) {
         name: true,
         username: true,
         role: true,
+        province: true,
         privateCompanyDepartmentId: true,
       },
     }),
@@ -158,18 +175,30 @@ export async function GET(req: NextRequest) {
     name: string | null;
     username: string;
     role: string;
+    province: string | null;
     privateCompanyDepartmentId: string | null;
   }>) {
     const did = s.privateCompanyDepartmentId;
+    const prov =
+      typeof s.province === 'string' && s.province.trim() ? s.province.trim() : null;
     staffMeta.set(s.id, {
       id: s.id,
       name: s.name,
       username: s.username,
       role: String(s.role ?? '').toUpperCase(),
+      province: prov,
       departmentId: did,
       departmentName: did ? deptName.get(did) ?? null : null,
     });
   }
+
+  const staffIdsInProvince = provinceFilter
+    ? new Set(
+        [...staffMeta.values()]
+          .filter((m) => m.province === provinceFilter)
+          .map((m) => m.id)
+      )
+    : null;
 
   const ticketIds = (tickets as Array<{ id: string }>).map((t) => t.id);
   const logsByTicket = new Map<string, Array<{ status: string; createdAt: Date }>>();
@@ -188,6 +217,26 @@ export async function GET(req: NextRequest) {
 
   const perStaff = new Map<string, StaffAgg>();
   const perDept = new Map<string | null, DeptAgg>();
+  const perProvince = new Map<string, ProvinceAgg>();
+  const staffSeenInProvince = new Map<string, Set<string>>();
+
+  function ensureProvince(prov: string): ProvinceAgg {
+    const key = prov;
+    if (!perProvince.has(key)) {
+      perProvince.set(key, {
+        province: key,
+        ticketsAssigned: 0,
+        completedTickets: 0,
+        arrivalSumH: 0,
+        arrivalN: 0,
+        taskSumH: 0,
+        taskN: 0,
+        staffCount: 0,
+      });
+      staffSeenInProvince.set(key, new Set());
+    }
+    return perProvince.get(key)!;
+  }
 
   function ensureDept(did: string | null, dname: string) {
     if (!perDept.has(did)) {
@@ -215,6 +264,7 @@ export async function GET(req: NextRequest) {
     const parsed = parseTicketCompanyJson(t.company);
     const assigneeId = assignedStaffIdFromCompanyJson(parsed);
     if (!assigneeId) continue;
+    if (staffIdsInProvince && !staffIdsInProvince.has(assigneeId)) continue;
 
     const logs = logsByTicket.get(t.id) ?? [];
     const arrh = siteArrivalHours(t.createdAt, logs);
@@ -247,6 +297,26 @@ export async function GET(req: NextRequest) {
       d.taskSumH += taskh;
       d.taskN += 1;
     }
+
+    const prov = meta?.province;
+    if (prov) {
+      const p = ensureProvince(prov);
+      p.ticketsAssigned += 1;
+      if (String(t.status).toUpperCase() === 'COMPLETED') p.completedTickets += 1;
+      if (arrh != null && arrh >= 0) {
+        p.arrivalSumH += arrh;
+        p.arrivalN += 1;
+      }
+      if (taskh != null && taskh >= 0) {
+        p.taskSumH += taskh;
+        p.taskN += 1;
+      }
+      const seen = staffSeenInProvince.get(prov)!;
+      if (!seen.has(assigneeId)) {
+        seen.add(assigneeId);
+        p.staffCount += 1;
+      }
+    }
   }
 
   let scope: 'workspace' | 'department' | 'self';
@@ -260,6 +330,9 @@ export async function GET(req: NextRequest) {
       byStaffRaw.push(finalizeStaffRow(meta, agg, days));
     }
     byStaffRaw.sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
+    if (provinceFilter) {
+      byStaffRaw = byStaffRaw.filter((r) => r.province === provinceFilter);
+    }
   } else if (MANAGER_ROLES.has(role) && actorDepartmentId) {
     scope = 'department';
     for (const [id, agg] of perStaff) {
@@ -268,6 +341,9 @@ export async function GET(req: NextRequest) {
       byStaffRaw.push(finalizeStaffRow(meta, agg, days));
     }
     byStaffRaw.sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
+    if (provinceFilter) {
+      byStaffRaw = byStaffRaw.filter((r) => r.province === provinceFilter);
+    }
   } else {
     scope = 'self';
     const selfId = auth.payload.requesterId;
@@ -308,12 +384,30 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
   }
 
+  const byProvince = [...perProvince.values()]
+    .map((p) => ({
+      province: p.province,
+      staffCount: p.staffCount,
+      ticketsAssigned: p.ticketsAssigned,
+      completedTickets: p.completedTickets,
+      avgTicketAssignmentsPerDay:
+        days > 0 ? Math.round((p.ticketsAssigned / days) * 100) / 100 : 0,
+      totalTaskHours: Math.round(p.taskSumH * 100) / 100,
+      avgTaskHours: p.taskN > 0 ? Math.round((p.taskSumH / p.taskN) * 100) / 100 : null,
+      totalArrivalHours: Math.round(p.arrivalSumH * 100) / 100,
+      avgArrivalHours:
+        p.arrivalN > 0 ? Math.round((p.arrivalSumH / p.arrivalN) * 100) / 100 : null,
+    }))
+    .sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
+
   return NextResponse.json({
     success: true,
     scope,
     days,
+    provinceFilter,
     ticketSampleSize: tickets.length,
     byDepartment,
+    byProvince,
     byStaff: byStaffRaw,
     legend: {
       taskHours:
