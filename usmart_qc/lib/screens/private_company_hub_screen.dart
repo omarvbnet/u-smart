@@ -34,6 +34,13 @@ String _pcStatusLabel(PrivateCompanyStatus s, AppLocalizations l10n) {
   }
 }
 
+bool _pcHubShowsExpensesTab(PrivateCompanyProvider pc) {
+  if (!pc.hasWorkspace || !pc.isApproved) return false;
+  final w = pc.workspace;
+  if (w == null) return false;
+  return w.ticketExpensesEnabled || pc.canManageStaff;
+}
+
 String _pcStatusDescription(
   PrivateCompanyStatus status,
   PrivateCompanyWorkspace ws,
@@ -427,7 +434,52 @@ class _ApprovedHubView extends StatefulWidget {
 
 class _ApprovedHubViewState extends State<_ApprovedHubView>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+  late TabController _tabs;
+  int _tabLength = 6;
+  PrivateCompanyProvider? _pcAttached;
+
+  void _syncExpensesTab(PrivateCompanyProvider pc) {
+    final n = _pcHubShowsExpensesTab(pc) ? 7 : 6;
+    if (n == _tabLength) return;
+    final prevIndex = _tabs.index;
+    final oldLen = _tabLength;
+    _tabs.dispose();
+    _tabLength = n;
+    _tabs = TabController(length: n, vsync: this);
+
+    int newIndex;
+    if (n > oldLen) {
+      // Inserted "Expenses" before warehouse (at index 5).
+      newIndex = prevIndex >= 5 ? prevIndex + 1 : prevIndex;
+    } else {
+      // Removed expenses tab at index 5.
+      if (prevIndex == 5) {
+        newIndex = 5; // was expenses → warehouse is now at 5
+      } else if (prevIndex > 5) {
+        newIndex = prevIndex - 1;
+      } else {
+        newIndex = prevIndex;
+      }
+    }
+    if (newIndex >= n) newIndex = n - 1;
+    if (newIndex < 0) newIndex = 0;
+    _tabs.index = newIndex;
+  }
+
+  void _attachPcListener(PrivateCompanyProvider pc) {
+    if (_pcAttached == pc) return;
+    _pcAttached?.removeListener(_onPcChanged);
+    _pcAttached = pc;
+    pc.addListener(_onPcChanged);
+  }
+
+  void _onPcChanged() {
+    final pc = _pcAttached;
+    if (pc == null || !mounted) return;
+    final lenBefore = _tabLength;
+    _syncExpensesTab(pc);
+    if (lenBefore != _tabLength) setState(() {});
+  }
 
   @override
   void initState() {
@@ -441,7 +493,18 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final pc = context.read<PrivateCompanyProvider>();
+    _attachPcListener(pc);
+    final lenBefore = _tabLength;
+    _syncExpensesTab(pc);
+    if (lenBefore != _tabLength) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _pcAttached?.removeListener(_onPcChanged);
     _tabs.dispose();
     super.dispose();
   }
@@ -451,6 +514,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     final pc = context.watch<PrivateCompanyProvider>();
     final ws = widget.workspace;
     final l10n = AppLocalizations.of(context);
+    final showExpensesTab = _pcHubShowsExpensesTab(pc);
     return Column(
       children: [
         _WorkspaceHeader(workspace: ws),
@@ -547,6 +611,8 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
               Tab(icon: const Icon(Icons.groups_rounded, size: 18), text: l10n.t('pc_ws_tab_staff')),
               Tab(icon: const Icon(Icons.checklist_rounded, size: 18), text: l10n.t('pc_ws_tab_checklists')),
               Tab(icon: const Icon(Icons.speed_rounded, size: 18), text: l10n.t('pc_ws_tab_performance')),
+              if (showExpensesTab)
+                Tab(icon: const Icon(Icons.payments_rounded, size: 18), text: l10n.t('pc_ws_tab_expenses')),
               Tab(icon: const Icon(Icons.inventory_2_rounded, size: 18), text: l10n.t('pc_ws_tab_warehouse')),
             ],
           ),
@@ -560,6 +626,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
               _StaffTab(workspace: ws),
               _ChecklistsTab(workspace: ws),
               _KpisTab(workspace: ws),
+              if (showExpensesTab) const _ExpensesTab(),
               _WarehouseTab(workspace: ws),
             ],
           ),
@@ -4448,11 +4515,69 @@ class _KpisTabState extends State<_KpisTab> {
                         ),
                         const SizedBox(height: 12),
                         const WorkspaceCancellationsAnalyticsPanel(),
-                        const WorkspaceExpensesAnalyticsPanel(),
                     ],
                   ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _ExpensesTab extends StatelessWidget {
+  const _ExpensesTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final pc = context.watch<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+      children: [
+        if (pc.canManageStaff) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: const Color(0xFF12122A).withAlpha(220),
+              border: Border.all(color: Colors.white.withAlpha(12)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.t('pc_ticket_expenses_settings'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.t('pc_expenses_tab_settings_hint'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(160),
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => _showTicketExpensesSettingsDialog(context),
+                  icon: const Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF00D4AA)),
+                  label: Text(l10n.t('pc_expenses_configure_dialog')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF00D4AA),
+                    side: const BorderSide(color: Color(0xFF00D4AA)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        const WorkspaceExpensesAnalyticsPanel(),
       ],
     );
   }
@@ -4588,20 +4713,153 @@ class _KpiStatRow extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 // WAREHOUSE TAB
 //
-// Holds six sub-tabs:
+// Sub-tabs (6 or 7):
 //   • Dashboard — aggregate counters + recent activity
-//   • Inventory — searchable / filterable list of items (with actions)
-//   • Requests — material requests (all staff submit; keepers review)
-//   • Materials — catalog management (managers only)
-//   • Activity  — full movement log
-//   • Budgets   — per-staff assignment caps by catalog material (managers;
-//                  everyone can view their own lines)
+//   • Inventory — stock search / filters; tools Excel export; tool assignment from stock
+//   • Add tools — materials catalog (managers create catalog lines / tools)
+//   • Request tools — material requests (staff submit; keepers review)
+//   • Reasons — material-use preset reasons (owners / managers / coordinators only)
+//   • Activity — full movement log
+//   • Budgets — per-staff caps (managers edit; everyone can view self)
+//
+// Ticket expenses activation and expense reasons: Expenses top-level hub tab.
 //
 // Visibility rules:
-//   • Owner / manager / coordinator: everything
-//   • Engineer / technician / worker: items currently assigned to them
-//     and movements they participated in
+//   • Owner / manager / coordinator: full warehouse per role flags
+//   • Engineer / technician / worker: assigned inventory and their movements
 // ═════════════════════════════════════════════════════════════════════════════
+
+Future<void> _showTicketExpensesSettingsDialog(BuildContext context) async {
+  final pc = context.read<PrivateCompanyProvider>();
+  final l10n = AppLocalizations.of(context);
+  final initial = List<String>.from(pc.workspace?.ticketExpenseReasons ?? const []);
+  final editCtrl = TextEditingController();
+  var live = List<String>.from(initial);
+  var enabled = pc.workspace?.ticketExpensesEnabled == true;
+  final pending = pc.workspace?.ticketExpensesActivationPending == true;
+  final role = (pc.membership.role ?? '').toUpperCase();
+  final isCoordinator = role == 'COORDINATOR';
+  final canEnableDirect = pc.isOwner || role == 'MANAGER';
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          l10n.t('pc_ticket_expenses_settings'),
+          style: const TextStyle(color: Colors.white, fontSize: 17),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (pending)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      l10n.t('pc_expenses_activation_pending'),
+                      style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12),
+                    ),
+                  ),
+                if (canEnableDirect)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      l10n.t('pc_expenses_enable'),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    value: enabled,
+                    onChanged: (v) => setLocal(() => enabled = v),
+                  )
+                else if (isCoordinator && !enabled)
+                  Text(
+                    l10n.t('pc_expenses_coordinator_hint'),
+                    style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
+                  ),
+                TextField(
+                  controller: editCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: l10n.t('pc_expenses_reason_add_hint'),
+                    hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
+                      onPressed: () {
+                        final s = editCtrl.text.trim();
+                        if (s.isEmpty) return;
+                        if (live.any((x) => x.toLowerCase() == s.toLowerCase())) return;
+                        setLocal(() {
+                          live = [...live, s];
+                          editCtrl.clear();
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...live.map(
+                  (r) => ListTile(
+                    dense: true,
+                    title: Text(r, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                      onPressed: () => setLocal(() => live = [...live]..remove(r)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.t('cancel')),
+          ),
+          if (canEnableDirect && pending)
+            TextButton(
+              onPressed: () async {
+                await pc.patchExpenseSettings(approveActivation: true);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text(l10n.t('pc_expenses_approve')),
+            ),
+          if (isCoordinator && !enabled && !canEnableDirect)
+            TextButton(
+              onPressed: () async {
+                await pc.patchExpenseSettings(
+                  reasons: live,
+                  requestActivation: true,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text(l10n.t('pc_expenses_request_activation')),
+            ),
+          FilledButton(
+            onPressed: () async {
+              if (canEnableDirect) {
+                await pc.patchExpenseSettings(
+                  reasons: live,
+                  enabled: enabled,
+                  disable: !enabled && pc.workspace?.ticketExpensesEnabled == true,
+                );
+              } else {
+                await pc.patchExpenseSettings(reasons: live);
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: Text(l10n.t('submit')),
+          ),
+        ],
+      ),
+    ),
+  );
+  editCtrl.dispose();
+}
 
 class _WarehouseTab extends StatefulWidget {
   const _WarehouseTab({required this.workspace});
@@ -4613,255 +4871,58 @@ class _WarehouseTab extends StatefulWidget {
 
 class _WarehouseTabState extends State<_WarehouseTab>
     with SingleTickerProviderStateMixin {
-  late final TabController _subTabs;
+  late TabController _subTabs;
+  int _warehouseSubTabLength = 6;
+  PrivateCompanyProvider? _pcWhAttached;
   bool _exportingTools = false;
+
+  int _warehouseSubTabCount(PrivateCompanyProvider pc) =>
+      6 + (pc.canManageStaff ? 1 : 0);
+
+  void _syncWarehouseSubTabs(PrivateCompanyProvider pc) {
+    final n = _warehouseSubTabCount(pc);
+    if (n == _warehouseSubTabLength) return;
+    final prevIndex = _subTabs.index;
+    final oldLen = _warehouseSubTabLength;
+    _subTabs.dispose();
+    _warehouseSubTabLength = n;
+    _subTabs = TabController(length: n, vsync: this);
+    int newIndex;
+    if (n > oldLen) {
+      newIndex = prevIndex >= 4 ? prevIndex + 1 : prevIndex;
+    } else {
+      if (prevIndex == 4) {
+        newIndex = 4;
+      } else if (prevIndex > 4) {
+        newIndex = prevIndex - 1;
+      } else {
+        newIndex = prevIndex;
+      }
+    }
+    if (newIndex >= n) newIndex = n - 1;
+    if (newIndex < 0) newIndex = 0;
+    _subTabs.index = newIndex;
+  }
+
+  void _attachWhPc(PrivateCompanyProvider pc) {
+    if (_pcWhAttached == pc) return;
+    _pcWhAttached?.removeListener(_onWhPcChanged);
+    _pcWhAttached = pc;
+    pc.addListener(_onWhPcChanged);
+  }
+
+  void _onWhPcChanged() {
+    final pc = _pcWhAttached;
+    if (pc == null || !mounted) return;
+    final lenBefore = _warehouseSubTabLength;
+    _syncWarehouseSubTabs(pc);
+    if (lenBefore != _warehouseSubTabLength) setState(() {});
+  }
 
   @override
   void initState() {
     super.initState();
     _subTabs = TabController(length: 6, vsync: this);
-  }
-
-  Future<void> _openMaterialUseReasonsEditor() async {
-    final pc = context.read<PrivateCompanyProvider>();
-    final l10n = AppLocalizations.of(context);
-    final initial = List<String>.from(pc.workspace?.materialUseReasons ?? const []);
-    final editCtrl = TextEditingController();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        var live = List<String>.from(initial);
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF12122A),
-              title: Text(
-                l10n.t('pc_ws_material_use_reasons'),
-                style: const TextStyle(color: Colors.white, fontSize: 17),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: editCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: l10n.t('pc_ws_material_reason_add_hint'),
-                        hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.add_circle_outline,
-                              color: Color(0xFF6C63FF)),
-                          onPressed: () {
-                            final s = editCtrl.text.trim();
-                            if (s.isEmpty) return;
-                            if (live.any(
-                                (x) => x.toLowerCase() == s.toLowerCase())) {
-                              return;
-                            }
-                            setLocal(() {
-                              live = [...live, s];
-                              editCtrl.clear();
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 280),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: live.length,
-                        itemBuilder: (_, i) {
-                          final r = live[i];
-                          return ListTile(
-                            dense: true,
-                            title: Text(r,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.white54, size: 20),
-                              onPressed: () {
-                                setLocal(() {
-                                  live = [...live]..removeAt(i);
-                                });
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text(l10n.t('cancel')),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final ok = await pc.updateMaterialUseReasons(live);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          ok
-                              ? (pc.lastSuccess ??
-                                  l10n.t('pc_ws_material_reasons_saved'))
-                              : (pc.error ??
-                                  l10n.t('pc_ws_material_reasons_save_failed')),
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(l10n.t('submit')),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    editCtrl.dispose();
-  }
-
-  Future<void> _openTicketExpensesSettings() async {
-    final pc = context.read<PrivateCompanyProvider>();
-    final l10n = AppLocalizations.of(context);
-    final initial = List<String>.from(pc.workspace?.ticketExpenseReasons ?? const []);
-    final editCtrl = TextEditingController();
-    var live = List<String>.from(initial);
-    var enabled = pc.workspace?.ticketExpensesEnabled == true;
-    final pending = pc.workspace?.ticketExpensesActivationPending == true;
-    final role = (pc.membership.role ?? '').toUpperCase();
-    final isCoordinator = role == 'COORDINATOR';
-    final canEnableDirect = pc.isOwner || role == 'MANAGER';
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          backgroundColor: const Color(0xFF12122A),
-          title: Text(
-            l10n.t('pc_ticket_expenses_settings'),
-            style: const TextStyle(color: Colors.white, fontSize: 17),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (pending)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        l10n.t('pc_expenses_activation_pending'),
-                        style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12),
-                      ),
-                    ),
-                  if (canEnableDirect)
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        l10n.t('pc_expenses_enable'),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      value: enabled,
-                      onChanged: (v) => setLocal(() => enabled = v),
-                    )
-                  else if (isCoordinator && !enabled)
-                    Text(
-                      l10n.t('pc_expenses_coordinator_hint'),
-                      style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
-                    ),
-                  TextField(
-                    controller: editCtrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: l10n.t('pc_expenses_reason_add_hint'),
-                      hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
-                        onPressed: () {
-                          final s = editCtrl.text.trim();
-                          if (s.isEmpty) return;
-                          if (live.any((x) => x.toLowerCase() == s.toLowerCase())) return;
-                          setLocal(() {
-                            live = [...live, s];
-                            editCtrl.clear();
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...live.map(
-                    (r) => ListTile(
-                      dense: true,
-                      title: Text(r, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-                        onPressed: () => setLocal(() => live = [...live]..remove(r)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(l10n.t('cancel')),
-            ),
-            if (canEnableDirect && pending)
-              TextButton(
-                onPressed: () async {
-                  await pc.patchExpenseSettings(approveActivation: true);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Text(l10n.t('pc_expenses_approve')),
-              ),
-            if (isCoordinator && !enabled && !canEnableDirect)
-              TextButton(
-                onPressed: () async {
-                  await pc.patchExpenseSettings(
-                    reasons: live,
-                    requestActivation: true,
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Text(l10n.t('pc_expenses_request_activation')),
-              ),
-            FilledButton(
-              onPressed: () async {
-                if (canEnableDirect) {
-                  await pc.patchExpenseSettings(
-                    reasons: live,
-                    enabled: enabled,
-                    disable: !enabled && pc.workspace?.ticketExpensesEnabled == true,
-                  );
-                } else {
-                  await pc.patchExpenseSettings(reasons: live);
-                }
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: Text(l10n.t('submit')),
-            ),
-          ],
-        ),
-      ),
-    );
-    editCtrl.dispose();
   }
 
   Future<void> _exportWarehouseToolsReport() async {
@@ -4914,6 +4975,16 @@ class _WarehouseTabState extends State<_WarehouseTab>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final pc = context.read<PrivateCompanyProvider>();
+    _attachWhPc(pc);
+    final lenBefore = _warehouseSubTabLength;
+    _syncWarehouseSubTabs(pc);
+    if (lenBefore != _warehouseSubTabLength) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
     final pc = context.watch<PrivateCompanyProvider>();
@@ -4922,6 +4993,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
     final exportTools = pc.canExportWarehouseToolsReport;
     final dashboardCatalog = keeperManage || assignTools;
     final l10n = AppLocalizations.of(context);
+    final showReasons = pc.canManageStaff;
     return Column(
       children: [
         if (wh.error != null)
@@ -4975,61 +5047,6 @@ class _WarehouseTabState extends State<_WarehouseTab>
               ),
             ),
           ),
-        if (pc.canManageStaff) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: OutlinedButton.icon(
-              onPressed: _openMaterialUseReasonsEditor,
-              icon: const Icon(Icons.list_alt_rounded,
-                  size: 18, color: Color(0xFF8B83FF)),
-              label: Text(l10n.t('pc_ws_material_use_reasons')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF8B83FF),
-                side: const BorderSide(color: Color(0xFF6C63FF)),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: OutlinedButton.icon(
-              onPressed: _openTicketExpensesSettings,
-              icon: const Icon(Icons.payments_outlined,
-                  size: 18, color: Color(0xFF00D4AA)),
-              label: Text(l10n.t('pc_ticket_expenses_settings')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF00D4AA),
-                side: const BorderSide(color: Color(0xFF00D4AA)),
-              ),
-            ),
-          ),
-        ],
-        if (exportTools) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: OutlinedButton.icon(
-              onPressed: _exportingTools ? null : _exportWarehouseToolsReport,
-              icon: _exportingTools
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF8B83FF),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.table_chart_outlined,
-                      size: 18,
-                      color: Color(0xFF8B83FF),
-                    ),
-              label: Text(l10n.t('pc_warehouse_tools_export')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF8B83FF),
-                side: const BorderSide(color: Color(0xFF6C63FF)),
-              ),
-            ),
-          ),
-        ],
         Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           decoration: BoxDecoration(
@@ -5056,15 +5073,36 @@ class _WarehouseTabState extends State<_WarehouseTab>
                 const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
             unselectedLabelStyle:
                 const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-            tabs: const [
-              Tab(icon: Icon(Icons.insights_rounded, size: 16), text: 'Dashboard'),
-              Tab(icon: Icon(Icons.inventory_2_rounded, size: 16), text: 'Inventory'),
-              Tab(icon: Icon(Icons.post_add_rounded, size: 16), text: 'Requests'),
-              Tab(icon: Icon(Icons.category_rounded, size: 16), text: 'Materials'),
-              Tab(icon: Icon(Icons.history_rounded, size: 16), text: 'Activity'),
+            tabs: [
               Tab(
-                  icon: Icon(Icons.account_balance_wallet_outlined, size: 16),
-                  text: 'Budgets'),
+                icon: const Icon(Icons.insights_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_dashboard'),
+              ),
+              Tab(
+                icon: const Icon(Icons.inventory_2_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_inventory'),
+              ),
+              Tab(
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_add_tools'),
+              ),
+              Tab(
+                icon: const Icon(Icons.post_add_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_request_tools'),
+              ),
+              if (showReasons)
+                Tab(
+                  icon: const Icon(Icons.list_alt_rounded, size: 16),
+                  text: l10n.t('pc_wh_tab_reasons'),
+                ),
+              Tab(
+                icon: const Icon(Icons.history_rounded, size: 16),
+                text: l10n.t('pc_wh_tab_activity'),
+              ),
+              Tab(
+                icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                text: l10n.t('pc_wh_tab_budgets'),
+              ),
             ],
           ),
         ),
@@ -5076,9 +5114,13 @@ class _WarehouseTabState extends State<_WarehouseTab>
               _WarehouseInventoryView(
                 keeperManage: keeperManage,
                 assignToolsFromStock: assignTools,
+                canExportTools: exportTools,
+                exportingTools: _exportingTools,
+                onExportTools: _exportWarehouseToolsReport,
               ),
-              _WarehouseRequestsView(canManage: keeperManage),
               _WarehouseMaterialsView(canManage: dashboardCatalog),
+              _WarehouseRequestsView(canManage: keeperManage),
+              if (showReasons) const _WarehouseMaterialReasonsView(),
               _WarehouseActivityView(),
               _WarehouseBudgetsView(workspace: widget.workspace),
             ],
@@ -5090,8 +5132,157 @@ class _WarehouseTabState extends State<_WarehouseTab>
 
   @override
   void dispose() {
+    _pcWhAttached?.removeListener(_onWhPcChanged);
     _subTabs.dispose();
     super.dispose();
+  }
+}
+
+// ─── Material use reasons (warehouse sub-tab) ────────────────────────────────
+
+class _WarehouseMaterialReasonsView extends StatefulWidget {
+  const _WarehouseMaterialReasonsView();
+
+  @override
+  State<_WarehouseMaterialReasonsView> createState() =>
+      _WarehouseMaterialReasonsViewState();
+}
+
+class _WarehouseMaterialReasonsViewState extends State<_WarehouseMaterialReasonsView> {
+  final _editCtrl = TextEditingController();
+  late List<String> _live;
+  bool _loaded = false;
+  bool _saving = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_loaded) return;
+    _loaded = true;
+    final pc = context.read<PrivateCompanyProvider>();
+    _live = List<String>.from(pc.workspace?.materialUseReasons ?? const []);
+  }
+
+  @override
+  void dispose() {
+    _editCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final pc = context.read<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
+    final ok = await pc.updateMaterialUseReasons(_live);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (pc.lastSuccess ?? l10n.t('pc_ws_material_reasons_saved'))
+              : (pc.error ?? l10n.t('pc_ws_material_reasons_save_failed')),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final pc = context.watch<PrivateCompanyProvider>();
+    if (!pc.canManageStaff) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            l10n.t('pc_wh_reasons_no_access'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13, height: 1.4),
+          ),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      children: [
+        Text(
+          l10n.t('pc_ws_material_use_reasons'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          l10n.t('pc_wh_reasons_subtitle'),
+          style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12, height: 1.35),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _editCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: l10n.t('pc_ws_material_reason_add_hint'),
+            hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+            filled: true,
+            fillColor: const Color(0xFF12122A),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
+              onPressed: () {
+                final s = _editCtrl.text.trim();
+                if (s.isEmpty) return;
+                if (_live.any((x) => x.toLowerCase() == s.toLowerCase())) return;
+                setState(() {
+                  _live = [..._live, s];
+                  _editCtrl.clear();
+                });
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ..._live.asMap().entries.map((e) {
+          final i = e.key;
+          final r = e.value;
+          return ListTile(
+            dense: true,
+            tileColor: const Color(0xFF12122A).withAlpha(120),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            title: Text(r, style: const TextStyle(color: Colors.white, fontSize: 14)),
+            trailing: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: () {
+                setState(() {
+                  _live = [..._live]..removeAt(i);
+                });
+              },
+            ),
+          );
+        }),
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF6C63FF),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : Text(l10n.t('submit')),
+        ),
+      ],
+    );
   }
 }
 
@@ -6228,9 +6419,15 @@ class _WarehouseInventoryView extends StatefulWidget {
   const _WarehouseInventoryView({
     required this.keeperManage,
     required this.assignToolsFromStock,
+    required this.canExportTools,
+    required this.exportingTools,
+    required this.onExportTools,
   });
   final bool keeperManage;
   final bool assignToolsFromStock;
+  final bool canExportTools;
+  final bool exportingTools;
+  final VoidCallback onExportTools;
 
   @override
   State<_WarehouseInventoryView> createState() =>
@@ -6252,8 +6449,35 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
+        if (widget.canExportTools)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: OutlinedButton.icon(
+              onPressed: widget.exportingTools ? null : widget.onExportTools,
+              icon: widget.exportingTools
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF8B83FF),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.table_chart_outlined,
+                      size: 18,
+                      color: Color(0xFF8B83FF),
+                    ),
+              label: Text(l10n.t('pc_warehouse_tools_export')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF8B83FF),
+                side: const BorderSide(color: Color(0xFF6C63FF)),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Row(

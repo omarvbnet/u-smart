@@ -23,6 +23,15 @@ class ApiService {
           'X-Provisor-Locale': _requestLocaleCode!,
       };
 
+  /// GET for binary bodies (exports). Avoids `Content-Type: application/json`, which
+  /// some stacks mishandle for file downloads behind proxies.
+  Map<String, String> get _binaryGetHeaders => {
+        if (_token != null) 'Authorization': 'Bearer $_token',
+        if (_requestLocaleCode != null && _requestLocaleCode!.isNotEmpty)
+          'X-Provisor-Locale': _requestLocaleCode!,
+        'Accept': '*/*',
+      };
+
   Uri _uri(String path, [Map<String, String>? queryParams]) {
     final base = Uri.parse(ApiConfig.baseUrl);
     return base.replace(path: path, queryParameters: queryParams);
@@ -106,7 +115,8 @@ class ApiService {
   /// Download raw bytes (e.g. for CSV/Excel export).
   Future<List<int>?> getBytes(String path, {Map<String, String>? query}) async {
     try {
-      final response = await http.get(_uri(path, query), headers: _headers);
+      final response =
+          await http.get(_uri(path, query), headers: _binaryGetHeaders);
       if (response.statusCode == 200) return response.bodyBytes;
     } catch (_) {}
     return null;

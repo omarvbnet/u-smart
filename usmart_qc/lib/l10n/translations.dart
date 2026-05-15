@@ -740,6 +740,7 @@ const Map<String, String> _en = {
   'pc_ws_tab_staff': 'Staff',
   'pc_ws_tab_checklists': 'Checklists',
   'pc_ws_tab_performance': 'Performance',
+  'pc_ws_tab_expenses': 'Expenses',
   'pc_kpi_avg_assignments_per_day': 'Avg assignments / day',
   'pc_kpi_avg_assignments_per_day_hint':
       'Assigned tickets in the window divided by calendar days — workload rate for comparisons.',
@@ -815,6 +816,20 @@ const Map<String, String> _en = {
   'pc_ws_techniques_delete_confirm': 'Delete this technique?',
   'pc_ws_warehouse_assigned_only_hint':
       'You only see warehouse data for materials assigned to you. Managers, coordinators, warehouse keepers, and the owner see the full workspace.',
+  'pc_wh_tab_dashboard': 'Dashboard',
+  'pc_wh_tab_inventory': 'Inventory',
+  'pc_wh_tab_add_tools': 'Add tools',
+  'pc_wh_tab_request_tools': 'Request tools',
+  'pc_wh_tab_reasons': 'Reasons',
+  'pc_wh_tab_activity': 'Activity',
+  'pc_wh_tab_budgets': 'Budgets',
+  'pc_wh_reasons_subtitle':
+      'Preset reasons staff pick when logging material use on tickets (warehouse withdrawals).',
+  'pc_wh_reasons_no_access':
+      'Only owners, managers, and coordinators can edit material use reasons.',
+  'pc_expenses_tab_settings_hint':
+      'Turn ticket expenses on or off, handle activation requests, and manage expense reasons.',
+  'pc_expenses_configure_dialog': 'Configure…',
   'pc_status_pending': 'Pending review',
   'pc_status_approved': 'Approved',
   'pc_status_rejected': 'Rejected',
@@ -1472,6 +1487,7 @@ const Map<String, String> _ar = {
   'pc_ws_tab_staff': 'الموظفون',
   'pc_ws_tab_checklists': 'قوائم التحقق',
   'pc_ws_tab_performance': 'الأداء',
+  'pc_ws_tab_expenses': 'المصروفات',
   'pc_kpi_avg_assignments_per_day': 'متوسط الإسناد / يوم',
   'pc_kpi_avg_assignments_per_day_hint':
       'التذاكر المعيّنة في الفترة مقسومة على عدد أيام التقويم — معدل عبء للمقارنة.',
@@ -1603,6 +1619,20 @@ const Map<String, String> _ar = {
   'pc_ws_techniques_delete_confirm': 'حذف هذه التقنية؟',
   'pc_ws_warehouse_assigned_only_hint':
       'تعرض لك بيانات المستودع للمواد المعيّنة لك فقط. المديرون والمنسّقون وأمناء المستودع ومالك مساحة العمل يرون كامل المساحة.',
+  'pc_wh_tab_dashboard': 'لوحة التحكم',
+  'pc_wh_tab_inventory': 'المخزون',
+  'pc_wh_tab_add_tools': 'إضافة أدوات',
+  'pc_wh_tab_request_tools': 'طلب أدوات',
+  'pc_wh_tab_reasons': 'الأسباب',
+  'pc_wh_tab_activity': 'النشاط',
+  'pc_wh_tab_budgets': 'الميزانيات',
+  'pc_wh_reasons_subtitle':
+      'أسباب جاهزة يختارها الموظفون عند تسجيل استخدام المادة في التذاكر (سحب من المستودع).',
+  'pc_wh_reasons_no_access':
+      'مالك مساحة العمل والمديرون والمنسّقون فقط يمكنهم تعديل أسباب استخدام المواد.',
+  'pc_expenses_tab_settings_hint':
+      'شغّل أو عطّل مصاريف التذاكر، واعالج طلبات التفعيل، وأدر أسباب المصروف.',
+  'pc_expenses_configure_dialog': 'تهيئة…',
   'pc_status_pending': 'قيد المراجعة',
   'pc_status_approved': 'مقبول',
   'pc_status_rejected': 'مرفوض',
@@ -2281,6 +2311,7 @@ const Map<String, String> _ku = {
   'pc_ws_tab_staff': 'کارمەندان',
   'pc_ws_tab_checklists': 'لیستی پشکنین',
   'pc_ws_tab_performance': 'ئەداء',
+  'pc_ws_tab_expenses': 'مەسروفات',
   'pc_kpi_avg_assignments_per_day': 'تێکڕای دیاریکردن / ڕۆژ',
   'pc_kpi_avg_assignments_per_day_hint':
       'تیکێتە دیاریکراوەکان لە ماوەکە دابەش بە ڕۆژەکانی ڕۆژژمێر — ڕێژەی بار بۆ بەراورد.',
@@ -2411,6 +2442,20 @@ const Map<String, String> _ku = {
   'pc_ws_techniques_delete_confirm': 'ئەم تەکنیکە بسڕدرێتەوە؟',
   'pc_ws_warehouse_assigned_only_hint':
       'تەنها زانیاری کۆگا بۆ ئەو کەرەستانە دەبینیت کە بۆ تۆ دیاریکراون. بەڕێوەبەر و هەماهەنگکەر و پارێزەری کۆگا و خاوەنی workspace هەمووی دەبینن.',
+  'pc_wh_tab_dashboard': 'داشبۆرد',
+  'pc_wh_tab_inventory': 'کۆگا',
+  'pc_wh_tab_add_tools': 'زیادکردنی ئامێر',
+  'pc_wh_tab_request_tools': 'داواکردنی ئامێر',
+  'pc_wh_tab_reasons': 'هۆکارەکان',
+  'pc_wh_tab_activity': 'چالاکی',
+  'pc_wh_tab_budgets': 'بودجە',
+  'pc_wh_reasons_subtitle':
+      'هۆکارە ئامادەکان کارمەند هەڵدەبژێرێت کاتێک بەکارهێنانی ماددە لە تیکێت تۆمار دەکات (ڕاکێشان لە کۆگا).',
+  'pc_wh_reasons_no_access':
+      'تەنها خاوەن workspace و بەڕێوەبەر و هەماهەنگکەر دەتوانن هۆکاری بەکارهێنانی ماددە دەستکاری بکەن.',
+  'pc_expenses_tab_settings_hint':
+      'خەرجی تیکێت چالاک/ناچالاک بکە، داواکاری چالاککردن پەسەند بکە، هۆکاری خەرجی بەڕێوە ببە.',
+  'pc_expenses_configure_dialog': 'ڕێکخستن…',
   'pc_status_pending': 'چاوەڕوانی پێداچوونەوە',
   'pc_status_approved': 'پەسەندکراو',
   'pc_status_rejected': 'ڕەتکراوەتەوە',
@@ -3094,6 +3139,7 @@ const Map<String, String> _tr = {
   'pc_ws_tab_staff': 'Personel',
   'pc_ws_tab_checklists': 'Kontrol listeleri',
   'pc_ws_tab_performance': 'Performans',
+  'pc_ws_tab_expenses': 'Giderler',
   'pc_kpi_avg_assignments_per_day': 'Günlük ort. atama',
   'pc_kpi_avg_assignments_per_day_hint':
       'Penceredeki atanan talepler ÷ takvim günleri — karşılaştırma için iş yükü oranı.',
@@ -3228,6 +3274,20 @@ const Map<String, String> _tr = {
   'pc_ws_techniques_delete_confirm': 'Bu teknik silinsin mi?',
   'pc_ws_warehouse_assigned_only_hint':
       'Yalnızca size atanmış malzemelere ait depo verilerini görürsünüz. Yöneticiler, koordinatörler, depo sorumluları ve çalışma alanı sahibi tüm alanı görür.',
+  'pc_wh_tab_dashboard': 'Özet',
+  'pc_wh_tab_inventory': 'Envanter',
+  'pc_wh_tab_add_tools': 'Araç ekle',
+  'pc_wh_tab_request_tools': 'Araç talep et',
+  'pc_wh_tab_reasons': 'Nedenler',
+  'pc_wh_tab_activity': 'Hareketler',
+  'pc_wh_tab_budgets': 'Bütçeler',
+  'pc_wh_reasons_subtitle':
+      'Biletlerde malzeme kullanımı (depodan çekme) kaydedilirken personelin seçtiği hazır nedenler.',
+  'pc_wh_reasons_no_access':
+      'Malzeme kullanım nedenlerini yalnızca çalışma alanı sahibi, yöneticiler ve koordinatörler düzenleyebilir.',
+  'pc_expenses_tab_settings_hint':
+      'Bilet giderlerini açın veya kapatın, etkinleştirme taleplerini yönetin ve gider nedenlerini düzenleyin.',
+  'pc_expenses_configure_dialog': 'Yapılandır…',
   'pc_status_pending': 'İncelemede',
   'pc_status_approved': 'Onaylandı',
   'pc_status_rejected': 'Reddedildi',
