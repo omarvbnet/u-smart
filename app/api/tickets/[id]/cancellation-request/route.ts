@@ -35,7 +35,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const reason = typeof body?.reason === 'string' ? body.reason.trim() : '';
   if (!reason || reason.length > 500) {
     return NextResponse.json(
-      { success: false, message: 'Cancellation reason is required (max 500 characters).' },
+      {
+        success: false,
+        code: 'CANCELLATION_REASON_REQUIRED',
+        message: 'Cancellation reason is required (max 500 characters).',
+      },
       { status: 400 }
     );
   }
@@ -62,13 +66,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const blocked = assertNotBlockedForCancellation(ticket.status);
   if (!blocked.ok) {
-    return NextResponse.json({ success: false, message: blocked.message }, { status: 400 });
+    return NextResponse.json(
+      { success: false, code: 'CANCELLATION_STATUS_BLOCKED', message: blocked.message },
+      { status: 400 }
+    );
   }
   if (!canRequesterRequestCancellation(ticket.status)) {
     return NextResponse.json(
       {
         success: false,
-        message: 'Cancellation can only be requested while the ticket is pending or assigned (not yet on site).',
+        code: 'CANCELLATION_STATUS_NOT_PENDING',
+        message:
+          'Cancellation can only be requested while the ticket is still pending (not on site or in progress).',
       },
       { status: 400 }
     );
@@ -96,7 +105,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     'Cancellation reasons'
   );
   if (!reasonCheck.ok) {
-    return NextResponse.json({ success: false, message: reasonCheck.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        success: false,
+        code: reasonCheck.code ?? 'CANCELLATION_REASON_REJECTED',
+        message: reasonCheck.message,
+      },
+      { status: 400 }
+    );
   }
 
   parsed[CANCELLATION_REQUEST_STATUS_KEY] = 'PENDING';

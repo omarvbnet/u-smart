@@ -1139,15 +1139,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     const SizedBox(height: 10),
                     _maintenanceCrewBanner(context, t),
                   ],
-                  if (t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
-                      t.workspaceTicketExpensesEnabled) ...[
-                    WorkspaceTicketExpensesSection(
-                      ticket: t,
-                      onChanged: () {
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                  ],
                   if (t.isCompleted && _effectiveInspectionResult(t) != null) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -1621,9 +1612,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
       if (_isTicketRequester(t) && t.awaitsRequesterResubmit) ...[
         const SizedBox(height: 12),
-        _requesterResubmitBanner(t, l10n),
-        const SizedBox(height: 8),
-        _requesterEditAndResubmitActions(t, l10n),
+        _RequesterResubmitWorkflowCard(
+          ticket: t,
+          l10n: l10n,
+          onEditTap: () => _openRequesterEditDialog(t, l10n),
+          onReturned: () {
+            if (!mounted) return;
+            setState(() => _ticket = null);
+            _load();
+          },
+        ),
       ],
 
       // ─── NEEDS_EDIT banner: notify field staff coordinator wants edits ───
@@ -1647,6 +1645,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if (isCoordinatorUser && t.workflowState == 'RESUBMITTED') ...[
         const SizedBox(height: 12),
         _resubmittedByStaffBanner(t, l10n),
+      ],
+
+      if (t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
+          t.workspaceTicketExpensesEnabled) ...[
+        const SizedBox(height: 12),
+        WorkspaceTicketExpensesSection(
+          ticket: t,
+          onChanged: () {
+            if (mounted) setState(() {});
+          },
+        ),
       ],
 
       // Details
@@ -2483,70 +2492,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  Widget _requesterResubmitBanner(Ticket t, AppLocalizations l10n) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF6C63FF).withAlpha(18),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF6C63FF).withAlpha(100)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.t('resubmit_awaiting_requester_title'),
-              style: const TextStyle(
-                  color: Color(0xFF8B83FF),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14)),
-          if (t.resubmitReason != null && t.resubmitReason!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(t.resubmitReason!,
-                style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 12)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _requesterEditAndResubmitActions(Ticket t, AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          _WorkflowActionButton(
-            label: l10n.t('resubmit_edit_ticket'),
-            icon: Icons.edit_rounded,
-            color: const Color(0xFF6C63FF),
-            onTap: () => _openRequesterEditDialog(t, l10n),
-          ),
-          const SizedBox(height: 10),
-          _WorkflowActionButton(
-            label: l10n.t('resubmit_to_staff'),
-            icon: Icons.send_rounded,
-            color: const Color(0xFF00D4AA),
-            onTap: () async {
-              final ok = await context
-                  .read<TicketsProvider>()
-                  .resubmitTicketToStaff(t.id);
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(ok
-                    ? l10n.t('resubmit_sent_to_staff')
-                    : l10n.t('action_failed')),
-                backgroundColor:
-                    ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
-              ));
-              setState(() => _ticket = null);
-              _load();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _openRequesterEditDialog(Ticket t, AppLocalizations l10n) async {
     final siteCtrl = TextEditingController(text: t.siteName ?? '');
     final coordCtrl = TextEditingController(text: t.siteCoordinator ?? '');
@@ -2684,12 +2629,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         return;
                       }
                       setState(() => _cancellationBusy = true);
-                      final ok = await context
+                      final res = await context
                           .read<TicketsProvider>()
                           .requestTicketCancellation(widget.ticketId, reason);
                       if (!mounted) return;
                       setState(() => _cancellationBusy = false);
-                      if (ok) {
+                      if (res.ok) {
                         _cancellationReasonCtrl.clear();
                         await _load();
                       }
@@ -2697,9 +2642,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            ok
+                            res.ok
                                 ? l10n.t('ticket_cancellation_pending')
-                                : l10n.t('complete_failed'),
+                                : (res.message?.isNotEmpty == true
+                                    ? res.message!
+                                    : l10n.t('complete_failed')),
                           ),
                         ),
                       );
@@ -5310,6 +5257,191 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Requester: staff sent ticket back for edits — single card with edit + return actions.
+class _RequesterResubmitWorkflowCard extends StatefulWidget {
+  const _RequesterResubmitWorkflowCard({
+    required this.ticket,
+    required this.l10n,
+    required this.onEditTap,
+    required this.onReturned,
+  });
+
+  final Ticket ticket;
+  final AppLocalizations l10n;
+  final Future<void> Function() onEditTap;
+  final VoidCallback onReturned;
+
+  @override
+  State<_RequesterResubmitWorkflowCard> createState() => _RequesterResubmitWorkflowCardState();
+}
+
+class _RequesterResubmitWorkflowCardState extends State<_RequesterResubmitWorkflowCard> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.ticket;
+    final l10n = widget.l10n;
+    final hours = t.resubmissionHours;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF6C63FF).withValues(alpha: 0.22),
+            const Color(0xFF38BDF8).withValues(alpha: 0.09),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF8B83FF), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.t('resubmit_awaiting_requester_title'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          height: 1.2,
+                        ),
+                      ),
+                      if (hours != null && hours > 0) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          l10n.t('resubmit_open_cycle_hours', {'hours': hours.toStringAsFixed(2)}),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.68),
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (t.resubmitReason != null && t.resubmitReason!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                ),
+                child: Text(
+                  t.resubmitReason!,
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13, height: 1.35),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            await widget.onEditTap();
+                          },
+                    icon: const Icon(Icons.edit_rounded, color: Color(0xFF6C63FF)),
+                    label: Text(
+                      l10n.t('resubmit_edit_ticket'),
+                      style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w700),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF6C63FF), width: 1.3),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      minimumSize: const Size.fromHeight(50),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            setState(() => _busy = true);
+                            final r = await context.read<TicketsProvider>().resubmitTicketToStaff(t.id);
+                            if (!mounted) return;
+                            setState(() => _busy = false);
+                            if (!mounted) return;
+                            final msg = r.ok
+                                ? (r.resubmissionHours != null && r.resubmissionHours! > 0
+                                    ? '${l10n.t('resubmit_sent_to_staff')} · ${l10n.t('resubmit_cycle_closed_hours', {'hours': r.resubmissionHours!.toStringAsFixed(2)})}'
+                                    : l10n.t('resubmit_sent_to_staff'))
+                                : (r.message?.trim().isNotEmpty == true
+                                    ? r.message!
+                                    : l10n.t('action_failed'));
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(msg),
+                                backgroundColor: r.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            if (r.ok) widget.onReturned();
+                          },
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_rounded, size: 20),
+                    label: Text(l10n.t('resubmit_to_staff'), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D4AA),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      minimumSize: const Size.fromHeight(50),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

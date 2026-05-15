@@ -48,11 +48,12 @@ export function assertReasonInList(
   reason: string,
   allowed: string[],
   label: string
-): { ok: boolean; message?: string } {
+): { ok: boolean; message?: string; code?: string } {
   if (allowed.length === 0) {
     return {
       ok: false,
-      message: `${label} are not configured yet. Ask your administrator to set them in the admin panel.`,
+      code: 'POLICY_REASONS_EMPTY',
+      message: `${label} are not configured yet. Ask your administrator to set them under Admin → Ticket cancel / resubmit.`,
     };
   }
   const norm = reason.trim().toLowerCase();
@@ -60,6 +61,7 @@ export function assertReasonInList(
   if (!match) {
     return {
       ok: false,
+      code: 'REASON_NOT_IN_LIST',
       message: `Please select a valid ${label.toLowerCase()} from the list.`,
     };
   }

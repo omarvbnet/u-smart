@@ -100,25 +100,54 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 20),
-        Text(
-          l10n.t('analytics_workspace_performance'),
-          style: TextStyle(
-            color: Colors.white.withAlpha(200),
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF38BDF8).withValues(alpha: 0.2),
+                const Color(0xFF6C63FF).withValues(alpha: 0.14),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.insights_rounded,
+                      color: Colors.white.withValues(alpha: 0.95), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      l10n.t('analytics_performance_insights'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.t('analytics_workspace_performance_hint'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          l10n.t('analytics_workspace_performance_hint'),
-          style: TextStyle(
-            color: Colors.white.withAlpha(120),
-            fontSize: 11,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 10),
         if (pc.kpiLoading || (!_initialRefreshDone && snap == null))
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),

@@ -48,19 +48,17 @@ export async function POST(
     }
     const coordinatorContext = await getCoordinatorContext(req);
     const { id } = await params;
-    const body = await req.json();
-    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    const target =
-      typeof body.target === 'string' ? body.target.trim().toUpperCase() : 'COORDINATOR';
-    if (!reason) {
-      return NextResponse.json({ success: false, message: 'Resubmit reason is required.' }, { status: 400 });
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
     }
 
-    const policy = await loadPlatformTicketPolicy();
-    const reasonCheck = assertReasonInList(reason, policy.resubmitReasons, 'Resubmit reasons');
-    if (!reasonCheck.ok) {
-      return NextResponse.json({ success: false, message: reasonCheck.message }, { status: 400 });
-    }
+    const rawReason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    const targetRaw = typeof body.target === 'string' ? body.target.trim().toUpperCase() : 'COORDINATOR';
+    const target = targetRaw || 'COORDINATOR';
 
     const ticket = await prisma.visitorRequest.findFirst({
       where: { id },
@@ -88,6 +86,30 @@ export async function POST(
     }
 
     let parsed = parseTicketCompanyJson(ticket.company);
+
+    const isRequesterReturnToStaff =
+      !coordinatorContext &&
+      ticket.requesterId === auth.payload.requesterId &&
+      target === RESUBMIT_TARGET_STAFF;
+
+    const reason = isRequesterReturnToStaff
+      ? rawReason || 'Requester returned ticket to field staff.'
+      : rawReason;
+
+    if (!reason) {
+      return NextResponse.json({ success: false, message: 'Resubmit reason is required.' }, { status: 400 });
+    }
+
+    if (!isRequesterReturnToStaff) {
+      const policy = await loadPlatformTicketPolicy();
+      const reasonCheck = assertReasonInList(reason, policy.resubmitReasons, 'Resubmit reasons');
+      if (!reasonCheck.ok) {
+        return NextResponse.json(
+          { success: false, message: reasonCheck.message, code: reasonCheck.code },
+          { status: 400 }
+        );
+      }
+    }
 
     if (coordinatorContext) {
       if (!ENGINEERING_ROLES.has(coordinatorContext.role)) {
@@ -224,9 +246,7 @@ export async function POST(
       }
 
       const now = new Date().toISOString();
-      const hours = resubmitPendingAt
-        ? resubmissionHoursBetween(resubmitPendingAt, now)
-        : 0;
+      const hours = resubmitPendingAt ? resubmissionHoursBetween(resubmitPendingAt, now) : 0;
 
       const cycles = Array.isArray(parsed.resubmissionCycles)
         ? (parsed.resubmissionCycles as ResubmissionCycle[])
@@ -250,6 +270,7 @@ export async function POST(
       parsed.resubmitHistory = history;
       parsed.resubmissionCycles = cycles;
       parsed.workflowState = 'IN_PROGRESS';
+      parsed.status = 'IN_PROGRESS';
       parsed.resubmitReason = null;
       parsed.resubmitTarget = null;
       delete parsed.resubmitPendingAt;
@@ -258,10 +279,19 @@ export async function POST(
         where: { id },
         data: {
           workflowState: 'IN_PROGRESS',
+          status: 'IN_PROGRESS',
           resubmitReason: null,
           company: JSON.stringify(parsed),
         },
       });
+
+      try {
+        await prisma.ticketStatusLog.create({
+          data: { visitorRequestId: id, status: 'IN_PROGRESS' },
+        });
+      } catch {
+        /* optional table */
+      }
 
       const staffId = assignedStaffIdFromCompanyJson(parsed);
       if (staffId) {

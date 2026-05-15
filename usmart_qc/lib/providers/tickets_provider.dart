@@ -346,7 +346,11 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   /// Requester returns an edited ticket to field staff after staff resubmit.
-  Future<bool> resubmitTicketToStaff(String ticketId, {String? reason}) async {
+  /// Does not require a platform "resubmit reason" on the server (free-text / default).
+  Future<({bool ok, String? message, double? resubmissionHours})> resubmitTicketToStaff(
+    String ticketId, {
+    String? reason,
+  }) async {
     try {
       final data = await _api.post(
         ApiConfig.ticketResubmit(ticketId),
@@ -359,10 +363,15 @@ class TicketsProvider extends ChangeNotifier {
       );
       if (data['success'] == true) {
         await fetchTickets();
-        return true;
+        final h = data['resubmissionHours'];
+        final hours = h is num ? h.toDouble() : null;
+        return (ok: true, message: null, resubmissionHours: hours);
       }
-    } catch (_) {}
-    return false;
+      final msg = data['message'] is String ? data['message'] as String : null;
+      return (ok: false, message: msg, resubmissionHours: null);
+    } catch (_) {
+      return (ok: false, message: null, resubmissionHours: null);
+    }
   }
 
   Future<bool> requesterEditTicket(
@@ -418,15 +427,23 @@ class TicketsProvider extends ChangeNotifier {
   /// Workspace tickets (maintenance or QC): join or leave `maintenanceCrewIds` (server enforces roles + proximity).
   /// [latitude] / [longitude] are required for `join` (proximity to job site).
   /// On failure, [message] may contain the server error (English) or null on network error.
-  Future<bool> requestTicketCancellation(String ticketId, String reason) async {
+  /// On failure, [message] contains the server error when available.
+  Future<({bool ok, String? message})> requestTicketCancellation(
+    String ticketId,
+    String reason,
+  ) async {
     try {
       final data = await _api.post(
         ApiConfig.ticketCancellationRequest(ticketId),
         body: {'reason': reason.trim()},
       );
-      return data['success'] == true;
+      final msg = data['message'] is String ? (data['message'] as String).trim() : null;
+      if (data['success'] == true) {
+        return (ok: true, message: null);
+      }
+      return (ok: false, message: msg?.isNotEmpty == true ? msg : null);
     } catch (_) {
-      return false;
+      return (ok: false, message: null);
     }
   }
 

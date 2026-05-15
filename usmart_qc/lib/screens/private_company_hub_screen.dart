@@ -4046,7 +4046,7 @@ class _KpisTabState extends State<_KpisTab> {
     if (!pc.canViewKpis) {
       return Center(
         child: Text(
-          'Performance metrics are unavailable.',
+          l10n.t('pc_kpi_unavailable'),
           style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
         ),
       );
@@ -4061,10 +4061,10 @@ class _KpisTabState extends State<_KpisTab> {
               Expanded(
                 child: Text(
                   pc.isOwner
-                      ? 'Rollups by department and by staff, from workspace-assigned tickets in the selected window.'
+                      ? l10n.t('pc_kpi_intro_owner')
                       : pc.isDepartmentManager
-                          ? 'KPIs for people in your department only (flat list).'
-                          : 'Your assigned workspace tickets only.',
+                          ? l10n.t('pc_kpi_intro_manager')
+                          : l10n.t('pc_kpi_intro_self'),
                   style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
                 ),
               ),
@@ -4073,10 +4073,16 @@ class _KpisTabState extends State<_KpisTab> {
                 dropdownColor: const Color(0xFF12122A),
                 underline: const SizedBox(),
                 style: const TextStyle(color: Colors.white, fontSize: 12),
-                items: const [
-                  DropdownMenuItem(value: 90, child: Text('90 d')),
-                  DropdownMenuItem(value: 180, child: Text('180 d')),
-                  DropdownMenuItem(value: 365, child: Text('365 d')),
+                items: [
+                  DropdownMenuItem(
+                      value: 90,
+                      child: Text(l10n.t('pc_kpi_days_short', {'n': '90'}))),
+                  DropdownMenuItem(
+                      value: 180,
+                      child: Text(l10n.t('pc_kpi_days_short', {'n': '180'}))),
+                  DropdownMenuItem(
+                      value: 365,
+                      child: Text(l10n.t('pc_kpi_days_short', {'n': '365'}))),
                 ],
                 onChanged: pc.kpiLoading
                     ? null
@@ -4109,8 +4115,50 @@ class _KpisTabState extends State<_KpisTab> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     children: [
                       if (pc.kpiSnapshot != null) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF6C63FF).withValues(alpha: 0.22),
+                                const Color(0xFF38BDF8).withValues(alpha: 0.12),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.t('analytics_performance_insights'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                l10n.t('analytics_performance_insights_hint'),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         Text(
-                          'Tickets in window: ${pc.kpiSnapshot!.ticketSampleSize}',
+                          l10n.t('pc_kpi_tickets_in_window', {
+                            'count': '${pc.kpiSnapshot!.ticketSampleSize}'
+                          }),
                           style: TextStyle(
                               color: Colors.white.withAlpha(140), fontSize: 11),
                         ),
@@ -4125,7 +4173,8 @@ class _KpisTabState extends State<_KpisTab> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Province: $_provinceFilter',
+                                  l10n.t('pc_kpi_province_filter',
+                                      {'province': _provinceFilter!}),
                                   style: const TextStyle(
                                     color: Color(0xFF38BDF8),
                                     fontWeight: FontWeight.w700,
@@ -4140,7 +4189,7 @@ class _KpisTabState extends State<_KpisTab> {
                                         setState(() => _provinceFilter = null);
                                         await _refresh();
                                       },
-                                child: const Text('Show all provinces'),
+                                child: Text(l10n.t('pc_kpi_show_all_provinces')),
                               ),
                             ],
                           ),
@@ -4148,7 +4197,7 @@ class _KpisTabState extends State<_KpisTab> {
                         const SizedBox(height: 12),
                         if (pc.kpiSnapshot!.byProvince.isNotEmpty &&
                             _provinceFilter == null) ...[
-                          const _SectionTitle('By province'),
+                          _SectionTitle(l10n.t('pc_kpi_by_province')),
                           const SizedBox(height: 8),
                           ...pc.kpiSnapshot!.byProvince.map((p) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -4190,12 +4239,16 @@ class _KpisTabState extends State<_KpisTab> {
                                           ),
                                           const SizedBox(height: 6),
                                           Text(
-                                            '${p.staffCount} staff · ${p.ticketsAssigned} tickets · ${p.completedTickets} completed',
-                                            style: TextStyle(
-                                              color: Colors.white.withAlpha(150),
-                                              fontSize: 11,
-                                            ),
-                                          ),
+                            l10n.t('pc_kpi_province_summary', {
+                              'staff': '${p.staffCount}',
+                              'tickets': '${p.ticketsAssigned}',
+                              'completed': '${p.completedTickets}',
+                            }),
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(150),
+                              fontSize: 11,
+                            ),
+                          ),
                                           _KpiStatRow(
                                             l10n.t('pc_kpi_avg_assignments_per_day'),
                                             '${p.avgTicketAssignmentsPerDay}',
@@ -4211,7 +4264,7 @@ class _KpisTabState extends State<_KpisTab> {
                         if (pc.isOwner &&
                             pc.kpiSnapshot!.byDepartment.isNotEmpty &&
                             _provinceFilter == null) ...[
-                          const _SectionTitle('By department'),
+                          _SectionTitle(l10n.t('pc_kpi_by_department')),
                           const SizedBox(height: 8),
                           ...pc.kpiSnapshot!.byDepartment.map((d) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -4231,24 +4284,24 @@ class _KpisTabState extends State<_KpisTab> {
                                         ),
                                         const SizedBox(height: 6),
                                         _KpiStatRow(
-                                            'Assigned tickets', '${d.ticketsAssigned}'),
+                                            l10n.t('pc_kpi_stat_assigned_tickets'), '${d.ticketsAssigned}'),
                                         _KpiStatRow(
                                           l10n.t('pc_kpi_avg_assignments_per_day'),
                                           '${d.avgTicketAssignmentsPerDay}',
                                         ),
-                                        _KpiStatRow('Completed', '${d.completedTickets}'),
-                                        _KpiStatRow('Total task hours',
+                                        _KpiStatRow(l10n.t('pc_kpi_stat_completed'), '${d.completedTickets}'),
+                                        _KpiStatRow(l10n.t('pc_kpi_stat_total_task_hours'),
                                             '${d.totalTaskHours} h'),
                                         _KpiStatRow(
-                                          'Avg task hours',
+                                          l10n.t('pc_kpi_stat_avg_task_hours'),
                                           d.avgTaskHours != null
                                               ? '${d.avgTaskHours} h'
                                               : '—',
                                         ),
-                                        _KpiStatRow('Total arrival hours',
+                                        _KpiStatRow(l10n.t('pc_kpi_stat_total_arrival_hours'),
                                             '${d.totalArrivalHours} h'),
                                         _KpiStatRow(
-                                          'Avg arrival hours',
+                                          l10n.t('pc_kpi_stat_avg_arrival_hours'),
                                           d.avgArrivalHours != null
                                               ? '${d.avgArrivalHours} h'
                                               : '—',
@@ -4258,7 +4311,7 @@ class _KpisTabState extends State<_KpisTab> {
                                           '${d.totalResubmissionHours} h',
                                         ),
                                         _KpiStatRow(
-                                          'Avg resubmission',
+                                          l10n.t('pc_kpi_stat_avg_resubmission'),
                                           d.avgResubmissionHours != null
                                               ? '${d.avgResubmissionHours} h'
                                               : '—',
@@ -4284,12 +4337,13 @@ class _KpisTabState extends State<_KpisTab> {
                         if (pc.kpiSnapshot!.byStaff.isNotEmpty) ...[
                           _SectionTitle(
                             _provinceFilter != null
-                                ? 'Staff in $_provinceFilter'
+                                ? l10n.t('pc_kpi_staff_in_province',
+                                    {'province': _provinceFilter!})
                                 : pc.isOwner
-                                    ? 'By staff'
+                                    ? l10n.t('pc_kpi_by_staff')
                                     : pc.isDepartmentManager
-                                        ? 'Staff in your department'
-                                        : 'Your performance',
+                                        ? l10n.t('pc_kpi_staff_in_department')
+                                        : l10n.t('pc_kpi_your_performance'),
                           ),
                           const SizedBox(height: 8),
                           ...pc.kpiSnapshot!.byStaff.map((s) => Padding(
@@ -4309,7 +4363,10 @@ class _KpisTabState extends State<_KpisTab> {
                                           ),
                                         ),
                                         Text(
-                                          '${_staffRoleLabel(s.role)} · ${s.ticketsAssigned} assigned',
+                                          l10n.t('pc_kpi_staff_assigned_line', {
+                                            'role': _staffRoleLabel(s.role),
+                                            'count': '${s.ticketsAssigned}',
+                                          }),
                                           style: TextStyle(
                                             color: Colors.white.withAlpha(150),
                                             fontSize: 11,
@@ -4330,30 +4387,30 @@ class _KpisTabState extends State<_KpisTab> {
                                           '${s.avgTicketAssignmentsPerDay}',
                                         ),
                                         _KpiStatRow(
-                                            'Completed', '${s.completedTickets}'),
-                                        _KpiStatRow('Total task hours',
+                                            l10n.t('pc_kpi_stat_completed'), '${s.completedTickets}'),
+                                        _KpiStatRow(l10n.t('pc_kpi_stat_total_task_hours'),
                                             '${s.totalTaskHours} h'),
                                         _KpiStatRow(
-                                          'Avg task hours',
+                                          l10n.t('pc_kpi_stat_avg_task_hours'),
                                           s.avgTaskHours != null
                                               ? '${s.avgTaskHours} h'
                                               : '—',
                                         ),
-                                        _KpiStatRow('Total arrival hours',
+                                        _KpiStatRow(l10n.t('pc_kpi_stat_total_arrival_hours'),
                                             '${s.totalArrivalHours} h'),
                                         _KpiStatRow(
-                                          'Avg arrival hours',
+                                          l10n.t('pc_kpi_stat_avg_arrival_hours'),
                                           s.avgArrivalHours != null
                                               ? '${s.avgArrivalHours} h'
                                               : '—',
                                         ),
-                                        _KpiStatRow('Crew joins', '${s.crewJoins}'),
+                                        _KpiStatRow(l10n.t('pc_kpi_stat_crew_joins'), '${s.crewJoins}'),
                                         _KpiStatRow(
                                           l10n.t('analytics_kpi_resubmission_hours'),
                                           '${s.totalResubmissionHours} h',
                                         ),
                                         _KpiStatRow(
-                                          'Avg resubmission',
+                                          l10n.t('pc_kpi_stat_avg_resubmission'),
                                           s.avgResubmissionHours != null
                                               ? '${s.avgResubmissionHours} h'
                                               : '—',
@@ -4364,20 +4421,34 @@ class _KpisTabState extends State<_KpisTab> {
                                 ),
                               )),
                         ] else
-                          const _EmptyState(
+                          _EmptyState(
                             icon: Icons.data_thresholding_rounded,
-                            title: 'No KPI data yet',
-                            subtitle:
-                                'Metrics use tickets assigned to workspace staff, with status history for arrival and task duration.',
+                            title: l10n.t('pc_kpi_empty_title'),
+                            subtitle: l10n.t('pc_kpi_empty_subtitle'),
                           ),
                         ] else
-                          const _EmptyState(
+                          _EmptyState(
                             icon: Icons.error_outline_rounded,
-                            title: 'Could not load KPIs',
-                            subtitle: 'Pull to refresh or check your connection.',
+                            title: l10n.t('pc_kpi_error_title'),
+                            subtitle: l10n.t('pc_kpi_error_subtitle'),
                           ),
-                        const WorkspaceExpensesAnalyticsPanel(),
+                        const SizedBox(height: 8),
+                        Container(
+                          margin: const EdgeInsets.only(top: 8, bottom: 4),
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Colors.white.withValues(alpha: 0.12),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         const WorkspaceCancellationsAnalyticsPanel(),
+                        const WorkspaceExpensesAnalyticsPanel(),
                     ],
                   ),
           ),
