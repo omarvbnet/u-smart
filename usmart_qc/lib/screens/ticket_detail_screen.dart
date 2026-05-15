@@ -2962,12 +2962,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Future<void> _openUseMaterialFromMyAssignment(Ticket t) async {
     final l10n = AppLocalizations.of(context);
     final wh = context.read<PrivateCompanyWarehouseProvider>();
-    wh.resetFilters();
-    wh.setFilters(mineOnly: true, status: 'ASSIGNED');
-    await wh.refreshItems();
+    final pools = await wh.fetchMyHeldMaterials();
     if (!mounted) return;
-    final items = List<WarehouseItem>.from(wh.items);
-    if (items.isEmpty) {
+    if (pools.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.t('maint_no_assigned_materials'))),
       );
@@ -2999,22 +2996,35 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Totals combine every line you hold (e.g. 4 × 1000 m = 4000 m). Enter meters used per site; the rest stays on your stock.',
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(140),
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: ListView.builder(
-                    itemCount: items.length,
+                    itemCount: pools.length,
                     itemBuilder: (_, i) {
-                      final it = items[i];
-                      final name = it.materialName ?? 'Material';
+                      final pool = pools[i];
+                      final unit = pool.unit?.trim();
+                      final unitSuffix =
+                          unit != null && unit.isNotEmpty ? ' $unit' : '';
                       return ListTile(
-                        title: Text(name,
+                        title: Text(pool.name,
                             style: const TextStyle(color: Colors.white)),
                         subtitle: Text(
-                          '${it.serialNumber} · ×${it.quantity} ${it.materialUnit ?? ''}',
+                          '${pool.lineCount} line(s) · ${pool.totalQuantity}$unitSuffix held',
                           style: TextStyle(color: Colors.white.withAlpha(140)),
                         ),
                         onTap: () {
                           Navigator.pop(ctx);
-                          _promptUseMaterialOnTicket(t, it);
+                          _promptUseMaterialOnTicket(t, pool: pool);
                         },
                       );
                     },
@@ -3028,12 +3038,27 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  Future<void> _promptUseMaterialOnTicket(Ticket t, WarehouseItem item) async {
+  Future<void> _promptUseMaterialOnTicket(
+    Ticket t, {
+    HeldMaterialPool? pool,
+    WarehouseItem? item,
+  }) async {
     final l10n = AppLocalizations.of(context);
     final pc = context.read<PrivateCompanyProvider>();
     final reasons = pc.workspace?.materialUseReasons ?? const <String>[];
     final noteCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController();
     String? picked = reasons.length == 1 ? reasons.first : null;
+
+    final materialName =
+        pool?.name ?? item?.materialName ?? 'Material';
+    final unit = pool?.unit ?? item?.materialUnit;
+    final unitSuffix = unit != null && unit.trim().isNotEmpty ? ' ${unit.trim()}' : '';
+    final totalHeld = pool?.totalQuantity ?? item?.quantity ?? 1;
+    final partial = pool?.partialConsumption ?? item?.supportsPartialConsumption ?? false;
+    if (partial) {
+      qtyCtrl.text = '1';
+    }
 
     final res = await showDialog<Map<String, dynamic>?>(
       context: context,
@@ -3056,10 +3081,36 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      '${item.materialName ?? 'Material'} — ${item.serialNumber} ×${item.quantity}',
+                      pool != null
+                          ? '$materialName — $totalHeld$unitSuffix held (${pool.lineCount} line(s))'
+                          : '$materialName — ${item!.serialNumber} ×${item.quantity}$unitSuffix',
                       style:
                           TextStyle(color: Colors.white.withAlpha(200), fontSize: 14),
                     ),
+                    if (partial) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: qtyCtrl,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Quantity to use$unitSuffix',
+                          helperText: 'Max $totalHeld$unitSuffix — remainder stays on your stock',
+                          helperStyle: TextStyle(color: Colors.white.withAlpha(120)),
+                          labelStyle:
+                              TextStyle(color: Colors.white.withAlpha(180)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                BorderSide(color: Colors.white.withAlpha(40)),
+                          ),
+                          focusedBorder: const OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
+                            borderSide: BorderSide(color: Color(0xFF6C63FF)),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (reasons.isNotEmpty) ...[
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
@@ -3123,9 +3174,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         (picked == null || picked!.trim().isEmpty)) {
                       return;
                     }
+                    int? useQty;
+                    if (partial) {
+                      useQty = int.tryParse(qtyCtrl.text.trim());
+                      if (useQty == null || useQty < 1 || useQty > totalHeld) {
+                        return;
+                      }
+                    }
                     Navigator.pop(ctx, {
                       'useReason': picked?.trim(),
                       'note': noteCtrl.text.trim(),
+                      if (useQty != null) 'quantity': useQty,
                     });
                   },
                   child: Text(l10n.t('submit')),
@@ -3137,20 +3196,36 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       },
     );
     noteCtrl.dispose();
+    qtyCtrl.dispose();
     if (res == null || !mounted) return;
     final useReason = res['useReason'] as String?;
     final note = res['note'] as String?;
+    final useQty = res['quantity'] as int?;
     if (reasons.isNotEmpty && (useReason == null || useReason.isEmpty)) {
       return;
     }
 
     final wh = context.read<PrivateCompanyWarehouseProvider>();
-    final success = await wh.useOnTicket(
-      item.id,
-      t.id,
-      useReason: useReason?.isNotEmpty == true ? useReason : null,
-      note: note?.isNotEmpty == true ? note : null,
-    );
+    final bool success;
+    if (pool != null) {
+      success = await wh.consumeMaterialOnTicket(
+        materialId: pool.materialId,
+        ticketId: t.id,
+        quantity: useQty ?? totalHeld,
+        useReason: useReason?.isNotEmpty == true ? useReason : null,
+        note: note?.isNotEmpty == true ? note : null,
+      );
+    } else if (item != null) {
+      success = await wh.useOnTicket(
+        item.id,
+        t.id,
+        useReason: useReason?.isNotEmpty == true ? useReason : null,
+        note: note?.isNotEmpty == true ? note : null,
+        quantity: useQty,
+      );
+    } else {
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

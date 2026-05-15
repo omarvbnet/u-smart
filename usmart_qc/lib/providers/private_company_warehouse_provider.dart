@@ -572,6 +572,58 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
           },
           successMessage: 'Recorded on ticket.');
 
+  Future<List<HeldMaterialPool>> fetchMyHeldMaterials() async {
+    try {
+      final res = await _api.getSafe(ApiConfig.privateCompanyWarehouseMyHeldMaterials);
+      if (res != null && res['success'] == true) {
+        return ((res['materials'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(HeldMaterialPool.fromJson)
+            .toList();
+      }
+    } catch (_) {
+      /* non-fatal */
+    }
+    return const [];
+  }
+
+  Future<bool> consumeMaterialOnTicket({
+    required String materialId,
+    required String ticketId,
+    required int quantity,
+    String? note,
+    String? useReason,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        ApiConfig.privateCompanyWarehouseConsumeOnTicket,
+        body: {
+          'materialId': materialId,
+          'ticketId': ticketId,
+          'quantity': quantity,
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+          if (useReason != null && useReason.trim().isNotEmpty) 'useReason': useReason.trim(),
+        },
+      );
+      if (res['success'] == true) {
+        final msg = res['message']?.toString();
+        await Future.wait([_loadItems(), _loadDashboard(), _loadActivity()]);
+        _setSuccess(msg ?? 'Material use recorded.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Could not record use.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> markDamaged(String id, {String? note, String? ticketId, String? useReason}) =>
       _itemAction(id, 'damage',
           body: {

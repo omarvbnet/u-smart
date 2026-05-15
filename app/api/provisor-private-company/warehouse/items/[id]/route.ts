@@ -8,6 +8,8 @@ import {
   warehouseGuard,
 } from '@/lib/private-company-warehouse';
 import { remainingAssignBudgetForStaffMaterial } from '@/lib/private-company-staff-budget-access';
+import { consumeQuantityFromItemLine } from '@/lib/private-company-material-consume';
+import { materialSupportsPartialConsumption } from '@/lib/material-quantity';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -263,7 +265,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       returnRequestedAt: true,
       returnRequestedById: true,
       returnRequestNote: true,
-      material: { select: { id: true, name: true, tracking: true } },
+      material: { select: { id: true, name: true, tracking: true, unit: true } },
     },
   });
   if (!item) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
@@ -889,42 +891,63 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           { status: 403 }
         );
       }
-      const previousHolderId = item.assignedToId;
       const noteRes = await resolveMaterialMovementNote(guard.companyId, body as Record<string, unknown>);
       if (!noteRes.ok) return noteRes.response;
       const resolvedNote = noteRes.note;
-      const updated = await prisma.privateCompanyMaterialItem.update({
-        where: { id },
-        data: {
-          status: 'USED',
-          usedTicketId: ticketId,
-          usedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const lineQty = Math.max(1, Math.floor(Number(item.quantity)) || 1);
+      const partialOk = materialSupportsPartialConsumption({
+        tracking: item.material.tracking,
+        unit: item.material.unit,
       });
-      await logMovement({
-        companyId: guard.companyId,
-        itemId: id,
-        type: 'USED',
-        fromStaffId: previousHolderId,
-        ticketId,
-        actorId: guard.requesterId,
-        quantity: bodyQuantity,
-        note: resolvedNote,
-      });
+      const useQty =
+        bodyQuantity !== undefined
+          ? Math.floor(bodyQuantity)
+          : partialOk
+            ? lineQty
+            : 1;
+      if (useQty < 1) {
+        return NextResponse.json(
+          { success: false, message: 'quantity must be at least 1.' },
+          { status: 400 }
+        );
+      }
       const ticketLabel =
         [ticket.siteName, ticket.technique].filter(Boolean).join(' · ') || ticket.id;
-      const matName = updated.material?.name ?? item.material.name;
-      await notifyMaterialUsedForRecipients({
+      const previousHolderId = item.assignedToId;
+      const consumed = await consumeQuantityFromItemLine({
         companyId: guard.companyId,
         itemId: id,
-        materialName: matName,
-        serialNumber: updated.serialNumber,
+        ticketId,
+        consumeQty: useQty,
+        actorId: guard.requesterId,
+        note: resolvedNote,
+        ticketSiteLabel: ticketLabel,
+      });
+      if (!consumed.ok) {
+        return NextResponse.json(
+          { success: false, message: consumed.message },
+          { status: consumed.status }
+        );
+      }
+      const updated = await prisma.privateCompanyMaterialItem.findFirst({
+        where: { id: consumed.usedItemId, companyId: guard.companyId },
+        include: ITEM_INCLUDE,
+      });
+      await notifyMaterialUsedForRecipients({
+        companyId: guard.companyId,
+        itemId: consumed.usedItemId,
+        materialName: item.material.name,
+        serialNumber: item.serialNumber,
         ticketLabel,
         previousHolderId,
         excludeId: guard.requesterId,
       });
-      return NextResponse.json({ success: true, item: updated });
+      return NextResponse.json({
+        success: true,
+        item: updated,
+        consumedQty: consumed.consumedQty,
+        remainingOnLine: consumed.remainingOnLine,
+      });
     }
     case 'damage':
     case 'lose': {

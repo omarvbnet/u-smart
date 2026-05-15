@@ -8623,7 +8623,33 @@ class _ItemActionsSheet extends StatelessWidget {
                     Navigator.pop(context);
                     final res = await _pickTicket(anchorContext);
                     if (res == null) return;
-                    await wh.useOnTicket(item.id, res.$1, note: res.$2);
+                    int? useQty;
+                    if (item.supportsPartialConsumption && item.quantity > 1) {
+                      useQty = await _promptWarehouseMoveQuantity(
+                        anchorContext,
+                        item,
+                        title: 'Quantity to use on ticket',
+                        helperPrefix: 'This line has',
+                      );
+                      if (useQty == null) return;
+                    }
+                    if (!anchorContext.mounted) return;
+                    final ok = await wh.useOnTicket(
+                      item.id,
+                      res.$1,
+                      note: res.$2,
+                      quantity: useQty,
+                    );
+                    if (!anchorContext.mounted) return;
+                    ScaffoldMessenger.of(anchorContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (wh.lastSuccess ?? 'Recorded on ticket.')
+                              : (wh.error ?? 'Could not record use.'),
+                        ),
+                      ),
+                    );
                   },
                 ),
               if (canFieldReportDamagedOrLost) ...[
@@ -9056,11 +9082,13 @@ class _StaffPickSearchSheetState extends State<_StaffPickSearchSheet> {
   }
 }
 
-/// How many units to assign/transfer when the inventory line has quantity > 1.
+/// How many units to assign/transfer/use when the inventory line has quantity > 1.
 Future<int?> _promptWarehouseMoveQuantity(
   BuildContext context,
-  WarehouseItem item,
-) async {
+  WarehouseItem item, {
+  String title = 'Quantity to assign',
+  String helperPrefix = 'Enter how many to move to the selected staff',
+}) async {
   if (item.quantity <= 1) return 1;
   final ctrl = TextEditingController(text: '${item.quantity}');
   final unit =
@@ -9072,9 +9100,9 @@ Future<int?> _promptWarehouseMoveQuantity(
     builder: (ctx) => AlertDialog(
       backgroundColor: const Color(0xFF12122A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: const Text(
-        'Quantity to assign',
-        style: TextStyle(
+      title: Text(
+        title,
+        style: const TextStyle(
             color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
       ),
       content: Column(
@@ -9082,7 +9110,7 @@ Future<int?> _promptWarehouseMoveQuantity(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'This line has ${item.quantity}$unit. Enter how many to move to the selected staff (1–${item.quantity}). The rest stays on this line.',
+            '$helperPrefix (1–${item.quantity}$unit). This line has ${item.quantity}$unit.',
             style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 13),
           ),
           const SizedBox(height: 14),

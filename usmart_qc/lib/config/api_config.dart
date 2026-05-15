@@ -128,6 +128,10 @@ class ApiConfig {
       '/api/provisor-private-company/warehouse/items';
   static String privateCompanyWarehouseItemDetail(String id) =>
       '/api/provisor-private-company/warehouse/items/$id';
+  static const String privateCompanyWarehouseConsumeOnTicket =
+      '/api/provisor-private-company/warehouse/consume-on-ticket';
+  static const String privateCompanyWarehouseMyHeldMaterials =
+      '/api/provisor-private-company/warehouse/my-held-materials';
   static const String privateCompanyWarehouseDashboard =
       '/api/provisor-private-company/warehouse/dashboard';
   static const String privateCompanyWarehouseProvinceInventory =

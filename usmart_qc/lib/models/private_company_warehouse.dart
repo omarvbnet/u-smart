@@ -17,6 +17,26 @@ MaterialTracking _trackingFromString(String? raw) {
 String materialTrackingApi(MaterialTracking t) =>
     t == MaterialTracking.bulk ? 'BULK' : 'SERIAL';
 
+bool unitMeasuresLength(String? unit) {
+  if (unit == null || unit.trim().isEmpty) return false;
+  final u = unit.trim().toLowerCase();
+  return u == 'm' ||
+      u == 'meter' ||
+      u == 'meters' ||
+      u == 'metre' ||
+      u == 'metres' ||
+      u == 'lm' ||
+      u == 'linear m';
+}
+
+bool materialSupportsPartialConsumption({
+  MaterialTracking? tracking,
+  String? unit,
+}) {
+  if (tracking == MaterialTracking.bulk) return true;
+  return unitMeasuresLength(unit);
+}
+
 enum MaterialItemStatus { inWarehouse, assigned, used, damaged, lost, retired }
 
 MaterialItemStatus materialItemStatusFromString(String? raw) {
@@ -68,6 +88,54 @@ String materialItemStatusLabel(MaterialItemStatus s) {
       return 'Lost';
     case MaterialItemStatus.retired:
       return 'Retired';
+  }
+}
+
+/// Staff-held stock rolled up by catalog material (meters / BULK pools).
+class HeldMaterialPool {
+  HeldMaterialPool({
+    required this.materialId,
+    required this.name,
+    this.unit,
+    this.color,
+    required this.tracking,
+    required this.partialConsumption,
+    required this.totalQuantity,
+    required this.lineCount,
+    required this.lines,
+  });
+
+  final String materialId;
+  final String name;
+  final String? unit;
+  final String? color;
+  final MaterialTracking tracking;
+  final bool partialConsumption;
+  final int totalQuantity;
+  final int lineCount;
+  final List<({String id, String serialNumber, int quantity})> lines;
+
+  factory HeldMaterialPool.fromJson(Map<String, dynamic> json) {
+    final rawLines = (json['lines'] as List?) ?? const [];
+    return HeldMaterialPool(
+      materialId: json['materialId'] as String,
+      name: json['name'] as String? ?? 'Material',
+      unit: json['unit'] as String?,
+      color: json['color'] as String?,
+      tracking: _trackingFromString(json['tracking'] as String?),
+      partialConsumption: json['partialConsumption'] == true,
+      totalQuantity: (json['totalQuantity'] as num?)?.toInt() ?? 0,
+      lineCount: (json['lineCount'] as num?)?.toInt() ?? 0,
+      lines: [
+        for (final l in rawLines)
+          if (l is Map<String, dynamic>)
+            (
+              id: l['id'] as String,
+              serialNumber: l['serialNumber'] as String? ?? '',
+              quantity: (l['quantity'] as num?)?.toInt() ?? 1,
+            ),
+      ],
+    );
   }
 }
 
@@ -130,6 +198,7 @@ class WarehouseItem {
     this.materialName,
     this.materialColor,
     this.materialUnit,
+    this.materialTracking = MaterialTracking.serial,
     this.assignedToId,
     this.assignedToName,
     this.assignedToUsername,
@@ -156,6 +225,7 @@ class WarehouseItem {
   final String? materialName;
   final String? materialColor;
   final String? materialUnit;
+  final MaterialTracking materialTracking;
   final String? assignedToId;
   final String? assignedToName;
   final String? assignedToUsername;
@@ -181,6 +251,11 @@ class WarehouseItem {
   bool get returnPending =>
       status == MaterialItemStatus.assigned && returnRequestedAt != null;
 
+  bool get supportsPartialConsumption => materialSupportsPartialConsumption(
+        tracking: materialTracking,
+        unit: materialUnit,
+      );
+
   factory WarehouseItem.fromJson(Map<String, dynamic> json) {
     final material = json['material'] as Map<String, dynamic>?;
     final assigned = json['assignedTo'] as Map<String, dynamic>?;
@@ -196,6 +271,7 @@ class WarehouseItem {
       materialName: material?['name'] as String?,
       materialColor: material?['color'] as String?,
       materialUnit: material?['unit'] as String?,
+      materialTracking: _trackingFromString(material?['tracking'] as String?),
       assignedToId: json['assignedToId'] as String? ?? assigned?['id'] as String?,
       assignedToName: assigned?['name'] as String?,
       assignedToUsername: assigned?['username'] as String?,
