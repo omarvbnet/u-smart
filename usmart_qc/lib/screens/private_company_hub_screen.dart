@@ -16,6 +16,8 @@ import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
 import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
+import '../widgets/workspace_cancellations_analytics_panel.dart';
+import '../widgets/workspace_expenses_analytics_panel.dart';
 
 String _pcStatusLabel(PrivateCompanyStatus s, AppLocalizations l10n) {
   switch (s) {
@@ -1080,6 +1082,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   String _color = '#6C63FF';
   String? _iconKey;
   bool _proxJoin = false;
+  bool _siteArrivalAuto = true;
   bool _engineerAvailabilityPool = true;
   bool _technicianAvailabilityPool = true;
   String _maintDispatchMode = 'DIRECT_TECHNICIAN';
@@ -1112,8 +1115,9 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
     _name = TextEditingController(text: widget.existing?.name ?? '');
     _description = TextEditingController(text: widget.existing?.description ?? '');
     _proxJoin = widget.existing?.maintenanceProximityJoinEnabled ?? false;
+    _siteArrivalAuto = widget.existing?.siteArrivalAutoOnSiteEnabled != false;
     _proxRadius = TextEditingController(
-      text: '${widget.existing?.maintenanceProximityRadiusM ?? 100}',
+      text: '${widget.existing?.maintenanceProximityRadiusM ?? 500}',
     );
     _color = widget.existing?.color ?? _colorOptions[math.Random().nextInt(_colorOptions.length)];
     _iconKey = widget.existing?.iconKey;
@@ -1147,7 +1151,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
       );
     } else {
       final r = int.tryParse(_proxRadius.text.trim());
-      final radius = (r != null && r >= 10 && r <= 5000) ? r : 100;
+      final radius = (r != null && r >= 10 && r <= 5000) ? r : 500;
       ok = await pc.updateDepartment(
         widget.existing!.id,
         name: name,
@@ -1156,6 +1160,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         iconKey: _iconKey ?? '',
         maintenanceProximityJoinEnabled: _proxJoin,
         maintenanceProximityRadiusM: radius,
+        siteArrivalAutoOnSiteEnabled: _siteArrivalAuto,
         engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
         maintenanceDispatchMode: _maintDispatchMode,
@@ -1394,10 +1399,28 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                     activeThumbColor: const Color(0xFF00D4AA),
                     onChanged: (v) => setState(() => _proxJoin = v),
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Auto ON_SITE when near job site',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Assigned maintenance and QC tickets stay pending until the lead is within the radius below.',
+                      style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                    ),
+                    value: _siteArrivalAuto,
+                    activeThumbColor: const Color(0xFF00D4AA),
+                    onChanged: (v) => setState(() => _siteArrivalAuto = v),
+                  ),
                   _DarkField(
                     controller: _proxRadius,
-                    label: 'Proximity radius (m)',
-                    hint: '100',
+                    label: 'Site arrival & crew radius (m)',
+                    hint: '500',
                     icon: Icons.radar_rounded,
                     keyboardType: TextInputType.number,
                   ),
@@ -4230,12 +4253,33 @@ class _KpisTabState extends State<_KpisTab> {
                                               ? '${d.avgArrivalHours} h'
                                               : '—',
                                         ),
+                                        _KpiStatRow(
+                                          l10n.t('analytics_kpi_resubmission_hours'),
+                                          '${d.totalResubmissionHours} h',
+                                        ),
+                                        _KpiStatRow(
+                                          'Avg resubmission',
+                                          d.avgResubmissionHours != null
+                                              ? '${d.avgResubmissionHours} h'
+                                              : '—',
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ),
                               )),
                           const SizedBox(height: 18),
+                        ],
+                        if (pc.isDepartmentManager && pc.myDepartmentId != null) ...[
+                          _ManagerDeptFieldSettingsCard(
+                            department: widget.workspace.departments
+                                .cast<PrivateCompanyDepartment?>()
+                                .firstWhere(
+                                  (d) => d?.id == pc.myDepartmentId,
+                                  orElse: () => null,
+                                ),
+                          ),
+                          const SizedBox(height: 14),
                         ],
                         if (pc.kpiSnapshot!.byStaff.isNotEmpty) ...[
                           _SectionTitle(
@@ -4303,6 +4347,17 @@ class _KpisTabState extends State<_KpisTab> {
                                               ? '${s.avgArrivalHours} h'
                                               : '—',
                                         ),
+                                        _KpiStatRow('Crew joins', '${s.crewJoins}'),
+                                        _KpiStatRow(
+                                          l10n.t('analytics_kpi_resubmission_hours'),
+                                          '${s.totalResubmissionHours} h',
+                                        ),
+                                        _KpiStatRow(
+                                          'Avg resubmission',
+                                          s.avgResubmissionHours != null
+                                              ? '${s.avgResubmissionHours} h'
+                                              : '—',
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -4315,17 +4370,112 @@ class _KpisTabState extends State<_KpisTab> {
                             subtitle:
                                 'Metrics use tickets assigned to workspace staff, with status history for arrival and task duration.',
                           ),
-                      ] else
-                        const _EmptyState(
-                          icon: Icons.error_outline_rounded,
-                          title: 'Could not load KPIs',
-                          subtitle: 'Pull to refresh or check your connection.',
-                        ),
+                        ] else
+                          const _EmptyState(
+                            icon: Icons.error_outline_rounded,
+                            title: 'Could not load KPIs',
+                            subtitle: 'Pull to refresh or check your connection.',
+                          ),
+                        const WorkspaceExpensesAnalyticsPanel(),
+                        const WorkspaceCancellationsAnalyticsPanel(),
                     ],
                   ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ManagerDeptFieldSettingsCard extends StatefulWidget {
+  const _ManagerDeptFieldSettingsCard({this.department});
+  final PrivateCompanyDepartment? department;
+
+  @override
+  State<_ManagerDeptFieldSettingsCard> createState() =>
+      _ManagerDeptFieldSettingsCardState();
+}
+
+class _ManagerDeptFieldSettingsCardState extends State<_ManagerDeptFieldSettingsCard> {
+  late bool _siteArrivalAuto;
+  late TextEditingController _radius;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.department;
+    _siteArrivalAuto = d?.siteArrivalAutoOnSiteEnabled != false;
+    _radius = TextEditingController(text: '${d?.maintenanceProximityRadiusM ?? 500}');
+  }
+
+  @override
+  void dispose() {
+    _radius.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final d = widget.department;
+    if (d == null) return;
+    final r = int.tryParse(_radius.text.trim());
+    final radius = (r != null && r >= 10 && r <= 5000) ? r : 500;
+    final pc = context.read<PrivateCompanyProvider>();
+    final ok = await pc.updateDepartment(
+      d.id,
+      maintenanceProximityRadiusM: radius,
+      siteArrivalAutoOnSiteEnabled: _siteArrivalAuto,
+    );
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Department field settings saved.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.department;
+    if (d == null) return const SizedBox.shrink();
+    final pc = context.watch<PrivateCompanyProvider>();
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionTitle('Department field settings'),
+            Text(
+              '${d.name} — site arrival distance and auto ON_SITE for maintenance / QC tickets.',
+              style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11, height: 1.35),
+            ),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Auto ON_SITE near job site',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              value: _siteArrivalAuto,
+              activeThumbColor: const Color(0xFF00D4AA),
+              onChanged: (v) => setState(() => _siteArrivalAuto = v),
+            ),
+            _DarkField(
+              controller: _radius,
+              label: 'Site arrival radius (m)',
+              hint: '500',
+              icon: Icons.radar_rounded,
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            _GradientButton(
+              onPressed: pc.submitting ? null : _save,
+              label: pc.submitting ? 'Saving…' : 'Save field settings',
+              icon: Icons.save_rounded,
+              stretch: true,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -4510,6 +4660,138 @@ class _WarehouseTabState extends State<_WarehouseTab>
     editCtrl.dispose();
   }
 
+  Future<void> _openTicketExpensesSettings() async {
+    final pc = context.read<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
+    final initial = List<String>.from(pc.workspace?.ticketExpenseReasons ?? const []);
+    final editCtrl = TextEditingController();
+    var live = List<String>.from(initial);
+    var enabled = pc.workspace?.ticketExpensesEnabled == true;
+    final pending = pc.workspace?.ticketExpensesActivationPending == true;
+    final role = (pc.membership.role ?? '').toUpperCase();
+    final isCoordinator = role == 'COORDINATOR';
+    final canEnableDirect = pc.isOwner || role == 'MANAGER';
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: const Color(0xFF12122A),
+          title: Text(
+            l10n.t('pc_ticket_expenses_settings'),
+            style: const TextStyle(color: Colors.white, fontSize: 17),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (pending)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        l10n.t('pc_expenses_activation_pending'),
+                        style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12),
+                      ),
+                    ),
+                  if (canEnableDirect)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        l10n.t('pc_expenses_enable'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      value: enabled,
+                      onChanged: (v) => setLocal(() => enabled = v),
+                    )
+                  else if (isCoordinator && !enabled)
+                    Text(
+                      l10n.t('pc_expenses_coordinator_hint'),
+                      style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
+                    ),
+                  TextField(
+                    controller: editCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: l10n.t('pc_expenses_reason_add_hint'),
+                      hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6C63FF)),
+                        onPressed: () {
+                          final s = editCtrl.text.trim();
+                          if (s.isEmpty) return;
+                          if (live.any((x) => x.toLowerCase() == s.toLowerCase())) return;
+                          setLocal(() {
+                            live = [...live, s];
+                            editCtrl.clear();
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...live.map(
+                    (r) => ListTile(
+                      dense: true,
+                      title: Text(r, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                        onPressed: () => setLocal(() => live = [...live]..remove(r)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.t('cancel')),
+            ),
+            if (canEnableDirect && pending)
+              TextButton(
+                onPressed: () async {
+                  await pc.patchExpenseSettings(approveActivation: true);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text(l10n.t('pc_expenses_approve')),
+              ),
+            if (isCoordinator && !enabled && !canEnableDirect)
+              TextButton(
+                onPressed: () async {
+                  await pc.patchExpenseSettings(
+                    reasons: live,
+                    requestActivation: true,
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text(l10n.t('pc_expenses_request_activation')),
+              ),
+            FilledButton(
+              onPressed: () async {
+                if (canEnableDirect) {
+                  await pc.patchExpenseSettings(
+                    reasons: live,
+                    enabled: enabled,
+                    disable: !enabled && pc.workspace?.ticketExpensesEnabled == true,
+                  );
+                } else {
+                  await pc.patchExpenseSettings(reasons: live);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text(l10n.t('submit')),
+            ),
+          ],
+        ),
+      ),
+    );
+    editCtrl.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
@@ -4569,7 +4851,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
               ),
             ),
           ),
-        if (pc.canManageStaff)
+        if (pc.canManageStaff) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: OutlinedButton.icon(
@@ -4583,6 +4865,20 @@ class _WarehouseTabState extends State<_WarehouseTab>
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: OutlinedButton.icon(
+              onPressed: _openTicketExpensesSettings,
+              icon: const Icon(Icons.payments_outlined,
+                  size: 18, color: Color(0xFF00D4AA)),
+              label: Text(l10n.t('pc_ticket_expenses_settings')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00D4AA),
+                side: const BorderSide(color: Color(0xFF00D4AA)),
+              ),
+            ),
+          ),
+        ],
         Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           decoration: BoxDecoration(

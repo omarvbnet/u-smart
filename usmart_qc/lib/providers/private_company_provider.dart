@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+
 import '../config/api_config.dart';
 import '../models/private_company.dart';
+import '../models/private_company_cancellation.dart';
+import '../models/private_company_expense.dart';
 import '../services/api_service.dart';
 
 /// Manages the private company workspace lifecycle for the authenticated user.
@@ -13,6 +17,10 @@ class PrivateCompanyProvider extends ChangeNotifier {
   PrivateCompanyWorkspace? _workspace;
   PrivateCompanyKpiSnapshot? _kpiSnapshot;
   bool _kpiLoading = false;
+  ExpenseAnalyticsSnapshot? _expenseAnalytics;
+  bool _expenseAnalyticsLoading = false;
+  CancellationAnalyticsSnapshot? _cancellationAnalytics;
+  bool _cancellationAnalyticsLoading = false;
   bool _loading = false;
   String? _error;
   String? _lastSuccess;
@@ -22,6 +30,10 @@ class PrivateCompanyProvider extends ChangeNotifier {
   PrivateCompanyWorkspace? get workspace => _workspace;
   PrivateCompanyKpiSnapshot? get kpiSnapshot => _kpiSnapshot;
   bool get kpiLoading => _kpiLoading;
+  ExpenseAnalyticsSnapshot? get expenseAnalytics => _expenseAnalytics;
+  bool get expenseAnalyticsLoading => _expenseAnalyticsLoading;
+  CancellationAnalyticsSnapshot? get cancellationAnalytics => _cancellationAnalytics;
+  bool get cancellationAnalyticsLoading => _cancellationAnalyticsLoading;
   bool get loading => _loading;
   bool get submitting => _submitting;
   String? get error => _error;
@@ -247,6 +259,35 @@ class PrivateCompanyProvider extends ChangeNotifier {
     );
   }
 
+  /// When GPS is available, marks assigned maintenance/QC tickets ON_SITE within department radius.
+  Future<int> checkWorkspaceSiteArrival() async {
+    if (!hasWorkspace || !isApproved) return 0;
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return 0;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      final res = await _api.post(ApiConfig.privateCompanySiteArrivalCheck, body: {
+        'latitude': pos.latitude,
+        'longitude': pos.longitude,
+      });
+      if (res['success'] == true) {
+        return (res['updatedCount'] as num?)?.toInt() ??
+            ((res['updated'] as List?)?.length ?? 0);
+      }
+    } catch (_) {
+      /* location optional */
+    }
+    return 0;
+  }
+
   Future<void> fetchKpis({int days = 365, String? province}) async {
     if (!canViewKpis) return;
     _kpiLoading = true;
@@ -357,6 +398,177 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchExpenseAnalytics({
+    int days = 90,
+    String? province,
+    String? departmentId,
+    String? staffId,
+  }) async {
+    if (!hasWorkspace || !isApproved) return;
+    _expenseAnalyticsLoading = true;
+    notifyListeners();
+    try {
+      final query = <String, String>{'days': '${days.clamp(1, 730)}'};
+      final p = province?.trim();
+      if (p != null && p.isNotEmpty) query['province'] = p;
+      final d = departmentId?.trim();
+      if (d != null && d.isNotEmpty) query['departmentId'] = d;
+      final s = staffId?.trim();
+      if (s != null && s.isNotEmpty) query['staffId'] = s;
+      final res = await _api.getSafe(ApiConfig.privateCompanyExpensesAnalytics, query: query);
+      if (res != null && res['success'] == true) {
+        _expenseAnalytics = ExpenseAnalyticsSnapshot.fromJson(res);
+      }
+    } catch (_) {
+      /* keep previous */
+    } finally {
+      _expenseAnalyticsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchCancellationAnalytics({
+    int days = 90,
+    String? province,
+    String? departmentId,
+  }) async {
+    if (!hasWorkspace || !isApproved) return;
+    if (!canManageStaff) return;
+    _cancellationAnalyticsLoading = true;
+    notifyListeners();
+    try {
+      final query = <String, String>{'days': '${days.clamp(1, 730)}'};
+      final p = province?.trim();
+      if (p != null && p.isNotEmpty) query['province'] = p;
+      final d = departmentId?.trim();
+      if (d != null && d.isNotEmpty) query['departmentId'] = d;
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyCancellationsAnalytics,
+        query: query,
+      );
+      if (res != null && res['success'] == true) {
+        _cancellationAnalytics = CancellationAnalyticsSnapshot.fromJson(res);
+      }
+    } catch (_) {
+      /* keep previous */
+    } finally {
+      _cancellationAnalyticsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> patchCancellationSettings({List<String>? reasons}) async {
+    if (!canManageStaff) return false;
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(
+        ApiConfig.privateCompanyCancellationSettings,
+        body: {if (reasons != null) 'reasons': reasons},
+      );
+      if (res['success'] == true) {
+        await refresh();
+        _setSuccess('Cancellation reasons saved.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to save.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> patchExpenseSettings({
+    List<String>? reasons,
+    bool? enabled,
+    bool requestActivation = false,
+    bool approveActivation = false,
+    bool rejectActivation = false,
+    bool disable = false,
+  }) async {
+    if (!canManageStaff) return false;
+    _submitting = true;
+    notifyListeners();
+    try {
+      final body = <String, dynamic>{
+        if (reasons != null) 'reasons': reasons,
+        if (enabled == true) 'enabled': true,
+        if (requestActivation) 'requestActivation': true,
+        if (approveActivation) 'approveActivation': true,
+        if (rejectActivation) 'rejectActivation': true,
+        if (disable) 'disable': true,
+      };
+      final res = await _api.patch(ApiConfig.privateCompanyExpenseSettings, body: body);
+      if (res['success'] == true) {
+        await refresh();
+        _setSuccess('Expense settings saved.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to save expense settings.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> submitTicketExpense({
+    required String ticketId,
+    required double amount,
+    required String reason,
+    String? note,
+  }) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyExpenses, body: {
+        'ticketId': ticketId,
+        'amount': amount,
+        'reason': reason,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      });
+      if (res['success'] == true) {
+        _setSuccess('Expense recorded.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to record expense.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteTicketExpense(String expenseId) async {
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.delete(ApiConfig.privateCompanyExpenseDetail(expenseId));
+      if (res['success'] == true) {
+        _setSuccess('Expense removed.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to remove expense.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   /// Owner, manager, or coordinator: labels for material USE / DAMAGE / LOST audit dropdowns.
   Future<bool> updateMaterialUseReasons(List<String> reasons) async {
     if (!canManageStaff) return false;
@@ -434,6 +646,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? iconKey,
     bool? maintenanceProximityJoinEnabled,
     int? maintenanceProximityRadiusM,
+    bool? siteArrivalAutoOnSiteEnabled,
     bool? engineerAvailabilityPoolEnabled,
     bool? technicianAvailabilityPoolEnabled,
     String? maintenanceDispatchMode,
@@ -451,6 +664,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'maintenanceProximityJoinEnabled': maintenanceProximityJoinEnabled,
         if (maintenanceProximityRadiusM != null)
           'maintenanceProximityRadiusM': maintenanceProximityRadiusM,
+        if (siteArrivalAutoOnSiteEnabled != null)
+          'siteArrivalAutoOnSiteEnabled': siteArrivalAutoOnSiteEnabled,
         if (engineerAvailabilityPoolEnabled != null)
           'engineerAvailabilityPoolEnabled': engineerAvailabilityPoolEnabled,
         if (technicianAvailabilityPoolEnabled != null)

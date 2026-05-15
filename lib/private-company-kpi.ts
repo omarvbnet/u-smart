@@ -67,3 +67,5 @@ export function taskDurationHours(
   if (!work) return null;
   return (completedAt.getTime() - work.getTime()) / 36e5;
 }
+
+export { ticketResubmissionHoursForKpi } from '@/lib/ticket-resubmit';

@@ -5,9 +5,11 @@ import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 import { normalizeProvince } from '@/lib/private-company-warehouse';
 import {
   assignedStaffIdFromCompanyJson,
+  maintenanceCrewIdsFromCompanyJson,
   parseTicketCompanyJson,
   siteArrivalHours,
   taskDurationHours,
+  ticketResubmissionHoursForKpi,
 } from '@/lib/private-company-kpi';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +36,8 @@ type ProvinceAgg = {
   taskSumH: number;
   taskN: number;
   staffCount: number;
+  resubmitSumH: number;
+  resubmitN: number;
 };
 
 type StaffAgg = {
@@ -43,6 +47,9 @@ type StaffAgg = {
   arrivalN: number;
   taskSumH: number;
   taskN: number;
+  crewJoins: number;
+  resubmitSumH: number;
+  resubmitN: number;
 };
 
 function emptyAgg(): StaffAgg {
@@ -53,6 +60,9 @@ function emptyAgg(): StaffAgg {
     arrivalN: 0,
     taskSumH: 0,
     taskN: 0,
+    crewJoins: 0,
+    resubmitSumH: 0,
+    resubmitN: 0,
   };
 }
 
@@ -74,6 +84,10 @@ function finalizeStaffRow(meta: StaffMeta, a: StaffAgg, days: number) {
     avgTaskHours: a.taskN > 0 ? Math.round((a.taskSumH / a.taskN) * 100) / 100 : null,
     totalArrivalHours: Math.round(a.arrivalSumH * 100) / 100,
     avgArrivalHours: a.arrivalN > 0 ? Math.round((a.arrivalSumH / a.arrivalN) * 100) / 100 : null,
+    crewJoins: a.crewJoins,
+    totalResubmissionHours: Math.round(a.resubmitSumH * 100) / 100,
+    avgResubmissionHours:
+      a.resubmitN > 0 ? Math.round((a.resubmitSumH / a.resubmitN) * 100) / 100 : null,
   };
 }
 
@@ -86,6 +100,8 @@ type DeptAgg = {
   arrivalN: number;
   taskSumH: number;
   taskN: number;
+  resubmitSumH: number;
+  resubmitN: number;
 };
 
 /**
@@ -232,6 +248,8 @@ export async function GET(req: NextRequest) {
         taskSumH: 0,
         taskN: 0,
         staffCount: 0,
+        resubmitSumH: 0,
+        resubmitN: 0,
       });
       staffSeenInProvince.set(key, new Set());
     }
@@ -249,9 +267,16 @@ export async function GET(req: NextRequest) {
         arrivalN: 0,
         taskSumH: 0,
         taskN: 0,
+        resubmitSumH: 0,
+        resubmitN: 0,
       });
     }
     return perDept.get(did)!;
+  }
+
+  function bumpResubmit(agg: StaffAgg | DeptAgg | ProvinceAgg, hours: number) {
+    agg.resubmitSumH += hours;
+    agg.resubmitN += 1;
   }
 
   for (const t of tickets as Array<{
@@ -269,6 +294,7 @@ export async function GET(req: NextRequest) {
     const logs = logsByTicket.get(t.id) ?? [];
     const arrh = siteArrivalHours(t.createdAt, logs);
     const taskh = taskDurationHours(t.status, t.completedAt, logs);
+    const resubh = ticketResubmissionHoursForKpi(parsed);
 
     const a = perStaff.get(assigneeId) ?? emptyAgg();
     a.ticketsAssigned += 1;
@@ -281,7 +307,17 @@ export async function GET(req: NextRequest) {
       a.taskSumH += taskh;
       a.taskN += 1;
     }
+    if (resubh != null && resubh >= 0) {
+      bumpResubmit(a, resubh);
+    }
     perStaff.set(assigneeId, a);
+
+    for (const crewId of maintenanceCrewIdsFromCompanyJson(parsed)) {
+      if (staffIdsInProvince && !staffIdsInProvince.has(crewId)) continue;
+      const c = perStaff.get(crewId) ?? emptyAgg();
+      c.crewJoins += 1;
+      perStaff.set(crewId, c);
+    }
 
     const meta = staffMeta.get(assigneeId);
     const dId = meta?.departmentId ?? null;
@@ -297,6 +333,9 @@ export async function GET(req: NextRequest) {
       d.taskSumH += taskh;
       d.taskN += 1;
     }
+    if (resubh != null && resubh >= 0) {
+      bumpResubmit(d, resubh);
+    }
 
     const prov = meta?.province;
     if (prov) {
@@ -310,6 +349,9 @@ export async function GET(req: NextRequest) {
       if (taskh != null && taskh >= 0) {
         p.taskSumH += taskh;
         p.taskN += 1;
+      }
+      if (resubh != null && resubh >= 0) {
+        bumpResubmit(p, resubh);
       }
       const seen = staffSeenInProvince.get(prov)!;
       if (!seen.has(assigneeId)) {
@@ -380,6 +422,9 @@ export async function GET(req: NextRequest) {
         avgTaskHours: d.taskN > 0 ? Math.round((d.taskSumH / d.taskN) * 100) / 100 : null,
         totalArrivalHours: Math.round(d.arrivalSumH * 100) / 100,
         avgArrivalHours: d.arrivalN > 0 ? Math.round((d.arrivalSumH / d.arrivalN) * 100) / 100 : null,
+        totalResubmissionHours: Math.round(d.resubmitSumH * 100) / 100,
+        avgResubmissionHours:
+          d.resubmitN > 0 ? Math.round((d.resubmitSumH / d.resubmitN) * 100) / 100 : null,
       }))
       .sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
   }
@@ -397,6 +442,9 @@ export async function GET(req: NextRequest) {
       totalArrivalHours: Math.round(p.arrivalSumH * 100) / 100,
       avgArrivalHours:
         p.arrivalN > 0 ? Math.round((p.arrivalSumH / p.arrivalN) * 100) / 100 : null,
+      totalResubmissionHours: Math.round(p.resubmitSumH * 100) / 100,
+      avgResubmissionHours:
+        p.resubmitN > 0 ? Math.round((p.resubmitSumH / p.resubmitN) * 100) / 100 : null,
     }))
     .sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
 
@@ -413,6 +461,8 @@ export async function GET(req: NextRequest) {
       taskHours:
         'Per completed ticket: hours from first ON_SITE/IN_PROGRESS log to completion.',
       arrivalHours: 'Per ticket: hours from ticket creation until first ON_SITE/IN_PROGRESS log.',
+      resubmissionHours:
+        'Per ticket with resubmit cycles: total hours staff waited for requester edits (closed cycles + open pending).',
       avgTicketAssignmentsPerDay:
         'Assigned ticket count in the window divided by the number of calendar days in the window (smooth workload rate).',
     },

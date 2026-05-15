@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { assertReasonInList, loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
 
 const prisma = _prisma as any;
 
@@ -44,15 +45,31 @@ export async function POST(
       );
     }
 
+    const policy = await loadPlatformTicketPolicy();
+    const reasonCheck = assertReasonInList(reason, policy.resubmitReasons, 'Resubmit reasons');
+    if (!reasonCheck.ok) {
+      return NextResponse.json({ success: false, message: reasonCheck.message }, { status: 400 });
+    }
+
     const { id } = await params;
     const ticket = await prisma.visitorRequest.findFirst({
       where: { id, coordinatorCompanyId: ctx.companyId },
-      select: { id: true, company: true },
+      select: { id: true, company: true, status: true, workflowState: true },
     });
     if (!ticket) {
       return NextResponse.json(
         { success: false, message: 'Ticket not found' },
         { status: 404 },
+      );
+    }
+
+    if (
+      String(ticket.status ?? '').toUpperCase() === 'COMPLETED' ||
+      String(ticket.workflowState ?? '').toUpperCase() === 'DONE'
+    ) {
+      return NextResponse.json(
+        { success: false, message: 'Cannot request edits on a completed ticket.' },
+        { status: 400 },
       );
     }
 

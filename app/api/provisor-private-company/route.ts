@@ -44,6 +44,10 @@ export async function GET(req: NextRequest) {
             createdAt: true,
             updatedAt: true,
             materialUseReasons: true,
+            ticketExpensesEnabled: true,
+            ticketExpenseReasons: true,
+            ticketCancellationReasons: true,
+            ticketExpensesActivationPending: true,
             departments: {
               orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
               select: {
@@ -56,6 +60,7 @@ export async function GET(req: NextRequest) {
                 createdAt: true,
                 maintenanceProximityJoinEnabled: true,
                 maintenanceProximityRadiusM: true,
+                siteArrivalAutoOnSiteEnabled: true,
                 engineerAvailabilityPoolEnabled: true,
                 technicianAvailabilityPoolEnabled: true,
                 maintenanceDispatchMode: true,
@@ -139,6 +144,10 @@ export async function GET(req: NextRequest) {
           status: true,
           approvedAt: true,
           materialUseReasons: true,
+          ticketExpensesEnabled: true,
+          ticketExpenseReasons: true,
+          ticketCancellationReasons: true,
+          ticketExpensesActivationPending: true,
           departments: {
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
             select: {
@@ -151,6 +160,7 @@ export async function GET(req: NextRequest) {
               createdAt: true,
               maintenanceProximityJoinEnabled: true,
               maintenanceProximityRadiusM: true,
+              siteArrivalAutoOnSiteEnabled: true,
               engineerAvailabilityPoolEnabled: true,
               technicianAvailabilityPoolEnabled: true,
               maintenanceDispatchMode: true,

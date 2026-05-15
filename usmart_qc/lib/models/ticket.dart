@@ -1,3 +1,4 @@
+import 'private_company_expense.dart';
 import 'qfield_project.dart';
 
 class ChecklistHistoryEntry {
@@ -117,6 +118,9 @@ class Ticket {
   final String? workflowState;
   /// Reason set by engineer/technician when resubmitting for coordinator edit
   final String? resubmitReason;
+  final String? resubmittedAt;
+  final String? resubmitTarget;
+  final double? resubmissionHours;
   /// category of the coordinator task (MAINTENANCE | QUALITY | SUPERVISION)
   final String? taskCategory;
   /// DB / company JSON: inspection checklist template id for this ticket.
@@ -141,6 +145,23 @@ class Ticket {
 
   /// True when API allows join/leave for workspace maintenance or inspection crew (field staff).
   final bool allowWorkspaceCrewJoin;
+  final List<TicketExpenseLine> ticketExpenses;
+  final bool workspaceTicketExpensesEnabled;
+  final String? cancellationRequestStatus;
+  final String? cancellationRequestedAt;
+  final String? cancellationReason;
+  final String? cancellationRejectedAt;
+  final String? cancellationRejectionReason;
+  final bool canRequestCancellation;
+  final List<String> workspaceCancellationReasons;
+  final List<String> platformCancellationReasons;
+  final List<String> platformResubmitReasons;
+  final bool canEditForResubmit;
+
+  List<String> get effectiveCancellationReasons =>
+      platformCancellationReasons.isNotEmpty
+          ? platformCancellationReasons
+          : workspaceCancellationReasons;
 
   Ticket({
     required this.id,
@@ -180,6 +201,9 @@ class Ticket {
     this.finishingImageUrls = const [],
     this.workflowState,
     this.resubmitReason,
+    this.resubmittedAt,
+    this.resubmitTarget,
+    this.resubmissionHours,
     this.taskCategory,
     this.checklistTemplateId,
     this.checklistTemplate,
@@ -192,9 +216,29 @@ class Ticket {
     this.siteLatitude,
     this.siteLongitude,
     this.allowWorkspaceCrewJoin = false,
+    this.ticketExpenses = const [],
+    this.workspaceTicketExpensesEnabled = false,
+    this.cancellationRequestStatus,
+    this.cancellationRequestedAt,
+    this.cancellationReason,
+    this.cancellationRejectedAt,
+    this.cancellationRejectionReason,
+    this.canRequestCancellation = false,
+    this.workspaceCancellationReasons = const [],
+    this.platformCancellationReasons = const [],
+    this.platformResubmitReasons = const [],
+    this.canEditForResubmit = false,
   });
 
   bool get isPending => status == 'PENDING';
+  bool get isCancelled => status == 'CANCELLED';
+  bool get hasPendingCancellationRequest => cancellationRequestStatus == 'PENDING';
+
+  bool get awaitsRequesterResubmit =>
+      workflowState == 'RESUBMITTED' && resubmitTarget == 'REQUESTER';
+
+  bool get isWorkspaceScoped =>
+      assignmentScope == 'PRIVATE_COMPANY_STAFF' && privateCompanyId != null;
   bool get isOnSite => status == 'ON_SITE';
   bool get isInProgress => status == 'IN_PROGRESS';
   bool get isCompleted => status == 'COMPLETED';
@@ -309,6 +353,9 @@ class Ticket {
           [],
       workflowState: json['workflowState'] as String?,
       resubmitReason: json['resubmitReason'] as String?,
+      resubmittedAt: json['resubmittedAt'] as String?,
+      resubmitTarget: json['resubmitTarget'] as String?,
+      resubmissionHours: (json['resubmissionHours'] as num?)?.toDouble(),
       taskCategory: json['taskCategory'] as String?,
       checklistTemplateId: json['checklistTemplateId'] as String?,
       checklistTemplate: json['checklistTemplate'] is Map
@@ -328,6 +375,38 @@ class Ticket {
       siteLatitude: (json['siteLatitude'] as num?)?.toDouble(),
       siteLongitude: (json['siteLongitude'] as num?)?.toDouble(),
       allowWorkspaceCrewJoin: json['allowWorkspaceCrewJoin'] == true,
+      workspaceTicketExpensesEnabled: () {
+        final s = json['workspaceExpenseSettings'];
+        if (s is Map) return s['enabled'] == true;
+        return false;
+      }(),
+      ticketExpenses: (json['ticketExpenses'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(TicketExpenseLine.fromJson)
+              .toList() ??
+          const [],
+      cancellationRequestStatus: json['cancellationRequestStatus'] as String?,
+      cancellationRequestedAt: json['cancellationRequestedAt'] as String?,
+      cancellationReason: json['cancellationReason'] as String?,
+      cancellationRejectedAt: json['cancellationRejectedAt'] as String?,
+      cancellationRejectionReason: json['cancellationRejectionReason'] as String?,
+      canRequestCancellation: json['canRequestCancellation'] == true,
+      workspaceCancellationReasons: () {
+        final raw = json['workspaceCancellationReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
+      platformCancellationReasons: () {
+        final raw = json['platformCancellationReasons'] ?? json['workspaceCancellationReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
+      platformResubmitReasons: () {
+        final raw = json['platformResubmitReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
+      canEditForResubmit: json['canEditForResubmit'] == true,
     );
   }
 

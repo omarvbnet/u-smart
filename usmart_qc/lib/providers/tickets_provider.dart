@@ -327,16 +327,65 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   /// Engineer/Technician resubmits a coordinator ticket asking coordinator to edit it.
-  Future<bool> resubmitTicketForEdit(String ticketId, {required String reason}) async {
+  Future<bool> resubmitTicketForEdit(
+    String ticketId, {
+    required String reason,
+    String target = 'COORDINATOR',
+  }) async {
     try {
       final data = await _api.post(
         ApiConfig.ticketResubmit(ticketId),
-        body: {'reason': reason, 'target': 'COORDINATOR'},
+        body: {'reason': reason, 'target': target},
       );
       if (data['success'] == true) {
         await fetchTickets();
         return true;
       }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Requester returns an edited ticket to field staff after staff resubmit.
+  Future<bool> resubmitTicketToStaff(String ticketId, {String? reason}) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketResubmit(ticketId),
+        body: {
+          'reason': (reason ?? '').trim().isNotEmpty
+              ? reason!.trim()
+              : 'Edits completed per staff request.',
+          'target': 'STAFF',
+        },
+      );
+      if (data['success'] == true) {
+        await fetchTickets();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> requesterEditTicket(
+    String ticketId, {
+    String? siteName,
+    String? siteCoordinator,
+    String? designSpecifications,
+    String? maintenanceReason,
+    List<String>? attachmentUrls,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (siteName != null && siteName.trim().isNotEmpty) {
+        body['siteName'] = siteName.trim();
+      }
+      if (siteCoordinator != null) body['siteCoordinator'] = siteCoordinator.trim();
+      if (designSpecifications != null) {
+        body['designSpecifications'] = designSpecifications.trim();
+      }
+      if (maintenanceReason != null) body['maintenanceReason'] = maintenanceReason.trim();
+      if (attachmentUrls != null) body['attachmentUrls'] = attachmentUrls;
+      final data = await _api.patch(ApiConfig.ticketRequesterEdit(ticketId), body: body);
+      return data['success'] == true;
     } catch (_) {}
     return false;
   }
@@ -369,6 +418,41 @@ class TicketsProvider extends ChangeNotifier {
   /// Workspace tickets (maintenance or QC): join or leave `maintenanceCrewIds` (server enforces roles + proximity).
   /// [latitude] / [longitude] are required for `join` (proximity to job site).
   /// On failure, [message] may contain the server error (English) or null on network error.
+  Future<bool> requestTicketCancellation(String ticketId, String reason) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketCancellationRequest(ticketId),
+        body: {'reason': reason.trim()},
+      );
+      return data['success'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<({bool ok, String? message})> respondTicketCancellation(
+    String ticketId,
+    String action, {
+    String? rejectionReason,
+  }) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketCancellationRespond(ticketId),
+        body: {
+          'action': action,
+          if (rejectionReason != null && rejectionReason.trim().isNotEmpty)
+            'rejectionReason': rejectionReason.trim(),
+        },
+      );
+      if (data['success'] == true) return (ok: true, message: null);
+      final msg = data['message'];
+      if (msg is String && msg.trim().isNotEmpty) {
+        return (ok: false, message: msg.trim());
+      }
+    } catch (_) {}
+    return (ok: false, message: null);
+  }
+
   Future<({List<String>? crew, String? message})> postMaintenanceCrewAction(
     String ticketId,
     String action, {

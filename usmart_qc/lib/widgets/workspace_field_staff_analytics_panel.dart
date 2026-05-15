@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/tickets_provider.dart';
+
 import '../l10n/app_localizations.dart';
 import '../models/private_company.dart';
 import '../models/private_company_warehouse.dart';
 import '../providers/auth_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
+import 'workspace_cancellations_analytics_panel.dart';
+import 'workspace_expenses_analytics_panel.dart';
 import 'workspace_material_budget_analytics_panel.dart';
 
 /// Loads workspace KPIs, material requests (mine), and staff material budgets when
@@ -23,10 +27,19 @@ Future<void> refreshWorkspaceFieldStaffAnalytics(BuildContext context) async {
     return;
   }
   await Future.wait([
+    pc.checkWorkspaceSiteArrival(),
     pc.fetchKpis(days: 365),
+    pc.fetchExpenseAnalytics(days: 90),
     wh.refreshMaterialRequests('mine'),
     wh.loadStaffMaterialBudgets(),
   ]);
+  if (context.mounted) {
+    try {
+      await context.read<TicketsProvider>().fetchTickets();
+    } catch (_) {
+      /* tickets provider may be absent on some screens */
+    }
+  }
 }
 
 /// Private-workspace engineers and technicians: performance KPIs (self),
@@ -162,9 +175,14 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
                       ),
                       _miniStat(l10n.t('analytics_kpi_arrival_hours'), _fmtHours(row.totalArrivalHours)),
                       _miniStat(
+                        l10n.t('analytics_kpi_resubmission_hours'),
+                        _fmtHours(row.totalResubmissionHours),
+                      ),
+                      _miniStat(
                         l10n.t('analytics_kpi_avg_arrival'),
                         row.avgArrivalHours != null ? _fmtHours(row.avgArrivalHours!) : '—',
                       ),
+                      _miniStat(l10n.t('analytics_kpi_crew_joins'), '${row.crewJoins}'),
                     ],
                   ),
                 ],
@@ -247,6 +265,8 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
             );
           }),
         const WorkspaceMaterialBudgetAnalyticsPanel(skipInitialLoad: true),
+        const WorkspaceExpensesAnalyticsPanel(compact: true),
+        const WorkspaceCancellationsAnalyticsPanel(compact: true),
       ],
     );
   }

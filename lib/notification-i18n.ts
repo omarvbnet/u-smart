@@ -28,6 +28,11 @@ export type NotificationCopyKey =
   | 'material_request_issue_acknowledged'
   | 'maintenance_crew_joined'
   | 'maintenance_awaiting_your_confirm'
+  | 'ticket_cancellation_requested'
+  | 'ticket_cancellation_approved'
+  | 'ticket_cancellation_rejected'
+  | 'ticket_resubmit_to_requester'
+  | 'ticket_resubmit_to_staff'
   | 'maintenance_rejected_by_requester';
 
 export type NotificationCopyPayload = {
@@ -41,24 +46,28 @@ const STATUS_LABEL: Record<AppNotificationLocale, Record<string, string>> = {
     IN_PROGRESS: 'In progress',
     COMPLETED: 'Completed',
     PENDING: 'Pending',
+    CANCELLED: 'Cancelled',
   },
   ar: {
     ON_SITE: 'في الموقع',
     IN_PROGRESS: 'قيد التنفيذ',
     COMPLETED: 'مكتمل',
     PENDING: 'قيد الانتظار',
+    CANCELLED: 'ملغى',
   },
   tr: {
     ON_SITE: 'Sahada',
     IN_PROGRESS: 'Devam ediyor',
     COMPLETED: 'Tamamlandı',
     PENDING: 'Beklemede',
+    CANCELLED: 'İptal edildi',
   },
   ku: {
     ON_SITE: 'لە شوێنەکە',
     IN_PROGRESS: 'لە کاردایە',
     COMPLETED: 'تەواو بوو',
     PENDING: 'چاوەڕوان',
+    CANCELLED: 'هەڵوەشێنراوە',
   },
 };
 
@@ -687,6 +696,96 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: 'تەواوکردنی چاککردنەوە پشتڕاست بکەرەوە',
       body: `تیمەکە کارەکەی لە تیکەتی ${v.ticketId} تەواو کرد. تکایە لە نزیکەی ${v.minutes} خولەکدا پشتڕاستی بکەرەوە یان کێشە ڕابگەیەنە (وەگرنا بە شێوەی ئۆتۆماتیکی قبووڵ دەکرێت).`,
+    }),
+  },
+  ticket_cancellation_requested: {
+    en: (v) => ({
+      title: 'Cancellation requested',
+      body: `The requester asked to cancel this ticket: ${v.reason}`,
+    }),
+    ar: (v) => ({
+      title: 'طلب إلغاء',
+      body: `طلب مقدّم التذكرة الإلغاء: ${v.reason}`,
+    }),
+    tr: (v) => ({
+      title: 'İptal talebi',
+      body: `Talep sahibi iptal istedi: ${v.reason}`,
+    }),
+    ku: (v) => ({
+      title: 'داواکاری هەڵوەشاندنەوە',
+      body: `داواکار داوای هەڵوەشاندنەوەی کرد: ${v.reason}`,
+    }),
+  },
+  ticket_cancellation_approved: {
+    en: () => ({
+      title: 'Ticket cancelled',
+      body: 'Assigned staff approved your cancellation request.',
+    }),
+    ar: () => ({
+      title: 'تم إلغاء التذكرة',
+      body: 'وافق الموظف المعيّن على طلب الإلغاء.',
+    }),
+    tr: () => ({
+      title: 'Talep iptal edildi',
+      body: 'Atanan personel iptal talebinizi onayladı.',
+    }),
+    ku: () => ({
+      title: 'تیکەت هەڵوەشێنرایەوە',
+      body: 'کارمەندی دیاریکراو داواکاری هەڵوەشاندنەوەکەی پەسەند کرد.',
+    }),
+  },
+  ticket_resubmit_to_requester: {
+    en: (v) => ({
+      title: 'Ticket needs your edits',
+      body: `Field staff requested changes: ${v.reason}`,
+    }),
+    ar: (v) => ({
+      title: 'التذكرة تحتاج تعديلاتك',
+      body: `طلب الموظف تعديلات: ${v.reason}`,
+    }),
+    tr: (v) => ({
+      title: 'Talep düzenlemenizi bekliyor',
+      body: `Saha personeli değişiklik istedi: ${v.reason}`,
+    }),
+    ku: (v) => ({
+      title: 'تیکەت پێویستی دەستکاری تۆیە',
+      body: `کارمەند داوای گۆڕانکاری کرد: ${v.reason}`,
+    }),
+  },
+  ticket_resubmit_to_staff: {
+    en: (v) => ({
+      title: 'Ticket returned to you',
+      body: `Requester finished edits: ${v.reason}`,
+    }),
+    ar: (v) => ({
+      title: 'أُعيدت التذكرة إليك',
+      body: `أنهى مقدّم الطلب التعديلات: ${v.reason}`,
+    }),
+    tr: (v) => ({
+      title: 'Talep size geri gönderildi',
+      body: `Talep sahibi düzenlemeleri tamamladı: ${v.reason}`,
+    }),
+    ku: (v) => ({
+      title: 'تیکەت گەڕێندرایەوە بۆ تۆ',
+      body: `داواکار دەستکارییەکەی تەواو کرد: ${v.reason}`,
+    }),
+  },
+  ticket_cancellation_rejected: {
+    en: (v) => ({
+      title: 'Cancellation declined',
+      body: `Staff declined cancellation: ${v.reason}`,
+    }),
+    ar: (v) => ({
+      title: 'رفض الإلغاء',
+      body: `رفض الموظف الإلغاء: ${v.reason}`,
+    }),
+    tr: (v) => ({
+      title: 'İptal reddedildi',
+      body: `Personel iptali reddetti: ${v.reason}`,
+    }),
+    ku: (v) => ({
+      title: 'هەڵوەشاندنەوە ڕەتکرایەوە',
+      body: `کارمەند هەڵوەشاندنەوەکەی ڕەتکردەوە: ${v.reason}`,
     }),
   },
   maintenance_rejected_by_requester: {

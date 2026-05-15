@@ -77,7 +77,8 @@ class PrivateCompanyDepartment {
     this.memberCount = 0,
     this.members = const [],
     this.maintenanceProximityJoinEnabled = false,
-    this.maintenanceProximityRadiusM = 100,
+    this.maintenanceProximityRadiusM = 500,
+    this.siteArrivalAutoOnSiteEnabled,
     this.engineerAvailabilityPoolEnabled = true,
     this.technicianAvailabilityPoolEnabled = true,
     this.maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
@@ -93,6 +94,8 @@ class PrivateCompanyDepartment {
   final List<PrivateCompanyStaff> members;
   final bool maintenanceProximityJoinEnabled;
   final int maintenanceProximityRadiusM;
+  /// null = inherit workspace default (auto ON_SITE when near site).
+  final bool? siteArrivalAutoOnSiteEnabled;
   final bool engineerAvailabilityPoolEnabled;
   final bool technicianAvailabilityPoolEnabled;
   /// `DIRECT_TECHNICIAN` (default) or `ENGINEER_ASSIGNS` (engineer/coordinator assigns techs first).
@@ -132,7 +135,10 @@ class PrivateCompanyDepartment {
       memberCount: memberCount,
       members: members,
       maintenanceProximityJoinEnabled: json['maintenanceProximityJoinEnabled'] == true,
-      maintenanceProximityRadiusM: (json['maintenanceProximityRadiusM'] as num?)?.toInt() ?? 100,
+      maintenanceProximityRadiusM: (json['maintenanceProximityRadiusM'] as num?)?.toInt() ?? 500,
+      siteArrivalAutoOnSiteEnabled: json['siteArrivalAutoOnSiteEnabled'] is bool
+          ? json['siteArrivalAutoOnSiteEnabled'] as bool
+          : null,
       engineerAvailabilityPoolEnabled: json['engineerAvailabilityPoolEnabled'] != false,
       technicianAvailabilityPoolEnabled: json['technicianAvailabilityPoolEnabled'] != false,
       maintenanceDispatchMode: _normalizeMaintenanceDispatchMode(
@@ -341,6 +347,10 @@ class PrivateCompanyWorkspace {
     this.staff = const [],
     this.checklists = const [],
     this.materialUseReasons = const [],
+    this.ticketExpensesEnabled = false,
+    this.ticketExpenseReasons = const [],
+    this.ticketCancellationReasons = const [],
+    this.ticketExpensesActivationPending = false,
   });
 
   final String id;
@@ -357,6 +367,10 @@ class PrivateCompanyWorkspace {
   final List<PrivateCompanyChecklist> checklists;
   /// Workspace-defined reasons for material USE / DAMAGE / LOST (audit dropdown).
   final List<String> materialUseReasons;
+  final bool ticketExpensesEnabled;
+  final List<String> ticketExpenseReasons;
+  final List<String> ticketCancellationReasons;
+  final bool ticketExpensesActivationPending;
 
   bool get isApproved => status == PrivateCompanyStatus.approved;
   bool get isPending => status == PrivateCompanyStatus.pending;
@@ -404,6 +418,18 @@ class PrivateCompanyWorkspace {
         if (raw is! List) return const <String>[];
         return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
       }(),
+      ticketExpensesEnabled: json['ticketExpensesEnabled'] == true,
+      ticketExpenseReasons: () {
+        final raw = json['ticketExpenseReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
+      ticketCancellationReasons: () {
+        final raw = json['ticketCancellationReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
+      ticketExpensesActivationPending: json['ticketExpensesActivationPending'] == true,
     );
   }
 }
@@ -459,6 +485,8 @@ class PrivateCompanyDepartmentKpi {
     this.avgTaskHours,
     required this.totalArrivalHours,
     this.avgArrivalHours,
+    this.totalResubmissionHours = 0,
+    this.avgResubmissionHours,
   });
 
   final String? departmentId;
@@ -470,6 +498,8 @@ class PrivateCompanyDepartmentKpi {
   final double? avgTaskHours;
   final double totalArrivalHours;
   final double? avgArrivalHours;
+  final double totalResubmissionHours;
+  final double? avgResubmissionHours;
 
   factory PrivateCompanyDepartmentKpi.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyDepartmentKpi(
@@ -483,6 +513,9 @@ class PrivateCompanyDepartmentKpi {
       avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
       totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,
       avgArrivalHours: (json['avgArrivalHours'] as num?)?.toDouble(),
+      totalResubmissionHours:
+          (json['totalResubmissionHours'] as num?)?.toDouble() ?? 0,
+      avgResubmissionHours: (json['avgResubmissionHours'] as num?)?.toDouble(),
     );
   }
 }
@@ -499,6 +532,8 @@ class PrivateCompanyProvinceKpi {
     this.avgTaskHours,
     required this.totalArrivalHours,
     this.avgArrivalHours,
+    this.totalResubmissionHours = 0,
+    this.avgResubmissionHours,
   });
 
   final String province;
@@ -510,6 +545,8 @@ class PrivateCompanyProvinceKpi {
   final double? avgTaskHours;
   final double totalArrivalHours;
   final double? avgArrivalHours;
+  final double totalResubmissionHours;
+  final double? avgResubmissionHours;
 
   factory PrivateCompanyProvinceKpi.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyProvinceKpi(
@@ -523,6 +560,9 @@ class PrivateCompanyProvinceKpi {
       avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
       totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,
       avgArrivalHours: (json['avgArrivalHours'] as num?)?.toDouble(),
+      totalResubmissionHours:
+          (json['totalResubmissionHours'] as num?)?.toDouble() ?? 0,
+      avgResubmissionHours: (json['avgResubmissionHours'] as num?)?.toDouble(),
     );
   }
 }
@@ -544,6 +584,9 @@ class PrivateCompanyStaffKpi {
     this.avgTaskHours,
     required this.totalArrivalHours,
     this.avgArrivalHours,
+    this.crewJoins = 0,
+    this.totalResubmissionHours = 0,
+    this.avgResubmissionHours,
   });
 
   final String staffId;
@@ -560,6 +603,9 @@ class PrivateCompanyStaffKpi {
   final double? avgTaskHours;
   final double totalArrivalHours;
   final double? avgArrivalHours;
+  final int crewJoins;
+  final double totalResubmissionHours;
+  final double? avgResubmissionHours;
 
   factory PrivateCompanyStaffKpi.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyStaffKpi(
@@ -578,6 +624,10 @@ class PrivateCompanyStaffKpi {
       avgTaskHours: (json['avgTaskHours'] as num?)?.toDouble(),
       totalArrivalHours: (json['totalArrivalHours'] as num?)?.toDouble() ?? 0,
       avgArrivalHours: (json['avgArrivalHours'] as num?)?.toDouble(),
+      crewJoins: (json['crewJoins'] as num?)?.toInt() ?? 0,
+      totalResubmissionHours:
+          (json['totalResubmissionHours'] as num?)?.toDouble() ?? 0,
+      avgResubmissionHours: (json['avgResubmissionHours'] as num?)?.toDouble(),
     );
   }
 }

@@ -75,6 +75,12 @@ class ApiConfig {
       '/api/tickets/$ticketId/resubmit';
   static String ticketRequestEdit(String ticketId) =>
       '/api/tickets/$ticketId/request-edit';
+  static String ticketRequesterEdit(String ticketId) =>
+      '/api/tickets/$ticketId/requester-edit';
+  static String ticketCancellationRequest(String ticketId) =>
+      '/api/tickets/$ticketId/cancellation-request';
+  static String ticketCancellationRespond(String ticketId) =>
+      '/api/tickets/$ticketId/cancellation-respond';
 
   static const String inspectionChecklists = '/api/inspection-checklists';
   static String inspectionChecklistDetail(String id) => '/api/inspection-checklists/$id';
@@ -102,6 +108,7 @@ class ApiConfig {
   static const String otpVerify = '/api/otp/verify';
 
   static const String provisorTechniques = '/api/provisor-techniques';
+  static const String provisorTicketPolicy = '/api/provisor-ticket-policy';
 
   static const String companyStaff = '/api/company/staff';
   static const String companyBillingPlan = '/api/company/billing/plan';
@@ -117,6 +124,20 @@ class ApiConfig {
       '/api/provisor-private-company/techniques/$id';
   static const String privateCompanyNotifications = '/api/provisor-private-company/notifications';
   static const String privateCompanyKpis = '/api/provisor-private-company/kpis';
+  static const String privateCompanySiteArrivalCheck =
+      '/api/provisor-private-company/site-arrival/check';
+  static const String privateCompanyExpenseSettings =
+      '/api/provisor-private-company/expenses/settings';
+  static const String privateCompanyExpenses =
+      '/api/provisor-private-company/expenses';
+  static const String privateCompanyExpensesAnalytics =
+      '/api/provisor-private-company/expenses/analytics';
+  static String privateCompanyExpenseDetail(String id) =>
+      '/api/provisor-private-company/expenses/$id';
+  static const String privateCompanyCancellationSettings =
+      '/api/provisor-private-company/cancellations/settings';
+  static const String privateCompanyCancellationsAnalytics =
+      '/api/provisor-private-company/cancellations/analytics';
   static const String privateCompanyExport = '/api/provisor-private-company/export';
 
   // ── Private Company warehouse / materials ────────────────────────────────

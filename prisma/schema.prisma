@@ -285,6 +285,7 @@ model VisitorRequest {
   // ── Private company warehouse (materials consumed on this ticket) ────
   usedMaterialItems              PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemUsedTicket")
   materialMovements              PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovementTicket")
+  ticketExpenses                 PrivateCompanyTicketExpense[]    @relation("PrivateCompanyTicketExpenseTicket")
 
   @@index([privateCompanyTargetDepartmentId])
   @@map("visitor_requests")
@@ -389,6 +390,9 @@ model TicketRequester {
   materialStaffBudgets           PrivateCompanyStaffMaterialBudget[] @relation("StaffMaterialBudget")
   materialHandoversConfirmed     PrivateCompanyMaterialItem[]        @relation("MaterialHandoverConfirmedBy")
   materialReturnRequests         PrivateCompanyMaterialItem[]        @relation("MaterialReturnRequestedBy")
+  ticketExpensesSubmitted        PrivateCompanyTicketExpense[]       @relation("PrivateCompanyTicketExpenseStaff")
+  ticketExpensesActivationRequested PrivateCompany[]                 @relation("PrivateCompanyTicketExpensesActivationRequester")
+  ticketExpensesEnabledBy        PrivateCompany[]                    @relation("PrivateCompanyTicketExpensesEnabledBy")
 
   @@map("ticket_requesters")
 }
@@ -566,6 +570,7 @@ enum TicketStatus {
   ON_SITE
   IN_PROGRESS
   COMPLETED
+  CANCELLED
 }
 
 // Phone OTP for ticket submission (visitors)
@@ -728,6 +733,16 @@ model ProvisorTechnique {
 
   @@unique([category, slug])
   @@map("provisor_techniques")
+}
+
+/// Singleton platform policy for Provisor tickets (company, personal, workspace).
+model ProvisorPlatformSettings {
+  id                        String   @id @default("default")
+  ticketCancellationReasons String[] @default([])
+  ticketResubmitReasons     String[] @default([])
+  updatedAt                 DateTime @updatedAt
+
+  @@map("provisor_platform_settings")
 }
 
 // Training requests (from Explore Training page)
@@ -1369,11 +1384,53 @@ model PrivateCompany {
   workspaceTechniques PrivateCompanyTechnique[]
   /// Preset labels for material USE / DAMAGE / LOST movement notes (owner, manager, coordinator).
   materialUseReasons String[] @default([])
+  /// When true, maintenance/QC tickets stay PENDING after assign until lead GPS is within department proximity radius.
+  siteArrivalAutoOnSiteEnabled Boolean @default(true)
+  /// Field staff may log ticket expenses (all workspace ticket types) before completion.
+  ticketExpensesEnabled                  Boolean   @default(false)
+  ticketExpenseReasons                   String[]  @default([])
+  /// Preset labels for ticket cancellation requests (owner, manager, coordinator).
+  ticketCancellationReasons              String[]  @default([])
+  /// Coordinator requested activation; manager/owner must approve.
+  ticketExpensesActivationPending        Boolean   @default(false)
+  ticketExpensesActivationRequestedAt  DateTime?
+  ticketExpensesActivationRequestedById  String?
+  ticketExpensesActivationRequestedBy    TicketRequester? @relation("PrivateCompanyTicketExpensesActivationRequester", fields: [ticketExpensesActivationRequestedById], references: [id], onDelete: SetNull)
+  ticketExpensesEnabledAt                DateTime?
+  ticketExpensesEnabledById              String?
+  ticketExpensesEnabledBy                TicketRequester? @relation("PrivateCompanyTicketExpensesEnabledBy", fields: [ticketExpensesEnabledById], references: [id], onDelete: SetNull)
+  ticketExpenses                         PrivateCompanyTicketExpense[] @relation("PrivateCompanyTicketExpenses")
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
   @@index([status])
   @@map("private_companies")
+}
+
+/// Staff-reported cost on a workspace ticket (before ticket completion).
+model PrivateCompanyTicketExpense {
+  id               String           @id @default(cuid())
+  companyId        String
+  company          PrivateCompany   @relation("PrivateCompanyTicketExpenses", fields: [companyId], references: [id], onDelete: Cascade)
+  ticketId         String
+  ticket           VisitorRequest   @relation("PrivateCompanyTicketExpenseTicket", fields: [ticketId], references: [id], onDelete: Cascade)
+  staffRequesterId String
+  staff            TicketRequester  @relation("PrivateCompanyTicketExpenseStaff", fields: [staffRequesterId], references: [id], onDelete: Cascade)
+  amount           Float
+  currency         String           @default("IQD")
+  reason           String
+  note             String?
+  ticketProvince   String?
+  departmentId     String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([companyId, staffRequesterId, createdAt])
+  @@index([companyId, ticketId])
+  @@index([companyId, ticketProvince])
+  @@index([companyId, departmentId])
+  @@map("private_company_ticket_expenses")
 }
 
 /// Workspace-specific ticket technique options (slug stored on VisitorRequest.technique).
@@ -1410,8 +1467,10 @@ model PrivateCompanyDepartment {
   sortOrder   Int               @default(0)
   /// Owner: allow technicians on this department to join the same maintenance ticket when in proximity.
   maintenanceProximityJoinEnabled Boolean @default(false)
-  /// Default pairing radius in meters (technicians); staff may override individually.
-  maintenanceProximityRadiusM     Int     @default(100)
+  /// Default pairing radius in meters (site arrival + crew join); staff may override individually.
+  maintenanceProximityRadiusM     Int     @default(500)
+  /// null = inherit company siteArrivalAutoOnSiteEnabled.
+  siteArrivalAutoOnSiteEnabled    Boolean?
   /// Owner: engineers in this department may browse and self-assign from the pending QC pool (workspace tickets).
   engineerAvailabilityPoolEnabled   Boolean @default(true)
   /// Owner: technicians may self-assign pending maintenance from the pool (when ticket targets this department).

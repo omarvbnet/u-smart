@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { getPrivateCompanyMembership } from '@/lib/private-company-context';
+import {
+  CAN_MANAGE_STAFF_ROLES,
+  getPrivateCompanyMembership,
+} from '@/lib/private-company-context';
 import {
   deleteDepartmentTechniqueRows,
   upsertDepartmentTechniqueRows,
@@ -38,6 +41,69 @@ async function ownerOnly(req: NextRequest) {
   return { ok: true as const, requesterId: auth.payload.requesterId, companyId: m.ownedCompanyId };
 }
 
+const DEPT_FIELD_SETTING_KEYS = new Set([
+  'id',
+  'maintenanceProximityJoinEnabled',
+  'maintenanceProximityRadiusM',
+  'siteArrivalAutoOnSiteEnabled',
+]);
+
+async function departmentSettingsGuard(req: NextRequest, body: Record<string, unknown>) {
+  const keys = Object.keys(body);
+  const fieldOnly = keys.length > 0 && keys.every((k) => DEPT_FIELD_SETTING_KEYS.has(k));
+  if (!fieldOnly) {
+    return { ...(await ownerOnly(req)), fieldOnly: false as const };
+  }
+  const auth = getRequesterFromRequest(req);
+  if (!auth) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 }),
+      fieldOnly: true as const,
+    };
+  }
+  const m = await getPrivateCompanyMembership(auth.payload.requesterId);
+  if (!m.effectiveCompanyId) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ success: false, message: 'No workspace.' }, { status: 403 }),
+      fieldOnly: true as const,
+    };
+  }
+  const isOwner = m.ownedCompanyId === m.effectiveCompanyId;
+  if (isOwner) {
+    return {
+      ok: true as const,
+      companyId: m.effectiveCompanyId,
+      isOwner: true as const,
+      actorDepartmentId: null as string | null,
+      fieldOnly: true as const,
+    };
+  }
+  const me = await prisma.ticketRequester.findUnique({
+    where: { id: auth.payload.requesterId },
+    select: { role: true, privateCompanyDepartmentId: true },
+  });
+  const actorRole = String(me?.role ?? '').toUpperCase();
+  if (!CAN_MANAGE_STAFF_ROLES.has(actorRole)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { success: false, message: 'Only the owner, managers, or coordinators can update field settings.' },
+        { status: 403 }
+      ),
+      fieldOnly: true as const,
+    };
+  }
+  return {
+    ok: true as const,
+    companyId: m.effectiveCompanyId,
+    isOwner: false as const,
+    actorDepartmentId: me?.privateCompanyDepartmentId ?? null,
+    fieldOnly: true as const,
+  };
+}
+
 /** GET — list departments for the workspace (owner OR staff). */
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -57,6 +123,7 @@ export async function GET(req: NextRequest) {
       createdAt: true,
       maintenanceProximityJoinEnabled: true,
       maintenanceProximityRadiusM: true,
+      siteArrivalAutoOnSiteEnabled: true,
       engineerAvailabilityPoolEnabled: true,
       technicianAvailabilityPoolEnabled: true,
       maintenanceDispatchMode: true,
@@ -142,24 +209,43 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** PATCH — owner updates a department. Body: { id, name?, description?, color?, iconKey?, sortOrder? } */
+/** PATCH — owner updates a department; managers/coordinators may patch field proximity settings for their department only. */
 export async function PATCH(req: NextRequest) {
-  const guard = await ownerOnly(req);
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const guard = await departmentSettingsGuard(req, body);
   if (!guard.ok) return guard.response;
-  const body = await req.json().catch(() => ({}));
   const id = typeof body?.id === 'string' ? body.id : '';
   if (!id) return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
+  if (guard.fieldOnly && !guard.isOwner) {
+    if (!guard.actorDepartmentId || guard.actorDepartmentId !== id) {
+      return NextResponse.json(
+        { success: false, message: 'You can only update field settings for your own department.' },
+        { status: 403 }
+      );
+    }
+  }
   const dept = await prisma.privateCompanyDepartment.findFirst({
     where: { id, companyId: guard.companyId },
     select: { id: true, name: true, sortOrder: true },
   });
   if (!dept) return NextResponse.json({ success: false, message: 'Department not found.' }, { status: 404 });
   const data: Record<string, unknown> = {};
-  if (typeof body?.name === 'string' && body.name.trim()) data.name = body.name.trim();
-  if (typeof body?.description === 'string') data.description = body.description.trim() || null;
-  if (typeof body?.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(body.color.trim())) data.color = body.color.trim();
-  if (typeof body?.iconKey === 'string') data.iconKey = body.iconKey.trim() || null;
-  if (Number.isFinite(body?.sortOrder)) data.sortOrder = Math.max(0, Math.floor(Number(body.sortOrder)));
+  if (!guard.fieldOnly) {
+    if (typeof body?.name === 'string' && body.name.trim()) data.name = body.name.trim();
+    if (typeof body?.description === 'string') data.description = body.description.trim() || null;
+    if (typeof body?.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(body.color.trim())) data.color = body.color.trim();
+    if (typeof body?.iconKey === 'string') data.iconKey = body.iconKey.trim() || null;
+    if (Number.isFinite(body?.sortOrder)) data.sortOrder = Math.max(0, Math.floor(Number(body.sortOrder)));
+    if (body?.engineerAvailabilityPoolEnabled !== undefined) {
+      data.engineerAvailabilityPoolEnabled = body.engineerAvailabilityPoolEnabled === true;
+    }
+    if (body?.technicianAvailabilityPoolEnabled !== undefined) {
+      data.technicianAvailabilityPoolEnabled = body.technicianAvailabilityPoolEnabled === true;
+    }
+    if (body?.maintenanceDispatchMode !== undefined) {
+      data.maintenanceDispatchMode = normalizeMaintenanceDispatchMode(body.maintenanceDispatchMode);
+    }
+  }
   if (body?.maintenanceProximityJoinEnabled !== undefined) {
     data.maintenanceProximityJoinEnabled = body.maintenanceProximityJoinEnabled === true;
   }
@@ -169,29 +255,29 @@ export async function PATCH(req: NextRequest) {
       Math.min(5000, Math.floor(Number(body.maintenanceProximityRadiusM)))
     );
   }
-  if (body?.engineerAvailabilityPoolEnabled !== undefined) {
-    data.engineerAvailabilityPoolEnabled = body.engineerAvailabilityPoolEnabled === true;
-  }
-  if (body?.technicianAvailabilityPoolEnabled !== undefined) {
-    data.technicianAvailabilityPoolEnabled = body.technicianAvailabilityPoolEnabled === true;
-  }
-  if (body?.maintenanceDispatchMode !== undefined) {
-    data.maintenanceDispatchMode = normalizeMaintenanceDispatchMode(body.maintenanceDispatchMode);
+  if (body?.siteArrivalAutoOnSiteEnabled !== undefined) {
+    if (body.siteArrivalAutoOnSiteEnabled === null) {
+      data.siteArrivalAutoOnSiteEnabled = null;
+    } else {
+      data.siteArrivalAutoOnSiteEnabled = body.siteArrivalAutoOnSiteEnabled === true;
+    }
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
   }
   try {
     const updated = await prisma.privateCompanyDepartment.update({ where: { id }, data });
-    try {
-      await upsertDepartmentTechniqueRows(prisma, {
-        companyId: guard.companyId,
+    if (!guard.fieldOnly) {
+      try {
+        await upsertDepartmentTechniqueRows(prisma, {
+          companyId: guard.companyId,
         departmentId: id,
         departmentName: String(updated.name ?? dept.name ?? ''),
         sortOrder: typeof updated.sortOrder === 'number' ? updated.sortOrder : Number(dept.sortOrder ?? 0),
       });
-    } catch (e) {
-      console.error('Department technique sync (update):', e);
+      } catch (e) {
+        console.error('Department technique sync (update):', e);
+      }
     }
     return NextResponse.json({ success: true, department: updated });
   } catch (err) {

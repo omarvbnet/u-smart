@@ -23,6 +23,7 @@ import '../providers/private_company_warehouse_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/workspace_ticket_expenses_section.dart';
 import '../widgets/comments_widget.dart';
 import '../widgets/checklist_widget.dart';
 import '../widgets/evidence_upload_widget.dart';
@@ -59,6 +60,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _completingMaintenance = false;
   bool _confirmingMaintenance = false;
   bool _maintenanceCrewBusy = false;
+  bool _cancellationBusy = false;
+  final _cancellationReasonCtrl = TextEditingController();
+  String? _selectedCancellationReason;
 
   /// Maintenance: before (4–6) and after (4–6) image URLs for completion
   List<String> _maintenanceBeforeUrls = [];
@@ -74,6 +78,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _userOnMaintenanceTicket(Ticket t) {
     final uid = context.read<AuthProvider>().user?.id;
     if (uid == null || !t.isMaintenance) return false;
+    if (t.assignedEngineerId == uid) return true;
+    return t.maintenanceCrewIds.contains(uid);
+  }
+
+  bool _isTicketRequester(Ticket t) {
+    final uid = context.read<AuthProvider>().user?.id;
+    return uid != null && t.requesterId == uid;
+  }
+
+  bool _isAssignedFieldStaff(Ticket t) {
+    final uid = context.read<AuthProvider>().user?.id;
+    if (uid == null) return false;
     if (t.assignedEngineerId == uid) return true;
     return t.maintenanceCrewIds.contains(uid);
   }
@@ -115,6 +131,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _cancellationReasonCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -1117,6 +1139,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     const SizedBox(height: 10),
                     _maintenanceCrewBanner(context, t),
                   ],
+                  if (t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
+                      t.workspaceTicketExpensesEnabled) ...[
+                    WorkspaceTicketExpensesSection(
+                      ticket: t,
+                      onChanged: () {
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                  ],
                   if (t.isCompleted && _effectiveInspectionResult(t) != null) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -1581,9 +1612,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if ((isEngineer || _isTechnician) &&
           isMyTicket &&
           t.workflowState != 'RESUBMITTED' &&
-          !t.isCompleted) ...[
+          !t.isCompleted &&
+          t.status.toUpperCase() != 'COMPLETED' &&
+          !t.isCancelled) ...[
         const SizedBox(height: 12),
         _resubmitForEditButton(t, l10n),
+      ],
+
+      if (_isTicketRequester(t) && t.awaitsRequesterResubmit) ...[
+        const SizedBox(height: 12),
+        _requesterResubmitBanner(t, l10n),
+        const SizedBox(height: 8),
+        _requesterEditAndResubmitActions(t, l10n),
       ],
 
       // ─── NEEDS_EDIT banner: notify field staff coordinator wants edits ───
@@ -1960,6 +2000,35 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               ),
             );
           }),
+        ]),
+      ],
+
+      if (_isTicketRequester(t) && t.hasPendingCancellationRequest) ...[
+        const SizedBox(height: 16),
+        _cancellationPendingBanner(t, l10n),
+      ],
+      if (_isTicketRequester(t) &&
+          t.canRequestCancellation &&
+          !t.isCancelled) ...[
+        const SizedBox(height: 16),
+        _cancellationRequesterSection(t, l10n),
+      ],
+      if (_isAssignedFieldStaff(t) && t.hasPendingCancellationRequest) ...[
+        const SizedBox(height: 16),
+        _cancellationStaffSection(t, l10n),
+      ],
+      if (_isTicketRequester(t) &&
+          t.cancellationRequestStatus == 'REJECTED' &&
+          (t.cancellationRejectionReason?.trim().isNotEmpty == true)) ...[
+        const SizedBox(height: 12),
+        _glassSection(l10n.t('ticket_cancellation_rejected_banner'), [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              t.cancellationRejectionReason!,
+              style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13),
+            ),
+          ),
         ]),
       ],
 
@@ -2376,6 +2445,411 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
 
     return widgets;
+  }
+
+  Widget _cancellationPendingBanner(Ticket t, AppLocalizations l10n) {
+    return _glassContainer(
+      Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFBBF24), size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.t('ticket_cancellation_pending'),
+                    style: const TextStyle(
+                      color: Color(0xFFFBBF24),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (t.cancellationReason != null && t.cancellationReason!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                t.cancellationReason!,
+                style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 13),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _requesterResubmitBanner(Ticket t, AppLocalizations l10n) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6C63FF).withAlpha(18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF6C63FF).withAlpha(100)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.t('resubmit_awaiting_requester_title'),
+              style: const TextStyle(
+                  color: Color(0xFF8B83FF),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14)),
+          if (t.resubmitReason != null && t.resubmitReason!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(t.resubmitReason!,
+                style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 12)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _requesterEditAndResubmitActions(Ticket t, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          _WorkflowActionButton(
+            label: l10n.t('resubmit_edit_ticket'),
+            icon: Icons.edit_rounded,
+            color: const Color(0xFF6C63FF),
+            onTap: () => _openRequesterEditDialog(t, l10n),
+          ),
+          const SizedBox(height: 10),
+          _WorkflowActionButton(
+            label: l10n.t('resubmit_to_staff'),
+            icon: Icons.send_rounded,
+            color: const Color(0xFF00D4AA),
+            onTap: () async {
+              final ok = await context
+                  .read<TicketsProvider>()
+                  .resubmitTicketToStaff(t.id);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(ok
+                    ? l10n.t('resubmit_sent_to_staff')
+                    : l10n.t('action_failed')),
+                backgroundColor:
+                    ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+              ));
+              setState(() => _ticket = null);
+              _load();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openRequesterEditDialog(Ticket t, AppLocalizations l10n) async {
+    final siteCtrl = TextEditingController(text: t.siteName ?? '');
+    final coordCtrl = TextEditingController(text: t.siteCoordinator ?? '');
+    final specCtrl = TextEditingController(text: t.designSpecifications ?? '');
+    final maintCtrl = TextEditingController(text: t.maintenanceReason ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(l10n.t('resubmit_edit_ticket'),
+            style: const TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: siteCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: l10n.t('site_name')),
+              ),
+              TextField(
+                controller: coordCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: l10n.t('coordinator')),
+              ),
+              TextField(
+                controller: specCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 3,
+                decoration: InputDecoration(labelText: l10n.t('design_specifications')),
+              ),
+              if (t.isMaintenance)
+                TextField(
+                  controller: maintCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 3,
+                  decoration: InputDecoration(labelText: l10n.t('maint_reason')),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('submit')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final saved = await context.read<TicketsProvider>().requesterEditTicket(
+          t.id,
+          siteName: siteCtrl.text,
+          siteCoordinator: coordCtrl.text,
+          designSpecifications: specCtrl.text,
+          maintenanceReason: t.isMaintenance ? maintCtrl.text : null,
+        );
+    siteCtrl.dispose();
+    coordCtrl.dispose();
+    specCtrl.dispose();
+    maintCtrl.dispose();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(saved ? l10n.t('submit') : l10n.t('action_failed')),
+    ));
+    setState(() => _ticket = null);
+    _load();
+  }
+
+  Widget _cancellationRequesterSection(Ticket t, AppLocalizations l10n) {
+    return _glassContainer(
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.t('ticket_request_cancellation'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.t('ticket_request_cancellation_hint'),
+              style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            if (t.effectiveCancellationReasons.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                value: _selectedCancellationReason,
+                dropdownColor: const Color(0xFF12122A),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: l10n.t('ticket_cancellation_reason'),
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(140)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                items: t.effectiveCancellationReasons
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                    .toList(),
+                onChanged: (v) => setState(() {
+                  _selectedCancellationReason = v;
+                  _cancellationReasonCtrl.text = v ?? '';
+                }),
+              ),
+            ] else
+              TextField(
+                controller: _cancellationReasonCtrl,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: l10n.t('ticket_cancellation_reason'),
+                  labelStyle: TextStyle(color: Colors.white.withAlpha(140)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _cancellationBusy
+                  ? null
+                  : () async {
+                      final reason = t.effectiveCancellationReasons.isNotEmpty
+                          ? (_selectedCancellationReason ?? '').trim()
+                          : _cancellationReasonCtrl.text.trim();
+                      if (reason.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(l10n.t('ticket_cancellation_reason'))),
+                        );
+                        return;
+                      }
+                      setState(() => _cancellationBusy = true);
+                      final ok = await context
+                          .read<TicketsProvider>()
+                          .requestTicketCancellation(widget.ticketId, reason);
+                      if (!mounted) return;
+                      setState(() => _cancellationBusy = false);
+                      if (ok) {
+                        _cancellationReasonCtrl.clear();
+                        await _load();
+                      }
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok
+                                ? l10n.t('ticket_cancellation_pending')
+                                : l10n.t('complete_failed'),
+                          ),
+                        ),
+                      );
+                    },
+              icon: _cancellationBusy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.cancel_schedule_send_rounded),
+              label: Text(l10n.t('ticket_request_cancellation')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF9F43),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cancellationStaffSection(Ticket t, AppLocalizations l10n) {
+    return _glassContainer(
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.t('ticket_cancellation_staff_title'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (t.cancellationReason != null && t.cancellationReason!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                t.cancellationReason!,
+                style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13, height: 1.35),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _cancellationBusy
+                        ? null
+                        : () async {
+                            setState(() => _cancellationBusy = true);
+                            final res = await context
+                                .read<TicketsProvider>()
+                                .respondTicketCancellation(widget.ticketId, 'approve');
+                            if (!mounted) return;
+                            setState(() => _cancellationBusy = false);
+                            if (res.ok) await _load();
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  res.ok
+                                      ? l10n.t('section_cancelled')
+                                      : (res.message ?? l10n.t('complete_failed')),
+                                ),
+                              ),
+                            );
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF87171),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(l10n.t('ticket_cancellation_approve')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _cancellationBusy
+                        ? null
+                        : () => _promptRejectCancellationRequest(t, l10n),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFBBF24),
+                      side: const BorderSide(color: Color(0xFFFBBF24)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(l10n.t('ticket_cancellation_reject')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _promptRejectCancellationRequest(Ticket t, AppLocalizations l10n) async {
+    final ctrl = TextEditingController();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          l10n.t('ticket_cancellation_reject'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: TextField(
+          controller: ctrl,
+          style: const TextStyle(color: Colors.white),
+          maxLines: 3,
+          decoration: InputDecoration(
+            labelText: l10n.t('ticket_cancellation_reject_reason'),
+            labelStyle: TextStyle(color: Colors.white.withAlpha(140)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('ticket_cancellation_reject')),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    setState(() => _cancellationBusy = true);
+    final res = await context.read<TicketsProvider>().respondTicketCancellation(
+          widget.ticketId,
+          'reject',
+          rejectionReason: ctrl.text.trim(),
+        );
+    ctrl.dispose();
+    if (!mounted) return;
+    setState(() => _cancellationBusy = false);
+    if (res.ok) await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(res.ok ? l10n.t('ticket_cancellation_reject') : (res.message ?? l10n.t('complete_failed'))),
+      ),
+    );
   }
 
   Widget _maintenanceRequesterConfirmCard(Ticket t, AppLocalizations l10n) {
@@ -4157,8 +4631,56 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     BuildContext ctx,
     String title,
     String hint,
-    AppLocalizations l10n,
-  ) async {
+    AppLocalizations l10n, {
+    List<String> presetReasons = const [],
+  }) async {
+    if (presetReasons.isNotEmpty) {
+      String? selected;
+      final result = await showDialog<String>(
+        context: ctx,
+        builder: (dialogCtx) => StatefulBuilder(
+          builder: (dialogCtx, setLocal) => AlertDialog(
+            backgroundColor: const Color(0xFF12122A),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(title,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
+            content: DropdownButtonFormField<String>(
+              value: selected,
+              dropdownColor: const Color(0xFF12122A),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: hint,
+                labelStyle: TextStyle(color: Colors.white.withAlpha(140)),
+              ),
+              items: presetReasons
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                  .toList(),
+              onChanged: (v) => setLocal(() => selected = v),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text(l10n.t('cancel'),
+                    style: TextStyle(color: Colors.white.withAlpha(120))),
+              ),
+              ElevatedButton(
+                onPressed: selected == null || selected!.isEmpty
+                    ? null
+                    : () => Navigator.pop(dialogCtx, selected),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C63FF),
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(l10n.t('submit')),
+              ),
+            ],
+          ),
+        ),
+      );
+      return result;
+    }
+
     final ctrl = TextEditingController();
     final result = await showDialog<String>(
       context: ctx,
@@ -4650,20 +5172,29 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       icon: Icons.reply_rounded,
       color: const Color(0xFFFBBF24),
       onTap: () async {
+        final auth = context.read<AuthProvider>();
         final reason = await _promptReason(
           context,
           l10n.t('resubmit_for_edit'),
           l10n.t('resubmit_reason_hint'),
           l10n,
+          presetReasons: t.platformResubmitReasons,
         );
         if (reason == null || reason.isEmpty) return;
-        final ok = await context
-            .read<TicketsProvider>()
-            .resubmitTicketForEdit(t.id, reason: reason);
+        final target = t.taskCategory != null && auth.hasCoordinatorCompany
+            ? 'COORDINATOR'
+            : 'REQUESTER';
+        final ok = await context.read<TicketsProvider>().resubmitTicketForEdit(
+              t.id,
+              reason: reason,
+              target: target,
+            );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(ok
-              ? l10n.t('resubmit_sent_to_coordinator')
+              ? (target == 'REQUESTER'
+                  ? l10n.t('resubmit_sent_to_requester')
+                  : l10n.t('resubmit_sent_to_coordinator'))
               : l10n.t('action_failed')),
           backgroundColor:
               ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
@@ -4724,6 +5255,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           l10n.t('request_edit'),
           l10n.t('request_edit_hint'),
           l10n,
+          presetReasons: t.platformResubmitReasons,
         );
         if (reason == null || reason.isEmpty) return;
         final ok = await context

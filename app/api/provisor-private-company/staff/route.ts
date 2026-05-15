@@ -569,10 +569,20 @@ export async function PATCH(req: NextRequest) {
   }
   if (body?.maintenanceProximityJoinOverride !== undefined) {
     if (!guard.isOwner) {
-      return NextResponse.json(
-        { success: false, message: 'Only the workspace owner can configure maintenance crew overrides.' },
-        { status: 403 }
-      );
+      const targetDept = target.privateCompanyDepartmentId ?? null;
+      if (
+        !guard.actorDepartmentId ||
+        !targetDept ||
+        guard.actorDepartmentId !== targetDept
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Managers can only configure crew overrides for staff in their department.',
+          },
+          { status: 403 }
+        );
+      }
     }
     if (body.maintenanceProximityJoinOverride === null) {
       data.maintenanceProximityJoinOverride = null;
@@ -582,10 +592,21 @@ export async function PATCH(req: NextRequest) {
   }
   if (body?.maintenanceProximityRadiusOverrideM !== undefined) {
     if (!guard.isOwner) {
-      return NextResponse.json(
-        { success: false, message: 'Only the workspace owner can configure maintenance crew distance overrides.' },
-        { status: 403 }
-      );
+      const targetDept = target.privateCompanyDepartmentId ?? null;
+      if (
+        !guard.actorDepartmentId ||
+        !targetDept ||
+        guard.actorDepartmentId !== targetDept
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Managers can only configure site arrival distance overrides for staff in their department.',
+          },
+          { status: 403 }
+        );
+      }
     }
     if (body.maintenanceProximityRadiusOverrideM === null) {
       data.maintenanceProximityRadiusOverrideM = null;

@@ -11,8 +11,24 @@ import {
 } from '@/lib/private-company-maintenance-dispatch';
 import { MAINTENANCE_TECHNIQUES } from '@/lib/qc-conflict-mapper';
 import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
+import { shouldDeferOnSiteUntilArrival } from '@/lib/workspace-site-arrival';
 
 const prisma = _prisma as any;
+
+async function resolveWorkspaceAssignStatus(
+  ticket: {
+    privateCompanyId: string | null;
+    technique: string | null;
+    privateCompanyTargetDepartmentId?: string | null;
+  },
+  assigneeDepartmentId: string | null | undefined
+): Promise<'PENDING' | 'ON_SITE'> {
+  if (!ticket.privateCompanyId || !isPrivateCompanyStaffTicket({ assignmentScope: 'PRIVATE_COMPANY_STAFF', privateCompanyId: ticket.privateCompanyId })) {
+    return 'ON_SITE';
+  }
+  const defer = await shouldDeferOnSiteUntilArrival(prisma, ticket, assigneeDepartmentId);
+  return defer ? 'PENDING' : 'ON_SITE';
+}
 
 /** Same semantics as GET /api/tickets list: workspace staff scope may be stored as null on legacy rows. */
 function isPrivateCompanyStaffTicket(row: {
@@ -365,23 +381,26 @@ export async function PATCH(
         );
       }
 
-      const newStatus = 'ON_SITE';
+      const newStatus = await resolveWorkspaceAssignStatus(row, targetDeptId);
       parsed.assignedEngineerId = assignee.id;
       parsed.assignedEngineerName = assignee.name || assignee.username;
       parsed.assignedAt = new Date().toISOString();
       parsed.status = newStatus;
+      parsed.awaitingSiteArrival = newStatus === 'PENDING';
       if (!parsed._ticket) parsed._ticket = true;
 
       await prisma.visitorRequest.update({
         where: { id },
         data: { status: newStatus, company: JSON.stringify(parsed) },
       });
-      try {
-        await prisma.ticketStatusLog.create({
-          data: { visitorRequestId: id, status: newStatus },
-        });
-      } catch {
-        /* ignore */
+      if (newStatus === 'ON_SITE') {
+        try {
+          await prisma.ticketStatusLog.create({
+            data: { visitorRequestId: id, status: newStatus },
+          });
+        } catch {
+          /* ignore */
+        }
       }
       if (assignee.id) {
         try {
@@ -474,6 +493,8 @@ export async function PATCH(
       roleUpper === 'QUALITY_ENGINEER' ||
       roleUpper === 'SUPERVISION_ENGINEER';
 
+    let assigneeDeptForArrival: string | null = row.privateCompanyTargetDepartmentId ?? null;
+
     if (isPrivateCompanyStaffTicket(row)) {
       const meFull = await prisma.ticketRequester.findUnique({
         where: { id: requester.id },
@@ -490,6 +511,7 @@ export async function PATCH(
         );
       }
       const deptId = meFull.privateCompanyDepartmentId ?? null;
+      assigneeDeptForArrival = deptId ?? assigneeDeptForArrival;
       let engineerPoolOk = true;
       let technicianPoolOk = true;
       if (deptId) {
@@ -599,12 +621,15 @@ export async function PATCH(
       );
     }
 
-    const newStatus = 'ON_SITE';
+    const newStatus = isPrivateCompanyStaffTicket(row)
+      ? await resolveWorkspaceAssignStatus(row, assigneeDeptForArrival)
+      : 'ON_SITE';
 
     parsed.assignedEngineerId = requester.id;
     parsed.assignedEngineerName = requester.name || requester.username;
     parsed.assignedAt = new Date().toISOString();
     parsed.status = newStatus;
+    parsed.awaitingSiteArrival = newStatus === 'PENDING';
     if (!parsed._ticket) parsed._ticket = true;
 
     await prisma.visitorRequest.update({
@@ -615,11 +640,15 @@ export async function PATCH(
       },
     });
 
-    try {
-      await prisma.ticketStatusLog.create({
-        data: { visitorRequestId: id, status: newStatus },
-      });
-    } catch { /* ignore */ }
+    if (newStatus === 'ON_SITE') {
+      try {
+        await prisma.ticketStatusLog.create({
+          data: { visitorRequestId: id, status: newStatus },
+        });
+      } catch {
+        /* ignore */
+      }
+    }
 
     if (row.requesterId) {
       try {

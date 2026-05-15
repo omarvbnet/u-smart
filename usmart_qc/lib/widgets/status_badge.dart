@@ -92,6 +92,13 @@ class StatusBadge extends StatelessWidget {
           border: const Color(0x6022C55E),
           text: const Color(0xFF4ADE80),
         );
+      case 'CANCELLED':
+        return _StatusConfig(
+          label: l10n.t('section_cancelled'),
+          bg: const Color(0x40F87171),
+          border: const Color(0x60F87171),
+          text: const Color(0xFFF87171),
+        );
       default:
         return _StatusConfig(
           label: status,

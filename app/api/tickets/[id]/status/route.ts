@@ -7,6 +7,7 @@ import { getCoordinatorContext } from '@/lib/provider-company-auth';
 const prisma = _prisma as any;
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ['ON_SITE'],
   ON_SITE: ['IN_PROGRESS'],
   IN_PROGRESS: ['COMPLETED'],
 };

@@ -9,6 +9,14 @@ import { MAINTENANCE_TECHNIQUES } from '@/lib/qc-conflict-mapper';
 import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
 import { isWorkspaceCrewTicketTechnique } from '@/lib/workspace-maintenance-crew';
 import {
+  expenseRowToJson,
+  loadExpenseSettings,
+  serializeExpenseSettings,
+} from '@/lib/private-company-expenses';
+import { loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
+import { readCancellationFromParsed } from '@/lib/ticket-cancellation';
+import { readResubmitMeta, totalResubmissionHoursFromParsed } from '@/lib/ticket-resubmit';
+import {
   tryAutoConfirmExpiredMaintenanceAwaiting,
   readMaintenanceAwaitingSince,
   readMaintenanceRejectReason,
@@ -102,6 +110,16 @@ export async function GET(
       const mergedCoords =
         Object.keys(embedCoords).length > 0 ? embedCoords : siteCoords;
 
+      let platformCancellationReasons: string[] = [];
+      let platformResubmitReasons: string[] = [];
+      try {
+        const policy = await loadPlatformTicketPolicy();
+        platformCancellationReasons = policy.cancellationReasons;
+        platformResubmitReasons = policy.resubmitReasons;
+      } catch {
+        /* ignore */
+      }
+
       return NextResponse.json({
         success: true,
         ticket: {
@@ -126,6 +144,8 @@ export async function GET(
           resubmittedAt: row.resubmittedAt ?? null,
           requesterId: row.requesterId ?? null,
           qfieldProjects: qfieldProjectsCoordinator,
+          platformCancellationReasons,
+          platformResubmitReasons,
         },
       });
     } catch (err) {
@@ -215,6 +235,9 @@ export async function GET(
           privateCompanyId: true,
           privateCompanyTargetDepartmentId: true,
           province: true,
+          workflowState: true,
+          resubmitReason: true,
+          resubmittedAt: true,
           requester: {
             select: { name: true, phone: true, role: true, username: true },
           },
@@ -372,6 +395,20 @@ export async function GET(
     let embeddedChecklistTemplateId: string | null = null;
     let maintenanceAwaitingRequesterSince: string | null = null;
     let maintenanceRequesterRejectReason: string | null = null;
+    let cancellationRequestStatus: string | null = null;
+    let cancellationRequestedAt: string | null = null;
+    let cancellationReason: string | null = null;
+    let cancellationRejectedAt: string | null = null;
+    let cancellationRejectionReason: string | null = null;
+    let workflowState: string | null = (row as { workflowState?: string | null }).workflowState ?? null;
+    let resubmitReason: string | null = (row as { resubmitReason?: string | null }).resubmitReason ?? null;
+    let resubmittedAt: string | null = (row as { resubmittedAt?: Date | null }).resubmittedAt
+      ? String((row as { resubmittedAt: Date }).resubmittedAt)
+      : null;
+    let resubmitTarget: string | null = null;
+    let resubmissionHours: number | null = null;
+    let platformCancellationReasons: string[] = [];
+    let platformResubmitReasons: string[] = [];
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -432,6 +469,22 @@ export async function GET(
         conflictResolvedAt = typeof parsed.conflictResolvedAt === 'string' ? parsed.conflictResolvedAt : null;
         qfieldProjects = parseQFieldProjectsFromCompanyJson(parsed as Record<string, unknown>);
       }
+      if (!workflowState && typeof parsed.workflowState === 'string') {
+        workflowState = parsed.workflowState;
+      }
+      const resubmitMeta = readResubmitMeta(parsed as Record<string, unknown>);
+      resubmitTarget = resubmitMeta.resubmitTarget;
+      resubmissionHours = totalResubmissionHoursFromParsed(parsed as Record<string, unknown>);
+      if (!resubmitReason && typeof parsed.resubmitReason === 'string') {
+        resubmitReason = parsed.resubmitReason;
+      }
+
+      const cancellationMeta = readCancellationFromParsed(parsed as Record<string, unknown>);
+      cancellationRequestStatus = cancellationMeta.cancellationRequestStatus;
+      cancellationRequestedAt = cancellationMeta.cancellationRequestedAt;
+      cancellationReason = cancellationMeta.cancellationReason;
+      cancellationRejectedAt = cancellationMeta.cancellationRejectedAt;
+      cancellationRejectionReason = cancellationMeta.cancellationRejectionReason;
       // Fallback: extract inspection result when COMPLETED (handles alternate company JSON structure)
       if (status === 'COMPLETED' && !inspectionResult && typeof parsed.inspectionResult === 'string') {
         inspectionResult = parsed.inspectionResult;
@@ -439,6 +492,9 @@ export async function GET(
       }
     } catch {
       /* ignore */
+    }
+    if (String((row as { status?: string }).status ?? '').toUpperCase() === 'CANCELLED') {
+      status = 'CANCELLED';
     }
 
     const statusTimeline =
@@ -509,6 +565,37 @@ export async function GET(
       }
     }
 
+    let ticketExpenses: ReturnType<typeof expenseRowToJson>[] = [];
+    let workspaceExpenseSettings: ReturnType<typeof serializeExpenseSettings> | null = null;
+    try {
+      const policy = await loadPlatformTicketPolicy();
+      platformCancellationReasons = policy.cancellationReasons;
+      platformResubmitReasons = policy.resubmitReasons;
+    } catch {
+      /* policy table may be absent before migrate */
+    }
+
+    if (privateCompanyIdVal) {
+      try {
+        const settingsRow = await loadExpenseSettings(privateCompanyIdVal);
+        if (settingsRow) {
+          workspaceExpenseSettings = serializeExpenseSettings(settingsRow);
+        }
+        if (settingsRow?.ticketExpensesEnabled) {
+          const expenseRows = await prisma.privateCompanyTicketExpense.findMany({
+            where: { companyId: privateCompanyIdVal, ticketId: row.id },
+            orderBy: { createdAt: 'asc' },
+            include: {
+              staff: { select: { id: true, name: true, username: true } },
+            },
+          });
+          ticketExpenses = expenseRows.map(expenseRowToJson);
+        }
+      } catch {
+        /* expenses tables may be absent on legacy DB */
+      }
+    }
+
     return NextResponse.json({
       success: true,
       ticket: {
@@ -561,6 +648,26 @@ export async function GET(
         conflictResolvedAt,
         checklistTemplateId: checklistTpl.checklistTemplateId ?? effectiveTemplateId,
         checklistTemplate: checklistTpl.checklistTemplate,
+        workspaceExpenseSettings,
+        ticketExpenses,
+        cancellationRequestStatus,
+        cancellationRequestedAt,
+        cancellationReason,
+        cancellationRejectedAt,
+        cancellationRejectionReason,
+        canRequestCancellation:
+          String(status).toUpperCase() === 'PENDING' && cancellationRequestStatus !== 'PENDING',
+        workflowState: workflowState ?? 'OPEN',
+        resubmitReason,
+        resubmittedAt,
+        resubmitTarget,
+        resubmissionHours,
+        platformCancellationReasons,
+        platformResubmitReasons,
+        /** @deprecated use platformCancellationReasons */
+        workspaceCancellationReasons: platformCancellationReasons,
+        canEditForResubmit:
+          workflowState === 'RESUBMITTED' && resubmitTarget === 'REQUESTER',
         ...mergedSiteCoords,
       },
     });
