@@ -441,6 +441,12 @@ class PrivateCompanyProvider extends ChangeNotifier {
     _expenseAnalyticsLoading = true;
     notifyListeners();
     try {
+      String? deptQ = departmentId?.trim();
+      String? staffQ = staffId?.trim();
+      if (!isOwner) {
+        deptQ = null;
+        staffQ = null;
+      }
       final query = <String, String>{};
       if (from != null && to != null) {
         String ymd(DateTime d) =>
@@ -452,9 +458,9 @@ class PrivateCompanyProvider extends ChangeNotifier {
       }
       final p = province?.trim();
       if (p != null && p.isNotEmpty) query['province'] = p;
-      final d = departmentId?.trim();
+      final d = deptQ;
       if (d != null && d.isNotEmpty) query['departmentId'] = d;
-      final s = staffId?.trim();
+      final s = staffQ;
       if (s != null && s.isNotEmpty) query['staffId'] = s;
       final res = await _api.getSafe(ApiConfig.privateCompanyExpensesAnalytics, query: query);
       if (res != null && res['success'] == true) {

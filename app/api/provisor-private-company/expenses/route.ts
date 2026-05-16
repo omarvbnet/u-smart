@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 730) : 90;
   const since = new Date(Date.now() - days * 86400000);
   const provinceFilter = normalizeProvince(url.searchParams.get('province'));
-  const departmentId = url.searchParams.get('departmentId')?.trim() || null;
+  let departmentId = url.searchParams.get('departmentId')?.trim() || null;
   const staffId = url.searchParams.get('staffId')?.trim() || null;
   const ticketId = url.searchParams.get('ticketId')?.trim() || null;
 
@@ -36,20 +36,37 @@ export async function GET(req: NextRequest) {
     createdAt: { gte: since },
   };
   if (ticketId) where.ticketId = ticketId;
-  if (staffId) where.staffRequesterId = staffId;
   if (provinceFilter) where.ticketProvince = provinceFilter;
-  if (departmentId) where.departmentId = departmentId;
 
-  if (!guard.isOwner && MANAGER_ROLES.has(guard.actorRole) && guard.actorDepartmentId) {
+  if (guard.isOwner) {
+    if (staffId) where.staffRequesterId = staffId;
+    if (departmentId) where.departmentId = departmentId;
+  } else if (MANAGER_ROLES.has(guard.actorRole)) {
+    if (!guard.actorDepartmentId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Your account must be assigned to a department to view expenses.',
+        },
+        { status: 403 }
+      );
+    }
     if (departmentId && departmentId !== guard.actorDepartmentId) {
       return NextResponse.json(
         { success: false, message: 'You can only view expenses for your department.' },
         { status: 403 }
       );
     }
-    if (!departmentId) where.departmentId = guard.actorDepartmentId;
-  } else if (!guard.isOwner && !MANAGER_ROLES.has(guard.actorRole)) {
+    departmentId = guard.actorDepartmentId;
+    where.departmentId = departmentId;
+  } else {
     where.staffRequesterId = guard.requesterId;
+    if (staffId && staffId !== guard.requesterId) {
+      return NextResponse.json(
+        { success: false, message: 'You can only view your own expenses.' },
+        { status: 403 }
+      );
+    }
   }
 
   const rows = await prisma.privateCompanyTicketExpense.findMany({
@@ -76,8 +93,8 @@ export async function GET(req: NextRequest) {
     success: true,
     days,
     provinceFilter,
-    departmentId: (where.departmentId as string | undefined) ?? departmentId,
-    staffId: (where.staffRequesterId as string | undefined) ?? staffId,
+    departmentId: (where.departmentId as string | undefined) ?? null,
+    staffId: (where.staffRequesterId as string | undefined) ?? null,
     ticketId,
     totalAmount: Math.round(totalAmount * 100) / 100,
     count: rows.length,

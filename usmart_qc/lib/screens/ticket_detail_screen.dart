@@ -1584,6 +1584,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final isEngineer = _isEngineer;
     final isMyTicket = t.assignedEngineerId ==
         context.read<AuthProvider>().user?.id;
+    final fieldStaffAwaitingRequesterOnQc = isMyTicket &&
+        !t.isMaintenance &&
+        t.awaitsRequesterResubmit &&
+        (isEngineer || _isTechnician);
     final siteUpdated = _siteLastUpdated;
 
     final auth = context.read<AuthProvider>();
@@ -1631,6 +1635,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           t.workflowState == 'NEEDS_EDIT') ...[
         const SizedBox(height: 12),
         _needsEditBanner(t, l10n),
+      ],
+
+      if (fieldStaffAwaitingRequesterOnQc) ...[
+        const SizedBox(height: 12),
+        _qcAwaitingRequesterReadOnlyBanner(t, l10n),
       ],
 
       // ─── Request-edit: coordinator asks assigned staff to edit ───
@@ -2053,7 +2062,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _ncrSection(t, l10n),
       ],
       // Engineer NCR response: when requester has resubmitted, show Approved/Rework
-      if (isEngineer && isMyTicket && t.isNcr && t.hasPendingEngineerNcrResponse) ...[
+      if (isEngineer &&
+          isMyTicket &&
+          t.isNcr &&
+          !t.awaitsRequesterResubmit &&
+          t.hasPendingEngineerNcrResponse) ...[
         const SizedBox(height: 16),
         _ncrEngineerResponseSection(t, l10n),
       ],
@@ -2091,7 +2104,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         CommentsWidget(
           comments: _comments,
           loading: _loadingComments,
-          allowAdd: !t.isCompleted,
+          allowAdd: !t.isCompleted && !fieldStaffAwaitingRequesterOnQc,
           onAdd: _addComment,
         ),
       ),
@@ -2104,7 +2117,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           onPickImage: _pickAndUploadImage,
           onPickFile: _pickAndUploadFile,
           showUploadButtons: !t.isCompleted &&
-              (!t.isMaintenance || t.isInProgress),
+              (!t.isMaintenance || t.isInProgress) &&
+              !fieldStaffAwaitingRequesterOnQc,
         ),
       ),
       // QC checklists: only for engineers on QC tickets (not maintenance)
@@ -2113,16 +2127,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           !t.isMaintenance &&
           !t.isCompleted &&
           (!t.isNcr || _isNcrResolved(t))) ...[
-        ..._engineerChecklistTemplateControls(t, l10n),
-        const SizedBox(height: 16),
-        _glassContainer(
-          ChecklistWidget(
-            templates: _checklists,
-            loading: _loadingChecklists,
-            onComplete: _completeWithChecklist,
-            initialTemplateId: t.checklistTemplateId,
+        if (!fieldStaffAwaitingRequesterOnQc) ...[
+          ..._engineerChecklistTemplateControls(t, l10n),
+          const SizedBox(height: 16),
+          _glassContainer(
+            ChecklistWidget(
+              templates: _checklists,
+              loading: _loadingChecklists,
+              onComplete: _completeWithChecklist,
+              initialTemplateId: t.checklistTemplateId,
+            ),
           ),
-        ),
+        ],
       ],
       if (t.isMaintenance &&
           !t.isCompleted &&
@@ -3287,9 +3303,89 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               );
             }).toList(),
           ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: steps.map((s) {
+              return Expanded(
+                child: Text(
+                  _statusStepTimeLines(t, s),
+                  textAlign: TextAlign.center,
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(110),
+                    fontSize: 8,
+                    height: 1.25,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );
+  }
+
+  /// Latest timestamps for the horizontal status stepper (aligned under each step).
+  String _statusStepTimeLines(Ticket t, String step) {
+    final fmt = DateFormat('MMM d HH:mm');
+    final up = step.toUpperCase();
+    final tl = t.statusTimeline;
+
+    DateTime? lastFor(String st) {
+      DateTime? b;
+      for (final e in tl) {
+        if (e.status.toUpperCase() == st) {
+          if (b == null || e.createdAt.isAfter(b)) b = e.createdAt;
+        }
+      }
+      return b;
+    }
+
+    if (up == 'PENDING') {
+      final d = tl.isNotEmpty ? tl.first.createdAt : t.createdAt;
+      return fmt.format(d.toLocal());
+    }
+    if (up == 'ON_SITE') {
+      final d = lastFor('ON_SITE');
+      return d != null ? fmt.format(d.toLocal()) : '—';
+    }
+    if (up == 'IN_PROGRESS') {
+      final buf = StringBuffer();
+      final d = lastFor('IN_PROGRESS');
+      if (d != null) buf.writeln(fmt.format(d.toLocal()));
+      final subs = tl.where((e) => e.status.toUpperCase() == 'RESUBMISSION').toList();
+      for (final e in subs.take(3)) {
+        buf.writeln('↺ ${fmt.format(e.createdAt.toLocal())}');
+      }
+      final s = buf.toString().trim();
+      return s.isEmpty ? '—' : s;
+    }
+    if (up == 'COMPLETED') {
+      final buf = StringBuffer();
+      if (t.completedAt != null && t.completedAt!.trim().isNotEmpty) {
+        final d = DateTime.tryParse(t.completedAt!);
+        if (d != null) buf.writeln(fmt.format(d.toLocal()));
+      } else {
+        final d = lastFor('COMPLETED');
+        if (d != null) buf.writeln(fmt.format(d.toLocal()));
+      }
+      final fromTl =
+          tl.where((e) => e.status.toUpperCase() == 'REQUESTER_CONFIRMED').toList();
+      if (fromTl.isNotEmpty) {
+        for (final e in fromTl) {
+          buf.writeln('✓ ${fmt.format(e.createdAt.toLocal())}');
+        }
+      } else if (t.maintenanceRequesterConfirmedAt != null &&
+          t.maintenanceRequesterConfirmedAt!.trim().isNotEmpty) {
+        final c = DateTime.tryParse(t.maintenanceRequesterConfirmedAt!);
+        if (c != null) buf.writeln('✓ ${fmt.format(c.toLocal())}');
+      }
+      final s = buf.toString().trim();
+      return s.isEmpty ? '—' : s;
+    }
+    return '—';
   }
 
   IconData _stepIcon(String status) {
@@ -4992,16 +5088,33 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      StatusBadge(status: log.status),
-                      const Spacer(),
-                      Text(
-                        fmt.format(log.createdAt),
-                        style: TextStyle(
-                            color: Colors.white.withAlpha(60),
-                            fontSize: 12),
+                      Row(
+                        children: [
+                          StatusBadge(status: log.status),
+                          const Spacer(),
+                          Text(
+                            fmt.format(log.createdAt),
+                            style: TextStyle(
+                                color: Colors.white.withAlpha(60),
+                                fontSize: 12),
+                          ),
+                        ],
                       ),
+                      if (log.detail != null && log.detail!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          log.detail!.trim(),
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(150),
+                            fontSize: 11,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -5021,6 +5134,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         return const Color(0xFF6C63FF);
       case 'IN_PROGRESS':
         return const Color(0xFF00D4AA);
+      case 'RESUBMISSION':
+        return const Color(0xFFFBBF24);
+      case 'REQUESTER_CONFIRMED':
+        return const Color(0xFF22D3EE);
       case 'COMPLETED':
         return const Color(0xFF4ADE80);
       default:
@@ -5157,6 +5274,47 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         setState(() => _ticket = null);
         _load();
       },
+    );
+  }
+
+  Widget _qcAwaitingRequesterReadOnlyBanner(Ticket t, AppLocalizations l10n) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF38BDF8).withAlpha(18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF38BDF8).withAlpha(100)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.hourglass_top_rounded, color: Color(0xFF38BDF8), size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.t('ticket_qc_awaiting_requester_return'),
+                  style: const TextStyle(
+                    color: Color(0xFF38BDF8),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                if (t.resubmitReason != null && t.resubmitReason!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    t.resubmitReason!,
+                    style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

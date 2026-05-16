@@ -469,6 +469,8 @@ const Map<String, String> _en = {
   'resubmit_open_cycle_hours': 'Elapsed on this cycle: {{hours}} h',
   'resubmit_cycle_closed_hours': 'Requester turnaround: {{hours}} h',
   'needs_edit_title': 'Coordinator requested edits',
+  'ticket_qc_awaiting_requester_return':
+      'This ticket was sent back for requester review. You cannot edit the inspection checklist, add comments, or upload evidence until the requester returns it to you.',
   'request_edit': 'Request edit from staff',
   'request_edit_hint': 'Describe what the staff member should change...',
   'edit_request_sent': 'Edit request sent to staff.',
@@ -786,6 +788,10 @@ const Map<String, String> _en = {
   'pc_kpi_error_title': 'Could not load KPIs',
   'pc_kpi_error_subtitle': 'Pull to refresh or check your connection.',
   'pc_kpi_unavailable': 'Performance metrics are unavailable.',
+  'pc_kpi_ticket_timeline_hint':
+      'Per-ticket resubmission and requester confirmation times appear on the ticket’s status timeline and progress row.',
+  'ticket_status_resubmission': 'Resubmission',
+  'ticket_status_requester_confirmed': 'Requester confirmed',
   'analytics_performance_insights': 'Performance insights',
   'analytics_performance_insights_hint':
       'KPIs tailored to your workspace role and time window.',
@@ -1253,6 +1259,8 @@ const Map<String, String> _ar = {
   'resubmit_open_cycle_hours': 'المدة في هذه الدورة: {{hours}} س',
   'resubmit_cycle_closed_hours': 'زمن استجابة طالب الخدمة: {{hours}} س',
   'needs_edit_title': 'طلب المنسق تعديلات',
+  'ticket_qc_awaiting_requester_return':
+      'أُعيد الطلب لمراجعة مقدم الطلب. لا يمكنك تعديل قائمة الفحص أو إضافة تعليقات أو رفع أدلة حتى يعيد مقدم الطلب الطلب إليك.',
   'request_edit': 'طلب تعديل من الموظف',
   'request_edit_hint': 'صف ما يجب أن يغيره الموظف...',
   'edit_request_sent': 'تم إرسال طلب التعديل للموظف.',
@@ -1553,6 +1561,10 @@ const Map<String, String> _ar = {
   'pc_kpi_error_title': 'تعذر تحميل مؤشرات الأداء',
   'pc_kpi_error_subtitle': 'اسحب للتحديث أو تحقق من الاتصال.',
   'pc_kpi_unavailable': 'مؤشرات الأداء غير متاحة.',
+  'pc_kpi_ticket_timeline_hint':
+      'تظهر أوقات إعادة الإرسال وتأكيد مقدم الطلب على الجدول الزمني للحالة وصف التقدم في التذكرة.',
+  'ticket_status_resubmission': 'إعادة إرسال',
+  'ticket_status_requester_confirmed': 'تأكيد مقدم الطلب',
   'analytics_performance_insights': 'رؤى الأداء',
   'analytics_performance_insights_hint':
       'مؤشرات وفق دورك في مساحة العمل والفترة الزمنية.',
@@ -2097,6 +2109,8 @@ const Map<String, String> _ku = {
   'resubmit_open_cycle_hours': 'ماوە لەم خولەدا: {{hours}} ک',
   'resubmit_cycle_closed_hours': 'کاتی گەڕانەوەی داواکار: {{hours}} ک',
   'needs_edit_title': 'کۆردیناتۆر داوای دەستکاری کرد',
+  'ticket_qc_awaiting_requester_return':
+      'تیکەت بۆ پێداچوونەوەی داواکار نێردراوەتەوە. ناتوانیت لیستی پشکنین دەستکاری بکەیت یان لێدوان زیاد بکەیت یان بەڵگە بار بکەیت تا داواکار دووبارە تیکەتەکە بۆ تۆ بگەڕێنێتەوە.',
   'request_edit': 'داوای دەستکاری لە کارمەند بکە',
   'request_edit_hint': 'ڕوونبکەرەوە چی دەبێت کارمەند بیگۆڕێت...',
   'edit_request_sent': 'داوای دەستکاری نێردرا بۆ کارمەند.',
@@ -2408,6 +2422,10 @@ const Map<String, String> _ku = {
   'pc_kpi_error_title': 'نەتوانرا ئەداء بەیۆنرێت',
   'pc_kpi_error_subtitle': 'بۆ نوێکردنەوە ڕاکێشە یان پەیوەندی بپشکنە.',
   'pc_kpi_unavailable': 'پێوەرەکانی ئەداء بەردەست نین.',
+  'pc_kpi_ticket_timeline_hint':
+      'کاتەکانی دووبارە ناردنەوە و پەسەندکردنی داواکەر لە کاتژمێری دۆخ و هێڵی پێشکەوتنی تیکێتدا دەردەکەون.',
+  'ticket_status_resubmission': 'دووبارە ناردنەوە',
+  'ticket_status_requester_confirmed': 'داواکەر پەسەندکرد',
   'analytics_performance_insights': 'تێگەیشتن لە ئەداء',
   'analytics_performance_insights_hint': 'پێوەرەکان بەپێی ڕۆڵ و ماوەی کات.',
   'pc_ticket_expenses_settings': 'خەرجی تیکێت',
@@ -2951,6 +2969,8 @@ const Map<String, String> _tr = {
   'resubmit_open_cycle_hours': 'Bu döngüde geçen süre: {{hours}} sa',
   'resubmit_cycle_closed_hours': 'Talep sahibi yanıt süresi: {{hours}} sa',
   'needs_edit_title': 'Koordinatör düzenleme istedi',
+  'ticket_qc_awaiting_requester_return':
+      'Bu talep talep sahibinin incelemesi için geri gönderildi. Talep sahibi size tekrar gönderene kadar kontrol listesini düzenleyemez, yorum ekleyemez veya kanıt yükleyemezsiniz.',
   'request_edit': 'Personelden düzenleme iste',
   'request_edit_hint': 'Personelin ne değiştirmesi gerektiğini açıklayın...',
   'edit_request_sent': 'Düzenleme isteği personele gönderildi.',
@@ -3269,6 +3289,10 @@ const Map<String, String> _tr = {
   'pc_kpi_error_subtitle':
       'Yenilemek için çekin veya bağlantınızı kontrol edin.',
   'pc_kpi_unavailable': 'Performans metrikleri kullanılamıyor.',
+  'pc_kpi_ticket_timeline_hint':
+      'Yeniden gönderim ve talep eden onayı zamanları, biletin durum zaman çizelgesinde ve ilerleme satırında görünür.',
+  'ticket_status_resubmission': 'Yeniden gönderim',
+  'ticket_status_requester_confirmed': 'Talep eden onayı',
   'analytics_performance_insights': 'Performans özeti',
   'analytics_performance_insights_hint':
       'Rolünüze ve zaman penceresine göre KPI’lar.',

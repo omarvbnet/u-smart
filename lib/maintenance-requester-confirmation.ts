@@ -11,6 +11,8 @@ import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup
 export const MAINTENANCE_REQUESTER_CONFIRM_MINUTES = 40;
 export const MAINTENANCE_AWAITING_SINCE_KEY = 'maintenanceAwaitingRequesterSince';
 export const MAINTENANCE_REJECT_REASON_KEY = 'maintenanceRequesterRejectReason';
+/** Set when the requester confirms (or auto-confirms) maintenance completion — shown on ticket timeline. */
+export const MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY = 'maintenanceRequesterConfirmedAt';
 
 export function isMaintenanceTechnique(technique: string | null | undefined): boolean {
   const lo = String(technique ?? '').trim().toLowerCase();
@@ -73,8 +75,10 @@ export async function finalizeMaintenanceAsCompleted(
     parsed = {};
   }
   if (!parsed._ticket) parsed._ticket = true;
+  const nowIso = new Date().toISOString();
+  parsed[MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY] = nowIso;
   parsed.status = 'COMPLETED';
-  parsed.completedAt = new Date().toISOString();
+  parsed.completedAt = nowIso;
   parsed.workflowState = 'DONE';
   delete parsed[MAINTENANCE_AWAITING_SINCE_KEY];
   delete parsed[MAINTENANCE_REJECT_REASON_KEY];

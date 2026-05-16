@@ -73,7 +73,18 @@ export async function GET(req: NextRequest) {
   };
   if (provinceFilter) where.ticketProvince = provinceFilter;
 
-  if (!guard.isOwner && MANAGER_ROLES.has(guard.actorRole) && guard.actorDepartmentId) {
+  if (guard.isOwner) {
+    if (departmentId) where.departmentId = departmentId;
+  } else if (MANAGER_ROLES.has(guard.actorRole)) {
+    if (!guard.actorDepartmentId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Your account must be assigned to a department to export expenses.',
+        },
+        { status: 403 }
+      );
+    }
     if (departmentId && departmentId !== guard.actorDepartmentId) {
       return NextResponse.json(
         { success: false, message: 'You can only export expenses for your department.' },
@@ -81,8 +92,6 @@ export async function GET(req: NextRequest) {
       );
     }
     departmentId = guard.actorDepartmentId;
-    where.departmentId = departmentId;
-  } else if (departmentId) {
     where.departmentId = departmentId;
   }
 

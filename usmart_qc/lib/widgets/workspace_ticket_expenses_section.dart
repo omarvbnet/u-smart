@@ -53,6 +53,14 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
     return uid == widget.ticket.assignedEngineerId || widget.ticket.maintenanceCrewIds.contains(uid);
   }
 
+  /// Only the assigned ticket lead may delete expense lines (not crew or managers).
+  bool get _isTicketLead {
+    final auth = context.read<AuthProvider>();
+    final uid = auth.user?.id;
+    if (uid == null) return false;
+    return uid == widget.ticket.assignedEngineerId;
+  }
+
   Future<void> _submit() async {
     final amount = double.tryParse(_amountCtrl.text.trim().replaceAll(',', '.'));
     final reason = _reason?.trim() ?? '';
@@ -227,8 +235,7 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
                           .join(' · '),
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11),
                     ),
-                    trailing: !widget.ticket.isCompleted &&
-                            (_canAdd || context.read<PrivateCompanyProvider>().canManageStaff)
+                    trailing: !widget.ticket.isCompleted && _isTicketLead
                         ? IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54),
                             onPressed: () => _deleteLine(e),

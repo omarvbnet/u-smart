@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
+import { assignedStaffIdFromCompanyJson, parseTicketCompanyJson } from '@/lib/private-company-kpi';
 import { expensesGuard } from '@/lib/private-company-expenses';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-const MANAGER_ROLES = new Set(['MANAGER', 'COORDINATOR']);
-
 /**
  * DELETE /api/provisor-private-company/expenses/[id]
- * Submitter may delete own line before ticket is completed; managers/owner
- * may delete until the ticket is completed (then all deletes are blocked).
+ * Only the assigned ticket lead (company JSON assignedEngineerId) may delete lines
+ * while the ticket is open. Managers/crew cannot delete others’ lines via API.
  */
 export async function DELETE(
   req: NextRequest,
@@ -26,7 +25,7 @@ export async function DELETE(
   const row = await prisma.privateCompanyTicketExpense.findFirst({
     where: { id, companyId: guard.companyId },
     include: {
-      ticket: { select: { id: true, status: true } },
+      ticket: { select: { id: true, status: true, company: true } },
     },
   });
   if (!row) {
@@ -40,22 +39,14 @@ export async function DELETE(
     );
   }
 
-  const isManager = guard.isOwner || MANAGER_ROLES.has(guard.actorRole);
-  const isOwnerLine = row.staffRequesterId === guard.requesterId;
-  if (!isManager && !isOwnerLine) {
+  const parsed = parseTicketCompanyJson(row.ticket?.company ?? null);
+  const leadId = assignedStaffIdFromCompanyJson(parsed);
+  if (!leadId || leadId !== guard.requesterId) {
     return NextResponse.json(
-      { success: false, message: 'You can only delete your own expense entries.' },
-      { status: 403 }
-    );
-  }
-  if (
-    !guard.isOwner &&
-    guard.actorRole === 'MANAGER' &&
-    guard.actorDepartmentId &&
-    row.departmentId !== guard.actorDepartmentId
-  ) {
-    return NextResponse.json(
-      { success: false, message: 'Expense is outside your department.' },
+      {
+        success: false,
+        message: 'Only the assigned ticket lead can delete expense lines.',
+      },
       { status: 403 }
     );
   }

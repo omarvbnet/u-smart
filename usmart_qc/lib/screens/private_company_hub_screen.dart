@@ -4370,6 +4370,13 @@ class _KpisTabState extends State<_KpisTab> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            l10n.t('pc_kpi_ticket_timeline_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11, height: 1.35),
+          ),
+        ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _refresh,

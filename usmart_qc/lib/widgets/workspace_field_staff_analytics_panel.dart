@@ -219,6 +219,18 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
                       _miniStat(l10n.t('analytics_kpi_crew_joins'), '${row.crewJoins}'),
                     ],
                   ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      l10n.t('pc_kpi_ticket_timeline_hint'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(120),
+                        fontSize: 10,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

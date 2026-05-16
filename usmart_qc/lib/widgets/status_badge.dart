@@ -92,6 +92,20 @@ class StatusBadge extends StatelessWidget {
           border: const Color(0x6022C55E),
           text: const Color(0xFF4ADE80),
         );
+      case 'RESUBMISSION':
+        return _StatusConfig(
+          label: l10n.t('ticket_status_resubmission'),
+          bg: const Color(0x40F59E0B),
+          border: const Color(0x60F59E0B),
+          text: const Color(0xFFFBBF24),
+        );
+      case 'REQUESTER_CONFIRMED':
+        return _StatusConfig(
+          label: l10n.t('ticket_status_requester_confirmed'),
+          bg: const Color(0x4006B6D4),
+          border: const Color(0x6006B6D4),
+          text: const Color(0xFF22D3EE),
+        );
       case 'CANCELLED':
         return _StatusConfig(
           label: l10n.t('section_cancelled'),

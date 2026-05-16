@@ -21,10 +21,75 @@ import {
   tryAutoConfirmExpiredMaintenanceAwaiting,
   readMaintenanceAwaitingSince,
   readMaintenanceRejectReason,
+  MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY,
 } from '@/lib/maintenance-requester-confirmation';
 import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
 
 const prisma = _prisma as any;
+
+type TimelineEntryOut = { status: string; createdAt: string; detail?: string | null };
+
+function timelineIso(d: Date | string): string {
+  if (d instanceof Date) return d.toISOString();
+  const t = Date.parse(String(d));
+  return Number.isFinite(t) ? new Date(t).toISOString() : String(d);
+}
+
+/** Merge status logs with NCR / workflow resubmits and maintenance requester confirmation. */
+function buildEnrichedStatusTimeline(args: {
+  logs: { status: string; createdAt: Date }[];
+  fallbackStatus: string;
+  fallbackAt: Date;
+  ncrResubmissions: Array<{ at?: string; by?: string; action?: string; comment?: string | null }>;
+  resubmittedAt: string | null;
+  resubmitReason: string | null;
+  maintenanceRequesterConfirmedAt: string | null;
+}): TimelineEntryOut[] {
+  const out: TimelineEntryOut[] = [];
+  if (args.logs.length > 0) {
+    for (const e of args.logs) {
+      out.push({ status: e.status, createdAt: timelineIso(e.createdAt), detail: null });
+    }
+  } else {
+    out.push({ status: args.fallbackStatus, createdAt: timelineIso(args.fallbackAt), detail: null });
+  }
+
+  const pushUnique = (status: string, atRaw: string | null | undefined, detail?: string | null) => {
+    const a = typeof atRaw === 'string' ? atRaw.trim() : '';
+    if (!a) return;
+    const t = Date.parse(a);
+    if (!Number.isFinite(t)) return;
+    const createdAt = new Date(t).toISOString();
+    const key = `${status}|${createdAt}`;
+    if (out.some((x) => `${x.status}|${x.createdAt}` === key)) return;
+    out.push({ status, createdAt, detail: detail ?? null });
+  };
+
+  for (const r of args.ncrResubmissions) {
+    const parts = [r.by, r.action, r.comment].filter(
+      (x): x is string => typeof x === 'string' && Boolean(x.trim())
+    );
+    pushUnique('RESUBMISSION', r.at, parts.length ? parts.join(' · ') : null);
+  }
+
+  if (args.resubmittedAt) {
+    const t0 = Date.parse(args.resubmittedAt);
+    const dupNcr =
+      Number.isFinite(t0) &&
+      args.ncrResubmissions.some((r) => {
+        const t1 = typeof r.at === 'string' ? Date.parse(r.at) : NaN;
+        return Number.isFinite(t1) && Math.abs(t1 - t0) < 4000;
+      });
+    if (!dupNcr) {
+      pushUnique('RESUBMISSION', args.resubmittedAt, args.resubmitReason ?? null);
+    }
+  }
+
+  pushUnique('REQUESTER_CONFIRMED', args.maintenanceRequesterConfirmedAt, null);
+
+  out.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  return out;
+}
 
 export async function GET(
   req: NextRequest,
@@ -396,6 +461,7 @@ export async function GET(
     let embeddedChecklistTemplateId: string | null = null;
     let maintenanceAwaitingRequesterSince: string | null = null;
     let maintenanceRequesterRejectReason: string | null = null;
+    let maintenanceRequesterConfirmedAt: string | null = null;
     let cancellationRequestStatus: string | null = null;
     let cancellationRequestedAt: string | null = null;
     let cancellationReason: string | null = null;
@@ -454,6 +520,9 @@ export async function GET(
         maintenanceCrewIds = maintenanceCrewIdsFromCompanyJson(parsed as Record<string, unknown>);
         maintenanceAwaitingRequesterSince = readMaintenanceAwaitingSince(parsed as Record<string, unknown>);
         maintenanceRequesterRejectReason = readMaintenanceRejectReason(parsed as Record<string, unknown>);
+        const confRaw = (parsed as Record<string, unknown>)[MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY];
+        maintenanceRequesterConfirmedAt =
+          typeof confRaw === 'string' && confRaw.trim() ? confRaw.trim() : null;
         checklistHistory = Array.isArray(parsed.checklistHistory)
           ? (parsed.checklistHistory as Array<{ at?: string; inspectionChecklist?: unknown[]; inspectionResult?: string; inspectionComments?: string }>).map((e) => ({
               at: e.at || '',
@@ -498,10 +567,15 @@ export async function GET(
       status = 'CANCELLED';
     }
 
-    const statusTimeline =
-      logs.length > 0
-        ? logs.map((e) => ({ status: e.status, createdAt: e.createdAt }))
-        : [{ status: status as string, createdAt: row.createdAt }];
+    const statusTimeline = buildEnrichedStatusTimeline({
+      logs,
+      fallbackStatus: status as string,
+      fallbackAt: row.createdAt,
+      ncrResubmissions,
+      resubmittedAt,
+      resubmitReason,
+      maintenanceRequesterConfirmedAt,
+    });
 
     const maintenanceDescription = (row as any).maintenanceDescription ?? null;
     const beforeImageUrls = Array.isArray((row as any).beforeImageUrls) ? (row as any).beforeImageUrls : [];
@@ -616,7 +690,7 @@ export async function GET(
         allowWorkspaceCrewJoin,
         createdAt: row.createdAt,
         completedAt,
-        statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
+        statusTimeline,
         maintenanceDescription,
         maintenanceReason,
         beforeImageUrls,
@@ -643,6 +717,7 @@ export async function GET(
         requesterPhone,
         maintenanceAwaitingRequesterSince,
         maintenanceRequesterRejectReason,
+        maintenanceRequesterConfirmedAt,
         conflictReported,
         conflictStatus,
         conflictResolution,

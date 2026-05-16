@@ -161,16 +161,14 @@ export async function GET(req: NextRequest) {
   XLSX.utils.book_append_sheet(wb, ws, 'Tools');
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   const u8 = Uint8Array.from(buf);
-  const blob = new Blob([u8], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return new NextResponse(blob, {
+  return new NextResponse(u8, {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="warehouse-tools-${stamp}.xlsx"`,
+      'Content-Length': String(u8.byteLength),
+      'Cache-Control': 'private, no-store, max-age=0',
     },
   });
 }

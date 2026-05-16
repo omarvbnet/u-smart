@@ -121,10 +121,10 @@ class ApiService {
     try {
       final response =
           await http.get(_uri(path, query), headers: _binaryGetHeaders);
-      if (response.statusCode != 200) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         if (kDebugMode) {
           debugPrint(
-            'getBytes non-200: ${response.statusCode} $path len=${response.bodyBytes.length}',
+            'getBytes HTTP ${response.statusCode}: $path len=${response.bodyBytes.length}',
           );
         }
         return null;
@@ -132,18 +132,28 @@ class ApiService {
       final bytes = response.bodyBytes;
       if (bytes.isEmpty) {
         if (kDebugMode) {
-          debugPrint('getBytes empty body (200): $path');
+          debugPrint('getBytes empty body (${response.statusCode}): $path');
         }
         return null;
       }
-      final ct = response.headers['content-type'] ?? '';
-      if (ct.toLowerCase().contains('json') &&
-          bytes.length < 4096 &&
-          String.fromCharCodes(bytes).trimLeft().startsWith('{')) {
-        if (kDebugMode) {
-          debugPrint('getBytes got JSON despite 200: $path');
+      final ct = (response.headers['content-type'] ?? '').toLowerCase();
+      final cd = (response.headers['content-disposition'] ?? '').toLowerCase();
+      final looksLikeAttachment =
+          cd.contains('attachment') ||
+              ct.contains('spreadsheet') ||
+              ct.contains('excel') ||
+              ct.contains('octet-stream') ||
+              ct.contains('zip');
+      if (!looksLikeAttachment &&
+          ct.contains('json') &&
+          bytes.length < 65536) {
+        final head = String.fromCharCodes(bytes.take(400)).trimLeft();
+        if (head.startsWith('{') || head.startsWith('[')) {
+          if (kDebugMode) {
+            debugPrint('getBytes rejected JSON error body: $path');
+          }
+          return null;
         }
-        return null;
       }
       return bytes;
     } catch (e, st) {

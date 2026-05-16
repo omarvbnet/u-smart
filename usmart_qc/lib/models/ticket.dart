@@ -30,13 +30,16 @@ class ChecklistHistoryEntry {
 class StatusLogEntry {
   final String status;
   final DateTime createdAt;
+  /// Extra context (e.g. NCR / workflow resubmit) from enriched API timeline.
+  final String? detail;
 
-  StatusLogEntry({required this.status, required this.createdAt});
+  StatusLogEntry({required this.status, required this.createdAt, this.detail});
 
   factory StatusLogEntry.fromJson(Map<String, dynamic> json) {
     return StatusLogEntry(
       status: json['status'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      detail: json['detail'] as String?,
     );
   }
 }
@@ -139,6 +142,8 @@ class Ticket {
   final String? maintenanceAwaitingRequesterSince;
   /// Last rejection reason from the requester (maintenance confirmation flow).
   final String? maintenanceRequesterRejectReason;
+  /// When the requester confirmed maintenance completion (ISO), if applicable.
+  final String? maintenanceRequesterConfirmedAt;
   /// Site coordinates from server (Sites table), when available.
   final double? siteLatitude;
   final double? siteLongitude;
@@ -215,6 +220,7 @@ class Ticket {
     this.maintenanceCrewIds = const [],
     this.maintenanceAwaitingRequesterSince,
     this.maintenanceRequesterRejectReason,
+    this.maintenanceRequesterConfirmedAt,
     this.siteLatitude,
     this.siteLongitude,
     this.allowWorkspaceCrewJoin = false,
@@ -375,6 +381,7 @@ class Ticket {
           const [],
       maintenanceAwaitingRequesterSince: json['maintenanceAwaitingRequesterSince'] as String?,
       maintenanceRequesterRejectReason: json['maintenanceRequesterRejectReason'] as String?,
+      maintenanceRequesterConfirmedAt: json['maintenanceRequesterConfirmedAt'] as String?,
       siteLatitude: (json['siteLatitude'] as num?)?.toDouble(),
       siteLongitude: (json['siteLongitude'] as num?)?.toDouble(),
       allowWorkspaceCrewJoin: json['allowWorkspaceCrewJoin'] == true,

@@ -59,25 +59,42 @@ export async function GET(req: NextRequest) {
     createdAt: { gte: rangeFrom, lte: rangeTo },
   };
   if (provinceFilter) where.ticketProvince = provinceFilter;
-  if (staffIdFilter) where.staffRequesterId = staffIdFilter;
 
   let scope: 'workspace' | 'department' | 'self' = 'workspace';
 
-  if (!guard.isOwner && MANAGER_ROLES.has(guard.actorRole) && guard.actorDepartmentId) {
-    scope = 'department';
+  if (guard.isOwner) {
+    scope = 'workspace';
+    if (departmentId) where.departmentId = departmentId;
+    if (staffIdFilter) where.staffRequesterId = staffIdFilter;
+  } else if (MANAGER_ROLES.has(guard.actorRole)) {
+    if (!guard.actorDepartmentId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Your account must be assigned to a department to view expense analytics.',
+        },
+        { status: 403 }
+      );
+    }
     if (departmentId && departmentId !== guard.actorDepartmentId) {
       return NextResponse.json(
         { success: false, message: 'You can only view analytics for your department.' },
         { status: 403 }
       );
     }
+    scope = 'department';
     departmentId = guard.actorDepartmentId;
     where.departmentId = departmentId;
-  } else if (!guard.isOwner && !MANAGER_ROLES.has(guard.actorRole)) {
+  } else {
     scope = 'self';
+    departmentId = null;
     where.staffRequesterId = guard.requesterId;
-  } else if (departmentId) {
-    where.departmentId = departmentId;
+    if (staffIdFilter && staffIdFilter !== guard.requesterId) {
+      return NextResponse.json(
+        { success: false, message: 'You can only view your own expenses.' },
+        { status: 403 }
+      );
+    }
   }
 
   const [departments, staffList, rows] = await Promise.all([
@@ -280,7 +297,7 @@ export async function GET(req: NextRequest) {
     to: ymdUTC(rangeTo),
     provinceFilter,
     departmentId,
-    staffId: staffIdFilter,
+    staffId: scope === 'self' ? guard.requesterId : staffIdFilter,
     settings,
     summary: {
       totalAmount: Math.round(totalAmount * 100) / 100,
