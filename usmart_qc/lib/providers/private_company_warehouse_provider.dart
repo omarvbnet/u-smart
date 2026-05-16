@@ -913,6 +913,17 @@ class PrivateCompanyWarehouseProvider extends ChangeNotifier {
     );
   }
 
+  /// XLSX: non-tool materials catalog + full stock lines (API role-scoped like tools export).
+  Future<List<int>?> downloadWarehouseMaterialsExport({String? departmentId}) async {
+    final q = <String, String>{};
+    final d = departmentId?.trim();
+    if (d != null && d.isNotEmpty) q['departmentId'] = d;
+    return _api.getBytes(
+      ApiConfig.privateCompanyWarehouseMaterialsExport,
+      query: q.isEmpty ? null : q,
+    );
+  }
+
   void reset() {
     _dashboard = null;
     _materials = const [];

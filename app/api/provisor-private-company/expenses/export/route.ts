@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { prisma as _prisma } from '@/lib/prisma';
 import {
+  CAN_SUBMIT_TICKET_EXPENSE_ROLES,
   expenseRowToJson,
   expensesGuard,
 } from '@/lib/private-company-expenses';
@@ -38,18 +39,11 @@ function parseInclusiveRange(
 
 /**
  * GET /api/provisor-private-company/expenses/export?from=yyyy-MM-dd&to=yyyy-MM-dd&province=&departmentId=
- * XLSX line items for owners and department managers/coordinators only.
+ * XLSX line items: owners (optional dept), managers/coordinators (their dept), field staff (own lines only).
  */
 export async function GET(req: NextRequest) {
   const guard = await expensesGuard(req);
   if (!guard.ok) return guard.response;
-
-  if (!guard.isOwner && !MANAGER_ROLES.has(guard.actorRole)) {
-    return NextResponse.json(
-      { success: false, message: 'Only workspace owners and managers can export expenses.' },
-      { status: 403 }
-    );
-  }
 
   const url = new URL(req.url);
   const parsed = parseInclusiveRange(url.searchParams.get('from'), url.searchParams.get('to'));
@@ -93,6 +87,13 @@ export async function GET(req: NextRequest) {
     }
     departmentId = guard.actorDepartmentId;
     where.departmentId = departmentId;
+  } else if (CAN_SUBMIT_TICKET_EXPENSE_ROLES.has(guard.actorRole)) {
+    where.staffRequesterId = guard.requesterId;
+  } else {
+    return NextResponse.json(
+      { success: false, message: 'You are not allowed to export expenses.' },
+      { status: 403 }
+    );
   }
 
   const rows = await prisma.privateCompanyTicketExpense.findMany({

@@ -2234,45 +2234,50 @@ class _StatsTab extends StatelessWidget {
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: provider.exporting
-                            ? null
-                            : () async {
-                                final path = await provider
-                                    .exportTicketsExcel();
-                                if (context.mounted && path != null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(l10n.t('export_success')),
-                                      backgroundColor: const Color(0xFF00D4AA),
-                                      behavior: SnackBarBehavior.floating,
+                      child: Builder(
+                        builder: (exportBtnContext) {
+                          return ElevatedButton.icon(
+                            onPressed: provider.exporting
+                                ? null
+                                : () async {
+                                    final path = await provider.exportTicketsExcel(
+                                      exportBtnContext,
+                                    );
+                                    if (context.mounted && path != null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(l10n.t('export_success')),
+                                          backgroundColor: const Color(0xFF00D4AA),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  },
+                            icon: provider.exporting
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
                                     ),
-                                  );
-                                }
-                              },
-                        icon: provider.exporting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.download_rounded, size: 20),
-                        label: Text(
-                          provider.exporting
-                              ? l10n.t('exporting')
-                              : l10n.t('export_excel'),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D4AA),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                                  )
+                                : const Icon(Icons.download_rounded, size: 20),
+                            label: Text(
+                              provider.exporting
+                                  ? l10n.t('exporting')
+                                  : l10n.t('export_excel'),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D4AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],

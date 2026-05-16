@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
   if (!guard.ok) return guard.response;
 
-  if (!guard.canExportWarehouseTools) {
+  if (!guard.canExportWarehouseTools && !guard.canMutateWarehouse) {
     return NextResponse.json(
       { success: false, message: 'You are not allowed to export this report.' },
       { status: 403 }

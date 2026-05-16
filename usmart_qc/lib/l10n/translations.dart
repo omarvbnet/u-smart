@@ -329,6 +329,8 @@ const Map<String, String> _en = {
   'pc_warehouse_tools_export_hint':
       'Staff, serials, status, condition, and recent movement notes for tool SKUs.',
   'pc_warehouse_tools_export_failed': 'Could not export tools report.',
+  'pc_warehouse_materials_export': 'Export materials (Excel)',
+  'pc_warehouse_materials_export_failed': 'Could not export materials report.',
   'pc_ws_material_reason_add_hint': 'New reason label',
   'pc_ws_material_reasons_saved': 'Material reasons saved.',
   'pc_ws_material_reasons_save_failed': 'Could not save material reasons.',
@@ -1636,6 +1638,8 @@ const Map<String, String> _ar = {
   'pc_warehouse_tools_export_hint':
       'الموظفون، والأرقام التسلسلية، والحالة، وآخر الملاحظات للأدوات.',
   'pc_warehouse_tools_export_failed': 'تعذر تصدير تقرير الأدوات.',
+  'pc_warehouse_materials_export': 'تصدير المواد (Excel)',
+  'pc_warehouse_materials_export_failed': 'تعذر تصدير تقرير المواد.',
   'pc_ws_tab_warehouse': 'المستودع',
   'pc_dept_maintenance_dispatch_title': 'توجيه الصيانة',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -2495,6 +2499,8 @@ const Map<String, String> _ku = {
   'pc_warehouse_tools_export_hint':
       'کارمەند، زنجیرەیی، دۆخ، و تێبینی نوێیات بۆ ئامێرەکان.',
   'pc_warehouse_tools_export_failed': 'نەتوانرا ڕاپۆرتی ئامێر هەناردە بکرێت.',
+  'pc_warehouse_materials_export': 'هەناردەی کەرەستەکان (Excel)',
+  'pc_warehouse_materials_export_failed': 'نەتوانرا ڕاپۆرتی کەرەستە هەناردە بکرێت.',
   'pc_ws_tab_warehouse': 'کۆگا',
   'pc_dept_maintenance_dispatch_title': 'ڕێڕەوی چاککردنەوە',
   'pc_dept_maintenance_dispatch_subtitle':
@@ -3359,6 +3365,8 @@ const Map<String, String> _tr = {
   'pc_warehouse_tools_export_hint':
       'Personel, seri numarası, durum ve araç kalemleri için son hareket notları.',
   'pc_warehouse_tools_export_failed': 'Araç raporu dışa aktarılamadı.',
+  'pc_warehouse_materials_export': 'Malzemeleri dışa aktar (Excel)',
+  'pc_warehouse_materials_export_failed': 'Malzeme raporu dışa aktarılamadı.',
   'pc_ws_tab_warehouse': 'Depo',
   'pc_dept_maintenance_dispatch_title': 'Bakım yönlendirmesi',
   'pc_dept_maintenance_dispatch_subtitle':

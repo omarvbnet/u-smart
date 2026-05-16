@@ -84,6 +84,28 @@ class PrivateCompanyProvider extends ChangeNotifier {
     return role == 'MANAGER' || role == 'COORDINATOR';
   }
 
+  /// Who may download the ticket-expenses XLSX (API-enforced).
+  bool get canExportExpenseLines {
+    if (!hasWorkspace || !isApproved) return false;
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole ?? '';
+    if (role == 'MANAGER' || role == 'COORDINATOR') {
+      return myDepartmentId != null && myDepartmentId!.isNotEmpty;
+    }
+    const selfRoles = {
+      'ENGINEER',
+      'TECHNICIAN',
+      'WORKER',
+      'QUALITY_ENGINEER',
+      'SUPERVISION_ENGINEER',
+    };
+    if (selfRoles.contains(role) && (workspace?.ticketExpensesEnabled == true)) {
+      return true;
+    }
+    return false;
+  }
+
   /// Only the workspace owner can create / edit / delete departments.
   bool get canManageDepartments => isOwner;
 
@@ -189,12 +211,13 @@ class PrivateCompanyProvider extends ChangeNotifier {
         r == 'SUPERVISION_ENGINEER';
   }
 
-  /// Excel export of tool inventory (workspace owner or department manager/coordinator).
+  /// Excel export of warehouse tools/materials (owner, keeper, dept manager/coordinator).
   bool get canExportWarehouseToolsReport {
     if (!hasWorkspace || !isApproved) return false;
     if (isOwner) return true;
     if (!isStaff) return false;
     final r = _resolvedRole;
+    if (r == 'WAREHOUSE_KEEPER') return true;
     if (r != 'MANAGER' && r != 'COORDINATOR') return false;
     return myDepartmentId != null && myDepartmentId!.isNotEmpty;
   }
@@ -483,7 +506,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? province,
     String? departmentId,
   }) async {
-    if (!canManageStaff || !hasWorkspace || !isApproved) return null;
+    if (!canExportExpenseLines || !hasWorkspace || !isApproved) return null;
     String ymd(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final query = <String, String>{

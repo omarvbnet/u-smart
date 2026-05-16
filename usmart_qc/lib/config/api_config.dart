@@ -169,6 +169,8 @@ class ApiConfig {
       '/api/provisor-private-company/warehouse/keeper-tracking';
   static const String privateCompanyWarehouseToolsExport =
       '/api/provisor-private-company/warehouse/tools/export';
+  static const String privateCompanyWarehouseMaterialsExport =
+      '/api/provisor-private-company/warehouse/materials/export';
   static const String privateCompanyWarehouseStaffSearch =
       '/api/provisor-private-company/warehouse/staff-search';
   static const String privateCompanyWarehouseMaterialUseReasons =

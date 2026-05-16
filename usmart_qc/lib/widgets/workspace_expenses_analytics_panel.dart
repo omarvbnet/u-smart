@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import '../models/private_company_expense.dart';
 import '../providers/private_company_provider.dart';
 import '../screens/ticket_detail_screen.dart';
+import '../utils/share_position_origin.dart';
 
 /// Expense rollups for owners/managers (province, department, staff) or field staff self-view.
 class WorkspaceExpensesAnalyticsPanel extends StatefulWidget {
@@ -72,6 +73,7 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
     if (_exporting) return;
     if (!context.mounted) return;
     setState(() => _exporting = true);
+    final shareOrigin = sharePositionOriginForShareSheet(context);
     final bytes = await pc.downloadTicketExpensesExport(
       from: _rangeStart,
       to: _rangeEnd,
@@ -98,7 +100,11 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
           '${_rangeEnd.year}-${_rangeEnd.month.toString().padLeft(2, '0')}-${_rangeEnd.day.toString().padLeft(2, '0')}';
       final path = '${dir.path}/ticket-expenses-$slug.xlsx';
       await File(path).writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(path)], subject: l10n.t('pc_expenses_export_excel'));
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: l10n.t('pc_expenses_export_excel'),
+        sharePositionOrigin: shareOrigin,
+      );
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
@@ -296,7 +302,7 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
           ),
         ] else ...[
           periodRow,
-          if (pc.canManageStaff && !widget.compact) ...[
+          if (pc.canExportExpenseLines && !widget.compact) ...[
             _glass(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -354,7 +360,44 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
             ),
             const SizedBox(height: 10),
           ],
-          if (pc.isOwner || pc.isDepartmentManager) ...[
+          if (pc.canExportExpenseLines && widget.compact && enabled) ...[
+            const SizedBox(height: 10),
+            _glass(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.table_chart_rounded, color: Color(0xFF00D4AA), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        l10n.t('pc_expenses_export_excel'),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _exporting || pc.expenseAnalyticsLoading
+                          ? null
+                          : () => _runExport(context, l10n, pc),
+                      icon: _exporting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00D4AA)),
+                            )
+                          : const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
+                      tooltip: l10n.t('export_excel'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
             if (pc.isOwner && snap != null && snap.byProvince.isNotEmpty) ...[
               _glass(
                 child: Padding(
@@ -422,7 +465,6 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
               ),
               const SizedBox(height: 10),
             ],
-          ],
           if (pc.expenseAnalyticsLoading && snap == null)
             const Center(
               child: Padding(

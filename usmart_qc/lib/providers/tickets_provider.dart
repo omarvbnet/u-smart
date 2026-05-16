@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
@@ -15,6 +16,7 @@ import '../models/inspection_checklist.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../utils/image_upload_compress.dart';
+import '../utils/share_position_origin.dart';
 
 class TicketsProvider extends ChangeNotifier {
   final ApiService _api;
@@ -669,9 +671,10 @@ class TicketsProvider extends ChangeNotifier {
 
   /// Export tickets as Excel (CSV) for the current date range.
   /// Shares file via system share sheet.
-  Future<String?> exportTicketsExcel() async {
+  Future<String?> exportTicketsExcel(BuildContext shareButtonContext) async {
     _exporting = true;
     notifyListeners();
+    final shareOrigin = sharePositionOriginForShareSheet(shareButtonContext);
     try {
       final query = <String, String>{
         'serviceSlug': ApiConfig.serviceSlug,
@@ -688,7 +691,11 @@ class TicketsProvider extends ChangeNotifier {
           : DateTime.now().toIso8601String().split('T')[0];
       final file = File('${dir.path}/dashboard-export-$dateStr.csv');
       await file.writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Dashboard export');
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Dashboard export',
+        sharePositionOrigin: shareOrigin,
+      );
       return file.path;
     } catch (_) {
       return null;

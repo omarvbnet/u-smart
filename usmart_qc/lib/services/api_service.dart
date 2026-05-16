@@ -138,12 +138,18 @@ class ApiService {
       }
       final ct = (response.headers['content-type'] ?? '').toLowerCase();
       final cd = (response.headers['content-disposition'] ?? '').toLowerCase();
-      final looksLikeAttachment =
-          cd.contains('attachment') ||
-              ct.contains('spreadsheet') ||
-              ct.contains('excel') ||
-              ct.contains('octet-stream') ||
-              ct.contains('zip');
+      var looksLikeAttachment = cd.contains('attachment') ||
+          ct.contains('spreadsheet') ||
+          ct.contains('excel') ||
+          ct.contains('octet-stream') ||
+          ct.contains('zip');
+      if (!looksLikeAttachment &&
+          bytes.length >= 2 &&
+          bytes[0] == 0x50 &&
+          bytes[1] == 0x4b) {
+        // ZIP-based Office docs (.xlsx) — some proxies strip Content-Type.
+        looksLikeAttachment = true;
+      }
       if (!looksLikeAttachment &&
           ct.contains('json') &&
           bytes.length < 65536) {

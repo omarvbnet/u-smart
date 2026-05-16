@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../utils/share_position_origin.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/api_config.dart';
@@ -86,7 +87,10 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
   }
 
   Future<void> _shareLink(String url, String label) async {
-    await Share.share('${label.trim()}\n${_resolveUrl(url)}');
+    await Share.share(
+      '${label.trim()}\n${_resolveUrl(url)}',
+      sharePositionOrigin: sharePositionOriginForShareSheet(context),
+    );
   }
 
   void _openMapSheet(QFieldProject p) {

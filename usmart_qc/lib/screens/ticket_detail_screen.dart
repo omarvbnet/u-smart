@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
+import '../utils/share_position_origin.dart';
 import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
@@ -1021,18 +1022,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final url = '${ApiConfig.baseUrl}${ApiConfig.publicTicketPage(t.id)}';
     final text = 'Ticket: ${t.siteName ?? t.id}\n$url';
     try {
-      final box = context.findRenderObject() as RenderBox?;
       await Share.share(
         text,
         subject: 'Ticket ${t.siteName ?? t.id}',
-        sharePositionOrigin: box == null
-            ? null
-            : Rect.fromLTWH(
-                box.localToGlobal(Offset.zero).dx,
-                box.localToGlobal(Offset.zero).dy,
-                box.size.width,
-                box.size.height,
-              ),
+        sharePositionOrigin: sharePositionOriginForShareSheet(context),
       );
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: text));

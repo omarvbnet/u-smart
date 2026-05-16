@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../utils/share_position_origin.dart';
 import '../constants/iraq_provinces.dart';
 import '../models/private_company.dart';
 import '../models/private_company_warehouse.dart';
@@ -741,49 +742,55 @@ class _WorkspaceHeader extends StatelessWidget {
             ),
           ),
           if (pc.canExportWorkspaceData)
-            IconButton(
-              tooltip: l10n.t('pc_ws_export_data'),
-              icon: const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
-              onPressed: () async {
-                final prov = context.read<PrivateCompanyProvider>();
-                final bytes = await prov.downloadWorkspaceExport(days: 365);
-                if (!context.mounted) return;
-                if (bytes == null || bytes.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(l10n.t('pc_ws_export_failed')),
-                      backgroundColor: const Color(0xFFFF4757),
-                    ),
-                  );
-                  return;
-                }
-                try {
-                  final dir = await getTemporaryDirectory();
-                  final path =
-                      '${dir.path}/workspace-export-${DateTime.now().millisecondsSinceEpoch}.json';
-                  await File(path).writeAsBytes(bytes);
-                  await Share.shareXFiles(
-                    [XFile(path)],
-                    subject: l10n.t('pc_ws_export_data'),
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.t('pc_ws_export_shared')),
-                        backgroundColor: const Color(0xFF00D4AA),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${l10n.t('pc_ws_export_failed')}: $e'),
-                        backgroundColor: const Color(0xFFFF4757),
-                      ),
-                    );
-                  }
-                }
+            Builder(
+              builder: (btnContext) {
+                return IconButton(
+                  tooltip: l10n.t('pc_ws_export_data'),
+                  icon: const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
+                  onPressed: () async {
+                    final shareOrigin = sharePositionOriginForShareSheet(btnContext);
+                    final prov = context.read<PrivateCompanyProvider>();
+                    final bytes = await prov.downloadWorkspaceExport(days: 365);
+                    if (!context.mounted) return;
+                    if (bytes == null || bytes.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.t('pc_ws_export_failed')),
+                          backgroundColor: const Color(0xFFFF4757),
+                        ),
+                      );
+                      return;
+                    }
+                    try {
+                      final dir = await getTemporaryDirectory();
+                      final path =
+                          '${dir.path}/workspace-export-${DateTime.now().millisecondsSinceEpoch}.json';
+                      await File(path).writeAsBytes(bytes);
+                      await Share.shareXFiles(
+                        [XFile(path)],
+                        subject: l10n.t('pc_ws_export_data'),
+                        sharePositionOrigin: shareOrigin,
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.t('pc_ws_export_shared')),
+                            backgroundColor: const Color(0xFF00D4AA),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${l10n.t('pc_ws_export_failed')}: $e'),
+                            backgroundColor: const Color(0xFFFF4757),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                );
               },
             ),
           IconButton(
@@ -5095,7 +5102,7 @@ Future<void> _showTicketExpensesSettingsDialog(BuildContext context) async {
   if (snap == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(l10n.t('pc_expenses_export_failed')),
+        content: Text(l10n.t('action_failed')),
         backgroundColor: const Color(0xFFFF4757),
       ),
     );
@@ -5308,6 +5315,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
   int _warehouseSubTabLength = 6;
   PrivateCompanyProvider? _pcWhAttached;
   bool _exportingTools = false;
+  bool _exportingMaterials = false;
 
   int _warehouseSubTabCount(PrivateCompanyProvider pc) =>
       7 + (pc.canManageStaff ? 1 : 0);
@@ -5360,6 +5368,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
 
   Future<void> _exportWarehouseToolsReport() async {
     if (_exportingTools) return;
+    final shareOrigin = sharePositionOriginForShareSheet(context);
     final wh = context.read<PrivateCompanyWarehouseProvider>();
     final pc = context.read<PrivateCompanyProvider>();
     final l10n = AppLocalizations.of(context);
@@ -5388,6 +5397,7 @@ class _WarehouseTabState extends State<_WarehouseTab>
       await Share.shareXFiles(
         [XFile(path)],
         subject: l10n.t('pc_warehouse_tools_export'),
+        sharePositionOrigin: shareOrigin,
       );
       if (!mounted) return;
       messenger.showSnackBar(
@@ -5401,6 +5411,56 @@ class _WarehouseTabState extends State<_WarehouseTab>
       messenger.showSnackBar(
         SnackBar(
           content: Text(l10n.t('pc_warehouse_tools_export_failed')),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportWarehouseMaterialsReport() async {
+    if (_exportingMaterials) return;
+    final shareOrigin = sharePositionOriginForShareSheet(context);
+    final wh = context.read<PrivateCompanyWarehouseProvider>();
+    final pc = context.read<PrivateCompanyProvider>();
+    final l10n = AppLocalizations.of(context);
+    setState(() => _exportingMaterials = true);
+    final bytes = await wh.downloadWarehouseMaterialsExport(
+      departmentId: pc.isOwner ? null : pc.myDepartmentId,
+    );
+    if (!mounted) return;
+    setState(() => _exportingMaterials = false);
+    final messenger = ScaffoldMessenger.of(context);
+    if (bytes == null || bytes.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('pc_warehouse_materials_export_failed')),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+      return;
+    }
+    try {
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/warehouse-materials-${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      await File(path).writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: l10n.t('pc_warehouse_materials_export'),
+        sharePositionOrigin: shareOrigin,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('export_success')),
+          backgroundColor: const Color(0xFF00D4AA),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('pc_warehouse_materials_export_failed')),
           backgroundColor: const Color(0xFFFF4757),
         ),
       );
@@ -5554,6 +5614,8 @@ class _WarehouseTabState extends State<_WarehouseTab>
                 canExportTools: exportTools,
                 exportingTools: _exportingTools,
                 onExportTools: _exportWarehouseToolsReport,
+                exportingMaterials: _exportingMaterials,
+                onExportMaterials: _exportWarehouseMaterialsReport,
               ),
               _WarehouseMaterialsView(canManage: dashboardCatalog, toolsCatalogOnly: true),
               _WarehouseMaterialsView(canManage: dashboardCatalog, toolsCatalogOnly: false),
@@ -6860,12 +6922,16 @@ class _WarehouseInventoryView extends StatefulWidget {
     required this.canExportTools,
     required this.exportingTools,
     required this.onExportTools,
+    required this.exportingMaterials,
+    required this.onExportMaterials,
   });
   final bool keeperManage;
   final bool assignToolsFromStock;
   final bool canExportTools;
   final bool exportingTools;
   final VoidCallback onExportTools;
+  final bool exportingMaterials;
+  final VoidCallback onExportMaterials;
 
   @override
   State<_WarehouseInventoryView> createState() =>
@@ -6890,7 +6956,7 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
     final l10n = AppLocalizations.of(context);
     return Column(
       children: [
-        if (widget.canExportTools)
+        if (widget.canExportTools) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: OutlinedButton.icon(
@@ -6916,6 +6982,32 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: OutlinedButton.icon(
+              onPressed: widget.exportingMaterials ? null : widget.onExportMaterials,
+              icon: widget.exportingMaterials
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF00D4AA),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.inventory_2_outlined,
+                      size: 18,
+                      color: Color(0xFF00D4AA),
+                    ),
+              label: Text(l10n.t('pc_warehouse_materials_export')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00D4AA),
+                side: const BorderSide(color: Color(0xFF00B894)),
+              ),
+            ),
+          ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Row(
