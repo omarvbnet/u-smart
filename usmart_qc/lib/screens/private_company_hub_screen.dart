@@ -766,11 +766,24 @@ class _WorkspaceHeader extends StatelessWidget {
                       final path =
                           '${dir.path}/workspace-export-${DateTime.now().millisecondsSinceEpoch}.json';
                       await File(path).writeAsBytes(bytes);
-                      await Share.shareXFiles(
-                        [XFile(path)],
-                        subject: l10n.t('pc_ws_export_data'),
-                        sharePositionOrigin: shareOrigin,
-                      );
+                      try {
+                        await Share.shareXFiles(
+                          [
+                            XFile(path, mimeType: 'application/json'),
+                          ],
+                          subject: l10n.t('pc_ws_export_data'),
+                          sharePositionOrigin: shareOrigin,
+                        );
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.t('pc_expenses_export_share_failed')),
+                            backgroundColor: const Color(0xFFFBBF24),
+                          ),
+                        );
+                        return;
+                      }
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -5394,11 +5407,28 @@ class _WarehouseTabState extends State<_WarehouseTab>
       final path =
           '${dir.path}/warehouse-tools-${DateTime.now().millisecondsSinceEpoch}.xlsx';
       await File(path).writeAsBytes(bytes);
-      await Share.shareXFiles(
-        [XFile(path)],
-        subject: l10n.t('pc_warehouse_tools_export'),
-        sharePositionOrigin: shareOrigin,
-      );
+      try {
+        await Share.shareXFiles(
+          [
+            XFile(
+              path,
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ),
+          ],
+          subject: l10n.t('pc_warehouse_tools_export'),
+          sharePositionOrigin: shareOrigin,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('pc_expenses_export_share_failed')),
+            backgroundColor: const Color(0xFFFBBF24),
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
@@ -5444,11 +5474,28 @@ class _WarehouseTabState extends State<_WarehouseTab>
       final path =
           '${dir.path}/warehouse-materials-${DateTime.now().millisecondsSinceEpoch}.xlsx';
       await File(path).writeAsBytes(bytes);
-      await Share.shareXFiles(
-        [XFile(path)],
-        subject: l10n.t('pc_warehouse_materials_export'),
-        sharePositionOrigin: shareOrigin,
-      );
+      try {
+        await Share.shareXFiles(
+          [
+            XFile(
+              path,
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ),
+          ],
+          subject: l10n.t('pc_warehouse_materials_export'),
+          sharePositionOrigin: shareOrigin,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('pc_expenses_export_share_failed')),
+            backgroundColor: const Color(0xFFFBBF24),
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
@@ -6956,58 +7003,73 @@ class _WarehouseInventoryViewState extends State<_WarehouseInventoryView> {
     final l10n = AppLocalizations.of(context);
     return Column(
       children: [
-        if (widget.canExportTools) ...[
+        if (widget.canExportTools)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: OutlinedButton.icon(
-              onPressed: widget.exportingTools ? null : widget.onExportTools,
-              icon: widget.exportingTools
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF8B83FF),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.table_chart_outlined,
-                      size: 18,
-                      color: Color(0xFF8B83FF),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: widget.exportingTools ? null : widget.onExportTools,
+                    icon: widget.exportingTools
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF8B83FF),
+                            ),
+                          )
+                        : const Icon(Icons.table_chart_outlined, size: 16, color: Color(0xFF8B83FF)),
+                    label: Text(
+                      l10n.t('pc_warehouse_tools_export'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                     ),
-              label: Text(l10n.t('pc_warehouse_tools_export')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF8B83FF),
-                side: const BorderSide(color: Color(0xFF6C63FF)),
-              ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B83FF),
+                      side: const BorderSide(color: Color(0xFF6C63FF)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: widget.exportingMaterials ? null : widget.onExportMaterials,
+                    icon: widget.exportingMaterials
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF00D4AA),
+                            ),
+                          )
+                        : const Icon(Icons.inventory_2_outlined, size: 16, color: Color(0xFF00D4AA)),
+                    label: Text(
+                      l10n.t('pc_warehouse_materials_export'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00D4AA),
+                      side: const BorderSide(color: Color(0xFF00B894)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: OutlinedButton.icon(
-              onPressed: widget.exportingMaterials ? null : widget.onExportMaterials,
-              icon: widget.exportingMaterials
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF00D4AA),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.inventory_2_outlined,
-                      size: 18,
-                      color: Color(0xFF00D4AA),
-                    ),
-              label: Text(l10n.t('pc_warehouse_materials_export')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF00D4AA),
-                side: const BorderSide(color: Color(0xFF00B894)),
-              ),
-            ),
-          ),
-        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Row(

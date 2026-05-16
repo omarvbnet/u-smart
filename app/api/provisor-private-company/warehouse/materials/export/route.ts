@@ -23,10 +23,81 @@ function iso(d: unknown): string {
   return d != null ? String(d) : '';
 }
 
+type Mov = {
+  itemId: string;
+  type: string;
+  quantity: number;
+  note: string | null;
+  createdAt: Date;
+  ticketId: string | null;
+  actor: { id: string; name: string | null; username: string } | null;
+  ticket: {
+    id: string;
+    siteName: string | null;
+    technique: string | null;
+    status: string;
+  } | null;
+};
+
+function actorLabel(a: { name: string | null; username: string } | null): string {
+  if (!a) return '';
+  return (a.name?.trim() || a.username || a.id) as string;
+}
+
+function humanItemStatus(row: {
+  status: string;
+  handoverConfirmedAt: Date | null;
+}): string {
+  const s = row.status;
+  if (s === 'IN_WAREHOUSE') return 'In warehouse (available / new stock)';
+  if (s === 'ASSIGNED') {
+    return row.handoverConfirmedAt
+      ? 'Assigned — receipt confirmed by staff'
+      : 'Assigned — pending staff receipt';
+  }
+  if (s === 'USED') return 'Used / consumed on ticket';
+  if (s === 'DAMAGED') return 'Damaged';
+  if (s === 'LOST') return 'Lost';
+  if (s === 'RETIRED') return 'Retired';
+  return s;
+}
+
+function firstMovementOfType(mv: Mov[], type: string): Mov | null {
+  for (const m of mv) {
+    if (m.type === type) return m;
+  }
+  return null;
+}
+
+function lastMovementOfType(mv: Mov[], type: string): Mov | null {
+  for (let i = mv.length - 1; i >= 0; i--) {
+    if (mv[i].type === type) return mv[i];
+  }
+  return null;
+}
+
+function movementTrail(mv: Mov[], max = 20): string {
+  const tail = mv.slice(-max);
+  return tail
+    .map((m) => {
+      const who = actorLabel(m.actor);
+      const tk = m.ticketId ?? m.ticket?.id ?? '';
+      const bits = [
+        m.type,
+        iso(m.createdAt),
+        `qty:${m.quantity}`,
+        who && `by:${who}`,
+        tk && `ticket:${tk}`,
+        m.note?.trim() && `note:${String(m.note).slice(0, 120)}`,
+      ].filter(Boolean);
+      return bits.join(' | ');
+    })
+    .join(' → ');
+}
+
 /**
  * GET /api/provisor-private-company/warehouse/materials/export?departmentId=
- * XLSX: sheet "Catalog" (material definitions), sheet "Stock lines" (every unit + assignments).
- * Same export permission as tools export (owner, manager, coordinator).
+ * XLSX: Catalog, Totals by material (qty + line counts by status), Stock lines (serials + assignments + movement audit).
  */
 export async function GET(req: NextRequest) {
   const guard = await warehouseGuard(req);
@@ -95,7 +166,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.privateCompanyMaterialItem.findMany({
       where: whereItems,
-      orderBy: [{ updatedAt: 'desc' }],
+      orderBy: [{ materialId: 'asc' }, { serialNumber: 'asc' }],
       take: 20_000,
       include: {
         material: {
@@ -117,14 +188,107 @@ export async function GET(req: NextRequest) {
         createdBy: { select: { id: true, name: true, username: true } },
         handoverConfirmedBy: { select: { id: true, name: true, username: true } },
         returnRequestedBy: { select: { id: true, name: true, username: true } },
-        movements: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: { type: true, note: true, createdAt: true, quantity: true },
-        },
       },
     }),
   ]);
+
+  const itemIds = (items as Array<{ id: string }>).map((r) => r.id);
+  const movementRows: Mov[] =
+    itemIds.length > 0
+      ? await prisma.privateCompanyMaterialMovement.findMany({
+          where: { companyId: guard.companyId, itemId: { in: itemIds } },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            itemId: true,
+            type: true,
+            quantity: true,
+            note: true,
+            createdAt: true,
+            ticketId: true,
+            actor: { select: { id: true, name: true, username: true } },
+            ticket: { select: { id: true, siteName: true, technique: true, status: true } },
+          },
+        })
+      : [];
+
+  const movByItem = new Map<string, Mov[]>();
+  for (const m of movementRows) {
+    const arr = movByItem.get(m.itemId) ?? [];
+    arr.push(m as Mov);
+    movByItem.set(m.itemId, arr);
+  }
+
+  type TotAgg = {
+    name: string;
+    unit: string;
+    linesInWh: number;
+    qtyInWh: number;
+    linesAssigned: number;
+    qtyAssigned: number;
+    linesUsed: number;
+    qtyUsed: number;
+    linesDamaged: number;
+    qtyDamaged: number;
+    linesLost: number;
+    qtyLost: number;
+    linesOther: number;
+    qtyOther: number;
+    linesTotal: number;
+    qtyTotal: number;
+  };
+  const totals = new Map<string, TotAgg>();
+
+  function bumpTotal(mid: string, name: string, unit: string, status: string, qty: number) {
+    let a = totals.get(mid);
+    if (!a) {
+      a = {
+        name,
+        unit,
+        linesInWh: 0,
+        qtyInWh: 0,
+        linesAssigned: 0,
+        qtyAssigned: 0,
+        linesUsed: 0,
+        qtyUsed: 0,
+        linesDamaged: 0,
+        qtyDamaged: 0,
+        linesLost: 0,
+        qtyLost: 0,
+        linesOther: 0,
+        qtyOther: 0,
+        linesTotal: 0,
+        qtyTotal: 0,
+      };
+      totals.set(mid, a);
+    }
+    a.linesTotal += 1;
+    a.qtyTotal += qty;
+    switch (status) {
+      case 'IN_WAREHOUSE':
+        a.linesInWh += 1;
+        a.qtyInWh += qty;
+        break;
+      case 'ASSIGNED':
+        a.linesAssigned += 1;
+        a.qtyAssigned += qty;
+        break;
+      case 'USED':
+        a.linesUsed += 1;
+        a.qtyUsed += qty;
+        break;
+      case 'DAMAGED':
+        a.linesDamaged += 1;
+        a.qtyDamaged += qty;
+        break;
+      case 'LOST':
+        a.linesLost += 1;
+        a.qtyLost += qty;
+        break;
+      default:
+        a.linesOther += 1;
+        a.qtyOther += qty;
+    }
+  }
 
   const catHeader = [
     'Material ID',
@@ -154,26 +318,122 @@ export async function GET(req: NextRequest) {
     ]);
   }
 
-  const stockHeader = [
-    'Item ID',
-    'Serial / lot',
-    'Qty',
-    'Province',
-    'Status',
-    'Notes',
-    'Created (UTC)',
-    'Updated (UTC)',
-    'Used at (UTC)',
+  for (const row of items as Array<{
+    id: string;
+    materialId: string;
+    serialNumber: string;
+    province: string;
+    status: string;
+    quantity: number;
+    notes: string | null;
+    assignedToId: string | null;
+    usedTicketId: string | null;
+    usedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    handoverConfirmedAt: Date | null;
+    handoverRejectedAt: Date | null;
+    handoverRejectionReason: string | null;
+    returnRequestedAt: Date | null;
+    returnRequestNote: string | null;
+    returnRejectedAt: Date | null;
+    returnRejectionReason: string | null;
+    material: {
+      id: string;
+      name: string;
+      description: string | null;
+      category: string | null;
+      unit: string | null;
+      tracking: string;
+    } | null;
+    assignedTo: {
+      id: string;
+      name: string | null;
+      username: string;
+      privateCompanyDepartmentId: string | null;
+    } | null;
+    usedTicket: {
+      id: string;
+      siteName: string | null;
+      technique: string | null;
+      status: string;
+      province: string | null;
+    } | null;
+    createdBy: { id: string; name: string | null; username: string } | null;
+    handoverConfirmedBy: { id: string; name: string | null; username: string } | null;
+    returnRequestedBy: { id: string; name: string | null; username: string } | null;
+  }>) {
+    const mid = row.materialId;
+    const mname = row.material?.name ?? '';
+    const munit = row.material?.unit ?? '';
+    bumpTotal(mid, mname, munit, row.status, row.quantity ?? 1);
+  }
+
+  const sumHeader = [
     'Material ID',
     'Material name',
-    'Material description',
+    'Unit',
+    '# Lines in warehouse',
+    'Qty in warehouse',
+    '# Lines assigned',
+    'Qty assigned',
+    '# Lines used (ticket)',
+    'Qty used',
+    '# Lines damaged',
+    'Qty damaged',
+    '# Lines lost',
+    'Qty lost',
+    '# Lines other status',
+    'Qty other',
+    'Total lines',
+    'Total qty',
+  ];
+  const sumRows: (string | number)[][] = [sumHeader];
+  const sortedMids = [...totals.keys()].sort();
+  for (const mid of sortedMids) {
+    const a = totals.get(mid)!;
+    sumRows.push([
+      mid,
+      a.name,
+      a.unit,
+      a.linesInWh,
+      a.qtyInWh,
+      a.linesAssigned,
+      a.qtyAssigned,
+      a.linesUsed,
+      a.qtyUsed,
+      a.linesDamaged,
+      a.qtyDamaged,
+      a.linesLost,
+      a.qtyLost,
+      a.linesOther,
+      a.qtyOther,
+      a.linesTotal,
+      a.qtyTotal,
+    ]);
+  }
+
+  const stockHeader = [
+    'Material name',
     'Category',
     'Unit',
-    'Tracking',
-    'Assigned staff ID',
-    'Assigned name',
-    'Assigned username',
-    'Assignee dept ID',
+    'Serial / lot',
+    'Line qty',
+    'Province',
+    'Status (code)',
+    'Status (summary)',
+    'Material ID',
+    'Item ID',
+    'Assigned to staff ID',
+    'Assigned to name',
+    'Assigned to username',
+    'Assignee department ID',
+    'First stocked (UTC)',
+    'Stocked by',
+    'Last ASSIGN movement (UTC)',
+    'Last assigned by',
+    'Last ASSIGN qty',
+    'Last ASSIGN ticket ID',
     'Handover confirmed (UTC)',
     'Handover confirmed by',
     'Handover rejected (UTC)',
@@ -188,37 +448,95 @@ export async function GET(req: NextRequest) {
     'Ticket technique',
     'Ticket status',
     'Ticket province',
-    'Stocked by ID',
-    'Stocked by name',
-    'Last movement type',
-    'Last movement qty',
-    'Last movement note',
-    'Last movement (UTC)',
+    'Used at on item (UTC)',
+    'Last USED movement (UTC)',
+    'Used recorded by (movement)',
+    'USE movement ticket ID',
+    'USE movement note',
+    'Last TRANSFER (UTC)',
+    'Transfer by',
+    'Notes on item',
+    'Row created (UTC)',
+    'Row updated (UTC)',
+    'Initial stocker ID',
+    'Initial stocker',
+    'Movement audit (oldest→newest, truncated)',
   ];
   const stockRows: (string | number)[][] = [stockHeader];
 
-  for (const row of items) {
-    const lastM = row.movements?.[0];
+  for (const row of items as Array<{
+    id: string;
+    materialId: string;
+    serialNumber: string;
+    province: string;
+    status: string;
+    quantity: number;
+    notes: string | null;
+    assignedToId: string | null;
+    usedTicketId: string | null;
+    usedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    handoverConfirmedAt: Date | null;
+    handoverRejectedAt: Date | null;
+    handoverRejectionReason: string | null;
+    returnRequestedAt: Date | null;
+    returnRequestNote: string | null;
+    returnRejectedAt: Date | null;
+    returnRejectionReason: string | null;
+    material: {
+      id: string;
+      name: string;
+      description: string | null;
+      category: string | null;
+      unit: string | null;
+      tracking: string;
+    } | null;
+    assignedTo: {
+      id: string;
+      name: string | null;
+      username: string;
+      privateCompanyDepartmentId: string | null;
+    } | null;
+    usedTicket: {
+      id: string;
+      siteName: string | null;
+      technique: string | null;
+      status: string;
+      province: string | null;
+    } | null;
+    createdBy: { id: string; name: string | null; username: string } | null;
+    createdById: string | null;
+    handoverConfirmedBy: { id: string; name: string | null; username: string } | null;
+    returnRequestedBy: { id: string; name: string | null; username: string } | null;
+  }>) {
+    const mv = movByItem.get(row.id) ?? [];
+    const firstStock = firstMovementOfType(mv, 'STOCKED');
+    const lastAssign = lastMovementOfType(mv, 'ASSIGNED');
+    const lastUsedM = lastMovementOfType(mv, 'USED');
+    const lastXfer = lastMovementOfType(mv, 'TRANSFERRED');
+
     stockRows.push([
-      row.id,
+      row.material?.name ?? '',
+      row.material?.category ?? '',
+      row.material?.unit ?? '',
       row.serialNumber,
       row.quantity,
       row.province,
       row.status,
-      row.notes ?? '',
-      iso(row.createdAt),
-      iso(row.updatedAt),
-      iso(row.usedAt),
+      humanItemStatus(row),
       row.material?.id ?? '',
-      row.material?.name ?? '',
-      row.material?.description ?? '',
-      row.material?.category ?? '',
-      row.material?.unit ?? '',
-      row.material?.tracking ?? '',
+      row.id,
       row.assignedToId ?? '',
       row.assignedTo?.name ?? '',
       row.assignedTo?.username ?? '',
       row.assignedTo?.privateCompanyDepartmentId ?? '',
+      firstStock ? iso(firstStock.createdAt) : '',
+      actorLabel(firstStock?.actor ?? null),
+      lastAssign ? iso(lastAssign.createdAt) : '',
+      actorLabel(lastAssign?.actor ?? null),
+      lastAssign?.quantity ?? '',
+      lastAssign?.ticketId ?? lastAssign?.ticket?.id ?? '',
       iso(row.handoverConfirmedAt),
       row.handoverConfirmedBy?.username ?? row.handoverConfirmedBy?.name ?? '',
       iso(row.handoverRejectedAt),
@@ -228,22 +546,30 @@ export async function GET(req: NextRequest) {
       row.returnRequestNote ?? '',
       iso(row.returnRejectedAt),
       row.returnRejectionReason ?? '',
-      row.usedTicketId ?? '',
+      row.usedTicketId ?? row.usedTicket?.id ?? '',
       row.usedTicket?.siteName ?? '',
       row.usedTicket?.technique ?? '',
       row.usedTicket?.status ?? '',
       row.usedTicket?.province ?? '',
+      iso(row.usedAt),
+      lastUsedM ? iso(lastUsedM.createdAt) : '',
+      actorLabel(lastUsedM?.actor ?? null),
+      lastUsedM?.ticketId ?? lastUsedM?.ticket?.id ?? '',
+      lastUsedM?.note ?? '',
+      lastXfer ? iso(lastXfer.createdAt) : '',
+      actorLabel(lastXfer?.actor ?? null),
+      row.notes ?? '',
+      iso(row.createdAt),
+      iso(row.updatedAt),
       row.createdById ?? '',
-      row.createdBy?.name ?? row.createdBy?.username ?? '',
-      lastM?.type ?? '',
-      lastM?.quantity ?? '',
-      lastM?.note ?? '',
-      lastM ? iso(lastM.createdAt) : '',
+      actorLabel(row.createdBy),
+      movementTrail(mv, 25),
     ]);
   }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catRows), 'Catalog');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), 'Totals by material');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stockRows), 'Stock lines');
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   const u8 = Uint8Array.from(buf);

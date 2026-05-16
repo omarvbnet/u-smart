@@ -325,6 +325,8 @@ const Map<String, String> _en = {
   'pc_expenses_export_subtitle':
       'Choose dates. Province and department filters above apply to the file.',
   'pc_expenses_export_failed': 'Could not export expenses.',
+  'pc_expenses_export_share_failed':
+      'File downloaded, but the share sheet could not open. Try again or find the file in your app\'s temporary folder.',
   'pc_warehouse_tools_export': 'Export tools (Excel)',
   'pc_warehouse_tools_export_hint':
       'Staff, serials, status, condition, and recent movement notes for tool SKUs.',
@@ -1634,6 +1636,8 @@ const Map<String, String> _ar = {
   'pc_expenses_export_subtitle':
       'اختر التواريخ. تُطبَّق عوامل تصفية المحافظة والقسم أعلاه على الملف.',
   'pc_expenses_export_failed': 'تعذر تصدير المصاريف.',
+  'pc_expenses_export_share_failed':
+      'تم تنزيل الملف، لكن تعذر فتح نافذة المشاركة. أعد المحاولة أو ابحث عن الملف في مجلد الملفات المؤقتة للتطبيق.',
   'pc_warehouse_tools_export': 'تصدير الأدوات (Excel)',
   'pc_warehouse_tools_export_hint':
       'الموظفون، والأرقام التسلسلية، والحالة، وآخر الملاحظات للأدوات.',
@@ -2495,6 +2499,8 @@ const Map<String, String> _ku = {
   'pc_expenses_export_subtitle':
       'بەروار هەڵبژێرە. فلتەرەکانی پارێزگا و بەش سەرەوە کاریان پێدەکەن لە فایلەکە.',
   'pc_expenses_export_failed': 'نەتوانرا خەرجی هەناردە بکرێت.',
+  'pc_expenses_export_share_failed':
+      'فایلەکە داگیرا، بەڵام پەنجەرەی بڵاوکردنەوە نەکرایەوە. دووبارە هەوڵ بدەرەوە یان فایلەکە لە بوخچەی کاتی ئەپ بدۆزەرەوە.',
   'pc_warehouse_tools_export': 'هەناردەی ئامێرەکان (Excel)',
   'pc_warehouse_tools_export_hint':
       'کارمەند، زنجیرەیی، دۆخ، و تێبینی نوێیات بۆ ئامێرەکان.',
@@ -3361,6 +3367,8 @@ const Map<String, String> _tr = {
   'pc_expenses_export_subtitle':
       'Tarihleri seçin. Üstteki il ve departman süzgeçleri dosyaya uygulanır.',
   'pc_expenses_export_failed': 'Giderler dışa aktarılamadı.',
+  'pc_expenses_export_share_failed':
+      'Dosya indirildi ancak paylaşım ekranı açılamadı. Tekrar deneyin veya uygulamanın geçici dosyalar klasörüne bakın.',
   'pc_warehouse_tools_export': 'Araçları dışa aktar (Excel)',
   'pc_warehouse_tools_export_hint':
       'Personel, seri numarası, durum ve araç kalemleri için son hareket notları.',

@@ -100,11 +100,29 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
           '${_rangeEnd.year}-${_rangeEnd.month.toString().padLeft(2, '0')}-${_rangeEnd.day.toString().padLeft(2, '0')}';
       final path = '${dir.path}/ticket-expenses-$slug.xlsx';
       await File(path).writeAsBytes(bytes);
-      await Share.shareXFiles(
-        [XFile(path)],
-        subject: l10n.t('pc_expenses_export_excel'),
-        sharePositionOrigin: shareOrigin,
-      );
+      try {
+        await Share.shareXFiles(
+          [
+            XFile(
+              path,
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ),
+          ],
+          subject: l10n.t('pc_expenses_export_excel'),
+          sharePositionOrigin: shareOrigin,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('pc_expenses_export_share_failed')),
+            backgroundColor: const Color(0xFFFBBF24),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(

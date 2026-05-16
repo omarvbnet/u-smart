@@ -136,6 +136,11 @@ class ApiService {
         }
         return null;
       }
+      // Office Open XML (.xlsx, .docx, …) is a ZIP — always treat as binary first.
+      // Some proxies mislabel these as JSON/HTML; accepting PK avoids false rejection.
+      if (bytes.length >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4b) {
+        return bytes;
+      }
       final ct = (response.headers['content-type'] ?? '').toLowerCase();
       final cd = (response.headers['content-disposition'] ?? '').toLowerCase();
       var looksLikeAttachment = cd.contains('attachment') ||
@@ -143,13 +148,6 @@ class ApiService {
           ct.contains('excel') ||
           ct.contains('octet-stream') ||
           ct.contains('zip');
-      if (!looksLikeAttachment &&
-          bytes.length >= 2 &&
-          bytes[0] == 0x50 &&
-          bytes[1] == 0x4b) {
-        // ZIP-based Office docs (.xlsx) — some proxies strip Content-Type.
-        looksLikeAttachment = true;
-      }
       if (!looksLikeAttachment &&
           ct.contains('json') &&
           bytes.length < 65536) {

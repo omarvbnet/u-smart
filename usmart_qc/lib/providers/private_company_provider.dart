@@ -515,7 +515,13 @@ class PrivateCompanyProvider extends ChangeNotifier {
     };
     final p = province?.trim();
     if (p != null && p.isNotEmpty) query['province'] = p;
-    final d = departmentId?.trim();
+    var d = departmentId?.trim();
+    if (!isOwner) {
+      final role = (_resolvedRole ?? '').toUpperCase();
+      if (role != 'MANAGER' && role != 'COORDINATOR') {
+        d = null;
+      }
+    }
     if (d != null && d.isNotEmpty) query['departmentId'] = d;
     return _api.getBytes(ApiConfig.privateCompanyExpensesExport, query: query);
   }
