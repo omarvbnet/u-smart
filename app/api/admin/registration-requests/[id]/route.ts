@@ -170,6 +170,8 @@ export async function PATCH(
           role: true,
           email: true,
           phone: true,
+          name: true,
+          province: true,
           serviceSlug: true,
         },
       });
