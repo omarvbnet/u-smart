@@ -94,6 +94,70 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
+      const requesterId = (rr as { requesterId?: string | null }).requesterId?.trim() || null;
+
+      if (requesterId && rr.role === 'COMPANY') {
+        const linked = await prisma.ticketRequester.findUnique({
+          where: { id: requesterId },
+          select: {
+            id: true,
+            username: true,
+            passwordHash: true,
+            role: true,
+            email: true,
+            phone: true,
+            name: true,
+            province: true,
+            company: true,
+          },
+        });
+        if (!linked) {
+          return NextResponse.json(
+            { success: false, message: 'Linked requester account not found.' },
+            { status: 400 }
+          );
+        }
+        if (linked.role !== 'PERSONAL') {
+          return NextResponse.json(
+            { success: false, message: 'Linked account is not an individual (PERSONAL) user.' },
+            { status: 400 }
+          );
+        }
+        const companyName = rr.legalName.trim();
+        await prisma.ticketRequester.update({
+          where: { id: linked.id },
+          data: {
+            role: 'COMPANY',
+            company: companyName,
+            name: linked.name || companyName,
+            email: rr.email.trim().toLowerCase() || linked.email,
+            phone: rr.phone || linked.phone,
+            province: rr.province?.trim() || linked.province,
+            companyCertificationUrl: rr.evidenceUrl,
+            serviceSlug: 'quality-control-supervision',
+            status: 'ACTIVE',
+          },
+        });
+        await delegate.update({
+          where: { id },
+          data: { status: 'APPROVED' },
+        });
+        const notifyEmail = (rr.email || linked.email || '').trim().toLowerCase();
+        if (notifyEmail) {
+          sendCompanyAccountApprovedEmail(notifyEmail, {
+            name: linked.name || companyName,
+            username: linked.username,
+            password: '(use your existing phone sign-in)',
+          }).catch((e) => console.error('Upgrade approval email failed:', e));
+        }
+        return NextResponse.json({
+          success: true,
+          status: 'APPROVED',
+          upgraded: true,
+          message: 'Individual account upgraded to company successfully.',
+        });
+      }
+
       const normalizedEmail = rr.email.trim().toLowerCase();
       const normalizedPhone = normalizePhone(rr.phone);
       const existingRequesters = await prisma.ticketRequester.findMany({
@@ -129,9 +193,11 @@ export async function PATCH(
           where: { id: existingRequester.id },
           data: {
             role: 'COMPANY',
-            name: rr.legalName,
+            company: rr.legalName,
+            name: existingRequester.name || rr.legalName,
             email: rr.email,
             phone: rr.phone,
+            province: (rr as { province?: string }).province || undefined,
             companyCertificationUrl: rr.evidenceUrl,
             serviceSlug: upgradeServiceSlug,
             status: 'ACTIVE',

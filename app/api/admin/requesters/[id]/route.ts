@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { RequesterRole } from '@prisma/client';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+
+const ALLOWED_ROLES: RequesterRole[] = [
+  'COMPANY',
+  'PERSONAL',
+  'ENGINEER',
+  'TECHNICIAN',
+  'WORKER',
+  'MANAGER',
+  'COORDINATOR',
+  'WAREHOUSE_KEEPER',
+];
+
+const FIELD_ROLES = new Set<RequesterRole>(['ENGINEER', 'TECHNICIAN', 'WORKER']);
 
 export async function PATCH(
   req: NextRequest,
@@ -21,21 +35,72 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const status = typeof body.status === 'string' ? body.status.toUpperCase() : '';
-  if (!['ACTIVE', 'SUSPENDED', 'BLOCKED'].includes(status)) {
-    return NextResponse.json({ success: false, message: 'Invalid status. Use ACTIVE, SUSPENDED, or BLOCKED' }, { status: 400 });
+  const statusRaw = typeof body.status === 'string' ? body.status.toUpperCase() : '';
+  const roleRaw = typeof body.role === 'string' ? body.role.toUpperCase() : '';
+
+  const data: {
+    status?: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+    role?: RequesterRole;
+    serviceSlug?: string;
+  } = {};
+
+  if (statusRaw) {
+    if (!['ACTIVE', 'SUSPENDED', 'BLOCKED'].includes(statusRaw)) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid status. Use ACTIVE, SUSPENDED, or BLOCKED' },
+        { status: 400 }
+      );
+    }
+    data.status = statusRaw as 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+  }
+
+  if (roleRaw) {
+    if (!ALLOWED_ROLES.includes(roleRaw as RequesterRole)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Invalid role. Use COMPANY, PERSONAL, ENGINEER, TECHNICIAN, WORKER, MANAGER, COORDINATOR, or WAREHOUSE_KEEPER',
+        },
+        { status: 400 }
+      );
+    }
+    const ownedWorkspace = await prisma.privateCompany.findFirst({
+      where: { ownerRequesterId: id },
+      select: { id: true },
+    });
+    if (ownedWorkspace && roleRaw !== 'COMPANY' && roleRaw !== 'PERSONAL') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'This user owns a private workspace. Change role to COMPANY or transfer ownership first.',
+        },
+        { status: 400 }
+      );
+    }
+    data.role = roleRaw as RequesterRole;
+    if (FIELD_ROLES.has(data.role)) {
+      data.serviceSlug = 'quality-control-supervision';
+    }
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ success: false, message: 'Provide status and/or role to update' }, { status: 400 });
   }
 
   try {
     const updated = await prisma.ticketRequester.update({
       where: { id },
-      data: { status: status as 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' },
+      data,
+      select: { id: true, status: true, role: true, serviceSlug: true },
     });
     return NextResponse.json({
       success: true,
       requester: {
         id: updated.id,
-        status: (updated as { status?: string }).status ?? 'ACTIVE',
+        status: updated.status,
+        role: updated.role,
+        serviceSlug: updated.serviceSlug,
       },
     });
   } catch (err) {

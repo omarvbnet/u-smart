@@ -33,6 +33,8 @@ import '../widgets/site_share_dialog.dart';
 import '../widgets/site_bulk_import_menu.dart';
 import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../widgets/available_tickets_pool_tab.dart';
+import '../widgets/personal_company_upgrade_card.dart';
+import '../utils/requester_role_labels.dart';
 import '../config/api_config.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -2839,10 +2841,11 @@ class _ProfileTab extends StatelessWidget {
               context,
               Icons.business_rounded,
               l10n.t('profile_role'),
-              l10n.t('role_company'),
+              requesterRoleLabel(l10n, user.role),
               const Color(0xFFFBBF24),
             ),
             const SizedBox(height: 12),
+            const PersonalCompanyUpgradeCard(),
             _languageRow(context, l10n, localeProv),
             const SizedBox(height: 12),
             _updatePasswordRow(context, l10n),

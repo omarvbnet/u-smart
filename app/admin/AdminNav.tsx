@@ -28,6 +28,8 @@ import {
 
 const links = [
   { href: '/admin', label: 'Hero / Home', icon: Home },
+  { href: '/admin/analytics', label: 'Analytics dashboard', icon: ClipboardCheck },
+  { href: '/admin/provisor-requests', label: 'Provisor requests', icon: TicketCheck, badgeType: 'pending_qc' as const },
   { href: '/admin/projects', label: 'Projects', icon: FolderKanban },
   { href: '/admin/services', label: 'Services', icon: Boxes },
   { href: '/admin/products', label: 'Products', icon: Package },

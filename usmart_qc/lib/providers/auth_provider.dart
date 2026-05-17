@@ -24,6 +24,7 @@ class AuthProvider extends ChangeNotifier {
   String? get otpVerifyFailureCode => _otpVerifyFailureCode;
   bool get isEngineer => _user?.isEngineer ?? false;
   bool get isCompany => _user?.isCompany ?? true;
+  bool get isPersonal => _user?.isPersonal ?? false;
   bool get isTechnician => _user?.isTechnician ?? false;
   bool get isWorker => _user?.isWorker ?? false;
   bool get isAdmin => _user?.isAdmin ?? false;

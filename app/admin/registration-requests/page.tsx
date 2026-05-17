@@ -13,6 +13,7 @@ type RegistrationRequest = {
   role: string;
   specialization?: string | null;
   rejectionReason?: string | null;
+  requesterId?: string | null;
   status: string;
   createdAt: string;
 };
@@ -160,7 +161,14 @@ export default function AdminRegistrationRequestsPage() {
               {list.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.createdAt)}</td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.legalName}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    {r.legalName}
+                    {r.requesterId && r.role === 'COMPANY' && (
+                      <span className="ml-2 inline-flex px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                        Individual → Company
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.phone}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.email}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.province ?? '—'}</td>

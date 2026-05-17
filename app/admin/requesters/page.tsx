@@ -46,6 +46,27 @@ export default function AdminRequestersPage() {
     }
   };
 
+  const setRole = async (id: string, role: string) => {
+    setUpdatingId(id);
+    try {
+      const res = await fetch(`/api/admin/requesters/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setList((prev) => prev.map((r) => (r.id === id ? { ...r, role: data.requester?.role ?? role } : r)));
+      } else {
+        alert(data.message || 'Failed to update role');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const setStatus = async (id: string, status: string) => {
     setUpdatingId(id);
     try {
@@ -238,25 +259,21 @@ export default function AdminRequestersPage() {
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.username}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.name ?? '—'}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                        r.role === 'ENGINEER'
-                          ? 'bg-amber-100 text-amber-800'
-                          : r.role === 'TECHNICIAN'
-                            ? 'bg-violet-100 text-violet-800'
-                            : r.role === 'PERSONAL'
-                              ? 'bg-sky-100 text-sky-800'
-                              : 'bg-cyan-100 text-cyan-800'
-                      }`}
+                    <select
+                      value={r.role}
+                      disabled={updatingId === r.id}
+                      onChange={(e) => setRole(r.id, e.target.value)}
+                      className="border border-gray-300 rounded-lg px-2 py-1 text-xs font-medium bg-white min-w-[120px]"
                     >
-                      {r.role === 'ENGINEER'
-                        ? 'Engineer'
-                        : r.role === 'TECHNICIAN'
-                          ? 'Technician'
-                          : r.role === 'PERSONAL'
-                            ? 'Personal'
-                            : 'Company'}
-                    </span>
+                      <option value="COMPANY">Company</option>
+                      <option value="PERSONAL">Individual</option>
+                      <option value="ENGINEER">Engineer</option>
+                      <option value="TECHNICIAN">Technician</option>
+                      <option value="WORKER">Worker</option>
+                      <option value="MANAGER">Manager (workspace)</option>
+                      <option value="COORDINATOR">Coordinator (workspace)</option>
+                      <option value="WAREHOUSE_KEEPER">Warehouse keeper</option>
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.phone}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 max-w-[260px] truncate" title={r.phonePushToken ?? ''}>

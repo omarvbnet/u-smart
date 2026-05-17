@@ -445,9 +445,12 @@ model RegistrationRequest {
   passwordHash String?
   role         RequesterRole // COMPANY, ENGINEER, TECHNICIAN, or PERSONAL
   status       RegistrationRequestStatus @default(PENDING)
+  /// When set, approval upgrades this existing ticket_requester (PERSONAL → COMPANY).
+  requesterId  String?
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
 
+  @@index([requesterId])
   @@map("registration_requests")
 }
 
