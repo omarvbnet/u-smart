@@ -51,24 +51,24 @@ export async function findTicketRequesterByPhone<S extends Prisma.TicketRequeste
     select: S;
     excludeId?: string;
   }
-): Promise<Prisma.TicketRequesterGetPayload<{ select: S & { phone: true } }> | null> {
+): Promise<Prisma.TicketRequesterGetPayload<{ select: S }> | null> {
   const variants = phoneLookupVariants(phone);
   if (variants.length === 0) return null;
 
-  const select = { ...args.select, phone: true } as S & { phone: true };
-  const rows = await prisma.ticketRequester.findMany({
+  const candidates = await prisma.ticketRequester.findMany({
     where: {
       phone: { in: variants },
       ...(args.excludeId ? { id: { not: args.excludeId } } : {}),
     },
-    select,
+    select: { id: true, phone: true },
   });
 
   const norm = normalizePhoneDigits(phone);
-  for (const row of rows) {
-    if (phonesMatch(norm, row.phone)) {
-      return row as Prisma.TicketRequesterGetPayload<{ select: S & { phone: true } }>;
-    }
-  }
-  return null;
+  const matched = candidates.find((row) => phonesMatch(norm, row.phone));
+  if (!matched) return null;
+
+  return prisma.ticketRequester.findUnique({
+    where: { id: matched.id },
+    select: args.select,
+  });
 }
