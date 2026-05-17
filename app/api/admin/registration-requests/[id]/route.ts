@@ -63,9 +63,11 @@ export async function PATCH(
       legalName: string;
       phone: string;
       email: string;
+      province: string;
       evidenceUrl: string;
       role: string;
       status: string;
+      requesterId?: string | null;
       username?: string | null;
       passwordHash?: string | null;
     } | null;
@@ -94,7 +96,7 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
-      const requesterId = (rr as { requesterId?: string | null }).requesterId?.trim() || null;
+      const requesterId = rr.requesterId?.trim() || null;
 
       if (requesterId && rr.role === 'COMPANY') {
         const linked = await prisma.ticketRequester.findUnique({
@@ -197,7 +199,7 @@ export async function PATCH(
             name: existingRequester.name || rr.legalName,
             email: rr.email,
             phone: rr.phone,
-            province: (rr as { province?: string }).province || undefined,
+            province: rr.province?.trim() || undefined,
             companyCertificationUrl: rr.evidenceUrl,
             serviceSlug: upgradeServiceSlug,
             status: 'ACTIVE',
