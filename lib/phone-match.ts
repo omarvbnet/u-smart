@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 /** Digits only (e.g. 9647701234567). */
 export function normalizePhoneDigits(phone: string): string {
@@ -44,28 +44,31 @@ export function phoneLookupVariants(phone: string): string[] {
   return [...out];
 }
 
-export async function findTicketRequesterByPhone<T extends { phone: string }>(
+export async function findTicketRequesterByPhone<S extends Prisma.TicketRequesterSelect>(
   prisma: PrismaClient,
   phone: string,
   args: {
-    select: Record<string, boolean>;
+    select: S;
     excludeId?: string;
   }
-): Promise<(T & { phone: string }) | null> {
+): Promise<Prisma.TicketRequesterGetPayload<{ select: S & { phone: true } }> | null> {
   const variants = phoneLookupVariants(phone);
   if (variants.length === 0) return null;
 
-  const rows = (await prisma.ticketRequester.findMany({
+  const select = { ...args.select, phone: true } as S & { phone: true };
+  const rows = await prisma.ticketRequester.findMany({
     where: {
       phone: { in: variants },
       ...(args.excludeId ? { id: { not: args.excludeId } } : {}),
     },
-    select: { ...args.select, phone: true } as never,
-  })) as (T & { phone: string })[];
+    select,
+  });
 
   const norm = normalizePhoneDigits(phone);
   for (const row of rows) {
-    if (phonesMatch(norm, row.phone)) return row;
+    if (phonesMatch(norm, row.phone)) {
+      return row as Prisma.TicketRequesterGetPayload<{ select: S & { phone: true } }>;
+    }
   }
   return null;
 }
