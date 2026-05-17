@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { normalizePhoneE164 } from '@/lib/phone-match';
 import { setOtp } from '@/lib/otp-store';
 
 const OTP_EXPIRY_MINUTES = 10;
@@ -17,7 +18,7 @@ function generateCode(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const phone = normalizePhoneE164(typeof body.phone === 'string' ? body.phone : '');
     if (!phone || phone.length < 8) {
       return NextResponse.json(
         { success: false, message: 'Valid phone number is required' },

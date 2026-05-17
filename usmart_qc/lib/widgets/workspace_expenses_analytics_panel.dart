@@ -73,7 +73,6 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
     if (_exporting) return;
     if (!context.mounted) return;
     setState(() => _exporting = true);
-    final shareOrigin = sharePositionOriginForShareSheet(context);
     final bytes = await pc.downloadTicketExpensesExport(
       from: _rangeStart,
       to: _rangeEnd,
@@ -100,6 +99,8 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
           '${_rangeEnd.year}-${_rangeEnd.month.toString().padLeft(2, '0')}-${_rangeEnd.day.toString().padLeft(2, '0')}';
       final path = '${dir.path}/ticket-expenses-$slug.xlsx';
       await File(path).writeAsBytes(bytes);
+      if (!context.mounted) return;
+      final shareOrigin = sharePositionOriginForShareSheet(context);
       try {
         await Share.shareXFiles(
           [
@@ -354,22 +355,24 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
                       ),
                     ),
                     const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: _exporting ? null : () => _runExport(context, l10n, pc),
-                      icon: _exporting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.download_rounded, size: 20),
-                      label: Text(l10n.t('export_excel')),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF00D4AA),
-                        foregroundColor: Colors.white,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    Builder(
+                      builder: (btnCtx) => FilledButton.icon(
+                        onPressed: _exporting ? null : () => _runExport(btnCtx, l10n, pc),
+                        icon: _exporting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.download_rounded, size: 20),
+                        label: Text(l10n.t('export_excel')),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF00D4AA),
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
                     ),
                   ],
@@ -397,18 +400,20 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
                         ),
                       ),
                     ),
-                    IconButton(
-                      onPressed: _exporting || pc.expenseAnalyticsLoading
-                          ? null
-                          : () => _runExport(context, l10n, pc),
-                      icon: _exporting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00D4AA)),
-                            )
-                          : const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
-                      tooltip: l10n.t('export_excel'),
+                    Builder(
+                      builder: (btnCtx) => IconButton(
+                        onPressed: _exporting || pc.expenseAnalyticsLoading
+                            ? null
+                            : () => _runExport(btnCtx, l10n, pc),
+                        icon: _exporting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00D4AA)),
+                              )
+                            : const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
+                        tooltip: l10n.t('export_excel'),
+                      ),
                     ),
                   ],
                 ),

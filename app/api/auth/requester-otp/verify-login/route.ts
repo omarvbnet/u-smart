@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { consumePhoneOtp, peekPhoneOtpValid } from '@/lib/consume-phone-otp';
 import { findLegacyCompanyOwnerCoordinator } from '@/lib/linked-coordinator-company';
+import { findTicketRequesterByPhone, normalizePhoneE164 } from '@/lib/phone-match';
 import {
-  nextResponseCoordinatorSession,
   nextResponseLegacyOwnerSession,
   nextResponseTicketRequesterSession,
 } from '@/lib/provisor-otp-login-issue';
@@ -12,7 +12,7 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const phone = normalizePhoneE164(typeof body.phone === 'string' ? body.phone : '');
     const code = body.code != null ? String(body.code).trim() : '';
     const pushToken = typeof body.pushToken === 'string' ? body.pushToken.trim() : '';
     const phonePlatform =
@@ -30,8 +30,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid or expired code' }, { status: 401 });
     }
 
-    const requester = await prisma.ticketRequester.findFirst({
-      where: { phone: { equals: phone } },
+    const requester = await findTicketRequesterByPhone(prisma, phone, {
       select: {
         id: true,
         username: true,
@@ -79,47 +78,6 @@ export async function POST(req: NextRequest) {
         pushToken,
         phonePlatform
       );
-    }
-
-    let coordinatorUser: {
-      id: string;
-      username: string | null;
-      name: string | null;
-      email: string | null;
-      passwordHash: string;
-      role: string | null;
-      status: string | null;
-      mustChangePassword: boolean | null;
-      companyId: string | null;
-    } | null = null;
-    try {
-      coordinatorUser = await (prisma as any).coordinatorUser.findFirst({
-        where: { phone: { equals: phone } },
-        select: {
-          id: true,
-          username: true,
-          name: true,
-          email: true,
-          passwordHash: true,
-          role: true,
-          status: true,
-          mustChangePassword: true,
-          companyId: true,
-        },
-      });
-    } catch {
-      coordinatorUser = null;
-    }
-
-    if (coordinatorUser) {
-      if (coordinatorUser.status === 'BLOCKED' || coordinatorUser.status === 'SUSPENDED') {
-        return NextResponse.json(
-          { success: false, message: 'Your account is blocked or suspended. Please contact support.' },
-          { status: 403 }
-        );
-      }
-      await consumePhoneOtp(phone, code);
-      return nextResponseCoordinatorSession(coordinatorUser, pushToken, phonePlatform);
     }
 
     return NextResponse.json(

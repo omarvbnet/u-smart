@@ -20,6 +20,32 @@ import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
 import '../widgets/workspace_expenses_analytics_panel.dart';
 
+/// Drag handle + title with an explicit close control for modal bottom sheets.
+Widget _modalSheetTitleRow(BuildContext context, String title) {
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      IconButton(
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 24),
+        onPressed: () => Navigator.pop(context),
+      ),
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 String _pcStatusLabel(PrivateCompanyStatus s, AppLocalizations l10n) {
   switch (s) {
     case PrivateCompanyStatus.pending:
@@ -748,7 +774,6 @@ class _WorkspaceHeader extends StatelessWidget {
                   tooltip: l10n.t('pc_ws_export_data'),
                   icon: const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
                   onPressed: () async {
-                    final shareOrigin = sharePositionOriginForShareSheet(btnContext);
                     final prov = context.read<PrivateCompanyProvider>();
                     final bytes = await prov.downloadWorkspaceExport(days: 365);
                     if (!context.mounted) return;
@@ -766,6 +791,8 @@ class _WorkspaceHeader extends StatelessWidget {
                       final path =
                           '${dir.path}/workspace-export-${DateTime.now().millisecondsSinceEpoch}.json';
                       await File(path).writeAsBytes(bytes);
+                      if (!btnContext.mounted) return;
+                      final shareOrigin = sharePositionOriginForShareSheet(btnContext);
                       try {
                         await Share.shareXFiles(
                           [
@@ -1496,12 +1523,9 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(
+                _modalSheetTitleRow(
+                  context,
                   widget.existing == null ? 'New department' : 'Edit department',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 18),
                 _DarkField(
@@ -2109,12 +2133,9 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(
+                _modalSheetTitleRow(
+                  context,
                   isEdit ? 'Edit staff' : 'Add staff member',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -5381,7 +5402,6 @@ class _WarehouseTabState extends State<_WarehouseTab>
 
   Future<void> _exportWarehouseToolsReport() async {
     if (_exportingTools) return;
-    final shareOrigin = sharePositionOriginForShareSheet(context);
     final wh = context.read<PrivateCompanyWarehouseProvider>();
     final pc = context.read<PrivateCompanyProvider>();
     final l10n = AppLocalizations.of(context);
@@ -5407,6 +5427,8 @@ class _WarehouseTabState extends State<_WarehouseTab>
       final path =
           '${dir.path}/warehouse-tools-${DateTime.now().millisecondsSinceEpoch}.xlsx';
       await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      final shareOrigin = sharePositionOriginForShareSheet(context);
       try {
         await Share.shareXFiles(
           [
@@ -5449,7 +5471,6 @@ class _WarehouseTabState extends State<_WarehouseTab>
 
   Future<void> _exportWarehouseMaterialsReport() async {
     if (_exportingMaterials) return;
-    final shareOrigin = sharePositionOriginForShareSheet(context);
     final wh = context.read<PrivateCompanyWarehouseProvider>();
     final pc = context.read<PrivateCompanyProvider>();
     final l10n = AppLocalizations.of(context);
@@ -5474,6 +5495,8 @@ class _WarehouseTabState extends State<_WarehouseTab>
       final path =
           '${dir.path}/warehouse-materials-${DateTime.now().millisecondsSinceEpoch}.xlsx';
       await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      final shareOrigin = sharePositionOriginForShareSheet(context);
       try {
         await Share.shareXFiles(
           [
@@ -7718,11 +7741,7 @@ class _NewMaterialRequestSheetState extends State<_NewMaterialRequestSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Request materials',
-                  style: TextStyle(
-                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
-                ),
+                _modalSheetTitleRow(context, 'Request materials'),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -9136,13 +9155,7 @@ class _MaterialEditorSheetState extends State<_MaterialEditorSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(
-                  title,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800),
-                ),
+                _modalSheetTitleRow(context, title),
                 const SizedBox(height: 18),
                 _DarkField(
                   controller: _name,
@@ -9391,13 +9404,7 @@ class _StockItemsSheetState extends State<_StockItemsSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Stock items',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800),
-                ),
+                _modalSheetTitleRow(context, 'Stock items'),
                 const SizedBox(height: 18),
                 const _SectionTitle('Material *'),
                 const SizedBox(height: 8),
@@ -9551,13 +9558,7 @@ class _InventoryFiltersSheetState extends State<_InventoryFiltersSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Filter items',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800),
-                ),
+                _modalSheetTitleRow(context, 'Filter items'),
                 const SizedBox(height: 18),
                 Row(
                   children: [
@@ -9766,13 +9767,7 @@ class _ItemActionsSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              Text(
-                item.materialName ?? 'Item',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800),
-              ),
+              _modalSheetTitleRow(context, item.materialName ?? 'Item'),
               const SizedBox(height: 4),
               Text(
                 'SN: ${item.serialNumber}',

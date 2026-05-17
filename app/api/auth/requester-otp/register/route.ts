@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { RequesterRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { checkPhoneUnique } from '@/lib/check-unique-email-phone';
 import { consumePhoneOtp } from '@/lib/consume-phone-otp';
+import { normalizePhoneE164 } from '@/lib/phone-match';
 import { nextResponseTicketRequesterSession } from '@/lib/provisor-otp-login-issue';
 
 const SELF_REGISTER_ROLES: RequesterRole[] = [
@@ -40,7 +42,7 @@ export async function POST(req: NextRequest) {
     const emailRaw = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const code = body.code != null ? String(body.code).trim() : '';
     const name = typeof body.name === 'string' ? body.name.trim() : '';
-    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const phone = normalizePhoneE164(typeof body.phone === 'string' ? body.phone : '');
     const province = typeof body.province === 'string' ? body.province.trim() : '';
     const company = typeof body.company === 'string' ? body.company.trim() : '';
     const pushToken = typeof body.pushToken === 'string' ? body.pushToken.trim() : '';
@@ -79,15 +81,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid or expired code' }, { status: 401 });
     }
 
-    const existingRequester = await prisma.ticketRequester.findFirst({
-      where: { OR: [{ phone: { equals: phone } }, { email: { equals: emailRaw, mode: 'insensitive' } }] },
-      select: { id: true },
-    });
-    if (existingRequester) {
+    const phoneCheck = await checkPhoneUnique(prisma, phone);
+    if (phoneCheck.taken) {
       return NextResponse.json(
-        { success: false, message: 'An account with this email already exists. Sign in instead.', code: 'EMAIL_TAKEN' },
+        { success: false, message: phoneCheck.message ?? 'Phone number is already registered', code: 'PHONE_TAKEN' },
         { status: 409 }
       );
+    }
+
+    if (emailRaw) {
+      const existingByEmail = await prisma.ticketRequester.findFirst({
+        where: { email: { equals: emailRaw, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (existingByEmail) {
+        return NextResponse.json(
+          { success: false, message: 'An account with this email already exists. Sign in instead.', code: 'EMAIL_TAKEN' },
+          { status: 409 }
+        );
+      }
     }
 
     let coordinatorCount = 0;

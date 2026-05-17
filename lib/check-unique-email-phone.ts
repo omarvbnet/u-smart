@@ -8,10 +8,7 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** Normalize phone to digits only for comparison (handles +964 77 123 4567, 0771 123 4567, etc.) */
-function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '');
-}
+import { normalizePhoneDigits, phonesMatch } from '@/lib/phone-match';
 
 export type ExcludeIds = {
   requesterId?: string;
@@ -111,17 +108,8 @@ export async function checkPhoneUnique(
   phone: string,
   exclude?: ExcludeIds
 ): Promise<{ taken: boolean; message?: string }> {
-  const norm = normalizePhone(phone);
+  const norm = normalizePhoneDigits(phone);
   if (!norm || norm.length < 6) return { taken: false };
-
-  /** Same if digits match, or Iraqi format: 0771... vs 964771... */
-  const phonesMatch = (a: string, b: string): boolean => {
-    if (!a || !b) return false;
-    if (a === b) return true;
-    const withZero = a.startsWith('964') ? '0' + a.slice(3) : a;
-    const with964 = a.startsWith('0') ? '964' + a.slice(1) : a;
-    return b === withZero || b === with964;
-  };
 
   // TicketRequester
   const reqs = await prisma.ticketRequester.findMany({
@@ -129,7 +117,7 @@ export async function checkPhoneUnique(
     select: { id: true, phone: true },
   });
   for (const r of reqs) {
-    const p = normalizePhone((r as { phone: string }).phone);
+    const p = normalizePhoneDigits((r as { phone: string }).phone);
     if (phonesMatch(norm, p)) return { taken: true, message: 'Phone number is already registered' };
   }
 
@@ -141,7 +129,7 @@ export async function checkPhoneUnique(
       select: { id: true, phone: true },
     }) as { phone: string }[];
     for (const e of employees) {
-      const p = normalizePhone(e.phone);
+      const p = normalizePhoneDigits(e.phone);
       if (phonesMatch(norm, p)) return { taken: true, message: 'Phone number is already in use' };
     }
   }
@@ -154,7 +142,7 @@ export async function checkPhoneUnique(
       select: { id: true, phone: true },
     });
     for (const rr of rrs) {
-      const p = normalizePhone(rr.phone);
+      const p = normalizePhoneDigits(rr.phone);
       if (phonesMatch(norm, p)) return { taken: true, message: 'Phone number is already used in a pending registration' };
     }
   }
@@ -167,7 +155,7 @@ export async function checkPhoneUnique(
       select: { id: true, pocPhone: true },
     });
     for (const cr of crs) {
-      const p = normalizePhone(cr.pocPhone);
+      const p = normalizePhoneDigits(cr.pocPhone);
       if (phonesMatch(norm, p)) return { taken: true, message: 'Phone number is already used in a pending company request' };
     }
   }
