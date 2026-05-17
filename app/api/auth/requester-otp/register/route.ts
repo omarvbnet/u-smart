@@ -103,14 +103,16 @@ export async function POST(req: NextRequest) {
     }
 
     let coordinatorCount = 0;
-    try {
-      coordinatorCount = await (prisma as any).coordinatorUser.count({
-        where: { email: { equals: emailRaw, mode: 'insensitive' } },
-      });
-    } catch {
-      coordinatorCount = 0;
+    if (emailRaw) {
+      try {
+        coordinatorCount = await (prisma as any).coordinatorUser.count({
+          where: { email: { equals: emailRaw, mode: 'insensitive' } },
+        });
+      } catch {
+        coordinatorCount = 0;
+      }
     }
-    if (coordinatorCount > 0) {
+    if (emailRaw && coordinatorCount > 0) {
       return NextResponse.json(
         {
           success: false,
@@ -128,7 +130,8 @@ export async function POST(req: NextRequest) {
       data: {
         username,
         passwordHash,
-        email: emailRaw,
+        // NULL, not '' — unique index allows many NULLs but only one empty string.
+        email: emailRaw || null,
         name,
         phone,
         province: province || null,
