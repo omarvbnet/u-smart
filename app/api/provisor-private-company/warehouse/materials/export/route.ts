@@ -39,7 +39,7 @@ type Mov = {
   } | null;
 };
 
-function actorLabel(a: { name: string | null; username: string } | null): string {
+function actorLabel(a: { id: string; name: string | null; username: string } | null): string {
   if (!a) return '';
   return (a.name?.trim() || a.username || a.id) as string;
 }
