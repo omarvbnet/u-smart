@@ -11,20 +11,12 @@
 import { gunzipSync, strFromU8, unzipSync } from 'fflate';
 import {
   enrichRowsWithWgs84,
+  type GeoJsonGeometry,
   geometryNeedsReproject,
   loadGpkgSpatialRefs,
   proj4SourceForTable,
   reprojectGeoJsonToWgs84Auto,
 } from '@/lib/coordinate-transform';
-
-type GeoJsonGeometry =
-  | { type: 'Point'; coordinates: [number, number] }
-  | { type: 'LineString'; coordinates: [number, number][] }
-  | { type: 'Polygon'; coordinates: [number, number][][] }
-  | { type: 'MultiPoint'; coordinates: [number, number][] }
-  | { type: 'MultiLineString'; coordinates: [number, number][][] }
-  | { type: 'MultiPolygon'; coordinates: [number, number][][][] }
-  | { type: 'GeometryCollection'; geometries: GeoJsonGeometry[] };
 
 type GeoJsonFeature = {
   type: 'Feature';
@@ -525,7 +517,7 @@ function extractEsriShapefileFeatures(
     }
 
     if (geom) {
-      let outGeom = geom;
+      let outGeom: GeoJsonGeometry = geom;
       if (geometryNeedsReproject(outGeom)) {
         const reproj = reprojectGeoJsonToWgs84Auto(outGeom, null, null);
         if (reproj) outGeom = reproj;

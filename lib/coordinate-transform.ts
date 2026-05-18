@@ -151,7 +151,7 @@ export function reprojectProjectedToWgs84WithEpsg(
   return null;
 }
 
-type GeoJsonGeometry =
+export type GeoJsonGeometry =
   | { type: 'Point'; coordinates: [number, number] }
   | { type: 'LineString'; coordinates: [number, number][] }
   | { type: 'Polygon'; coordinates: [number, number][][] }
