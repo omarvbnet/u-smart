@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -12,6 +10,7 @@ import '../providers/tickets_provider.dart';
 import '../utils/coordinate_transform.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/responsive_layout.dart';
+import 'qfield_map_symbols.dart';
 
 /// Long server preview lines: split on "Archive listing:" and "Map fields:" for readable rows.
 class _PreviewHintText extends StatelessWidget {
@@ -145,10 +144,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   List<_QFieldDataTable> _dataTables = const [];
   final Set<String> _hiddenLayerKeys = {};
   String? _focusedLayerKey;
-
-  static const _qfieldPolygonFill = Color(0xFF8BC34A);
-  static const _qfieldLineStroke = Color(0xFFE53935);
-  static const _qfieldPointColor = Color(0xFF43A047);
 
   @override
   void initState() {
@@ -537,14 +532,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     return '$pkg|$layer';
   }
 
-  Color _colorForFeature(Map<String, dynamic> f) {
-    final key = _featureLayerKey(f);
-    for (final m in _layers) {
-      if (m.key == key) return m.color;
-    }
-    return _layerPalette[key.hashCode.abs() % _layerPalette.length];
-  }
-
   bool _featureVisible(Map<String, dynamic> f) {
     final key = _featureLayerKey(f);
     if (key.isEmpty) return true;
@@ -707,6 +694,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       final t = g['type'] as String?;
       final c = g['coordinates'];
       final props = featureProperties(f);
+      final layerName = props['layer']?.toString();
+      final polySym = QFieldMapSymbols.polygonStyle(layerName);
       if (t == 'Polygon' && c is List && c.isNotEmpty) {
         final ring = c.first;
         if (ring is List) {
@@ -714,9 +703,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           if (pts.length >= 3) {
             out.add(Polygon(
               points: pts,
-              color: _qfieldPolygonFill.withAlpha(115),
-              borderColor: Colors.black87,
-              borderStrokeWidth: 1.5,
+              color: polySym.fill,
+              borderColor: polySym.border,
+              borderStrokeWidth: polySym.borderWidth,
             ));
           }
         }
@@ -729,9 +718,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (pts.length >= 3) {
               out.add(Polygon(
                 points: pts,
-                color: _qfieldPolygonFill.withAlpha(100),
-                borderColor: Colors.black87,
-                borderStrokeWidth: 1.5,
+                color: polySym.fill,
+                borderColor: polySym.border,
+                borderStrokeWidth: polySym.borderWidth,
               ));
             }
           }
@@ -755,15 +744,16 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       final t = g['type'] as String?;
       final c = g['coordinates'];
       final props = featureProperties(f);
+      final lineSym = QFieldMapSymbols.lineStyle(props['layer']?.toString());
       if (t == 'LineString' && c is List) {
         final pts = ringToLatLng(c, crsProps: props);
         if (pts.length >= 2) {
           out.add(Polyline(
             points: pts,
-            color: _qfieldLineStroke,
-            strokeWidth: 5.5,
-            borderColor: _qfieldLineStroke.withAlpha(80),
-            borderStrokeWidth: 8,
+            color: lineSym.color,
+            strokeWidth: lineSym.strokeWidth,
+            borderColor: lineSym.borderColor ?? lineSym.color.withAlpha(80),
+            borderStrokeWidth: lineSym.borderStrokeWidth,
           ));
         }
       } else if (t == 'MultiLineString' && c is List) {
@@ -773,10 +763,10 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (pts.length >= 2) {
               out.add(Polyline(
                 points: pts,
-                color: _qfieldLineStroke,
-                strokeWidth: 5,
-                borderColor: _qfieldLineStroke.withAlpha(70),
-                borderStrokeWidth: 7,
+                color: lineSym.color,
+                strokeWidth: lineSym.strokeWidth,
+                borderColor: lineSym.borderColor ?? lineSym.color.withAlpha(70),
+                borderStrokeWidth: lineSym.borderStrokeWidth,
               ));
             }
           }
@@ -795,10 +785,11 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
         for (final f in feats) {
           if (f is! Map<String, dynamic>) continue;
           if (!_featureVisible(f)) continue;
-          final color = _colorForFeature(f);
           final g = f['geometry'];
           if (g is! Map<String, dynamic>) continue;
           final props = featureProperties(f);
+          final layerName = props['layer']?.toString();
+          final ptStyle = QFieldMapSymbols.pointStyle(layerName);
           if (g['type'] == 'Point') {
             final c = g['coordinates'];
             if (c is List && c.length >= 2) {
@@ -811,9 +802,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               if (pt == null) continue;
               out.add(Marker(
                 point: pt,
-                width: 26,
-                height: 30,
-                child: _QFieldPointMarker(color: _qfieldPointColor, accent: color),
+                width: ptStyle.width,
+                height: ptStyle.height,
+                child: QFieldMapPointIcon(layerName: layerName),
               ));
             }
           } else if (g['type'] == 'MultiPoint') {
@@ -830,13 +821,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                   if (pt == null) continue;
                   out.add(Marker(
                     point: pt,
-                    width: 22,
-                    height: 26,
-                    child: const _QFieldPointMarker(
-                      color: _qfieldPointColor,
-                      accent: Color(0xFF9C27B0),
-                      small: true,
-                    ),
+                    width: ptStyle.width * 0.9,
+                    height: ptStyle.height * 0.9,
+                    child: QFieldMapPointIcon(layerName: layerName, small: true),
                   ));
                 }
               }
@@ -1430,74 +1417,3 @@ class _MapControlButton extends StatelessWidget {
   }
 }
 
-/// QField-style vertex marker (green triangle + accent flag).
-class _QFieldPointMarker extends StatelessWidget {
-  const _QFieldPointMarker({
-    required this.color,
-    required this.accent,
-    this.small = false,
-  });
-
-  final Color color;
-  final Color accent;
-  final bool small;
-
-  @override
-  Widget build(BuildContext context) {
-    final h = small ? 20.0 : 26.0;
-    final w = small ? 16.0 : 20.0;
-    return SizedBox(
-      width: w,
-      height: h,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
-        children: [
-          CustomPaint(
-            size: Size(w, h * 0.72),
-            painter: _TrianglePainter(color: color),
-          ),
-          Positioned(
-            top: 0,
-            child: Icon(
-              Icons.flag_rounded,
-              size: small ? 10 : 12,
-              color: accent,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrianglePainter extends CustomPainter {
-  _TrianglePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = ui.Path()
-      ..moveTo(size.width / 2, size.height)
-      ..lineTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.black87
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

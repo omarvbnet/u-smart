@@ -19,7 +19,7 @@ class QFieldMapFeature {
   final String id;
   final String layerKey;
   final Map<String, dynamic> properties;
-  /// Point / MultiPoint vertices (drawn as small circles, not map pins).
+  /// Point / MultiPoint vertices (drawn with QField layer symbology, not generic pins).
   final List<LatLng> points;
   final List<List<LatLng>> polylines;
   final List<List<LatLng>> polygons;
@@ -328,23 +328,107 @@ int countDrawables(Iterable<QFieldMapFeature> features) {
   return n;
 }
 
+/// One map feature hit by a tap, with distance in meters.
+class FeatureTapHit {
+  const FeatureTapHit({required this.feature, required this.distanceMeters});
+
+  final QFieldMapFeature feature;
+  final double distanceMeters;
+}
+
+double _distancePointToSegment(LatLng tap, LatLng a, LatLng b) {
+  const dist = Distance();
+  var best = dist(tap, a);
+  final end = dist(tap, b);
+  if (end < best) best = end;
+  for (var t = 0.1; t < 0.95; t += 0.12) {
+    final lat = a.latitude + (b.latitude - a.latitude) * t;
+    final lng = a.longitude + (b.longitude - a.longitude) * t;
+    final d = dist(tap, LatLng(lat, lng));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+bool _pointInPolygon(LatLng tap, List<LatLng> ring) {
+  if (ring.length < 3) return false;
+  var inside = false;
+  for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    final xi = ring[i].longitude;
+    final yi = ring[i].latitude;
+    final xj = ring[j].longitude;
+    final yj = ring[j].latitude;
+    final intersect = ((yi > tap.latitude) != (yj > tap.latitude)) &&
+        (tap.longitude <
+            (xj - xi) * (tap.latitude - yi) / (yj - yi + 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/// Shortest distance from [tap] to any part of [feature] (vertices, edges, polygon interior).
+double distanceFeatureToTap(QFieldMapFeature feature, LatLng tap) {
+  const dist = Distance();
+  var best = double.infinity;
+
+  for (final p in feature.points) {
+    best = best < dist(tap, p) ? best : dist(tap, p);
+  }
+
+  for (final line in feature.polylines) {
+    if (line.length < 2) continue;
+    for (var i = 0; i < line.length - 1; i++) {
+      final d = _distancePointToSegment(tap, line[i], line[i + 1]);
+      if (d < best) best = d;
+    }
+  }
+
+  for (final ring in feature.polygons) {
+    if (ring.length < 3) continue;
+    if (_pointInPolygon(tap, ring)) return 0;
+    for (var i = 0; i < ring.length - 1; i++) {
+      final d = _distancePointToSegment(tap, ring[i], ring[i + 1]);
+      if (d < best) best = d;
+    }
+  }
+
+  return best;
+}
+
+/// All features within [maxMeters] of [tap], closest first.
+List<FeatureTapHit> findFeaturesNearTap(
+  List<QFieldMapFeature> features,
+  LatLng tap, {
+  double maxMeters = 80,
+}) {
+  final hits = <FeatureTapHit>[];
+  for (final f in features) {
+    if (!f.hasGeometry) continue;
+    final d = distanceFeatureToTap(f, tap);
+    if (d <= maxMeters) hits.add(FeatureTapHit(feature: f, distanceMeters: d));
+  }
+  hits.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
+  return hits;
+}
+
+/// Layer keys at a tap, ordered by the nearest feature in each layer.
+List<String> layerKeysFromTapHits(List<FeatureTapHit> hits) {
+  final seen = <String>{};
+  final keys = <String>[];
+  for (final h in hits) {
+    final k = h.feature.layerKey;
+    if (k.isEmpty || seen.contains(k)) continue;
+    seen.add(k);
+    keys.add(k);
+  }
+  return keys;
+}
+
 QFieldMapFeature? findNearestFeature(
   List<QFieldMapFeature> features,
   LatLng tap, {
   double maxMeters = 80,
 }) {
-  const dist = Distance();
-  QFieldMapFeature? best;
-  var bestD = maxMeters;
-
-  for (final f in features) {
-    for (final v in f.allVertices) {
-      final d = dist(tap, v);
-      if (d < bestD) {
-        bestD = d;
-        best = f;
-      }
-    }
-  }
-  return best;
+  final hits = findFeaturesNearTap(features, tap, maxMeters: maxMeters);
+  return hits.isEmpty ? null : hits.first.feature;
 }

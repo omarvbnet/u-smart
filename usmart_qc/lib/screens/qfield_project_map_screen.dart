@@ -11,6 +11,7 @@ import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/responsive_layout.dart';
+import '../widgets/qfield_map_symbols.dart';
 import '../widgets/qfield_project_map_sheet.dart';
 
 /// Full-screen QField map: draws file geometries (lines, polygons, points) from GeoJSON preview.
@@ -64,6 +65,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   Map<String, int> _layerEpsgByKey = const {};
   final Set<String> _hiddenLayerKeys = {};
   String? _selectedFeatureId;
+  List<FeatureTapHit> _tapHits = const [];
+  String? _activeTapLayerKey;
   final Map<String, Map<String, dynamic>> _propertyEdits = {};
   final Map<String, TextEditingController> _fieldCtrls = {};
   bool _saving = false;
@@ -282,21 +285,70 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     return base;
   }
 
-  void _selectFeature(QFieldMapFeature? f) {
+  /// All fields for the info panel (metadata + attributes + geometry type).
+  Map<String, dynamic> _allDisplayProps(QFieldMapFeature f) {
+    final m = Map<String, dynamic>.from(_propsFor(f));
+    if (f.geometryType != null && f.geometryType!.isNotEmpty) {
+      m['geometryType'] = f.geometryType;
+    }
+    if (f.label != null && f.label!.isNotEmpty) {
+      m['displayLabel'] = f.label;
+    }
+    final sorted = Map.fromEntries(
+      m.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    return sorted;
+  }
+
+  List<String> get _tapLayerKeys => layerKeysFromTapHits(_tapHits);
+
+  List<FeatureTapHit> get _tapHitsForActiveLayer {
+    final key = _activeTapLayerKey;
+    if (key == null) return const [];
+    return _tapHits.where((h) => h.feature.layerKey == key).toList();
+  }
+
+  String _layerLabelForKey(String key) {
+    for (final l in _layers) {
+      if (l.key == key) return l.label;
+    }
+    final i = key.indexOf('|');
+    if (i >= 0 && i < key.length - 1) return key.substring(i + 1).trim();
+    return key;
+  }
+
+  void _selectFeature(
+    QFieldMapFeature? f, {
+    bool expandPanel = false,
+    bool lockActiveLayer = true,
+  }) {
     for (final c in _fieldCtrls.values) {
       c.dispose();
     }
     _fieldCtrls.clear();
     _selectedFeatureId = f?.id;
     if (f != null) {
+      if (lockActiveLayer) _activeTapLayerKey = f.layerKey;
       final props = _propsFor(f);
       const skip = {'layer', 'package', 'packagePath', 'source', 'kind'};
       for (final e in props.entries) {
         if (skip.contains(e.key)) continue;
-        _fieldCtrls[e.key] = TextEditingController(text: '${e.value ?? ''}');
+        if (e.value == null) continue;
+        final s = e.value.toString();
+        if (s == '[binary]') continue;
+        _fieldCtrls[e.key] = TextEditingController(text: s);
       }
     }
     setState(() {});
+    if (expandPanel) {
+      try {
+        _panelCtrl.animateTo(
+          0.45,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOut,
+        );
+      } catch (_) {}
+    }
     if (f != null) {
       final verts = f.allVertices.toList();
       if (verts.isNotEmpty) {
@@ -310,36 +362,75 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
   }
 
+  void _clearTapSelection() {
+    setState(() {
+      _tapHits = const [];
+      _activeTapLayerKey = null;
+    });
+    _selectFeature(null);
+  }
+
+  void _pickTapLayer(String layerKey) {
+    setState(() => _activeTapLayerKey = layerKey);
+    for (final h in _tapHits) {
+      if (h.feature.layerKey == layerKey) {
+        _selectFeature(h.feature, expandPanel: true);
+        return;
+      }
+    }
+  }
+
+  void _backToTapLayerPicker() {
+    for (final c in _fieldCtrls.values) {
+      c.dispose();
+    }
+    _fieldCtrls.clear();
+    setState(() => _activeTapLayerKey = null);
+  }
+
+  int _tapHitCountForLayer(String layerKey) =>
+      _tapHits.where((h) => h.feature.layerKey == layerKey).length;
+
   void _onMapTap(TapPosition _, LatLng point) {
-    final hit = findNearestFeature(_features, point, maxMeters: 100);
-    if (hit != null) {
-      _selectFeature(hit);
+    final hits = findFeaturesNearTap(_features, point, maxMeters: 100);
+    if (hits.isNotEmpty) {
+      final layerKeys = layerKeysFromTapHits(hits);
+      setState(() {
+        _tapHits = hits;
+        _activeTapLayerKey = layerKeys.length == 1 ? layerKeys.first : null;
+      });
+      final pick = _activeTapLayerKey != null
+          ? hits.firstWhere((h) => h.feature.layerKey == _activeTapLayerKey).feature
+          : hits.first.feature;
+      _selectFeature(
+        pick,
+        expandPanel: true,
+        lockActiveLayer: layerKeys.length == 1,
+      );
       return;
     }
+    _clearTapSelection();
     if (widget.canWrite) {
       setState(() => _draftPin = point);
     }
   }
 
-  Color _colorForLayer(String key) {
-    for (final l in _layers) {
-      if (l.key == key) return l.color;
-    }
-    return _layerPalette[key.hashCode.abs() % _layerPalette.length];
-  }
+  String _layerNameFor(QFieldMapFeature f) =>
+      f.properties['layer']?.toString() ??
+      QFieldMapSymbols.layerNameFromKey(f.layerKey);
 
   List<Polygon> _buildPolygons() {
     final out = <Polygon>[];
     for (final f in _features) {
       final selected = f.id == _selectedFeatureId;
-      final layerColor = _colorForLayer(f.layerKey);
+      final sym = QFieldMapSymbols.polygonStyle(_layerNameFor(f));
       for (final ring in f.polygons) {
         if (ring.length < 3) continue;
         out.add(Polygon(
           points: ring,
-          color: layerColor.withAlpha(selected ? 120 : 90),
-          borderColor: selected ? const Color(0xFF6C63FF) : layerColor,
-          borderStrokeWidth: selected ? 3 : 2,
+          color: selected ? sym.fill.withAlpha(140) : sym.fill,
+          borderColor: selected ? const Color(0xFF6C63FF) : sym.border,
+          borderStrokeWidth: selected ? 3 : sym.borderWidth,
         ));
       }
     }
@@ -350,33 +441,39 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final out = <Polyline>[];
     for (final f in _features) {
       final selected = f.id == _selectedFeatureId;
-      final layerColor = _colorForLayer(f.layerKey);
+      final sym = QFieldMapSymbols.lineStyle(_layerNameFor(f));
       for (final line in f.polylines) {
         if (line.length < 2) continue;
         out.add(Polyline(
           points: line,
-          color: selected ? const Color(0xFF6C63FF) : layerColor,
-          strokeWidth: selected ? 6 : 4.5,
-          borderColor: layerColor.withAlpha(100),
-          borderStrokeWidth: selected ? 8 : 6,
+          color: selected ? const Color(0xFF6C63FF) : sym.color,
+          strokeWidth: selected ? sym.strokeWidth + 1 : sym.strokeWidth,
+          borderColor: selected
+              ? const Color(0xFF6C63FF).withAlpha(120)
+              : (sym.borderColor ?? sym.color.withAlpha(80)),
+          borderStrokeWidth:
+              selected ? sym.borderStrokeWidth + 1 : sym.borderStrokeWidth,
         ));
       }
     }
     return out;
   }
 
-  List<CircleMarker> _buildPointCircles() {
-    final out = <CircleMarker>[];
+  List<Marker> _buildFeaturePointMarkers() {
+    final out = <Marker>[];
     for (final f in _features) {
       final selected = f.id == _selectedFeatureId;
-      final layerColor = _colorForLayer(f.layerKey);
+      final layerName = _layerNameFor(f);
+      final ptStyle = QFieldMapSymbols.pointStyle(layerName);
       for (final pt in f.points) {
-        out.add(CircleMarker(
+        out.add(Marker(
           point: pt,
-          radius: selected ? 7 : 5,
-          color: layerColor.withAlpha(selected ? 240 : 200),
-          borderColor: selected ? Colors.white : layerColor.withAlpha(255),
-          borderStrokeWidth: selected ? 2 : 1.2,
+          width: ptStyle.width + (selected ? 4 : 0),
+          height: ptStyle.height + (selected ? 4 : 0),
+          child: QFieldMapPointIcon(
+            layerName: layerName,
+            selected: selected,
+          ),
         ));
       }
     }
@@ -487,8 +584,12 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                 ),
                 if (_buildPolygons().isNotEmpty) PolygonLayer(polygons: _buildPolygons()),
                 if (_buildPolylines().isNotEmpty) PolylineLayer(polylines: _buildPolylines()),
-                if (_buildPointCircles().isNotEmpty) CircleLayer(circles: _buildPointCircles()),
-                MarkerLayer(markers: _buildOverlayMarkers(l10n)),
+                MarkerLayer(
+                  markers: [
+                    ..._buildFeaturePointMarkers(),
+                    ..._buildOverlayMarkers(l10n),
+                  ],
+                ),
                 SimpleAttributionWidget(
                   alignment: Alignment.bottomLeft,
                   backgroundColor: const Color(0x8805051A),
@@ -600,11 +701,16 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               sqlTableCount: _sqlTables.length,
               hiddenKeys: _hiddenLayerKeys,
               selected: _selected,
+              tapLayerKeys: _tapLayerKeys,
+              activeTapLayerKey: _activeTapLayerKey,
+              tapHitsInLayer: _tapHitsForActiveLayer,
+              layerLabelForKey: _layerLabelForKey,
+              hitCountForLayer: _tapHitCountForLayer,
+              allDisplayProps: _selected != null ? _allDisplayProps(_selected!) : null,
               canWrite: widget.canWrite,
               hint: _hint,
               noteCtrl: _noteCtrl,
               fieldCtrls: _fieldCtrls,
-              propsFor: _selected != null ? () => _propsFor(_selected!) : null,
               onToggleLayer: (key) {
                 setState(() {
                   if (_hiddenLayerKeys.contains(key)) {
@@ -618,7 +724,10 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               onFieldChanged: (featureId, key, value) {
                 _propertyEdits.putIfAbsent(featureId, () => {})[key] = value;
               },
-              onClearSelection: () => _selectFeature(null),
+              onClearSelection: _clearTapSelection,
+              onPickTapLayer: _pickTapLayer,
+              onBackToTapLayerPicker: _backToTapLayerPicker,
+              onPickTapFeature: (f) => _selectFeature(f, expandPanel: true),
               onShowAllOnMap: _fitMap,
             ),
           ),
@@ -690,14 +799,22 @@ class _BottomPanel extends StatelessWidget {
     required this.sqlTableCount,
     required this.hiddenKeys,
     required this.selected,
+    required this.tapLayerKeys,
+    required this.activeTapLayerKey,
+    required this.tapHitsInLayer,
+    required this.layerLabelForKey,
+    required this.hitCountForLayer,
+    required this.allDisplayProps,
     required this.canWrite,
     required this.hint,
     required this.noteCtrl,
     required this.fieldCtrls,
-    required this.propsFor,
     required this.onToggleLayer,
     required this.onFieldChanged,
     required this.onClearSelection,
+    required this.onPickTapLayer,
+    required this.onBackToTapLayerPicker,
+    required this.onPickTapFeature,
     required this.onShowAllOnMap,
   });
 
@@ -707,15 +824,26 @@ class _BottomPanel extends StatelessWidget {
   final int sqlTableCount;
   final Set<String> hiddenKeys;
   final QFieldMapFeature? selected;
+  final List<String> tapLayerKeys;
+  final String? activeTapLayerKey;
+  final List<FeatureTapHit> tapHitsInLayer;
+  final String Function(String key) layerLabelForKey;
+  final int Function(String key) hitCountForLayer;
+  final Map<String, dynamic>? allDisplayProps;
   final bool canWrite;
   final String? hint;
   final TextEditingController noteCtrl;
   final Map<String, TextEditingController> fieldCtrls;
-  final Map<String, dynamic> Function()? propsFor;
   final void Function(String key) onToggleLayer;
   final void Function(String featureId, String key, String value) onFieldChanged;
   final VoidCallback onClearSelection;
+  final void Function(String layerKey) onPickTapLayer;
+  final VoidCallback onBackToTapLayerPicker;
+  final void Function(QFieldMapFeature feature) onPickTapFeature;
   final VoidCallback onShowAllOnMap;
+
+  bool get _showLayerPicker =>
+      tapLayerKeys.length > 1 && activeTapLayerKey == null;
 
   @override
   Widget build(BuildContext context) {
@@ -792,7 +920,66 @@ class _BottomPanel extends StatelessWidget {
                 Text(hint!, style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11)),
               ],
               const SizedBox(height: 14),
-              if (selected == null)
+              if (_showLayerPicker) ...[
+                Text(
+                  l10n.t('qfield_map_tap_layers_title'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.t('qfield_map_tap_pick_layer'),
+                  style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                ...tapLayerKeys.map((key) {
+                  final n = hitCountForLayer(key);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Material(
+                      color: const Color(0xFF1A1A35),
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        onTap: () => onPickTapLayer(key),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          child: Row(
+                            children: [
+                              Icon(Icons.layers_rounded,
+                                  color: Colors.white.withAlpha(200), size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  layerLabelForKey(key),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '$n',
+                                style: TextStyle(
+                                  color: Colors.white.withAlpha(140),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white.withAlpha(120)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ] else if (selected == null)
                 Text(
                   sqlTableCount > 0
                       ? '${l10n.t('qfield_map_tap_feature')} · $sqlTableCount SQL ${l10n.t('qfield_map_layers').toLowerCase()}'
@@ -803,13 +990,26 @@ class _BottomPanel extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        selected!.label ?? l10n.t('qfield_layer_feature'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (activeTapLayerKey != null)
+                            Text(
+                              layerLabelForKey(activeTapLayerKey!),
+                              style: TextStyle(
+                                color: Colors.white.withAlpha(160),
+                                fontSize: 11,
+                              ),
+                            ),
+                          Text(
+                            selected!.label ?? l10n.t('qfield_layer_feature'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -818,31 +1018,105 @@ class _BottomPanel extends StatelessWidget {
                     ),
                   ],
                 ),
-                Text(
-                  '${l10n.t('qfield_map_edit_fields')} · ${selected!.source}',
-                  style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
-                ),
-                const SizedBox(height: 10),
-                ...fieldCtrls.entries.map((e) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: TextField(
-                      controller: e.value,
-                      enabled: canWrite,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      onChanged: canWrite
-                          ? (v) => onFieldChanged(selected!.id, e.key, v)
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: e.key,
-                        labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
-                        filled: true,
-                        fillColor: const Color(0xFF1A1A35),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                if (tapLayerKeys.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: onBackToTapLayerPicker,
+                        icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                        label: Text(l10n.t('qfield_map_tap_layers_title')),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF00D4AA),
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
                     ),
-                  );
-                }),
+                  ),
+                if (tapHitsInLayer.length > 1) ...[
+                  Text(
+                    l10n.t('qfield_map_tap_features_in_layer', {
+                      'count': '${tapHitsInLayer.length}',
+                    }),
+                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 36,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: tapHitsInLayer.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, i) {
+                        final f = tapHitsInLayer[i].feature;
+                        final isSel = selected!.id == f.id;
+                        final chipLabel = f.label ??
+                            f.properties['fid']?.toString() ??
+                            f.properties['id']?.toString() ??
+                            '#${i + 1}';
+                        return ChoiceChip(
+                          label: Text(chipLabel, style: const TextStyle(fontSize: 11)),
+                          selected: isSel,
+                          onSelected: (_) => onPickTapFeature(f),
+                          selectedColor: const Color(0xFF6C63FF).withAlpha(120),
+                          backgroundColor: Colors.white.withAlpha(25),
+                          labelStyle: TextStyle(
+                            color: isSel ? Colors.white : Colors.white.withAlpha(200),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                Text(
+                  l10n.t('qfield_map_feature_data'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (allDisplayProps != null && allDisplayProps!.isNotEmpty)
+                  ...allDisplayProps!.entries.map(
+                    (e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}'),
+                  )
+                else
+                  Text(
+                    l10n.t('qfield_layer_no_attributes'),
+                    style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
+                  ),
+                if (canWrite && fieldCtrls.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    l10n.t('qfield_map_edit_fields'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...fieldCtrls.entries.map((e) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: TextField(
+                        controller: e.value,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        onChanged: (v) => onFieldChanged(selected!.id, e.key, v),
+                        decoration: InputDecoration(
+                          labelText: e.key,
+                          labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+                          filled: true,
+                          fillColor: const Color(0xFF1A1A35),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               ],
               if (canWrite) ...[
                 const SizedBox(height: 16),
@@ -867,6 +1141,45 @@ class _BottomPanel extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FeatureDataRow extends StatelessWidget {
+  const _FeatureDataRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A35),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withAlpha(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withAlpha(150),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            value.isEmpty ? '—' : value,
+            style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.3),
+          ),
+        ],
       ),
     );
   }
