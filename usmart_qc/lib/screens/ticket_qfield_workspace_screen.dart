@@ -13,6 +13,7 @@ import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/qfield_file_picker.dart';
+import '../utils/responsive_layout.dart';
 import '../widgets/qfield_project_map_sheet.dart';
 
 /// Field workspace for QField / QGIS project packages on a ticket (read + optional write).
@@ -95,15 +96,19 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
   }
 
   void _openMapSheet(QFieldProject p) {
+    final initialSize = RLayout.isShortScreen(context) ? 0.94 : 0.9;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => DraggableScrollableSheet(
         expand: false,
-        initialChildSize: 0.9,
-        minChildSize: 0.45,
-        maxChildSize: 0.96,
+        initialChildSize: initialSize,
+        minChildSize: 0.5,
+        maxChildSize: 0.98,
+        snap: true,
+        snapSizes: [0.5, initialSize, 0.98],
         builder: (_, __) => QFieldProjectMapSheet(
           ticketId: widget.ticketId,
           project: p,
@@ -300,13 +305,21 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
         backgroundColor: const Color(0xFF05051A),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: Text(l10n.t('ticket_qfield_workspace')),
+        title: Text(
+          l10n.t('ticket_qfield_workspace'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
-          IconButton(
+          MinTouchTarget(
+            onTap: _loading ? null : _load,
             tooltip: MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh_rounded),
+            child: Icon(
+              Icons.refresh_rounded,
+              color: _loading ? Colors.white38 : Colors.white,
+            ),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: _loading && _projects.isEmpty
@@ -316,7 +329,8 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: RLayout.pagePadding(context),
                 children: [
                   Container(
                     padding: const EdgeInsets.all(18),
@@ -397,6 +411,7 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
         ? p.fileName.split('.').last.toUpperCase()
         : 'FILE';
     final busy = _busyProjectId == p.id;
+    final pad = RLayout.horizontalPad(context);
     final revs = List<QFieldRevision>.from(p.revisions)
       ..sort((a, b) => b.at.compareTo(a.at));
 
@@ -406,7 +421,7 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
         color: const Color(0xFF12122A),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(pad),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -419,10 +434,13 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
                       children: [
                         Text(
                           p.title,
-                          style: const TextStyle(
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 17,
+                            fontSize: RLayout.isCompact(context) ? 16 : 17,
                             fontWeight: FontWeight.w700,
+                            height: 1.2,
                           ),
                         ),
                         if (p.description != null && p.description!.trim().isNotEmpty) ...[
@@ -470,44 +488,11 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
                 style: TextStyle(color: Colors.white.withAlpha(100), fontSize: 11),
               ),
               const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _chipButton(
-                    icon: Icons.open_in_new_rounded,
-                    label: l10n.t('qfield_open_external'),
-                    onTap: busy ? null : () => _openUrl(p.currentUrl),
-                  ),
-                  _chipButton(
-                    icon: Icons.link_rounded,
-                    label: l10n.t('qfield_copy_link'),
-                    onTap: busy ? null : () => _copyLink(p.currentUrl),
-                  ),
-                  _chipButton(
-                    icon: Icons.share_rounded,
-                    label: l10n.t('qfield_share'),
-                    onTap: busy ? null : () => _shareLink(p.currentUrl, p.title),
-                  ),
-                  _chipButton(
-                    icon: Icons.map_outlined,
-                    label: l10n.t('qfield_map_title'),
-                    onTap: busy ? null : () => _openMapSheet(p),
-                  ),
-                  if (widget.canWrite) ...[
-                    _chipButton(
-                      icon: Icons.upload_file_rounded,
-                      label: l10n.t('qfield_add_revision'),
-                      onTap: busy ? null : () => _uploadRevision(p),
-                      primary: true,
-                    ),
-                    _chipButton(
-                      icon: Icons.edit_note_rounded,
-                      label: l10n.t('qfield_edit_meta'),
-                      onTap: busy ? null : () => _editMeta(p),
-                    ),
-                  ],
-                ],
+              _actionGrid(
+                context: context,
+                busy: busy,
+                p: p,
+                l10n: l10n,
               ),
               if (revs.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -571,34 +556,136 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
     );
   }
 
+  Widget _actionGrid({
+    required BuildContext context,
+    required bool busy,
+    required QFieldProject p,
+    required AppLocalizations l10n,
+  }) {
+    final actions = <({IconData icon, String label, VoidCallback? onTap, bool primary})>[
+      (
+        icon: Icons.map_outlined,
+        label: l10n.t('qfield_map_title'),
+        onTap: busy ? null : () => _openMapSheet(p),
+        primary: true,
+      ),
+      (
+        icon: Icons.open_in_new_rounded,
+        label: l10n.t('qfield_open_external'),
+        onTap: busy ? null : () => _openUrl(p.currentUrl),
+        primary: false,
+      ),
+      (
+        icon: Icons.link_rounded,
+        label: l10n.t('qfield_copy_link'),
+        onTap: busy ? null : () => _copyLink(p.currentUrl),
+        primary: false,
+      ),
+      (
+        icon: Icons.share_rounded,
+        label: l10n.t('qfield_share'),
+        onTap: busy ? null : () => _shareLink(p.currentUrl, p.title),
+        primary: false,
+      ),
+      if (widget.canWrite) ...[
+        (
+          icon: Icons.upload_file_rounded,
+          label: l10n.t('qfield_add_revision'),
+          onTap: busy ? null : () => _uploadRevision(p),
+          primary: true,
+        ),
+        (
+          icon: Icons.edit_note_rounded,
+          label: l10n.t('qfield_edit_meta'),
+          onTap: busy ? null : () => _editMeta(p),
+          primary: false,
+        ),
+      ],
+    ];
+
+    final narrow = RLayout.isNarrow(context);
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < actions.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _chipButton(
+              icon: actions[i].icon,
+              label: actions[i].label,
+              onTap: actions[i].onTap,
+              primary: actions[i].primary,
+              expanded: true,
+            ),
+          ],
+        ],
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final a in actions)
+          _chipButton(
+            icon: a.icon,
+            label: a.label,
+            onTap: a.onTap,
+            primary: a.primary,
+          ),
+      ],
+    );
+  }
+
   Widget _chipButton({
     required IconData icon,
     required String label,
     required VoidCallback? onTap,
     bool primary = false,
+    bool expanded = false,
   }) {
     final bg = primary
         ? const Color(0xFF6C63FF).withAlpha(45)
         : Colors.white.withAlpha(12);
     final fg = primary ? const Color(0xFF8B83FF) : Colors.white.withAlpha(200);
-    return Material(
+    final child = Material(
       color: bg,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-              Text(label, style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
-            ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: RLayout.minTouchTarget),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisAlignment:
+                  expanded ? MainAxisAlignment.center : MainAxisAlignment.start,
+              children: [
+                Icon(icon, size: 20, color: fg),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+    if (expanded) {
+      return SizedBox(width: double.infinity, child: child);
+    }
+    return child;
   }
 }

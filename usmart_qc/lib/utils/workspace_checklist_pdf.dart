@@ -1,12 +1,29 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/private_company.dart';
+import '../utils/share_position_origin.dart';
 
 bool _hasArabic(String s) => RegExp(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]').hasMatch(s);
 
 pw.TextDirection _textDir(String s) => _hasArabic(s) ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+
+Future<pw.Font> _loadPdfFont() async {
+  try {
+    final data = await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf');
+    return pw.Font.ttf(data);
+  } catch (_) {
+    return pw.Font.helvetica();
+  }
+}
 
 /// Builds a printable PDF for a workspace checklist (Provisor branding + Arabic support).
 Future<Uint8List> buildWorkspaceChecklistPdf({
@@ -16,42 +33,22 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
 }) async {
   final logoBytes = (await rootBundle.load('assets/provisor_icon.png')).buffer.asUint8List();
   final logo = pw.MemoryImage(logoBytes);
+  final font = await _loadPdfFont();
 
-  final arabicFontData =
-      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf');
-  final arabicFont = pw.Font.ttf(arabicFontData);
-  final latinFont = pw.Font.helvetica();
-  final latinBold = pw.Font.helveticaBold();
-
-  pw.TextStyle bodyStyle(String text, {double size = 10, bool bold = false, PdfColor? color}) {
-    final useArabic = _hasArabic(text);
+  pw.TextStyle style(String text, {double size = 10, bool bold = false, PdfColor? color}) {
     return pw.TextStyle(
       fontSize: size,
-      font: useArabic ? arabicFont : (bold ? latinBold : latinFont),
+      font: font,
       fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
       color: color,
     );
   }
 
-  pw.Widget textWidget(
-    String text, {
-    double size = 10,
-    bool bold = false,
-    PdfColor? color,
-  }) {
-    return pw.Text(
-      text,
-      style: bodyStyle(text, size: size, bold: bold, color: color),
-      textDirection: _textDir(text),
-    );
+  pw.Widget txt(String text, {double size = 10, bool bold = false, PdfColor? color}) {
+    return pw.Text(text, style: style(text, size: size, bold: bold, color: color), textDirection: _textDir(text));
   }
 
-  final doc = pw.Document(
-    theme: pw.ThemeData.withFont(
-      base: latinFont,
-      bold: latinBold,
-    ),
-  );
+  final doc = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: font));
 
   doc.addPage(
     pw.MultiPage(
@@ -66,9 +63,9 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                textWidget('Provisor', size: 20, bold: true, color: PdfColors.indigo800),
+                txt('Provisor', size: 20, bold: true, color: PdfColors.indigo800),
                 pw.SizedBox(height: 4),
-                textWidget(workspaceName, size: 12, color: PdfColors.grey700),
+                txt(workspaceName, size: 12, color: PdfColors.grey700),
               ],
             ),
           ),
@@ -78,34 +75,26 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
         alignment: pw.Alignment.centerRight,
         child: pw.Text(
           'Page ${context.pageNumber} / ${context.pagesCount}',
-          style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600, font: latinFont),
+          style: style('', size: 9, color: PdfColors.grey600),
         ),
       ),
       build: (context) => [
-        textWidget(checklist.name, size: 22, bold: true),
+        txt(checklist.name, size: 22, bold: true),
         if (checklist.description != null && checklist.description!.trim().isNotEmpty) ...[
           pw.SizedBox(height: 8),
-          textWidget(
-            checklist.description!.trim(),
-            size: 11,
-            color: PdfColors.grey800,
-          ),
+          txt(checklist.description!.trim(), size: 11, color: PdfColors.grey800),
         ],
         pw.SizedBox(height: 16),
         pw.Wrap(
           spacing: 8,
           runSpacing: 6,
           children: [
-            if (checklist.category != null)
-              _metaChip('Category: ${checklist.category}', bodyStyle),
-            _metaChip(
-              '${checklist.items.length} item${checklist.items.length == 1 ? '' : 's'}',
-              bodyStyle,
-            ),
+            if (checklist.category != null) _chip('Category: ${checklist.category}', style),
+            _chip('${checklist.items.length} items', style),
             if (departmentName != null && departmentName.isNotEmpty)
-              _metaChip('Department: $departmentName', bodyStyle),
+              _chip('Department: $departmentName', style),
             if (checklist.createdByName != null)
-              _metaChip('Created by: ${checklist.createdByName!}', bodyStyle),
+              _chip('Created by: ${checklist.createdByName!}', style),
           ],
         ),
         pw.SizedBox(height: 20),
@@ -120,19 +109,19 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: PdfColors.grey300),
               children: [
-                _tableCell('#', bodyStyle, bold: true, align: pw.Alignment.center),
-                _tableCell('Item', bodyStyle, bold: true),
-                _tableCell('Severity', bodyStyle, bold: true, align: pw.Alignment.center),
+                _cell('#', style, bold: true, align: pw.Alignment.center),
+                _cell('Item', style, bold: true),
+                _cell('Severity', style, bold: true, align: pw.Alignment.center),
               ],
             ),
             for (var i = 0; i < checklist.items.length; i++)
               pw.TableRow(
                 children: [
-                  _tableCell('${i + 1}', bodyStyle, align: pw.Alignment.center),
-                  _tableCell(checklist.items[i].label, bodyStyle),
-                  _tableCell(
+                  _cell('${i + 1}', style, align: pw.Alignment.center),
+                  _cell(checklist.items[i].label, style),
+                  _cell(
                     checklist.items[i].isMajor ? 'MAJOR' : 'MINOR',
-                    bodyStyle,
+                    style,
                     align: pw.Alignment.center,
                   ),
                 ],
@@ -146,9 +135,9 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
   return doc.save();
 }
 
-pw.Widget _tableCell(
+pw.Widget _cell(
   String text,
-  pw.TextStyle Function(String text, {double size, bool bold, PdfColor? color}) bodyStyle, {
+  pw.TextStyle Function(String text, {double size, bool bold, PdfColor? color}) style, {
   bool bold = false,
   pw.Alignment align = pw.Alignment.centerLeft,
 }) {
@@ -156,29 +145,80 @@ pw.Widget _tableCell(
     padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
     child: pw.Align(
       alignment: align,
-      child: pw.Text(
-        text,
-        style: bodyStyle(text, size: 10, bold: bold),
-        textDirection: _textDir(text),
-      ),
+      child: pw.Text(text, style: style(text, size: 10, bold: bold), textDirection: _textDir(text)),
     ),
   );
 }
 
-pw.Widget _metaChip(
-  String label,
-  pw.TextStyle Function(String text, {double size, bool bold, PdfColor? color}) bodyStyle,
-) {
+pw.Widget _chip(String label, pw.TextStyle Function(String text, {double size, bool bold, PdfColor? color}) style) {
   return pw.Container(
     padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: pw.BoxDecoration(
       color: PdfColors.grey200,
       borderRadius: pw.BorderRadius.circular(4),
     ),
-    child: pw.Text(
-      label,
-      style: bodyStyle(label, size: 9),
-      textDirection: _textDir(label),
+    child: pw.Text(label, style: style(label, size: 9), textDirection: _textDir(label)),
+  );
+}
+
+String _safePdfFileName(String name) {
+  final cleaned = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f]'), '_').trim();
+  return cleaned.isEmpty ? 'checklist' : cleaned;
+}
+
+/// Share checklist PDF via system sheet (reliable on iOS/Android).
+Future<void> shareWorkspaceChecklistPdf({
+  required Uint8List bytes,
+  required String fileName,
+  required BuildContext context,
+}) async {
+  final safe = _safePdfFileName(fileName);
+  if (kIsWeb) {
+    await Printing.sharePdf(bytes: bytes, filename: '$safe.pdf');
+    return;
+  }
+  final dir = await getTemporaryDirectory();
+  final file = File('${dir.path}/$safe.pdf');
+  await file.writeAsBytes(bytes, flush: true);
+  if (!context.mounted) return;
+  await Share.shareXFiles(
+    [XFile(file.path, mimeType: 'application/pdf', name: '$safe.pdf')],
+    subject: safe,
+    sharePositionOrigin: sharePositionOriginForShareSheet(context),
+  );
+}
+
+/// Open native print / PDF preview (works when direct layoutPdf fails on device).
+Future<void> previewWorkspaceChecklistPdf({
+  required BuildContext context,
+  required PrivateCompanyChecklist checklist,
+  required String workspaceName,
+  String? departmentName,
+}) async {
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (ctx) => Scaffold(
+        backgroundColor: const Color(0xFF05051A),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF12122A),
+          title: Text(
+            checklist.name,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          iconTheme: const IconThemeData(color: Colors.white),
+        ),
+        body: PdfPreview(
+          maxPageWidth: 700,
+          canChangeOrientation: false,
+          canDebug: false,
+          pdfFileName: '${_safePdfFileName(checklist.name)}.pdf',
+          build: (_) => buildWorkspaceChecklistPdf(
+            checklist: checklist,
+            workspaceName: workspaceName,
+            departmentName: departmentName,
+          ),
+        ),
+      ),
     ),
   );
 }

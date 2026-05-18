@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -32,17 +31,13 @@ class WorkspaceChecklistDetailScreen extends StatelessWidget {
   Future<void> _printPdf(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     try {
-      final bytes = await buildWorkspaceChecklistPdf(
+      await previewWorkspaceChecklistPdf(
+        context: context,
         checklist: checklist,
         workspaceName: workspace.name,
         departmentName: _departmentName(),
       );
-      if (!context.mounted) return;
-      await Printing.layoutPdf(
-        onLayout: (_) async => bytes,
-        name: '${checklist.name}.pdf',
-      );
-    } catch (_) {
+    } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -62,8 +57,12 @@ class WorkspaceChecklistDetailScreen extends StatelessWidget {
         departmentName: _departmentName(),
       );
       if (!context.mounted) return;
-      await Printing.sharePdf(bytes: bytes, filename: '${checklist.name}.pdf');
-    } catch (_) {
+      await shareWorkspaceChecklistPdf(
+        bytes: bytes,
+        fileName: checklist.name,
+        context: context,
+      );
+    } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -7,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
+import '../utils/responsive_layout.dart';
 
 /// Long server preview lines: split on "Archive listing:" and "Map fields:" for readable rows.
 class _PreviewHintText extends StatelessWidget {
@@ -82,6 +85,7 @@ class _QFieldLayerMeta {
     required this.color,
     this.featureCount = 0,
     this.geometryTypes = const [],
+    this.tableName = '',
   });
 
   final String key;
@@ -89,6 +93,27 @@ class _QFieldLayerMeta {
   final Color color;
   final int featureCount;
   final List<String> geometryTypes;
+  final String tableName;
+}
+
+class _QFieldDataTable {
+  const _QFieldDataTable({
+    required this.name,
+    required this.package,
+    required this.columns,
+    required this.rows,
+    this.packagePath,
+    this.hasGeometry = false,
+  });
+
+  final String name;
+  final String package;
+  final String? packagePath;
+  final List<String> columns;
+  final List<Map<String, dynamic>> rows;
+  final bool hasGeometry;
+
+  String get layerKey => '$package|$name';
 }
 
 class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
@@ -113,7 +138,13 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   LatLng? _draftPin;
   QFieldMapAnnotation? _annotation;
   List<_QFieldLayerMeta> _layers = const [];
+  List<_QFieldDataTable> _dataTables = const [];
   final Set<String> _hiddenLayerKeys = {};
+  String? _focusedLayerKey;
+
+  static const _qfieldPolygonFill = Color(0xFF8BC34A);
+  static const _qfieldLineStroke = Color(0xFFE53935);
+  static const _qfieldPointColor = Color(0xFF43A047);
 
   @override
   void initState() {
@@ -145,6 +176,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     Map<String, double>? b;
     String? hint;
     var metas = <_QFieldLayerMeta>[];
+    var tables = <_QFieldDataTable>[];
     if (data != null && data['success'] == true) {
       final g = data['geojson'];
       if (g is Map<String, dynamic>) gj = g;
@@ -185,6 +217,39 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
         }
         _hiddenLayerKeys.clear();
       }
+      final rawTables = data['dataTables'];
+      if (rawTables is List) {
+        for (final row in rawTables) {
+          if (row is! Map<String, dynamic>) continue;
+          final name = row['name']?.toString() ?? '';
+          final pkg = row['package']?.toString() ?? '';
+          if (name.isEmpty) continue;
+          final cols = (row['columns'] as List?)
+                  ?.map((e) => e.toString())
+                  .where((e) => e.isNotEmpty)
+                  .toList() ??
+              const <String>[];
+          final rawRows = row['rows'];
+          final parsedRows = <Map<String, dynamic>>[];
+          if (rawRows is List) {
+            for (final r in rawRows) {
+              if (r is Map) {
+                parsedRows.add(Map<String, dynamic>.from(r));
+              }
+            }
+          }
+          tables.add(_QFieldDataTable(
+            name: name,
+            package: pkg.isNotEmpty ? pkg : name,
+            packagePath: row['packagePath']?.toString(),
+            columns: cols.isNotEmpty
+                ? cols
+                : (parsedRows.isNotEmpty ? parsedRows.first.keys.toList() : const []),
+            rows: parsedRows,
+            hasGeometry: row['hasGeometry'] == true,
+          ));
+        }
+      }
       final ma = data['mapAnnotation'];
       if (ma is Map<String, dynamic>) {
         final lat = (ma['latitude'] as num?)?.toDouble();
@@ -198,12 +263,27 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     if (metas.isEmpty && gj != null) {
       metas.addAll(_layersFromGeoJson(gj));
     }
+    if (metas.isEmpty && tables.isNotEmpty) {
+      var i = 0;
+      for (final t in tables) {
+        metas.add(_QFieldLayerMeta(
+          key: t.layerKey,
+          label: t.package.isNotEmpty ? '${t.package} › ${t.name}' : t.name,
+          color: _layerPalette[i % _layerPalette.length],
+          featureCount: t.rows.length,
+          geometryTypes: t.hasGeometry ? const ['SQL'] : const ['Attributes'],
+          tableName: t.name,
+        ));
+        i++;
+      }
+    }
 
     setState(() {
       _geojson = gj;
       _boundsApi = b;
       _hint = hint;
       _layers = metas;
+      _dataTables = tables;
       _loading = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
@@ -375,7 +455,149 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   bool _featureVisible(Map<String, dynamic> f) {
     final key = _featureLayerKey(f);
     if (key.isEmpty) return true;
-    return !_hiddenLayerKeys.contains(key);
+    if (_hiddenLayerKeys.contains(key)) return false;
+    if (_focusedLayerKey != null && _focusedLayerKey != key) return false;
+    return true;
+  }
+
+  String? _geometryType(Map<String, dynamic> f) {
+    final g = f['geometry'];
+    if (g is Map<String, dynamic>) return g['type'] as String?;
+    return null;
+  }
+
+  List<Map<String, dynamic>> _featuresForLayer(String layerKey) {
+    final fc = _geojson;
+    if (fc == null) return const [];
+    final feats = fc['features'];
+    if (feats is! List) return const [];
+    final out = <Map<String, dynamic>>[];
+    for (final f in feats) {
+      if (f is! Map<String, dynamic>) continue;
+      if (_featureLayerKey(f) == layerKey) out.add(f);
+    }
+    return out;
+  }
+
+  _QFieldDataTable? _dataTableForLayer(String layerKey) {
+    for (final t in _dataTables) {
+      if (t.layerKey == layerKey) return t;
+    }
+    final parts = layerKey.split('|');
+    if (parts.length >= 2) {
+      final layer = parts.last;
+      for (final t in _dataTables) {
+        if (t.name == layer) return t;
+      }
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _sqlRowsForLayer(String layerKey) {
+    final table = _dataTableForLayer(layerKey);
+    return table?.rows ?? const [];
+  }
+
+  void _showLayerDetails(_QFieldLayerMeta meta) {
+    final l10n = AppLocalizations.of(context);
+    final features = _featuresForLayer(meta.key);
+    final sqlRows = _sqlRowsForLayer(meta.key);
+    final sqlTable = _dataTableForLayer(meta.key);
+    setState(() => _focusedLayerKey = meta.key);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.58,
+          minChildSize: 0.35,
+          maxChildSize: 0.92,
+          builder: (_, scroll) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    RLayout.horizontalPad(ctx),
+                    12,
+                    RLayout.horizontalPad(ctx) - 4,
+                    8,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: meta.color,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white38),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          meta.label,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      MinTouchTarget(
+                        onTap: () => Navigator.pop(ctx),
+                        child: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: RLayout.horizontalPad(ctx)),
+                  child: Text(
+                    '${features.isNotEmpty ? features.length : sqlRows.length} ${l10n.t('qfield_layer_feature_count')}'
+                    '${sqlTable != null ? ' · ${sqlTable.columns.length} ${l10n.t('qfield_sql_columns')}' : ''}'
+                    ' · ${meta.geometryTypes.join(', ')}',
+                    style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _buildLayerDetailList(
+                    scroll: scroll,
+                    l10n: l10n,
+                    features: features,
+                    sqlRows: sqlRows,
+                    sqlColumns: sqlTable?.columns ?? const [],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      if (mounted) setState(() => _focusedLayerKey = null);
+    });
   }
 
   List<Polygon> _polygons() {
@@ -387,7 +609,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     for (final f in feats) {
       if (f is! Map<String, dynamic>) continue;
       if (!_featureVisible(f)) continue;
-      final color = _colorForFeature(f);
       final g = f['geometry'];
       if (g is! Map<String, dynamic>) continue;
       final t = g['type'] as String?;
@@ -399,9 +620,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           if (pts.length >= 3) {
             out.add(Polygon(
               points: pts,
-              color: color.withAlpha(55),
-              borderColor: color,
-              borderStrokeWidth: 2,
+              color: _qfieldPolygonFill.withAlpha(115),
+              borderColor: Colors.black87,
+              borderStrokeWidth: 1.5,
             ));
           }
         }
@@ -414,9 +635,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (pts.length >= 3) {
               out.add(Polygon(
                 points: pts,
-                color: color.withAlpha(45),
-                borderColor: color,
-                borderStrokeWidth: 2,
+                color: _qfieldPolygonFill.withAlpha(100),
+                borderColor: Colors.black87,
+                borderStrokeWidth: 1.5,
               ));
             }
           }
@@ -435,7 +656,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     for (final f in feats) {
       if (f is! Map<String, dynamic>) continue;
       if (!_featureVisible(f)) continue;
-      final color = _colorForFeature(f);
       final g = f['geometry'];
       if (g is! Map<String, dynamic>) continue;
       final t = g['type'] as String?;
@@ -445,8 +665,10 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
         if (pts.length >= 2) {
           out.add(Polyline(
             points: pts,
-            color: color,
-            strokeWidth: 3,
+            color: _qfieldLineStroke,
+            strokeWidth: 5.5,
+            borderColor: _qfieldLineStroke.withAlpha(80),
+            borderStrokeWidth: 8,
           ));
         }
       } else if (t == 'MultiLineString' && c is List) {
@@ -456,8 +678,10 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (pts.length >= 2) {
               out.add(Polyline(
                 points: pts,
-                color: color,
-                strokeWidth: 2,
+                color: _qfieldLineStroke,
+                strokeWidth: 5,
+                borderColor: _qfieldLineStroke.withAlpha(70),
+                borderStrokeWidth: 7,
               ));
             }
           }
@@ -485,9 +709,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               final pt = LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble());
               out.add(Marker(
                 point: pt,
-                width: 28,
-                height: 28,
-                child: Icon(Icons.circle, color: color, size: 18),
+                width: 26,
+                height: 30,
+                child: _QFieldPointMarker(color: _qfieldPointColor, accent: color),
               ));
             }
           } else if (g['type'] == 'MultiPoint') {
@@ -499,8 +723,12 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                   out.add(Marker(
                     point: pt,
                     width: 22,
-                    height: 22,
-                    child: const Icon(Icons.circle, color: Color(0xFF6C63FF), size: 14),
+                    height: 26,
+                    child: const _QFieldPointMarker(
+                      color: _qfieldPointColor,
+                      accent: Color(0xFF9C27B0),
+                      small: true,
+                    ),
                   ));
                 }
               }
@@ -512,11 +740,190 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     return out;
   }
 
-  Widget _layerLegend(AppLocalizations l10n) {
+  static const _metaPropertyKeys = {
+    'layer',
+    'package',
+    'packagePath',
+    'source',
+    'kind',
+  };
+
+  Widget _buildLayerDetailList({
+    required ScrollController scroll,
+    required AppLocalizations l10n,
+    required List<Map<String, dynamic>> features,
+    required List<Map<String, dynamic>> sqlRows,
+    required List<String> sqlColumns,
+  }) {
+    final itemCount = features.isNotEmpty ? features.length : sqlRows.length;
+    if (itemCount == 0) {
+      return Center(
+        child: Text(
+          l10n.t('qfield_layer_no_features'),
+          style: TextStyle(color: Colors.white.withAlpha(140)),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: scroll,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+      itemCount: itemCount,
+      itemBuilder: (_, i) {
+        Map<String, dynamic> props = {};
+        String subtitle = l10n.t('qfield_sql_row');
+
+        if (features.isNotEmpty && i < features.length) {
+          final f = features[i];
+          props = Map<String, dynamic>.from(
+            (f['properties'] as Map<String, dynamic>?) ?? {},
+          );
+          subtitle = _geometryType(f) ?? 'Feature';
+          if (i < sqlRows.length) {
+            props.addAll(sqlRows[i]);
+          }
+        } else if (i < sqlRows.length) {
+          props = Map<String, dynamic>.from(sqlRows[i]);
+        }
+
+        props.removeWhere((k, _) => _metaPropertyKeys.contains(k));
+
+        final orderedKeys = <String>[
+          ...sqlColumns.where(props.containsKey),
+          ...props.keys.where((k) => !sqlColumns.contains(k)),
+        ];
+
+        return Card(
+          color: const Color(0xFF1A1A35),
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ExpansionTile(
+            initiallyExpanded: itemCount <= 3,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+            title: Text(
+              '${l10n.t('qfield_layer_feature')} ${i + 1}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            subtitle: Text(
+              subtitle,
+              style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12),
+            ),
+            children: orderedKeys.isEmpty
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        l10n.t('qfield_layer_no_attributes'),
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(130),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ]
+                : orderedKeys.map((key) {
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        key,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(200),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: SelectableText(
+                        '${props[key] ?? ''}',
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                    );
+                  }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _layerChip(_QFieldLayerMeta meta) {
+    final hidden = _hiddenLayerKeys.contains(meta.key);
+    final label = meta.label;
+    final count = meta.featureCount > 0 ? '${meta.featureCount}' : '…';
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: _focusedLayerKey == meta.key
+            ? meta.color.withAlpha(70)
+            : Colors.white.withAlpha(18),
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: () => _showLayerDetails(meta),
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: RLayout.minTouchTarget),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: _focusedLayerKey == meta.key
+                    ? meta.color
+                    : meta.color.withAlpha(140),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  hidden ? Icons.visibility_off_outlined : Icons.layers_outlined,
+                  size: 18,
+                  color: meta.color,
+                ),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: Text(
+                    '$label ($count)',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: hidden ? Colors.white54 : Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                MinTouchTarget(
+                  onTap: () {
+                    setState(() {
+                      if (hidden) {
+                        _hiddenLayerKeys.remove(meta.key);
+                      } else {
+                        _hiddenLayerKeys.add(meta.key);
+                      }
+                    });
+                  },
+                  child: Icon(
+                    hidden ? Icons.visibility_off : Icons.visibility,
+                    size: 20,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _layerLegend(AppLocalizations l10n, double horizontalPad) {
     if (_layers.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: EdgeInsets.fromLTRB(horizontalPad, 0, horizontalPad, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -528,39 +935,53 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(height: 2),
+          Text(
+            l10n.t('qfield_map_layers_tap_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: RLayout.minTouchTarget + 4,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [for (final meta in _layers) _layerChip(meta)],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mapZoomBy(double delta) {
+    final cam = _mapController.camera;
+    final next = (cam.zoom + delta).clamp(3.0, 19.0);
+    _mapController.move(cam.center, next);
+  }
+
+  void _mapRecenter() {
+    _fitMap();
+  }
+
+  Widget _mapFloatingControls() {
+    return Positioned(
+      right: 8,
+      top: 8,
+      child: Column(
+        children: [
+          _MapControlButton(
+            icon: Icons.add,
+            onTap: () => _mapZoomBy(1),
+          ),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final meta in _layers)
-                FilterChip(
-                  label: Text(
-                    meta.label,
-                    style: TextStyle(
-                      color: _hiddenLayerKeys.contains(meta.key)
-                          ? Colors.white54
-                          : Colors.white,
-                      fontSize: 11,
-                    ),
-                  ),
-                  selected: !_hiddenLayerKeys.contains(meta.key),
-                  onSelected: (on) {
-                    setState(() {
-                      if (on) {
-                        _hiddenLayerKeys.remove(meta.key);
-                      } else {
-                        _hiddenLayerKeys.add(meta.key);
-                      }
-                    });
-                  },
-                  selectedColor: meta.color.withAlpha(60),
-                  backgroundColor: Colors.white.withAlpha(18),
-                  checkmarkColor: meta.color,
-                  side: BorderSide(color: meta.color.withAlpha(140)),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                ),
-            ],
+          _MapControlButton(
+            icon: Icons.remove,
+            onTap: () => _mapZoomBy(-1),
+          ),
+          const SizedBox(height: 6),
+          _MapControlButton(
+            icon: Icons.my_location_rounded,
+            onTap: _mapRecenter,
           ),
         ],
       ),
@@ -643,177 +1064,342 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     }
   }
 
+  Widget _pinActions(AppLocalizations l10n) {
+    final narrow = RLayout.isNarrow(context);
+    final saveBtn = SizedBox(
+      width: double.infinity,
+      height: RLayout.minTouchTarget,
+      child: FilledButton.icon(
+        onPressed: _draftPin == null ? null : _savePin,
+        icon: const Icon(Icons.save_outlined, size: 20),
+        label: Text(l10n.t('qfield_map_save_pin')),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF6C63FF),
+          foregroundColor: Colors.white,
+        ),
+      ),
+    );
+    final clearBtn = SizedBox(
+      width: narrow ? double.infinity : null,
+      height: RLayout.minTouchTarget,
+      child: OutlinedButton(
+        onPressed: (_draftPin == null && _annotation == null) ? null : _clearPin,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFFFF4757),
+          side: const BorderSide(color: Color(0x66FF4757)),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Text(l10n.t('qfield_map_clear_pin')),
+      ),
+    );
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [saveBtn, const SizedBox(height: 8), clearBtn],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: saveBtn),
+        const SizedBox(width: 10),
+        clearBtn,
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final siteLat = widget.ticket?.siteLatitude;
     final siteLng = widget.ticket?.siteLongitude;
+    final hPad = RLayout.horizontalPad(context);
+    final bottomInset = RLayout.viewPadding(context).bottom;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF12122A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(40),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.t('qfield_map_title'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sheetH = constraints.maxHeight.isFinite && constraints.maxHeight > 100
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height * 0.9;
+
+        return Container(
+          height: sheetH,
+          decoration: const BoxDecoration(
+            color: Color(0xFF12122A),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(40),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-            if (_hint != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: _PreviewHintText(text: _hint!),
-              ),
-            if (!_loading) _layerLegend(l10n),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
-              )
-            else
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.52,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _initialCenter(),
-                      initialZoom: 13,
-                      onTap: widget.canWrite
-                          ? (_, p) => setState(() => _draftPin = p)
-                          : null,
-                    ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(hPad, 10, hPad - 4, 4),
+                  child: Row(
                     children: [
-                      TileLayer(
-                        urlTemplate: QFieldProjectMapSheet._tileUrlTemplate,
-                        subdomains: QFieldProjectMapSheet._tileSubdomains,
-                        userAgentPackageName: 'usmart_qc',
-                        maxNativeZoom: 19,
-                      ),
-                      if (_polygons().isNotEmpty) PolygonLayer(polygons: _polygons()),
-                      if (_polylines().isNotEmpty) PolylineLayer(polylines: _polylines()),
-                      MarkerLayer(markers: [
-                        ..._pointMarkers(),
-                        if (siteLat != null && siteLng != null)
-                          Marker(
-                            point: LatLng(siteLat, siteLng),
-                            width: 36,
-                            height: 36,
-                            child: const Icon(Icons.place_rounded, color: Color(0xFFFBBF24), size: 36),
+                      Expanded(
+                        child: Text(
+                          l10n.t('qfield_map_title'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: RLayout.isCompact(context) ? 16 : 17,
+                            fontWeight: FontWeight.w700,
                           ),
-                        if (_draftPin != null)
-                          Marker(
-                            point: _draftPin!,
-                            width: 44,
-                            height: 44,
-                            child: const Icon(Icons.location_on, color: Color(0xFFFF4757), size: 44),
-                          ),
-                      ]),
-                      SimpleAttributionWidget(
-                        alignment: Alignment.bottomRight,
-                        backgroundColor: const Color(0xAA05051A),
-                        source: Text(
-                          l10n.t('site_map_attribution'),
-                          style: const TextStyle(color: Colors.white70, fontSize: 10),
                         ),
+                      ),
+                      MinTouchTarget(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
                       ),
                     ],
                   ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_geojson == null && _hint == null)
-                    Text(
-                      l10n.t('qfield_map_no_preview'),
-                      style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13),
+                if (_hint != null)
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 4),
+                    child: _PreviewHintText(text: _hint!),
+                  ),
+                if (!_loading) _layerLegend(l10n, hPad),
+                if (_loading)
+                  const Expanded(
+                    child: Center(
+                      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
                     ),
-                  if (widget.canWrite) ...[
-                    Text(
-                      l10n.t('qfield_map_tap_place_pin'),
-                      style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _noteCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        hintText: l10n.t('qfield_map_note_hint'),
-                        hintStyle: TextStyle(color: Colors.white.withAlpha(90)),
-                        filled: true,
-                        fillColor: const Color(0xFF05051A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  )
+                else
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: hPad),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          children: [
+                            FlutterMap(
+                              mapController: _mapController,
+                              options: MapOptions(
+                                initialCenter: _initialCenter(),
+                                initialZoom: 13,
+                                interactionOptions: const InteractionOptions(
+                                  flags: InteractiveFlag.all,
+                                ),
+                                onTap: widget.canWrite
+                                    ? (_, p) => setState(() => _draftPin = p)
+                                    : null,
+                              ),
+                              children: [
+                                TileLayer(
+                                  urlTemplate: QFieldProjectMapSheet._tileUrlTemplate,
+                                  subdomains: QFieldProjectMapSheet._tileSubdomains,
+                                  userAgentPackageName: 'usmart_qc',
+                                  maxNativeZoom: 19,
+                                ),
+                                if (_polygons().isNotEmpty)
+                                  PolygonLayer(polygons: _polygons()),
+                                if (_polylines().isNotEmpty)
+                                  PolylineLayer(polylines: _polylines()),
+                                MarkerLayer(
+                                  markers: [
+                                    ..._pointMarkers(),
+                                    if (siteLat != null && siteLng != null)
+                                      Marker(
+                                        point: LatLng(siteLat, siteLng),
+                                        width: 40,
+                                        height: 40,
+                                        child: const Icon(
+                                          Icons.place_rounded,
+                                          color: Color(0xFFFBBF24),
+                                          size: 38,
+                                        ),
+                                      ),
+                                    if (_draftPin != null)
+                                      Marker(
+                                        point: _draftPin!,
+                                        width: 48,
+                                        height: 48,
+                                        child: const Icon(
+                                          Icons.location_on,
+                                          color: Color(0xFFFF4757),
+                                          size: 46,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                SimpleAttributionWidget(
+                                  alignment: Alignment.bottomLeft,
+                                  backgroundColor: const Color(0xAA05051A),
+                                  source: Text(
+                                    l10n.t('site_map_attribution'),
+                                    style: const TextStyle(color: Colors.white70, fontSize: 9),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            _mapFloatingControls(),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
+                  ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(hPad, 10, hPad, bottomInset + 12),
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: _draftPin == null ? null : _savePin,
-                            icon: const Icon(Icons.save_outlined, size: 20),
-                            label: Text(l10n.t('qfield_map_save_pin')),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF6C63FF),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                        if (_geojson == null && _hint == null)
+                          Text(
+                            l10n.t('qfield_map_no_preview'),
+                            style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13),
+                          ),
+                        if (widget.canWrite) ...[
+                          Text(
+                            l10n.t('qfield_map_tap_place_pin'),
+                            style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _noteCtrl,
+                            style: const TextStyle(color: Colors.white, fontSize: 15),
+                            minLines: 1,
+                            maxLines: 3,
+                            textInputAction: TextInputAction.done,
+                            decoration: InputDecoration(
+                              hintText: l10n.t('qfield_map_note_hint'),
+                              hintStyle: TextStyle(color: Colors.white.withAlpha(90)),
+                              filled: true,
+                              fillColor: const Color(0xFF05051A),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        OutlinedButton(
-                          onPressed: (_draftPin == null && _annotation == null) ? null : _clearPin,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFFF4757),
-                            side: const BorderSide(color: Color(0x66FF4757)),
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                          ),
-                          child: Text(l10n.t('qfield_map_clear_pin')),
-                        ),
+                          const SizedBox(height: 12),
+                          _pinActions(l10n),
+                        ],
                       ],
                     ),
-                  ],
-                ],
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MapControlButton extends StatelessWidget {
+  const _MapControlButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xEE12122A),
+      borderRadius: BorderRadius.circular(10),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: RLayout.minTouchTarget,
+          height: RLayout.minTouchTarget,
+          child: Icon(icon, color: Colors.white, size: 22),
         ),
       ),
     );
   }
+}
+
+/// QField-style vertex marker (green triangle + accent flag).
+class _QFieldPointMarker extends StatelessWidget {
+  const _QFieldPointMarker({
+    required this.color,
+    required this.accent,
+    this.small = false,
+  });
+
+  final Color color;
+  final Color accent;
+  final bool small;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = small ? 20.0 : 26.0;
+    final w = small ? 16.0 : 20.0;
+    return SizedBox(
+      width: w,
+      height: h,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          CustomPaint(
+            size: Size(w, h * 0.72),
+            painter: _TrianglePainter(color: color),
+          ),
+          Positioned(
+            top: 0,
+            child: Icon(
+              Icons.flag_rounded,
+              size: small ? 10 : 12,
+              color: accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrianglePainter extends CustomPainter {
+  _TrianglePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = ui.Path()
+      ..moveTo(size.width / 2, size.height)
+      ..lineTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.black87
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

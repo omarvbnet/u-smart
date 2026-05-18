@@ -37,15 +37,30 @@ export type QFieldMapLayerSummary = {
   geometryTypes: string[];
 };
 
+export type QFieldDataTableRow = Record<string, string | number | boolean | null>;
+
+export type QFieldDataTable = {
+  name: string;
+  package: string;
+  packagePath?: string;
+  columns: string[];
+  rows: QFieldDataTableRow[];
+  rowCount: number;
+  hasGeometry: boolean;
+};
+
 export type QFieldMapPreviewResult = {
   geojson: GeoJsonFeatureCollection | null;
   bounds: QFieldMapBounds | null;
   layers?: QFieldMapLayerSummary[];
+  dataTables?: QFieldDataTable[];
   message?: string;
 };
 
 const MAX_BYTES = 45 * 1024 * 1024;
-const MAX_FEATURES_TOTAL = 500;
+const MAX_FEATURES_TOTAL = 800;
+const MAX_DATA_TABLE_ROWS = 200;
+const MAX_DATA_TABLES = 48;
 
 /** GeoPackage geometry BLOB: "GP" + version + flags + srs_id + optional envelope, then OGC WKB. */
 const GPKG_GEOM_MAGIC = [0x47, 0x50] as const;
@@ -299,11 +314,76 @@ function readFloat64LE(buf: Uint8Array, off: number): number {
 const SHP_MAGIC = 9994;
 
 /**
- * Minimal ESRI Shapefile geometry scan (routes / lines / polygons). No .dbf attributes.
+ * Parse ESRI .dbf attribute table (dBASE III / IV subset used by shapefiles).
+ */
+function parseDbfAttributeRows(dbf: Uint8Array): QFieldDataTableRow[] {
+  const rows: QFieldDataTableRow[] = [];
+  if (dbf.length < 32) return rows;
+  const view = new DataView(dbf.buffer, dbf.byteOffset, dbf.byteLength);
+  const numRecords = view.getUint32(4, true);
+  const headerLen = view.getUint16(8, true);
+  const recordLen = view.getUint16(10, true);
+  if (headerLen < 33 || recordLen < 2 || headerLen >= dbf.length) return rows;
+
+  type DbfField = { name: string; type: string; len: number; dec: number; offset: number };
+  const fields: DbfField[] = [];
+  let off = 32;
+  while (off + 32 <= headerLen && dbf[off] !== 0x0d) {
+    let name = '';
+    for (let i = 0; i < 11; i++) {
+      const c = dbf[off + i]!;
+      if (c === 0) break;
+      name += String.fromCharCode(c);
+    }
+    name = name.trim();
+    const type = String.fromCharCode(dbf[off + 11]!);
+    const len = dbf[off + 16]!;
+    const dec = dbf[off + 17]!;
+    if (name) fields.push({ name, type, len, dec, offset: 0 });
+    off += 32;
+  }
+  if (fields.length === 0) return rows;
+
+  let fieldOff = 1;
+  for (const f of fields) {
+    f.offset = fieldOff;
+    fieldOff += f.len;
+  }
+
+  const maxRows = Math.min(numRecords, MAX_DATA_TABLE_ROWS);
+  let recOff = headerLen;
+  for (let r = 0; r < maxRows && recOff + recordLen <= dbf.length; r++) {
+    if (dbf[recOff] === 0x2a) {
+      recOff += recordLen;
+      continue;
+    }
+    const row: QFieldDataTableRow = {};
+    for (const f of fields) {
+      const start = recOff + f.offset;
+      const slice = dbf.subarray(start, start + f.len);
+      let text = new TextDecoder('latin1').decode(slice).trim();
+      if (f.type === 'N' || f.type === 'F') {
+        const n = parseFloat(text.replace(',', '.'));
+        row[f.name] = Number.isFinite(n) ? n : text || null;
+      } else if (f.type === 'L') {
+        const u = text.toUpperCase();
+        row[f.name] = u === 'T' || u === 'Y' ? true : u === 'F' || u === 'N' ? false : null;
+      } else {
+        row[f.name] = text || null;
+      }
+    }
+    rows.push(row);
+    recOff += recordLen;
+  }
+  return rows;
+}
+
+/**
+ * Minimal ESRI Shapefile geometry scan (routes / lines / polygons) with optional .dbf attributes.
  */
 function extractEsriShapefileFeatures(
   bytes: Uint8Array,
-  opts: { maxFeatures: number; packagePath: string }
+  opts: { maxFeatures: number; packagePath: string; dbfBytes?: Uint8Array }
 ): { features: GeoJsonFeature[]; bounds: QFieldMapBounds | null } {
   const features: GeoJsonFeature[] = [];
   let west = Infinity;
@@ -328,6 +408,8 @@ function extractEsriShapefileFeatures(
 
   let off = 100;
   const maxPtsPerGeom = 8000;
+  const dbfRows = opts.dbfBytes ? parseDbfAttributeRows(opts.dbfBytes) : [];
+  let dbfIndex = 0;
 
   while (off + 8 <= bytes.length && features.length < opts.maxFeatures) {
     const contentWords = readInt32BE(bytes, off + 4);
@@ -433,6 +515,7 @@ function extractEsriShapefileFeatures(
     }
 
     if (geom) {
+      const attrs = dbfRows[dbfIndex] ?? {};
       features.push({
         type: 'Feature',
         properties: {
@@ -440,10 +523,12 @@ function extractEsriShapefileFeatures(
           package: shortName,
           packagePath: opts.packagePath,
           source: 'shapefile',
+          ...attrs,
         },
         geometry: geom,
       });
     }
+    dbfIndex += 1;
     off = recEnd;
   }
 
@@ -927,6 +1012,148 @@ function discoverGeometryColumnsFallback(db: SqlJsDb, quoteId: (ident: string) =
   return out;
 }
 
+function serializeGpkgAttributeValue(value: unknown): string | number | boolean | null {
+  if (value == null) return null;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer) return '[binary]';
+  return String(value);
+}
+
+function listGpkgTableColumns(
+  db: { prepare: (sql: string) => { step: () => boolean; getAsObject: () => object; free: () => void } },
+  table: string,
+  geomCol: string | null,
+  quoteId: (ident: string) => string
+): string[] {
+  const cols: string[] = [];
+  const safeTable = quoteId(table);
+  try {
+    const stmt = db.prepare(`PRAGMA table_info("${safeTable}")`);
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { name?: string };
+      const name = row.name ? String(row.name) : '';
+      if (!name || (geomCol && name === geomCol)) continue;
+      cols.push(name);
+    }
+    stmt.free();
+  } catch {
+    /* ignore */
+  }
+  return cols;
+}
+
+function isSystemSqlTable(name: string): boolean {
+  const n = name.toLowerCase();
+  return (
+    n.startsWith('sqlite_') ||
+    n.startsWith('gpkg_') ||
+    n.startsWith('rtree_') ||
+    n.startsWith('idx_') ||
+    n === 'geometry_columns' ||
+    n === 'spatial_ref_sys' ||
+    n === 'views_geometry_columns' ||
+    n === 'virts_geometry_columns'
+  );
+}
+
+function rowToProperties(
+  row: Record<string, unknown>,
+  skipKeys: Set<string>
+): QFieldDataTableRow {
+  const out: QFieldDataTableRow = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (skipKeys.has(k)) continue;
+    out[k] = serializeGpkgAttributeValue(v);
+  }
+  return out;
+}
+
+/**
+ * Read all user tables from GeoPackage / SpatiaLite (attribute rows for map layer details).
+ */
+async function extractGpkgDataTables(
+  bytes: Uint8Array,
+  opts: { packagePath: string; maxRowsPerTable?: number }
+): Promise<QFieldDataTable[]> {
+  const tables: QFieldDataTable[] = [];
+  const shortName = opts.packagePath.split('/').pop() ?? opts.packagePath;
+  const maxRows = opts.maxRowsPerTable ?? MAX_DATA_TABLE_ROWS;
+
+  try {
+    const SQL = await initSqlJsForGeopackage();
+    const db = new SQL.Database(bytes);
+    const quoteId = (ident: string) => ident.replace(/"/g, '""');
+
+    const geomByTable = new Map<string, string>();
+    try {
+      const stmt = db.prepare(
+        'SELECT table_name AS t, column_name AS c FROM gpkg_geometry_columns'
+      );
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as { t?: string; c?: string };
+        if (row.t && row.c) geomByTable.set(String(row.t), String(row.c));
+      }
+      stmt.free();
+    } catch {
+      /* ignore */
+    }
+
+    const tableNames: string[] = [];
+    const listStmt = db.prepare(
+      "SELECT name AS n FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'"
+    );
+    while (listStmt.step()) {
+      const row = listStmt.getAsObject() as { n?: string };
+      if (row.n && !isSystemSqlTable(String(row.n))) tableNames.push(String(row.n));
+    }
+    listStmt.free();
+
+    for (const table of tableNames) {
+      if (tables.length >= MAX_DATA_TABLES) break;
+      const geomCol = geomByTable.get(table) ?? null;
+      const attrCols = listGpkgTableColumns(db, table, geomCol, quoteId);
+      if (attrCols.length === 0) continue;
+
+      const safeTable = quoteId(table);
+      const selectList = attrCols.map((c) => `"${quoteId(c)}"`);
+      const q = `SELECT ${selectList.join(', ')} FROM "${safeTable}" LIMIT ${maxRows}`;
+      let s: ReturnType<typeof db.prepare>;
+      try {
+        s = db.prepare(q);
+      } catch {
+        continue;
+      }
+
+      const rows: QFieldDataTableRow[] = [];
+      while (s.step()) {
+        const row = s.getAsObject() as Record<string, unknown>;
+        rows.push(rowToProperties(row, new Set()));
+      }
+      s.free();
+
+      if (rows.length === 0) continue;
+
+      tables.push({
+        name: table,
+        package: shortName,
+        packagePath: opts.packagePath,
+        columns: attrCols,
+        rows,
+        rowCount: rows.length,
+        hasGeometry: geomCol != null,
+      });
+    }
+
+    db.close();
+  } catch {
+    /* ignore */
+  }
+
+  return tables;
+}
+
 /**
  * Extract vector features from a single GeoPackage byte array (WKB → GeoJSON).
  */
@@ -1023,7 +1250,9 @@ async function extractGpkgVectorFeatures(
       if (table.startsWith('gpkg_') || table.startsWith('rtree_') || table.startsWith('idx_')) continue;
       const safeTable = quoteId(table);
       const safeCol = quoteId(geomCol);
-      const q = `SELECT "${safeCol}" AS g FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL LIMIT ${perTableLimit}`;
+      const attrCols = listGpkgTableColumns(db, table, geomCol, quoteId);
+      const selectParts = [`"${safeCol}" AS g`, ...attrCols.map((c) => `"${quoteId(c)}" AS "${quoteId(c)}"`)];
+      const q = `SELECT ${selectParts.join(', ')} FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL LIMIT ${perTableLimit}`;
       let s: ReturnType<typeof db.prepare>;
       try {
         s = db.prepare(q);
@@ -1032,7 +1261,7 @@ async function extractGpkgVectorFeatures(
       }
       while (s.step()) {
         if (features.length >= opts.maxFeatures) break;
-        const row = s.getAsObject() as { g?: unknown };
+        const row = s.getAsObject() as Record<string, unknown>;
         const raw = row.g;
         if (raw == null) continue;
         let geom: GeoJsonGeometry | null = null;
@@ -1046,14 +1275,16 @@ async function extractGpkgVectorFeatures(
         }
         if (!geom) continue;
         expandFromGeometry(geom);
+        const properties: Record<string, string | number | boolean | null> = {
+          layer: table,
+          package: shortName,
+          packagePath: opts.packagePath,
+          source: 'geopackage',
+          ...rowToProperties(row, new Set(['g'])),
+        };
         features.push({
           type: 'Feature',
-          properties: {
-            layer: table,
-            package: shortName,
-            packagePath: opts.packagePath,
-            source: 'geopackage',
-          },
+          properties,
           geometry: geom,
         });
       }
@@ -1074,23 +1305,36 @@ async function extractGpkgVectorFeatures(
 }
 
 async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<QFieldMapPreviewResult> {
-  const { features, bounds } = await extractGpkgVectorFeatures(bytes, {
-    maxFeatures: MAX_FEATURES_TOTAL,
-    packagePath: displayName,
-  });
-  if (features.length === 0) {
+  const [{ features, bounds }, dataTables] = await Promise.all([
+    extractGpkgVectorFeatures(bytes, {
+      maxFeatures: MAX_FEATURES_TOTAL,
+      packagePath: displayName,
+    }),
+    extractGpkgDataTables(bytes, { packagePath: displayName }),
+  ]);
+  if (features.length === 0 && dataTables.length === 0) {
     return {
       geojson: null,
       bounds: null,
-      message: 'No readable geometries in GeoPackage (CRS may be non‑WGS84 or empty).',
+      dataTables: [],
+      message: 'No readable geometries or attribute tables in GeoPackage (CRS may be non‑WGS84 or empty).',
     };
   }
   const layerSummaries = summarizeGeoJsonLayers(features);
+  const tableNote =
+    dataTables.length > 0
+      ? ` ${dataTables.length} SQL table(s) with up to ${MAX_DATA_TABLE_ROWS} rows each.`
+      : '';
   return {
-    geojson: { type: 'FeatureCollection', features },
+    geojson:
+      features.length > 0 ? { type: 'FeatureCollection', features } : null,
     bounds,
     layers: layerSummaries,
-    message: `${features.length} feature(s) from GeoPackage “${displayName}” across ${layerSummaries.length} layer(s) (WGS84 assumed; verify in QField if misaligned).`,
+    dataTables,
+    message:
+      features.length > 0
+        ? `${features.length} feature(s) from GeoPackage “${displayName}” across ${layerSummaries.length} layer(s).${tableNote}`
+        : `No map geometries in WGS84; ${dataTables.length} attribute table(s) loaded from “${displayName}”.${tableNote}`,
   };
 }
 
@@ -1169,6 +1413,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   ];
 
   const merged: GeoJsonFeature[] = [];
+  const allDataTables: QFieldDataTable[] = [];
   let unionBounds: QFieldMapBounds | null = null;
   let remaining = MAX_FEATURES_TOTAL;
   let gpkgOk = 0;
@@ -1180,23 +1425,29 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     const divisor = Math.min(gpkgKeysOrdered.length + shpKeysOrdered.length, 8);
     const budgetEach = Math.max(40, Math.floor(MAX_FEATURES_TOTAL / Math.max(1, divisor)));
     for (const path of gpkgKeysOrdered) {
-      if (remaining <= 0) break;
+      if (remaining <= 0 && allDataTables.length >= MAX_DATA_TABLES) break;
       const take = Math.min(remaining, budgetEach);
       const gBytes = files[path];
       if (!gBytes || gBytes.length < 64) {
         gpkgSkipped++;
         continue;
       }
-      const { features, bounds } = await extractGpkgVectorFeatures(gBytes, {
-        maxFeatures: take,
-        packagePath: path.replace(/\\/g, '/'),
-      });
+      const normPath = path.replace(/\\/g, '/');
+      const [vectorResult, dataTables] = await Promise.all([
+        extractGpkgVectorFeatures(gBytes, {
+          maxFeatures: take,
+          packagePath: normPath,
+        }),
+        extractGpkgDataTables(gBytes, { packagePath: normPath }),
+      ]);
+      if (dataTables.length > 0) allDataTables.push(...dataTables);
+      const { features, bounds } = vectorResult;
       if (features.length > 0) {
         merged.push(...features);
         gpkgOk++;
         unionBounds = mergeBounds(unionBounds, bounds);
         remaining -= features.length;
-      } else {
+      } else if (dataTables.length === 0) {
         gpkgSkipped++;
       }
     }
@@ -1234,15 +1485,38 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
         shpSkipped++;
         continue;
       }
+      const normPath = path.replace(/\\/g, '/');
+      const dbfKey = normPath.replace(/\.shp$/i, '.dbf');
+      const dbfBytes =
+        files[dbfKey] ??
+        files[dbfKey.replace(/\//g, '\\')] ??
+        files[dbfKey.split('/').pop() ?? ''];
       const { features: shpFeats, bounds: shpBounds } = extractEsriShapefileFeatures(sBytes, {
         maxFeatures: take,
-        packagePath: path.replace(/\\/g, '/'),
+        packagePath: normPath,
+        dbfBytes,
       });
       if (shpFeats.length > 0) {
         merged.push(...shpFeats);
         shpOk++;
         unionBounds = mergeBounds(unionBounds, shpBounds);
         remaining -= shpFeats.length;
+        if (dbfBytes && allDataTables.length < MAX_DATA_TABLES) {
+          const dbfRows = parseDbfAttributeRows(dbfBytes);
+          if (dbfRows.length > 0) {
+            const layerName = normPath.split('/').pop()?.replace(/\.shp$/i, '') ?? 'layer';
+            const cols = Object.keys(dbfRows[0] ?? {});
+            allDataTables.push({
+              name: layerName,
+              package: layerName + '.shp',
+              packagePath: normPath,
+              columns: cols,
+              rows: dbfRows,
+              rowCount: dbfRows.length,
+              hasGeometry: true,
+            });
+          }
+        }
       } else {
         shpSkipped++;
       }
@@ -1271,6 +1545,21 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   }
 
   if (merged.length === 0) {
+    if (allDataTables.length > 0) {
+      return {
+        geojson: null,
+        bounds: null,
+        dataTables: allDataTables.slice(0, MAX_DATA_TABLES),
+        layers: allDataTables.map((t) => ({
+          layer: t.name,
+          package: t.package,
+          packagePath: t.packagePath,
+          featureCount: t.rowCount,
+          geometryTypes: t.hasGeometry ? ['Table'] : ['Attributes'],
+        })),
+        message: `Archive "${archiveLabel}": ${allDataTables.length} SQL attribute table(s) loaded (no WGS84 geometries for map). Tap a layer for all fields.`,
+      };
+    }
     const hint =
       gpkgKeysOrdered.length > 0
         ? 'Archive contained .gpkg / .sqlite file(s) but no readable vector geometries (empty tables, unknown binary layout, or CRS outside WGS84-like bounds for map extent). Add .geojson layers or open in QField.'
@@ -1279,7 +1568,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
           : outerHadQgz && qgzNestedOpened === 0
             ? 'Archive contains .qgz project file(s) but they could not be opened as a ZIP (or gzip-wrapped ZIP). Re-save from QGIS as .qgz or include root layers.gpkg.'
             : 'No .gpkg / .shp layers, no GeoJSON sidecars, and no readable .qgs canvas extent found in the archive (after opening nested .qgz if present).';
-    return { geojson: null, bounds: null, message: hint };
+    return { geojson: null, bounds: null, dataTables: [], message: hint };
   }
 
   const parts: string[] = [];
@@ -1316,11 +1605,15 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   msg += ' Map fields: package / layer / source.';
 
   const layerSummaries = summarizeGeoJsonLayers(merged);
+  if (allDataTables.length > 0) {
+    msg += ` ${allDataTables.length} SQL table(s) with attributes.`;
+  }
 
   return {
     geojson: { type: 'FeatureCollection', features: merged },
     bounds: unionBounds,
     layers: layerSummaries,
+    dataTables: allDataTables.slice(0, MAX_DATA_TABLES),
     message: msg,
   };
 }

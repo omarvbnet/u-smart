@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import '../utils/share_position_origin.dart';
+import '../utils/responsive_layout.dart';
 import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
@@ -1001,10 +1002,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   onRefresh: _load,
                   color: const Color(0xFF6C63FF),
                   child: CustomScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     slivers: [
                       _buildAppBar(),
                       SliverPadding(
-                        padding: const EdgeInsets.all(16),
+                        padding: RLayout.pagePadding(context),
                         sliver: SliverList(
                           delegate:
                               SliverChildListDelegate(_buildContent()),
@@ -1039,21 +1042,173 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
+  bool _ticketShowsCrewBanner(Ticket t) =>
+      t.allowWorkspaceCrewJoin &&
+      t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
+      t.isAssigned &&
+      !t.isCompleted;
+
+  Widget _ticketHeaderBody(Ticket t, {required bool compact}) {
+    final l10n = AppLocalizations.of(context);
+    final siteTitle = t.siteName ?? l10n.t('unknown_site');
+    final result = _effectiveInspectionResult(t);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (compact)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                siteTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: RLayout.titleFontSize(context),
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 8),
+              StatusBadge(
+                status: t.status,
+                fontSize: 12,
+                localizations: l10n,
+              ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  siteTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: RLayout.titleFontSize(context),
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              StatusBadge(
+                status: t.status,
+                fontSize: 13,
+                localizations: l10n,
+              ),
+            ],
+          ),
+        if (t.isAssigned) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.person, size: 14, color: _accentColor),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  l10n.t('assigned_to', {'name': t.assignedEngineerName ?? ''}),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _accentColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (_ticketShowsCrewBanner(t)) ...[
+          const SizedBox(height: 10),
+          _maintenanceCrewBanner(context, t),
+        ],
+        if (t.isCompleted && result != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: _resultColor(result).withAlpha(35),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _resultColor(result).withAlpha(80)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.assignment_turned_in_rounded, size: 16, color: _resultColor(result)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    _statusLabel(result, l10n),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _resultColor(result),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   SliverAppBar _buildAppBar() {
     final t = _ticket!;
+    final compact = RLayout.isCompact(context);
+    final hPad = RLayout.horizontalPad(context);
+    final l10n = AppLocalizations.of(context);
+    final siteTitle = t.siteName ?? l10n.t('unknown_site');
+    final hasResult = t.isCompleted && _effectiveInspectionResult(t) != null;
+
     return SliverAppBar(
-      expandedHeight: 160,
+      expandedHeight: RLayout.ticketSliverExpandedHeight(
+        context,
+        hasAssignedLine: t.isAssigned,
+        hasCrewBanner: _ticketShowsCrewBanner(t),
+        hasResultBadge: hasResult,
+      ),
       pinned: true,
+      stretch: true,
       backgroundColor: const Color(0xFF05051A),
       foregroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
       actions: [
-        IconButton(
-          icon: const Icon(Icons.share_rounded),
-          onPressed: _shareTicket,
-          tooltip: AppLocalizations.of(context).t('share'),
+        MinTouchTarget(
+          onTap: _shareTicket,
+          tooltip: l10n.t('share'),
+          child: const Icon(Icons.share_rounded, color: Colors.white, size: 24),
         ),
+        const SizedBox(width: 4),
       ],
       flexibleSpace: FlexibleSpaceBar(
+        centerTitle: false,
+        titlePadding: EdgeInsets.only(
+          left: hPad + 4,
+          right: hPad + 48,
+          bottom: 14,
+        ),
+        title: Text(
+          siteTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         background: Stack(
           fit: StackFit.expand,
           children: [
@@ -1086,79 +1241,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 ),
               ),
             ),
-            Positioned(
-              bottom: 16,
-              left: 16,
-              right: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          t.siteName ?? AppLocalizations.of(context).t('unknown_site'),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      StatusBadge(status: t.status, fontSize: 13, localizations: AppLocalizations.of(context)),
-                    ],
-                  ),
-                  if (t.isAssigned) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.person, size: 14, color: _accentColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          AppLocalizations.of(context).t('assigned_to', {'name': t.assignedEngineerName ?? ''}),
-                          style: TextStyle(
-                            color: _accentColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (t.allowWorkspaceCrewJoin &&
-                      t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
-                      t.isAssigned &&
-                      !t.isCompleted) ...[
-                    const SizedBox(height: 10),
-                    _maintenanceCrewBanner(context, t),
-                  ],
-                  if (t.isCompleted && _effectiveInspectionResult(t) != null) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _resultColor(_effectiveInspectionResult(t)!).withAlpha(35),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _resultColor(_effectiveInspectionResult(t)!).withAlpha(80)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.assignment_turned_in_rounded, size: 16, color: _resultColor(_effectiveInspectionResult(t)!)),
-                          const SizedBox(width: 6),
-                          Text(
-                            _statusLabel(_effectiveInspectionResult(t)!, AppLocalizations.of(context)),
-                            style: TextStyle(
-                              color: _resultColor(_effectiveInspectionResult(t)!),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
+            SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(hPad, kToolbarHeight, hPad, 12),
+                  child: _ticketHeaderBody(t, compact: compact),
+                ),
               ),
             ),
           ],
@@ -2238,10 +2328,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
+                  height: RLayout.minTouchTarget,
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF00D4AA),
                       foregroundColor: const Color(0xFF05051A),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
                     onPressed: () {
                       Navigator.of(context).push(
@@ -2254,8 +2346,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         ),
                       );
                     },
-                    icon: const Icon(Icons.map_rounded, size: 20),
-                    label: Text(l10n.t('ticket_qfield_open')),
+                    icon: const Icon(Icons.map_rounded, size: 22),
+                    label: Text(
+                      l10n.t('ticket_qfield_open'),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ],
@@ -3206,15 +3301,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final steps = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'];
     final currentIdx =
         steps.indexOf(t.status.toUpperCase()).clamp(0, steps.length - 1);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF12122A),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withAlpha(10)),
-      ),
-      child: Column(
+    final labelSize = RLayout.isNarrow(context) ? 8.5 : 10.0;
+    final stepper = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -3283,15 +3371,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             children: steps.map((s) {
               final idx = steps.indexOf(s);
               final isCurrent = idx == currentIdx;
-              return Text(
-                _statusLabel(s, l10n),
-                style: TextStyle(
-                  color: isCurrent
-                      ? Colors.white
-                      : Colors.white.withAlpha(60),
-                  fontSize: 9,
-                  fontWeight:
-                      isCurrent ? FontWeight.w700 : FontWeight.w500,
+              return Flexible(
+                child: Text(
+                  _statusLabel(s, l10n),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isCurrent
+                        ? Colors.white
+                        : Colors.white.withAlpha(60),
+                    fontSize: labelSize,
+                    fontWeight:
+                        isCurrent ? FontWeight.w700 : FontWeight.w500,
+                    height: 1.2,
+                  ),
                 ),
               );
             }).toList(),
@@ -3308,7 +3402,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white.withAlpha(110),
-                    fontSize: 8,
+                    fontSize: labelSize - 1,
                     height: 1.25,
                   ),
                 ),
@@ -3316,7 +3410,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             }).toList(),
           ),
         ],
+      );
+
+    return Container(
+      padding: EdgeInsets.all(RLayout.horizontalPad(context)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12122A),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withAlpha(10)),
       ),
+      child: RLayout.isNarrow(context)
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(width: 360, child: stepper),
+            )
+          : stepper,
     );
   }
 
@@ -3407,7 +3515,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       onTap: loading ? null : onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        constraints: const BoxConstraints(minHeight: RLayout.minTouchTarget),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: gradient),
           borderRadius: BorderRadius.circular(16),
@@ -3778,11 +3887,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Widget _glassSection(String title, List<Widget> children) {
+    final pad = RLayout.horizontalPad(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             color: const Color(0xFF12122A),
             borderRadius: BorderRadius.circular(20),
@@ -3792,14 +3903,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                padding: EdgeInsets.fromLTRB(pad, 14, pad, 8),
                 child: Text(
                   title.toUpperCase(),
                   style: TextStyle(
                     color: Colors.white.withAlpha(100),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
@@ -3813,27 +3924,38 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Widget _row(String label, String value) {
+    final pad = RLayout.horizontalPad(context);
+    final labelStyle = TextStyle(color: Colors.white.withAlpha(80), fontSize: 13);
+    final valueStyle = const TextStyle(
+      color: Colors.white,
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      height: 1.35,
+    );
+    if (RLayout.isCompact(context)) {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: pad, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: labelStyle),
+            const SizedBox(height: 4),
+            SelectableText(value, style: valueStyle),
+          ],
+        ),
+      );
+    }
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: pad, vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: TextStyle(
-                  color: Colors.white.withAlpha(80), fontSize: 13),
-            ),
+            width: 108,
+            child: Text(label, style: labelStyle),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500),
-            ),
+            child: SelectableText(value, style: valueStyle),
           ),
         ],
       ),
