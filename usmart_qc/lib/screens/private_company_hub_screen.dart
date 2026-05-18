@@ -179,13 +179,92 @@ class _NotRequestedView extends StatefulWidget {
 class _NotRequestedViewState extends State<_NotRequestedView> {
   final _name = TextEditingController();
   final _description = TextEditingController();
+  final _scrollController = ScrollController();
   bool _formOpen = false;
 
   @override
   void dispose() {
     _name.dispose();
     _description.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _openRequestForm() {
+    if (_formOpen) return;
+    setState(() => _formOpen = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+    });
+  }
+
+  Widget _buildRequestFormCard(AppLocalizations l10n) {
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.business_center_rounded,
+                  color: Color(0xFF6C63FF), size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.t('pc_ws_req_form_title'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: () => setState(() => _formOpen = false),
+                icon: Icon(Icons.close_rounded, color: Colors.white.withAlpha(160)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DarkField(
+            controller: _name,
+            label: l10n.t('pc_ws_req_name_label'),
+            hint: l10n.t('pc_ws_req_name_hint'),
+            icon: Icons.apartment_rounded,
+          ),
+          const SizedBox(height: 12),
+          _DarkField(
+            controller: _description,
+            label: l10n.t('pc_ws_req_desc_label'),
+            hint: l10n.t('pc_ws_req_desc_hint'),
+            icon: Icons.description_outlined,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 18),
+          Consumer<PrivateCompanyProvider>(
+            builder: (context, provider, _) => SizedBox(
+              width: double.infinity,
+              child: _GradientButton(
+                onPressed: provider.submitting ? null : _submit,
+                label: provider.submitting
+                    ? l10n.t('pc_ws_req_submitting')
+                    : l10n.t('pc_ws_req_submit_btn'),
+                icon: Icons.send_rounded,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              l10n.t('pc_ws_req_admin_note'),
+              style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -211,15 +290,19 @@ class _NotRequestedViewState extends State<_NotRequestedView> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final canRequest = auth.isCompany && !auth.isCompanyOwner;
+    final l10n = AppLocalizations.of(context);
+
+    final showForm = _formOpen && canRequest;
 
     return CustomScrollView(
+      controller: _scrollController,
       slivers: [
         SliverAppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           pinned: false,
           floating: true,
-          title: const _Title('Private Workspace'),
+          title: _Title(l10n.t('pc_ws_screen_title')),
           centerTitle: false,
           systemOverlayStyle: SystemUiOverlayStyle.light,
         ),
@@ -230,15 +313,11 @@ class _NotRequestedViewState extends State<_NotRequestedView> {
               const SizedBox(height: 8),
               _GradientHeroCard(
                 gradient: const [Color(0xFF6C63FF), Color(0xFF8B83FF), Color(0xFF00D4AA)],
-                title: 'Build your private company',
-                subtitle:
-                    'Organize your team into departments, assign managers, coordinators, engineers, technicians and workers, and share tickets only with your staff.',
-                cta: 'Apply for a workspace',
-                onCta: !canRequest
-                    ? null
-                    : () {
-                        setState(() => _formOpen = true);
-                      },
+                title: l10n.t('pc_ws_req_hero_title'),
+                subtitle: l10n.t('pc_ws_req_hero_subtitle'),
+                cta: l10n.t('pc_ws_req_cta'),
+                showCta: !showForm,
+                onCta: !canRequest ? null : _openRequestForm,
                 disabled: !canRequest,
               ),
               if (!canRequest)
@@ -246,110 +325,72 @@ class _NotRequestedViewState extends State<_NotRequestedView> {
                   padding: const EdgeInsets.only(top: 12),
                   child: _MessageBanner(
                     icon: Icons.info_outline_rounded,
-                    text: 'Only company-role accounts can open a private workspace.',
+                    text: l10n.t('pc_ws_req_company_only'),
                     color: const Color(0xFFFBBF24),
                   ),
                 ),
-              const SizedBox(height: 22),
-              const _SectionTitle('What you get'),
-              const SizedBox(height: 10),
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                childAspectRatio: 1.05,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                children: const [
-                  _FeatureTile(
-                    icon: Icons.account_tree_rounded,
-                    title: 'Departments',
-                    description: 'Group teams by service or specialization.',
-                    color: Color(0xFF6C63FF),
-                  ),
-                  _FeatureTile(
-                    icon: Icons.groups_rounded,
-                    title: 'Staff roles',
-                    description: 'Managers, coordinators, engineers, technicians, workers.',
-                    color: Color(0xFF00D4AA),
-                  ),
-                  _FeatureTile(
-                    icon: Icons.checklist_rounded,
-                    title: 'Smart checklists',
-                    description: 'Reusable inspection lists, attached optionally to tickets.',
-                    color: Color(0xFFFBBF24),
-                  ),
-                  _FeatureTile(
-                    icon: Icons.notifications_active_rounded,
-                    title: 'Private notifications',
-                    description: 'Tickets and alerts visible only to your staff.',
-                    color: Color(0xFFFF9F43),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 26),
-              _ProcessSteps(),
-              if (_formOpen) ...[
-                const SizedBox(height: 26),
-                _GlassCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.business_center_rounded,
-                              color: Color(0xFF6C63FF), size: 22),
-                          SizedBox(width: 8),
-                          Text(
-                            'Workspace details',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _DarkField(
-                        controller: _name,
-                        label: 'Company / workspace name *',
-                        hint: 'e.g. ACME Construction',
-                        icon: Icons.apartment_rounded,
-                      ),
-                      const SizedBox(height: 12),
-                      _DarkField(
-                        controller: _description,
-                        label: 'Description',
-                        hint: 'What does your team do?',
-                        icon: Icons.description_outlined,
-                        maxLines: 3,
-                      ),
-                      const SizedBox(height: 18),
-                      Consumer<PrivateCompanyProvider>(
-                        builder: (context, provider, _) => SizedBox(
-                          width: double.infinity,
-                          child: _GradientButton(
-                            onPressed: provider.submitting ? null : _submit,
-                            label: provider.submitting
-                                ? 'Submitting…'
-                                : 'Submit for admin review',
-                            icon: Icons.send_rounded,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Text(
-                          'An admin must approve your request before you can build departments and add staff.',
-                          style: TextStyle(
-                              color: Colors.white.withAlpha(120),
-                              fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
+              if (showForm) ...[
+                const SizedBox(height: 18),
+                _buildRequestFormCard(l10n),
+              ],
+              if (!showForm) ...[
+                const SizedBox(height: 22),
+                _SectionTitle(l10n.t('pc_ws_req_what_you_get')),
+                const SizedBox(height: 10),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.92,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  children: [
+                    _FeatureTile(
+                      icon: Icons.account_tree_rounded,
+                      title: l10n.t('pc_ws_req_feat_departments_title'),
+                      description: l10n.t('pc_ws_req_feat_departments_desc'),
+                      color: const Color(0xFF6C63FF),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.groups_rounded,
+                      title: l10n.t('pc_ws_req_feat_roles_title'),
+                      description: l10n.t('pc_ws_req_feat_roles_desc'),
+                      color: const Color(0xFF00D4AA),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.inventory_2_rounded,
+                      title: l10n.t('pc_ws_req_feat_materials_title'),
+                      description: l10n.t('pc_ws_req_feat_materials_desc'),
+                      color: const Color(0xFF8B83FF),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.handyman_rounded,
+                      title: l10n.t('pc_ws_req_feat_tools_title'),
+                      description: l10n.t('pc_ws_req_feat_tools_desc'),
+                      color: const Color(0xFF5B8DEF),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.payments_rounded,
+                      title: l10n.t('pc_ws_req_feat_expenses_title'),
+                      description: l10n.t('pc_ws_req_feat_expenses_desc'),
+                      color: const Color(0xFF10B981),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.checklist_rounded,
+                      title: l10n.t('pc_ws_req_feat_checklists_title'),
+                      description: l10n.t('pc_ws_req_feat_checklists_desc'),
+                      color: const Color(0xFFFBBF24),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.notifications_active_rounded,
+                      title: l10n.t('pc_ws_req_feat_notifications_title'),
+                      description: l10n.t('pc_ws_req_feat_notifications_desc'),
+                      color: const Color(0xFFFF9F43),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 26),
+                const _ProcessSteps(),
               ],
             ]),
           ),
@@ -402,11 +443,13 @@ class _RequestPendingView extends StatelessWidget {
               if (workspace.rejectionReason != null && status == PrivateCompanyStatus.rejected)
                 _MessageBanner(
                   icon: Icons.report_gmailerrorred_rounded,
-                  text: 'Reason: ${workspace.rejectionReason}',
+                  text: l10n.t('pc_ws_req_rejection_reason', {
+                    'reason': workspace.rejectionReason!,
+                  }),
                   color: const Color(0xFFFF4757),
                 ),
               const SizedBox(height: 18),
-              const _SectionTitle('What happens next'),
+              _SectionTitle(l10n.t('pc_ws_req_what_next')),
               const SizedBox(height: 10),
               const _ProcessSteps(),
               const SizedBox(height: 22),
@@ -414,9 +457,9 @@ class _RequestPendingView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Submitted on',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    Text(
+                      l10n.t('pc_ws_req_submitted_on'),
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -3585,6 +3628,7 @@ class _GradientHeroCard extends StatelessWidget {
     required this.cta,
     required this.onCta,
     this.disabled = false,
+    this.showCta = true,
   });
 
   final List<Color> gradient;
@@ -3593,6 +3637,7 @@ class _GradientHeroCard extends StatelessWidget {
   final String cta;
   final VoidCallback? onCta;
   final bool disabled;
+  final bool showCta;
 
   @override
   Widget build(BuildContext context) {
@@ -3636,19 +3681,21 @@ class _GradientHeroCard extends StatelessWidget {
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 18),
-          ElevatedButton.icon(
-            onPressed: disabled ? null : onCta,
-            icon: const Icon(Icons.send_rounded, size: 16),
-            label: Text(cta, style: const TextStyle(fontWeight: FontWeight.w700)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: gradient.first,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              elevation: 0,
+          if (showCta) ...[
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: disabled ? null : onCta,
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: Text(cta, style: const TextStyle(fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: gradient.first,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                elevation: 0,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -3777,10 +3824,26 @@ class _ProcessSteps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final steps = [
-      ('Submit a request', 'Tell the admin your company name and what you do.', Icons.send_rounded, const Color(0xFF6C63FF)),
-      ('Admin review', 'Admin checks your account and approves the workspace.', Icons.gavel_rounded, const Color(0xFFFBBF24)),
-      ('Build & invite', 'Create departments, invite staff, design checklists.', Icons.engineering_rounded, const Color(0xFF00D4AA)),
+      (
+        l10n.t('pc_ws_req_process_submit_title'),
+        l10n.t('pc_ws_req_process_submit_desc'),
+        Icons.send_rounded,
+        const Color(0xFF6C63FF),
+      ),
+      (
+        l10n.t('pc_ws_req_process_review_title'),
+        l10n.t('pc_ws_req_process_review_desc'),
+        Icons.gavel_rounded,
+        const Color(0xFFFBBF24),
+      ),
+      (
+        l10n.t('pc_ws_req_process_build_title'),
+        l10n.t('pc_ws_req_process_build_desc'),
+        Icons.engineering_rounded,
+        const Color(0xFF00D4AA),
+      ),
     ];
     return Column(
       children: steps.map((s) {

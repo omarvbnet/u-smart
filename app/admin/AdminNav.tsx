@@ -24,6 +24,7 @@ import {
   HardHat,
   Sun,
   Scale,
+  KeyRound,
 } from 'lucide-react';
 
 const links = [
@@ -50,6 +51,7 @@ const links = [
   { href: '/admin/teams', label: 'Teams', icon: UsersRound },
   { href: '/admin/employees', label: 'Employees', icon: UserCog },
   { href: '/admin/company-requests', label: 'Company Req.', icon: Building2 },
+  { href: '/admin/ticket-api-key-requests', label: 'Ticket API keys', icon: KeyRound },
   { href: '/admin/registration-requests', label: 'Registration Req.', icon: UserCircle },
   { href: '/admin/companies', label: 'Companies', icon: Building },
   { href: '/admin/coordinator-companies', label: 'Coordinator Companies', icon: Building2 },

@@ -394,6 +394,9 @@ model TicketRequester {
   ticketExpensesActivationRequested PrivateCompany[]                 @relation("PrivateCompanyTicketExpensesActivationRequester")
   ticketExpensesEnabledBy        PrivateCompany[]                    @relation("PrivateCompanyTicketExpensesEnabledBy")
 
+  ticketApiKeyAccessRequests TicketApiKeyAccessRequest[] @relation("TicketApiKeyAccessRequester")
+  ticketApiKeys              TicketApiKey[]              @relation("TicketApiKeyOwner")
+
   @@map("ticket_requesters")
 }
 
@@ -481,6 +484,51 @@ enum CompanyStatus {
   ACTIVE
   SUSPENDED
   BLOCKED
+}
+
+/// Company / workspace owner requests REST API access for automated ticket creation.
+model TicketApiKeyAccessRequest {
+  id              String                        @id @default(cuid())
+  requesterId     String
+  requester       TicketRequester               @relation("TicketApiKeyAccessRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  useCase         String?
+  label           String?
+  status          TicketApiKeyAccessRequestStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  apiKey          TicketApiKey?
+
+  @@index([requesterId, status])
+  @@map("ticket_api_key_access_requests")
+}
+
+enum TicketApiKeyAccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Hashed API key for server-to-server ticket creation (Bearer usk_…).
+model TicketApiKey {
+  id               String                     @id @default(cuid())
+  requesterId      String
+  requester        TicketRequester            @relation("TicketApiKeyOwner", fields: [requesterId], references: [id], onDelete: Cascade)
+  accessRequestId  String?                    @unique
+  accessRequest    TicketApiKeyAccessRequest? @relation(fields: [accessRequestId], references: [id], onDelete: SetNull)
+  keyPrefix        String
+  keyHash          String
+  label            String?
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdByAdminId String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([requesterId])
+  @@index([keyPrefix])
+  @@map("ticket_api_keys")
 }
 
 // Sites managed by requesters (for quick ticket creation)

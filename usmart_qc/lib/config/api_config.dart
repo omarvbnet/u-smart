@@ -44,6 +44,7 @@ class ApiConfig {
   static const String requesterPushToken = '/api/auth/requester-push-token';
   static const String requesterUpdate = '/api/auth/requester-update';
   static const String requesterRoleUpgrade = '/api/auth/requester-role-upgrade';
+  static const String ticketApiKeyRequest = '/api/ticket-api-keys/request';
 
   static const String notifications = '/api/notifications';
   static String notificationMarkRead(String id) => '/api/notifications/$id';

@@ -30,6 +30,7 @@ import {
 import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
 import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-rows';
 import { normalizeQFieldProjectsFromCreateBody, qfieldProjectsToJsonValue } from '@/lib/qfield-projects';
+import { extractTicketApiKeyFromRequest, resolveTicketApiKey } from '@/lib/ticket-api-key-auth';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -333,10 +334,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const auth = getRequesterFromRequest(req);
-    const payload = auth?.payload ?? null;
-    const coordinatorContext = payload ? await getCoordinatorContext(req) : null;
-    let requester: { email?: string | null; id?: string; username?: string | null; role?: string | null } | null = null;
+    const apiKeyRaw = extractTicketApiKeyFromRequest(req);
+    const apiKeyAuth = apiKeyRaw ? await resolveTicketApiKey(apiKeyRaw) : null;
+    if (apiKeyRaw && !apiKeyAuth) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid or revoked API key' },
+        { status: 401 }
+      );
+    }
+
+    const usingApiKeyAuth = apiKeyAuth != null;
+    const auth = usingApiKeyAuth ? null : getRequesterFromRequest(req);
+    const payload = usingApiKeyAuth
+      ? { requesterId: apiKeyAuth!.requesterId, identitySource: 'ticket_requester' as const }
+      : auth?.payload ?? null;
+    const coordinatorContext = usingApiKeyAuth ? null : payload ? await getCoordinatorContext(req) : null;
+    let requester: { email?: string | null; id?: string; username?: string | null; role?: string | null; phone?: string | null; name?: string | null; company?: string | null; serviceSlug?: string | null } | null = null;
     let requesterRole: string | null = null;
 
     if (payload && !coordinatorContext) {
