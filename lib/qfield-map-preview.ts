@@ -1100,48 +1100,68 @@ async function extractGpkgDataTables(
       /* ignore */
     }
 
-    const tableNames: string[] = [];
+    const tableNames = new Set<string>();
     const listStmt = db.prepare(
       "SELECT name AS n FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'"
     );
     while (listStmt.step()) {
       const row = listStmt.getAsObject() as { n?: string };
-      if (row.n && !isSystemSqlTable(String(row.n))) tableNames.push(String(row.n));
+      if (row.n && !isSystemSqlTable(String(row.n))) tableNames.add(String(row.n));
     }
     listStmt.free();
+
+    try {
+      const gcStmt = db.prepare(
+        "SELECT DISTINCT table_name AS n FROM gpkg_contents WHERE typeof(table_name)='text' AND data_type IN ('features','tiles','attributes')"
+      );
+      while (gcStmt.step()) {
+        const row = gcStmt.getAsObject() as { n?: string };
+        if (row.n && !isSystemSqlTable(String(row.n))) tableNames.add(String(row.n));
+      }
+      gcStmt.free();
+    } catch {
+      /* ignore */
+    }
 
     for (const table of tableNames) {
       if (tables.length >= MAX_DATA_TABLES) break;
       const geomCol = geomByTable.get(table) ?? null;
       const attrCols = listGpkgTableColumns(db, table, geomCol, quoteId);
-      if (attrCols.length === 0) continue;
 
       const safeTable = quoteId(table);
-      const selectList = attrCols.map((c) => `"${quoteId(c)}"`);
-      const q = `SELECT ${selectList.join(', ')} FROM "${safeTable}" LIMIT ${maxRows}`;
-      let s: ReturnType<typeof db.prepare>;
-      try {
-        s = db.prepare(q);
-      } catch {
-        continue;
-      }
-
       const rows: QFieldDataTableRow[] = [];
-      while (s.step()) {
-        const row = s.getAsObject() as Record<string, unknown>;
-        rows.push(rowToProperties(row, new Set()));
-      }
-      s.free();
+      let columns = attrCols;
 
-      if (rows.length === 0) continue;
+      if (attrCols.length > 0) {
+        const selectList = attrCols.map((c) => `"${quoteId(c)}"`);
+        const q = `SELECT ${selectList.join(', ')} FROM "${safeTable}" LIMIT ${maxRows}`;
+        try {
+          const s = db.prepare(q);
+          while (s.step()) {
+            const row = s.getAsObject() as Record<string, unknown>;
+            rows.push(rowToProperties(row, new Set()));
+          }
+          s.free();
+        } catch {
+          /* try count-only below */
+        }
+      }
+
+      const totalRows = countSqliteTableRows(db, table, quoteId);
+      const rowCount = Math.max(rows.length, totalRows);
+      if (rowCount === 0) continue;
+
+      if (columns.length === 0 && geomCol) {
+        columns = ['(geometry column only)'];
+      }
 
       tables.push({
         name: table,
         package: shortName,
         packagePath: opts.packagePath,
-        columns: attrCols,
+        columns,
         rows,
-        rowCount: rows.length,
+        rowCount,
         hasGeometry: geomCol != null,
       });
     }
@@ -1252,12 +1272,17 @@ async function extractGpkgVectorFeatures(
       const safeCol = quoteId(geomCol);
       const attrCols = listGpkgTableColumns(db, table, geomCol, quoteId);
       const selectParts = [`"${safeCol}" AS g`, ...attrCols.map((c) => `"${quoteId(c)}" AS "${quoteId(c)}"`)];
-      const q = `SELECT ${selectParts.join(', ')} FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL LIMIT ${perTableLimit}`;
+      let q = `SELECT ${selectParts.join(', ')} FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL LIMIT ${perTableLimit}`;
       let s: ReturnType<typeof db.prepare>;
       try {
         s = db.prepare(q);
       } catch {
-        continue;
+        q = `SELECT "${safeCol}" AS g FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL LIMIT ${perTableLimit}`;
+        try {
+          s = db.prepare(q);
+        } catch {
+          continue;
+        }
       }
       while (s.step()) {
         if (features.length >= opts.maxFeatures) break;
@@ -1320,7 +1345,7 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
       message: 'No readable geometries or attribute tables in GeoPackage (CRS may be non‑WGS84 or empty).',
     };
   }
-  const layerSummaries = summarizeGeoJsonLayers(features);
+  const layerSummaries = buildLayerSummaries(features, dataTables);
   const tableNote =
     dataTables.length > 0
       ? ` ${dataTables.length} SQL table(s) with up to ${MAX_DATA_TABLE_ROWS} rows each.`
@@ -1338,16 +1363,42 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
   };
 }
 
+function layerSummaryKey(packageName: string, layerName: string): string {
+  return `${packageName}\0${layerName}`;
+}
+
+function countSqliteTableRows(db: SqlJsDb, table: string, quoteId: (ident: string) => string): number {
+  const safeTable = quoteId(table);
+  try {
+    const stmt = db.prepare(`SELECT COUNT(*) AS c FROM "${safeTable}"`);
+    if (!stmt.step()) {
+      stmt.free();
+      return 0;
+    }
+    const row = stmt.getAsObject() as { c?: number | bigint };
+    stmt.free();
+    const n = row.c;
+    if (typeof n === 'bigint') return Number(n);
+    return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
- * ZIP / QGZ: extract embedded .gpkg, unpack nested .qgz (QGIS project ZIP), GeoJSON, and .qgs extent.
+ * Layer list with feature counts from map geometries AND SQL table row counts (whichever is larger).
  */
-function summarizeGeoJsonLayers(features: GeoJsonFeature[]): QFieldMapLayerSummary[] {
+function buildLayerSummaries(
+  features: GeoJsonFeature[],
+  dataTables: QFieldDataTable[] = []
+): QFieldMapLayerSummary[] {
   const byKey = new Map<string, QFieldMapLayerSummary>();
+
   for (const f of features) {
     const props = f.properties ?? {};
     const layer = String(props.layer ?? props.name ?? 'layer');
     const pkg = String(props.package ?? props.packagePath ?? '');
-    const key = `${pkg}\0${layer}`;
+    const key = layerSummaryKey(pkg, layer);
     let row = byKey.get(key);
     if (!row) {
       row = {
@@ -1363,6 +1414,28 @@ function summarizeGeoJsonLayers(features: GeoJsonFeature[]): QFieldMapLayerSumma
     const gt = f.geometry?.type;
     if (gt && !row.geometryTypes.includes(gt)) row.geometryTypes.push(gt);
   }
+
+  for (const t of dataTables) {
+    const layer = t.name.trim() || 'layer';
+    const pkg = t.package.trim();
+    const count = Math.max(t.rowCount, t.rows.length);
+    const key = layerSummaryKey(pkg, layer);
+    let row = byKey.get(key);
+    if (!row) {
+      row = {
+        layer,
+        package: pkg,
+        packagePath: t.packagePath,
+        featureCount: 0,
+        geometryTypes: [],
+      };
+      byKey.set(key, row);
+    }
+    row.featureCount = Math.max(row.featureCount, count);
+    const gt = t.hasGeometry ? 'SQL' : 'Attributes';
+    if (!row.geometryTypes.includes(gt)) row.geometryTypes.push(gt);
+  }
+
   return [...byKey.values()].sort((a, b) =>
     a.package === b.package ? a.layer.localeCompare(b.layer) : a.package.localeCompare(b.package)
   );
@@ -1550,13 +1623,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
         geojson: null,
         bounds: null,
         dataTables: allDataTables.slice(0, MAX_DATA_TABLES),
-        layers: allDataTables.map((t) => ({
-          layer: t.name,
-          package: t.package,
-          packagePath: t.packagePath,
-          featureCount: t.rowCount,
-          geometryTypes: t.hasGeometry ? ['Table'] : ['Attributes'],
-        })),
+        layers: buildLayerSummaries([], allDataTables),
         message: `Archive "${archiveLabel}": ${allDataTables.length} SQL attribute table(s) loaded (no WGS84 geometries for map). Tap a layer for all fields.`,
       };
     }
@@ -1604,7 +1671,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   }
   msg += ' Map fields: package / layer / source.';
 
-  const layerSummaries = summarizeGeoJsonLayers(merged);
+  const layerSummaries = buildLayerSummaries(merged, allDataTables.slice(0, MAX_DATA_TABLES));
   if (allDataTables.length > 0) {
     msg += ` ${allDataTables.length} SQL table(s) with attributes.`;
   }

@@ -102,6 +102,7 @@ class _QFieldDataTable {
     required this.package,
     required this.columns,
     required this.rows,
+    required this.rowCount,
     this.packagePath,
     this.hasGeometry = false,
   });
@@ -111,6 +112,7 @@ class _QFieldDataTable {
   final String? packagePath;
   final List<String> columns;
   final List<Map<String, dynamic>> rows;
+  final int rowCount;
   final bool hasGeometry;
 
   String get layerKey => '$package|$name';
@@ -206,12 +208,14 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                   .where((e) => e.isNotEmpty)
                   .toList() ??
               const <String>[];
+          final apiCount = (row['featureCount'] as num?)?.toInt() ?? 0;
           metas.add(_QFieldLayerMeta(
             key: key,
             label: pkg.isNotEmpty ? '$pkg › $layer' : layer,
             color: _layerPalette[i % _layerPalette.length],
-            featureCount: (row['featureCount'] as num?)?.toInt() ?? 0,
+            featureCount: apiCount,
             geometryTypes: types,
+            tableName: layer,
           ));
           i++;
         }
@@ -238,6 +242,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               }
             }
           }
+          final rowCount = (row['rowCount'] as num?)?.toInt() ?? parsedRows.length;
           tables.add(_QFieldDataTable(
             name: name,
             package: pkg.isNotEmpty ? pkg : name,
@@ -246,6 +251,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                 ? cols
                 : (parsedRows.isNotEmpty ? parsedRows.first.keys.toList() : const []),
             rows: parsedRows,
+            rowCount: rowCount,
             hasGeometry: row['hasGeometry'] == true,
           ));
         }
@@ -261,8 +267,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       }
     }
     if (metas.isEmpty && gj != null) {
-      metas.addAll(_layersFromGeoJson(gj));
+      metas = _layersFromGeoJson(gj);
     }
+    metas = _mergeLayerCounts(metas, gj, tables);
     if (metas.isEmpty && tables.isNotEmpty) {
       var i = 0;
       for (final t in tables) {
@@ -270,7 +277,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           key: t.layerKey,
           label: t.package.isNotEmpty ? '${t.package} › ${t.name}' : t.name,
           color: _layerPalette[i % _layerPalette.length],
-          featureCount: t.rows.length,
+            featureCount: t.rowCount > 0 ? t.rowCount : t.rows.length,
           geometryTypes: t.hasGeometry ? const ['SQL'] : const ['Attributes'],
           tableName: t.name,
         ));
@@ -289,25 +296,109 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
   }
 
-  List<_QFieldLayerMeta> _layersFromGeoJson(Map<String, dynamic> fc) {
+  Map<String, int> _countFeaturesPerLayer(Map<String, dynamic>? fc) {
+    final counts = <String, int>{};
+    if (fc == null) return counts;
     final feats = fc['features'];
-    if (feats is! List) return const [];
-    final seen = <String>{};
-    final out = <_QFieldLayerMeta>[];
-    var i = 0;
+    if (feats is! List) return counts;
     for (final f in feats) {
       if (f is! Map<String, dynamic>) continue;
       final key = _featureLayerKey(f);
-      if (key.isEmpty || !seen.add(key)) continue;
-      final props = f['properties'] as Map<String, dynamic>? ?? {};
-      final pkg = props['package']?.toString() ?? '';
-      final layer = props['layer']?.toString() ?? '';
+      if (key.isEmpty) continue;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  int _bestLayerCount(int a, int b) => a > b ? a : b;
+
+  List<_QFieldLayerMeta> _mergeLayerCounts(
+    List<_QFieldLayerMeta> metas,
+    Map<String, dynamic>? gj,
+    List<_QFieldDataTable> tables,
+  ) {
+    final counts = _countFeaturesPerLayer(gj);
+
+    for (final t in tables) {
+      final n = _bestLayerCount(t.rowCount, t.rows.length);
+      if (n > 0) {
+        counts[t.layerKey] = _bestLayerCount(counts[t.layerKey] ?? 0, n);
+      }
+      final altKey = '${t.name}|${t.name}';
+      if (t.package != t.name) {
+        counts['${t.package}|${t.name}'] = _bestLayerCount(
+          counts['${t.package}|${t.name}'] ?? 0,
+          n,
+        );
+      }
+      if (counts.containsKey(altKey)) {
+        counts[altKey] = _bestLayerCount(counts[altKey] ?? 0, n);
+      }
+    }
+
+    final byKey = <String, _QFieldLayerMeta>{};
+    var palette = 0;
+    for (final m in metas) {
+      final count = _bestLayerCount(counts[m.key] ?? 0, m.featureCount);
+      byKey[m.key] = _QFieldLayerMeta(
+        key: m.key,
+        label: m.label,
+        color: m.color,
+        featureCount: count,
+        geometryTypes: m.geometryTypes,
+        tableName: m.tableName.isNotEmpty ? m.tableName : m.key.split('|').last,
+      );
+      palette++;
+    }
+
+    for (final t in tables) {
+      final key = t.layerKey;
+      if (byKey.containsKey(key)) {
+        final prev = byKey[key]!;
+        byKey[key] = _QFieldLayerMeta(
+          key: prev.key,
+          label: prev.label,
+          color: prev.color,
+          featureCount: _bestLayerCount(prev.featureCount, counts[key] ?? t.rowCount),
+          geometryTypes: prev.geometryTypes.isNotEmpty
+              ? prev.geometryTypes
+              : (t.hasGeometry ? const ['SQL'] : const ['Attributes']),
+          tableName: t.name,
+        );
+        continue;
+      }
+      final count = _bestLayerCount(counts[key] ?? 0, t.rowCount);
+      byKey[key] = _QFieldLayerMeta(
+        key: key,
+        label: t.package.isNotEmpty ? '${t.package} › ${t.name}' : t.name,
+        color: _layerPalette[palette % _layerPalette.length],
+        featureCount: count,
+        geometryTypes: t.hasGeometry ? const ['SQL'] : const ['Attributes'],
+        tableName: t.name,
+      );
+      palette++;
+    }
+
+    return byKey.values.toList();
+  }
+
+  List<_QFieldLayerMeta> _layersFromGeoJson(Map<String, dynamic> fc) {
+    final counts = _countFeaturesPerLayer(fc);
+    if (counts.isEmpty) return const [];
+    final out = <_QFieldLayerMeta>[];
+    var i = 0;
+    for (final entry in counts.entries) {
+      final key = entry.key;
+      final parts = key.split('|');
+      final pkg = parts.isNotEmpty ? parts.first : '';
+      final layer = parts.length > 1 ? parts.sublist(1).join('|') : key;
       final label = pkg.isNotEmpty ? '$pkg › $layer' : layer;
       if (label.isEmpty) continue;
       out.add(_QFieldLayerMeta(
         key: key,
         label: label,
         color: _layerPalette[i % _layerPalette.length],
+        featureCount: entry.value,
       ));
       i++;
     }

@@ -85,6 +85,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/fonts/NotoSans-Regular.ttf
     - assets/fonts/NotoSansArabic-Regular.ttf
     - assets/provisor_icon.png
 

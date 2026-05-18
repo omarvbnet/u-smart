@@ -16,26 +16,42 @@ bool _hasArabic(String s) => RegExp(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]'
 
 pw.TextDirection _textDir(String s) => _hasArabic(s) ? pw.TextDirection.rtl : pw.TextDirection.ltr;
 
-Future<pw.Font> _loadPdfFont() async {
+late pw.Font _latinFont;
+late pw.Font _arabicFont;
+var _fontsReady = false;
+
+Future<void> _ensurePdfFonts() async {
+  if (_fontsReady) return;
   try {
-    final data = await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf');
-    return pw.Font.ttf(data);
+    final latinData = await rootBundle.load('assets/fonts/NotoSans-Regular.ttf');
+    _latinFont = pw.Font.ttf(latinData);
   } catch (_) {
-    return pw.Font.helvetica();
+    _latinFont = pw.Font.helvetica();
   }
+  try {
+    final arabicData = await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf');
+    _arabicFont = pw.Font.ttf(arabicData);
+  } catch (_) {
+    _arabicFont = _latinFont;
+  }
+  _fontsReady = true;
 }
 
-/// Builds a printable PDF for a workspace checklist (Provisor branding + Arabic support).
+pw.Font _fontFor(String text) => _hasArabic(text) ? _arabicFont : _latinFont;
+
+/// Builds a printable PDF for a workspace checklist (Provisor branding + Arabic + English).
 Future<Uint8List> buildWorkspaceChecklistPdf({
   required PrivateCompanyChecklist checklist,
   required String workspaceName,
   String? departmentName,
 }) async {
+  await _ensurePdfFonts();
+
   final logoBytes = (await rootBundle.load('assets/provisor_icon.png')).buffer.asUint8List();
   final logo = pw.MemoryImage(logoBytes);
-  final font = await _loadPdfFont();
 
   pw.TextStyle style(String text, {double size = 10, bool bold = false, PdfColor? color}) {
+    final font = _fontFor(text);
     return pw.TextStyle(
       fontSize: size,
       font: font,
@@ -45,10 +61,16 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
   }
 
   pw.Widget txt(String text, {double size = 10, bool bold = false, PdfColor? color}) {
-    return pw.Text(text, style: style(text, size: size, bold: bold, color: color), textDirection: _textDir(text));
+    return pw.Text(
+      text,
+      style: style(text, size: size, bold: bold, color: color),
+      textDirection: _textDir(text),
+    );
   }
 
-  final doc = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: font));
+  final doc = pw.Document(
+    theme: pw.ThemeData.withFont(base: _latinFont, bold: _latinFont),
+  );
 
   doc.addPage(
     pw.MultiPage(
@@ -75,7 +97,7 @@ Future<Uint8List> buildWorkspaceChecklistPdf({
         alignment: pw.Alignment.centerRight,
         child: pw.Text(
           'Page ${context.pageNumber} / ${context.pagesCount}',
-          style: style('', size: 9, color: PdfColors.grey600),
+          style: style('Page', size: 9, color: PdfColors.grey600),
         ),
       ),
       build: (context) => [
@@ -145,7 +167,11 @@ pw.Widget _cell(
     padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
     child: pw.Align(
       alignment: align,
-      child: pw.Text(text, style: style(text, size: 10, bold: bold), textDirection: _textDir(text)),
+      child: pw.Text(
+        text,
+        style: style(text, size: 10, bold: bold),
+        textDirection: _textDir(text),
+      ),
     ),
   );
 }
