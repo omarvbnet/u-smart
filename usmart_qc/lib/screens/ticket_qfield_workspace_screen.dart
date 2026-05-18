@@ -12,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
+import '../utils/qfield_file_picker.dart';
 import '../widgets/qfield_project_map_sheet.dart';
 
 /// Field workspace for QField / QGIS project packages on a ticket (read + optional write).
@@ -118,28 +119,14 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
 
   Future<void> _uploadRevision(QFieldProject project) async {
     final l10n = AppLocalizations.of(context);
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['qgz', 'zip', 'gpkg', 'qgs'],
-      allowMultiple: false,
-      withData: true,
-    );
-    if (!mounted || result == null || result.files.isEmpty) return;
-    final file = result.files.single;
-    final bytes = file.bytes;
-    final path = file.path;
-    final filename = file.name;
-    if (filename.isEmpty) return;
+    final picked = await pickQFieldPackageBytes();
+    if (!mounted || picked == null) return;
+    final filename = picked.fileName;
 
     setState(() => _busyProjectId = project.id);
     try {
       final prov = context.read<TicketsProvider>();
-      String? url;
-      if (bytes != null && bytes.isNotEmpty) {
-        url = await prov.uploadQFieldPackageFromBytes(bytes, filename);
-      } else if (path != null && path.isNotEmpty) {
-        url = await prov.uploadQFieldPackageFromPath(path);
-      }
+      final url = await prov.uploadQFieldPackageFromBytes(picked.bytes, filename);
       if (url == null || !mounted) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

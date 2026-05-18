@@ -10,6 +10,7 @@ import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../utils/workspace_department_technique.dart';
+import '../utils/qfield_file_picker.dart';
 import 'attachment_viewer_screen.dart';
 
 /// Maintenance types. Values must match backend MAINTENANCE_TECHNIQUES.
@@ -263,27 +264,13 @@ class _CreateMaintenanceTicketScreenState
   }
 
   Future<void> _pickAndUploadQField(AppLocalizations l10n) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['qgz', 'zip', 'gpkg', 'qgs'],
-      allowMultiple: false,
-      withData: true,
-    );
-    if (!mounted || result == null || result.files.isEmpty) return;
-    final file = result.files.single;
-    final bytes = file.bytes;
-    final path = file.path;
-    final filename = file.name;
-    if (filename.isEmpty) return;
+    final picked = await pickQFieldPackageBytes();
+    if (!mounted || picked == null) return;
+    final filename = picked.fileName;
     final provider = context.read<TicketsProvider>();
     setState(() => _uploading = true);
     try {
-      String? url;
-      if (bytes != null && bytes.isNotEmpty) {
-        url = await provider.uploadQFieldPackageFromBytes(bytes, filename);
-      } else if (path != null && path.isNotEmpty) {
-        url = await provider.uploadQFieldPackageFromPath(path);
-      }
+      final url = await provider.uploadQFieldPackageFromBytes(picked.bytes, filename);
       if (url == null || !mounted) {
         if (mounted) _showError(l10n.t('upload_failed'));
         return;

@@ -71,6 +71,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       success: true,
       geojson: preview.geojson,
       bounds: preview.bounds,
+      layers: preview.layers ?? [],
       message: preview.message ?? null,
       mapAnnotation: proj.mapAnnotation ?? null,
     });

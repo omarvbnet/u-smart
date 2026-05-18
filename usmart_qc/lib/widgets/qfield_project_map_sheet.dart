@@ -75,9 +75,36 @@ class QFieldProjectMapSheet extends StatefulWidget {
   State<QFieldProjectMapSheet> createState() => _QFieldProjectMapSheetState();
 }
 
+class _QFieldLayerMeta {
+  const _QFieldLayerMeta({
+    required this.key,
+    required this.label,
+    required this.color,
+    this.featureCount = 0,
+    this.geometryTypes = const [],
+  });
+
+  final String key;
+  final String label;
+  final Color color;
+  final int featureCount;
+  final List<String> geometryTypes;
+}
+
 class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   final MapController _mapController = MapController();
   final TextEditingController _noteCtrl = TextEditingController();
+
+  static const _layerPalette = [
+    Color(0xFF6C63FF),
+    Color(0xFF00D4AA),
+    Color(0xFFFBBF24),
+    Color(0xFFFF6B81),
+    Color(0xFF38BDF8),
+    Color(0xFFA78BFA),
+    Color(0xFFFB923C),
+    Color(0xFF4ADE80),
+  ];
 
   bool _loading = true;
   String? _hint;
@@ -85,6 +112,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   Map<String, double>? _boundsApi;
   LatLng? _draftPin;
   QFieldMapAnnotation? _annotation;
+  List<_QFieldLayerMeta> _layers = const [];
+  final Set<String> _hiddenLayerKeys = {};
 
   @override
   void initState() {
@@ -115,6 +144,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     Map<String, dynamic>? gj;
     Map<String, double>? b;
     String? hint;
+    var metas = <_QFieldLayerMeta>[];
     if (data != null && data['success'] == true) {
       final g = data['geojson'];
       if (g is Map<String, dynamic>) gj = g;
@@ -129,6 +159,32 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       }
       final m = data['message'];
       if (m is String && m.trim().isNotEmpty) hint = m.trim();
+      final rawLayers = data['layers'];
+      if (rawLayers is List) {
+        metas = <_QFieldLayerMeta>[];
+        var i = 0;
+        for (final row in rawLayers) {
+          if (row is! Map<String, dynamic>) continue;
+          final layer = row['layer']?.toString() ?? '';
+          final pkg = row['package']?.toString() ?? '';
+          if (layer.isEmpty && pkg.isEmpty) continue;
+          final key = '$pkg|$layer';
+          final types = (row['geometryTypes'] as List?)
+                  ?.map((e) => e.toString())
+                  .where((e) => e.isNotEmpty)
+                  .toList() ??
+              const <String>[];
+          metas.add(_QFieldLayerMeta(
+            key: key,
+            label: pkg.isNotEmpty ? '$pkg › $layer' : layer,
+            color: _layerPalette[i % _layerPalette.length],
+            featureCount: (row['featureCount'] as num?)?.toInt() ?? 0,
+            geometryTypes: types,
+          ));
+          i++;
+        }
+        _hiddenLayerKeys.clear();
+      }
       final ma = data['mapAnnotation'];
       if (ma is Map<String, dynamic>) {
         final lat = (ma['latitude'] as num?)?.toDouble();
@@ -139,13 +195,43 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
         }
       }
     }
+    if (metas.isEmpty && gj != null) {
+      metas.addAll(_layersFromGeoJson(gj));
+    }
+
     setState(() {
       _geojson = gj;
       _boundsApi = b;
       _hint = hint;
+      _layers = metas;
       _loading = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
+  }
+
+  List<_QFieldLayerMeta> _layersFromGeoJson(Map<String, dynamic> fc) {
+    final feats = fc['features'];
+    if (feats is! List) return const [];
+    final seen = <String>{};
+    final out = <_QFieldLayerMeta>[];
+    var i = 0;
+    for (final f in feats) {
+      if (f is! Map<String, dynamic>) continue;
+      final key = _featureLayerKey(f);
+      if (key.isEmpty || !seen.add(key)) continue;
+      final props = f['properties'] as Map<String, dynamic>? ?? {};
+      final pkg = props['package']?.toString() ?? '';
+      final layer = props['layer']?.toString() ?? '';
+      final label = pkg.isNotEmpty ? '$pkg › $layer' : layer;
+      if (label.isEmpty) continue;
+      out.add(_QFieldLayerMeta(
+        key: key,
+        label: label,
+        color: _layerPalette[i % _layerPalette.length],
+      ));
+      i++;
+    }
+    return out;
   }
 
   void _fitMap() {
@@ -269,6 +355,29 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     }
   }
 
+  String _featureLayerKey(Map<String, dynamic> f) {
+    final props = f['properties'];
+    if (props is! Map<String, dynamic>) return '';
+    final pkg = props['package']?.toString() ?? '';
+    final layer = props['layer']?.toString() ?? '';
+    if (props['kind'] == 'qgis_project_extent') return 'extent|${props['projectFile'] ?? ''}';
+    return '$pkg|$layer';
+  }
+
+  Color _colorForFeature(Map<String, dynamic> f) {
+    final key = _featureLayerKey(f);
+    for (final m in _layers) {
+      if (m.key == key) return m.color;
+    }
+    return _layerPalette[key.hashCode.abs() % _layerPalette.length];
+  }
+
+  bool _featureVisible(Map<String, dynamic> f) {
+    final key = _featureLayerKey(f);
+    if (key.isEmpty) return true;
+    return !_hiddenLayerKeys.contains(key);
+  }
+
   List<Polygon> _polygons() {
     final out = <Polygon>[];
     final fc = _geojson;
@@ -277,6 +386,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     if (feats is! List) return out;
     for (final f in feats) {
       if (f is! Map<String, dynamic>) continue;
+      if (!_featureVisible(f)) continue;
+      final color = _colorForFeature(f);
       final g = f['geometry'];
       if (g is! Map<String, dynamic>) continue;
       final t = g['type'] as String?;
@@ -288,8 +399,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           if (pts.length >= 3) {
             out.add(Polygon(
               points: pts,
-              color: const Color(0xFF6C63FF).withAlpha(55),
-              borderColor: const Color(0xFF8B83FF),
+              color: color.withAlpha(55),
+              borderColor: color,
               borderStrokeWidth: 2,
             ));
           }
@@ -303,8 +414,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (pts.length >= 3) {
               out.add(Polygon(
                 points: pts,
-                color: const Color(0xFF00D4AA).withAlpha(45),
-                borderColor: const Color(0xFF00D4AA),
+                color: color.withAlpha(45),
+                borderColor: color,
                 borderStrokeWidth: 2,
               ));
             }
@@ -323,6 +434,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     if (feats is! List) return out;
     for (final f in feats) {
       if (f is! Map<String, dynamic>) continue;
+      if (!_featureVisible(f)) continue;
+      final color = _colorForFeature(f);
       final g = f['geometry'];
       if (g is! Map<String, dynamic>) continue;
       final t = g['type'] as String?;
@@ -332,7 +445,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
         if (pts.length >= 2) {
           out.add(Polyline(
             points: pts,
-            color: const Color(0xFF6C63FF),
+            color: color,
             strokeWidth: 3,
           ));
         }
@@ -343,7 +456,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (pts.length >= 2) {
               out.add(Polyline(
                 points: pts,
-                color: const Color(0xFF8B83FF),
+                color: color,
                 strokeWidth: 2,
               ));
             }
@@ -362,6 +475,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       if (feats is List) {
         for (final f in feats) {
           if (f is! Map<String, dynamic>) continue;
+          if (!_featureVisible(f)) continue;
+          final color = _colorForFeature(f);
           final g = f['geometry'];
           if (g is! Map<String, dynamic>) continue;
           if (g['type'] == 'Point') {
@@ -372,7 +487,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                 point: pt,
                 width: 28,
                 height: 28,
-                child: const Icon(Icons.circle, color: Color(0xFF6C63FF), size: 18),
+                child: Icon(Icons.circle, color: color, size: 18),
               ));
             }
           } else if (g['type'] == 'MultiPoint') {
@@ -398,59 +513,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   }
 
   Widget _layerLegend(AppLocalizations l10n) {
-    final fc = _geojson;
-    if (fc == null) return const SizedBox.shrink();
-    final feats = fc['features'];
-    if (feats is! List) return const SizedBox.shrink();
-
-    const maxChips = 20;
-    final seen = <String>{};
-    final chips = <Widget>[];
-
-    for (final f in feats) {
-      if (chips.length >= maxChips) break;
-      if (f is! Map<String, dynamic>) continue;
-      final props = f['properties'];
-      if (props is! Map<String, dynamic>) continue;
-      final kind = props['kind']?.toString();
-      late final String label;
-      late final String dedupeKey;
-
-      if (kind == 'qgis_project_extent') {
-        final pf = props['projectFile']?.toString() ?? '';
-        label = '${l10n.t('qfield_map_extent')}${pf.isNotEmpty ? ': $pf' : ''}';
-        dedupeKey = 'extent|$pf';
-      } else {
-        final pkg = props['package']?.toString() ?? '';
-        final layer = props['layer']?.toString() ?? '';
-        if (layer.isEmpty && pkg.isEmpty) continue;
-        dedupeKey = '$pkg|$layer';
-        label = pkg.isNotEmpty ? '$pkg › $layer' : layer;
-      }
-      if (!seen.add(dedupeKey)) continue;
-      chips.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(22),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withAlpha(40)),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withAlpha(220),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      );
-    }
-
-    if (chips.isEmpty) return const SizedBox.shrink();
+    if (_layers.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -469,7 +532,35 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           Wrap(
             spacing: 6,
             runSpacing: 6,
-            children: chips,
+            children: [
+              for (final meta in _layers)
+                FilterChip(
+                  label: Text(
+                    meta.label,
+                    style: TextStyle(
+                      color: _hiddenLayerKeys.contains(meta.key)
+                          ? Colors.white54
+                          : Colors.white,
+                      fontSize: 11,
+                    ),
+                  ),
+                  selected: !_hiddenLayerKeys.contains(meta.key),
+                  onSelected: (on) {
+                    setState(() {
+                      if (on) {
+                        _hiddenLayerKeys.remove(meta.key);
+                      } else {
+                        _hiddenLayerKeys.add(meta.key);
+                      }
+                    });
+                  },
+                  selectedColor: meta.color.withAlpha(60),
+                  backgroundColor: Colors.white.withAlpha(18),
+                  checkmarkColor: meta.color,
+                  side: BorderSide(color: meta.color.withAlpha(140)),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+            ],
           ),
         ],
       ),

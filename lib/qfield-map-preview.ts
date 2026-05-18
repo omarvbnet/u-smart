@@ -29,9 +29,18 @@ type GeoJsonFeatureCollection = { type: 'FeatureCollection'; features: GeoJsonFe
 
 export type QFieldMapBounds = { west: number; south: number; east: number; north: number };
 
+export type QFieldMapLayerSummary = {
+  layer: string;
+  package: string;
+  packagePath?: string;
+  featureCount: number;
+  geometryTypes: string[];
+};
+
 export type QFieldMapPreviewResult = {
   geojson: GeoJsonFeatureCollection | null;
   bounds: QFieldMapBounds | null;
+  layers?: QFieldMapLayerSummary[];
   message?: string;
 };
 
@@ -1076,23 +1085,51 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
       message: 'No readable geometries in GeoPackage (CRS may be non‑WGS84 or empty).',
     };
   }
+  const layerSummaries = summarizeGeoJsonLayers(features);
   return {
     geojson: { type: 'FeatureCollection', features },
     bounds,
-    message: `${features.length} feature(s) from GeoPackage “${displayName}” (WGS84 assumed; verify in QField if misaligned).`,
+    layers: layerSummaries,
+    message: `${features.length} feature(s) from GeoPackage “${displayName}” across ${layerSummaries.length} layer(s) (WGS84 assumed; verify in QField if misaligned).`,
   };
 }
 
 /**
  * ZIP / QGZ: extract embedded .gpkg, unpack nested .qgz (QGIS project ZIP), GeoJSON, and .qgs extent.
  */
+function summarizeGeoJsonLayers(features: GeoJsonFeature[]): QFieldMapLayerSummary[] {
+  const byKey = new Map<string, QFieldMapLayerSummary>();
+  for (const f of features) {
+    const props = f.properties ?? {};
+    const layer = String(props.layer ?? props.name ?? 'layer');
+    const pkg = String(props.package ?? props.packagePath ?? '');
+    const key = `${pkg}\0${layer}`;
+    let row = byKey.get(key);
+    if (!row) {
+      row = {
+        layer,
+        package: pkg,
+        packagePath: typeof props.packagePath === 'string' ? props.packagePath : undefined,
+        featureCount: 0,
+        geometryTypes: [],
+      };
+      byKey.set(key, row);
+    }
+    row.featureCount += 1;
+    const gt = f.geometry?.type;
+    if (gt && !row.geometryTypes.includes(gt)) row.geometryTypes.push(gt);
+  }
+  return [...byKey.values()].sort((a, b) =>
+    a.package === b.package ? a.layer.localeCompare(b.layer) : a.package.localeCompare(b.package)
+  );
+}
+
 async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): Promise<QFieldMapPreviewResult> {
-  let files: Record<string, Uint8Array>;
-  try {
-    files = unzipSync(bytes, { filter: () => true }) as Record<string, Uint8Array>;
-  } catch {
+  const unzipped = tryUnzipArchiveBytes(bytes);
+  if (!unzipped || Object.keys(unzipped).length === 0) {
     return { geojson: null, bounds: null, message: 'Could not read archive (zip/qgz).' };
   }
+  let files = unzipped;
 
   const outerHadQgz = Object.keys(files).some((k) => k.toLowerCase().endsWith('.qgz'));
   const expanded = expandNestedQgz(files);
@@ -1278,9 +1315,12 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   }
   msg += ' Map fields: package / layer / source.';
 
+  const layerSummaries = summarizeGeoJsonLayers(merged);
+
   return {
     geojson: { type: 'FeatureCollection', features: merged },
     bounds: unionBounds,
+    layers: layerSummaries,
     message: msg,
   };
 }
