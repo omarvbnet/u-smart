@@ -70,8 +70,8 @@ class QFieldProjectMapSheet extends StatefulWidget {
   final bool canWrite;
   final VoidCallback? onSaved;
 
-  static const _tileSubdomains = ['a', 'b', 'c', 'd'];
-  static const _tileUrlTemplate =
+  static const tileSubdomains = ['a', 'b', 'c', 'd'];
+  static const tileUrlTemplate =
       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
 
   @override
@@ -1292,8 +1292,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                               ),
                               children: [
                                 TileLayer(
-                                  urlTemplate: QFieldProjectMapSheet._tileUrlTemplate,
-                                  subdomains: QFieldProjectMapSheet._tileSubdomains,
+                                  urlTemplate: QFieldProjectMapSheet.tileUrlTemplate,
+                                  subdomains: QFieldProjectMapSheet.tileSubdomains,
                                   userAgentPackageName: 'usmart_qc',
                                   maxNativeZoom: 19,
                                 ),

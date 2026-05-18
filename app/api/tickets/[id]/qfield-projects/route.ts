@@ -73,6 +73,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (description !== undefined) {
       projects[idx].description = description.length > 0 ? description : null;
     }
+    const fe = body.fieldEdits;
+    if (fe !== undefined) {
+      if (fe === null) {
+        projects[idx].fieldEdits = null;
+      } else if (typeof fe === 'object' && !Array.isArray(fe)) {
+        projects[idx].fieldEdits = fe as Record<
+          string,
+          Record<string, string | number | boolean | null>
+        >;
+      }
+    }
     projects[idx].updatedAt = new Date().toISOString();
   } else if (action === 'add_revision') {
     const url = typeof body.url === 'string' ? body.url.trim() : '';

@@ -33,6 +33,8 @@ export type QFieldProjectStored = {
   revisions: QFieldRevisionStored[];
   /** Optional field pin / note placed on the in-app map (WGS84). */
   mapAnnotation?: QFieldMapAnnotationStored | null;
+  /** In-app edits to layer feature attributes (featureId → column → value). */
+  fieldEdits?: Record<string, Record<string, string | number | boolean | null>> | null;
 };
 
 export function newQfieldEntityId(): string {
@@ -96,7 +98,23 @@ export function parseQFieldProjectsFromCompanyJson(parsed: Record<string, unknow
         };
       }
     }
-    out.push({ id, title: title || fileName, description, currentUrl, fileName, createdAt, updatedAt, revisions, mapAnnotation });
+    let fieldEdits: QFieldProjectStored['fieldEdits'] = null;
+    const fe = item.fieldEdits;
+    if (fe && typeof fe === 'object' && !Array.isArray(fe)) {
+      fieldEdits = fe as Record<string, Record<string, string | number | boolean | null>>;
+    }
+    out.push({
+      id,
+      title: title || fileName,
+      description,
+      currentUrl,
+      fileName,
+      createdAt,
+      updatedAt,
+      revisions,
+      mapAnnotation,
+      fieldEdits,
+    });
   }
   return out;
 }
@@ -111,6 +129,7 @@ export function qfieldProjectsToJsonValue(projects: QFieldProjectStored[]): unkn
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     mapAnnotation: p.mapAnnotation ?? null,
+    fieldEdits: p.fieldEdits ?? null,
     revisions: p.revisions.map((r) => ({
       id: r.id,
       url: r.url,

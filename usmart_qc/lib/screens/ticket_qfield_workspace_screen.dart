@@ -14,7 +14,7 @@ import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/qfield_file_picker.dart';
 import '../utils/responsive_layout.dart';
-import '../widgets/qfield_project_map_sheet.dart';
+import '../screens/qfield_project_map_screen.dart';
 
 /// Field workspace for QField / QGIS project packages on a ticket (read + optional write).
 class TicketQFieldWorkspaceScreen extends StatefulWidget {
@@ -96,27 +96,15 @@ class _TicketQFieldWorkspaceScreenState extends State<TicketQFieldWorkspaceScree
   }
 
   void _openMapSheet(QFieldProject p) {
-    final initialSize = RLayout.isShortScreen(context) ? 0.94 : 0.9;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: initialSize,
-        minChildSize: 0.5,
-        maxChildSize: 0.98,
-        snap: true,
-        snapSizes: [0.5, initialSize, 0.98],
-        builder: (_, __) => QFieldProjectMapSheet(
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => QFieldProjectMapScreen(
           ticketId: widget.ticketId,
           project: p,
           ticket: _ticket,
           canWrite: widget.canWrite,
-          onSaved: () {
-            _load();
-          },
+          onSaved: _load,
         ),
       ),
     );
