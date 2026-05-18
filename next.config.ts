@@ -4,6 +4,8 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
+  // GeoPackage preview: keep Node-native parsers external (WASM loaded from disk).
+  serverExternalPackages: ['sql.js', 'wkx', 'proj4'],
   // sql.js loads sql-wasm.wasm at runtime; ensure it is copied into the serverless bundle (Vercel).
   outputFileTracingIncludes: {
     '/api/tickets/[id]/qfield-map-preview': [

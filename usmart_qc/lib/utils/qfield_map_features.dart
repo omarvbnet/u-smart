@@ -2,38 +2,38 @@ import 'package:latlong2/latlong.dart';
 
 import 'coordinate_transform.dart';
 
-/// One drawable item on the QField map (GeoJSON geometry and/or SQL row with coordinates).
+/// Drawable geometry from QField GeoPackage / shapefile (never synthetic SQL pins).
 class QFieldMapFeature {
   QFieldMapFeature({
     required this.id,
     required this.layerKey,
     required this.properties,
-    this.point,
+    this.points = const [],
     this.polylines = const [],
     this.polygons = const [],
     this.label,
     this.source = 'geojson',
-    this.sqlRowIndex,
+    this.geometryType,
   });
 
   final String id;
   final String layerKey;
   final Map<String, dynamic> properties;
-  final LatLng? point;
-  /// All line parts (LineString + each part of MultiLineString).
+  /// Point / MultiPoint vertices (drawn as small circles, not map pins).
+  final List<LatLng> points;
   final List<List<LatLng>> polylines;
   final List<List<LatLng>> polygons;
   final String? label;
   final String source;
-  final int? sqlRowIndex;
+  final String? geometryType;
 
   bool get hasGeometry =>
-      point != null ||
+      points.isNotEmpty ||
       polylines.any((l) => l.length >= 2) ||
       polygons.any((r) => r.length >= 3);
 
   Iterable<LatLng> get allVertices sync* {
-    if (point != null) yield point!;
+    yield* points;
     for (final line in polylines) {
       yield* line;
     }
@@ -43,33 +43,19 @@ class QFieldMapFeature {
   }
 }
 
-const _latKeys = ['lat', 'latitude', 'y', 'northing', 'LAT', 'Latitude'];
-const _lngKeys = ['lon', 'lng', 'longitude', 'long', 'x', 'easting', 'LON', 'Longitude'];
-
-bool isWgs84LatLng(double lat, double lng) => CoordinateTransform.isWgs84LatLng(lat, lng);
+/// Stable layer id for chips + visibility (package + table/layer name).
+String normalizeLayerKey(String package, String layer) {
+  final p = package.trim();
+  final l = layer.trim();
+  if (p.isEmpty && l.isEmpty) return '';
+  if (p.isEmpty) return l;
+  if (l.isEmpty) return p;
+  return '$p|$l';
+}
 
 double? _num(dynamic v) {
   if (v is num) return v.toDouble();
   if (v is String) return double.tryParse(v.trim());
-  return null;
-}
-
-double? _pick(Map<String, dynamic> m, List<String> keys) {
-  for (final k in keys) {
-    if (m.containsKey(k)) {
-      final n = _num(m[k]);
-      if (n != null) return n;
-    }
-  }
-  for (final e in m.entries) {
-    final lk = e.key.toLowerCase();
-    for (final want in keys) {
-      if (lk == want.toLowerCase()) {
-        final n = _num(e.value);
-        if (n != null) return n;
-      }
-    }
-  }
   return null;
 }
 
@@ -90,20 +76,6 @@ LatLng? _toWgs84(
     crsEpsg: props?['crsEpsg']?.toString(),
   ) ??
       CoordinateTransform.reprojectXYGuessed(x, y);
-}
-
-/// Try WGS84 lat/lng from attribute map (QField / shapefile / GPKG columns).
-LatLng? latLngFromProperties(
-  Map<String, dynamic> props, {
-  int? fallbackEpsg,
-}) {
-  final lat = _pick(props, _latKeys);
-  final lng = _pick(props, _lngKeys);
-  if (lat != null && lng != null) {
-    final wgs = _toWgs84(lng, lat, props: props, fallbackEpsg: fallbackEpsg);
-    if (wgs != null) return wgs;
-  }
-  return null;
 }
 
 String? labelFromProperties(Map<String, dynamic> props) {
@@ -133,9 +105,10 @@ List<LatLng> ringToLatLng(
   resolvedEpsg ??= fallbackEpsg;
 
   for (final p in ring) {
-    if (p is! List || p.length < 2 || p[0] is! num || p[1] is! num) continue;
-    final x = (p[0] as num).toDouble();
-    final y = (p[1] as num).toDouble();
+    if (p is! List || p.length < 2) continue;
+    final x = _num(p[0]);
+    final y = _num(p[1]);
+    if (x == null || y == null) continue;
     final ll = _toWgs84(x, y, epsg: resolvedEpsg, props: crsProps, fallbackEpsg: fallbackEpsg);
     if (ll != null) {
       pts.add(ll);
@@ -149,10 +122,10 @@ String featureLayerKey(Map<String, dynamic> f) {
   final props = f['properties'];
   if (props is! Map) return '';
   final m = Map<String, dynamic>.from(props);
-  final pkg = m['package']?.toString() ?? m['packagePath']?.toString() ?? '';
-  final layer = m['layer']?.toString() ?? m['name']?.toString() ?? '';
-  if (pkg.isEmpty && layer.isEmpty) return '';
-  return '$pkg|$layer';
+  return normalizeLayerKey(
+    m['package']?.toString() ?? m['packagePath']?.toString() ?? '',
+    m['layer']?.toString() ?? m['name']?.toString() ?? '',
+  );
 }
 
 Map<String, dynamic> featureProperties(Map<String, dynamic> f) {
@@ -169,7 +142,7 @@ List<QFieldMapFeature> geoJsonToMapFeatures(
   Map<String, int>? layerEpsgByKey,
 }) {
   final layerKey = featureLayerKey(f);
-  if (layerKey.isEmpty || layerKey == '|') return const [];
+  if (layerKey.isEmpty) return const [];
 
   final props = featureProperties(f);
   final layerEpsg = layerEpsgByKey?[layerKey] ?? fallbackEpsg;
@@ -194,34 +167,36 @@ List<QFieldMapFeature> _featuresFromGeometry(
 }) {
   final t = (g['type'] as String?)?.trim();
   if (t == null || t.isEmpty) return const [];
-  final type = t.replaceAll(' ', '');
+  final type = t.replaceAll(' ', '').toLowerCase();
   final c = g['coordinates'];
 
-  LatLng? point;
+  final points = <LatLng>[];
   final polylines = <List<LatLng>>[];
   final polygons = <List<LatLng>>[];
 
-  switch (type.toLowerCase()) {
+  switch (type) {
     case 'point':
       if (c is List && c.length >= 2) {
-        point = _toWgs84(
-          (c[0] as num).toDouble(),
-          (c[1] as num).toDouble(),
+        final ll = _toWgs84(
+          _num(c[0]) ?? 0,
+          _num(c[1]) ?? 0,
           props: props,
           fallbackEpsg: fallbackEpsg,
         );
+        if (ll != null) points.add(ll);
       }
       break;
     case 'multipoint':
       if (c is List) {
         for (final p in c) {
           if (p is List && p.length >= 2) {
-            point ??= _toWgs84(
-              (p[0] as num).toDouble(),
-              (p[1] as num).toDouble(),
+            final ll = _toWgs84(
+              _num(p[0]) ?? 0,
+              _num(p[1]) ?? 0,
               props: props,
               fallbackEpsg: fallbackEpsg,
             );
+            if (ll != null) points.add(ll);
           }
         }
       }
@@ -249,7 +224,7 @@ List<QFieldMapFeature> _featuresFromGeometry(
             final pts = ringToLatLng(ring, crsProps: props, fallbackEpsg: fallbackEpsg);
             if (pts.length >= 3) {
               polygons.add(pts);
-              break; // exterior ring only for fill
+              break;
             }
           }
         }
@@ -291,31 +266,31 @@ List<QFieldMapFeature> _featuresFromGeometry(
       break;
   }
 
-  if (point == null && polylines.isEmpty && polygons.isEmpty) return const [];
+  if (points.isEmpty && polylines.isEmpty && polygons.isEmpty) return const [];
 
   return [
     QFieldMapFeature(
       id: baseId,
       layerKey: layerKey,
       properties: props,
-      point: point,
+      points: points,
       polylines: polylines,
       polygons: polygons,
       label: labelFromProperties(props),
       source: props['source']?.toString() ?? 'geojson',
+      geometryType: type,
     ),
   ];
 }
 
+/// Build map drawables from GeoJSON only (file geometries). SQL tables are for attributes in the panel, not pins.
 List<QFieldMapFeature> buildMapFeatures({
   Map<String, dynamic>? geojson,
-  required List<({String name, String package, List<Map<String, dynamic>> rows})> sqlTables,
   Set<String> hiddenLayerKeys = const {},
   int? defaultCrsEpsg,
   Map<String, int>? layerEpsgByKey,
 }) {
   final out = <QFieldMapFeature>[];
-  final seenSqlPoints = <String>{};
 
   final feats = geojson?['features'];
   if (feats is List) {
@@ -331,40 +306,26 @@ List<QFieldMapFeature> buildMapFeatures({
       i++;
       for (final mf in list) {
         if (hiddenLayerKeys.contains(mf.layerKey)) continue;
+        if (!mf.hasGeometry) continue;
+        final kind = mf.properties['kind']?.toString();
+        final src = mf.properties['source']?.toString();
+        if (kind == 'qgis_project_extent' || src == 'qgis_project') continue;
         out.add(mf);
       }
     }
   }
 
-  var sqlIdx = 0;
-  for (final table in sqlTables) {
-    final layerKey = '${table.package}|${table.name}';
-    if (hiddenLayerKeys.contains(layerKey)) continue;
-    final layerEpsg = layerEpsgByKey?[layerKey] ?? defaultCrsEpsg;
-    for (var r = 0; r < table.rows.length; r++) {
-      final row = table.rows[r];
-      final pt = latLngFromProperties(row, fallbackEpsg: layerEpsg);
-      if (pt == null) continue;
-      final dedupe = '${pt.latitude.toStringAsFixed(5)}:${pt.longitude.toStringAsFixed(5)}:$layerKey';
-      if (!seenSqlPoints.add(dedupe)) continue;
-      final props = Map<String, dynamic>.from(row)
-        ..['layer'] = table.name
-        ..['package'] = table.package
-        ..['source'] = 'sql';
-      out.add(QFieldMapFeature(
-        id: 'sql_${table.name}_$sqlIdx',
-        layerKey: layerKey,
-        properties: props,
-        point: pt,
-        label: labelFromProperties(props) ?? '${table.name} #${r + 1}',
-        source: 'sql',
-        sqlRowIndex: r,
-      ));
-      sqlIdx++;
-    }
-  }
-
   return out;
+}
+
+int countDrawables(Iterable<QFieldMapFeature> features) {
+  var n = 0;
+  for (final f in features) {
+    n += f.points.length;
+    n += f.polylines.where((l) => l.length >= 2).length;
+    n += f.polygons.where((p) => p.length >= 3).length;
+  }
+  return n;
 }
 
 QFieldMapFeature? findNearestFeature(
@@ -377,14 +338,6 @@ QFieldMapFeature? findNearestFeature(
   var bestD = maxMeters;
 
   for (final f in features) {
-    if (f.point != null) {
-      final d = dist(tap, f.point!);
-      if (d < bestD) {
-        bestD = d;
-        best = f;
-      }
-      continue;
-    }
     for (final v in f.allVertices) {
       final d = dist(tap, v);
       if (d < bestD) {

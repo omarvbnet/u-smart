@@ -10,7 +10,6 @@
 
 import { gunzipSync, strFromU8, unzipSync } from 'fflate';
 import {
-  enrichRowsWithWgs84,
   type GeoJsonGeometry,
   geometryNeedsReproject,
   loadGpkgSpatialRefs,
@@ -135,6 +134,25 @@ function geopackageBlobToWkb(buf: Uint8Array): Uint8Array | null {
   return buf.subarray(wkbOffset);
 }
 
+/** wkx expects Node Buffer; sql.js returns Uint8Array. */
+function bytesForWkxParse(chunk: Uint8Array): Uint8Array | Buffer {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+  return chunk;
+}
+
+/** Normalize geometry values from sql.js (Uint8Array, number[], or ArrayBuffer). */
+function geometryBlobToUint8Array(raw: unknown): Uint8Array | null {
+  if (raw instanceof Uint8Array) return raw;
+  if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+  if (Array.isArray(raw) && raw.length > 0) {
+    const nums = raw.every((v) => typeof v === 'number');
+    if (nums) return Uint8Array.from(raw as number[]);
+  }
+  return null;
+}
+
 /**
  * Parse SQLite / GeoPackage / SpatiaLite geometry BLOB to GeoJSON (WKB + GeoPackage envelope + byte scan).
  */
@@ -146,7 +164,7 @@ function parseGeometryBlobToGeoJson(
   const tryParse = (chunk: Uint8Array): GeoJsonGeometry | null => {
     if (!chunk || chunk.length < 5) return null;
     try {
-      const g = wkx.Geometry.parse(chunk).toGeoJSON() as GeoJsonGeometry | null;
+      const g = wkx.Geometry.parse(bytesForWkxParse(chunk)).toGeoJSON() as GeoJsonGeometry | null;
       return g || null;
     } catch {
       return null;
@@ -220,6 +238,26 @@ function tryParseWktGeometry(wkt: string): GeoJsonGeometry | null {
       if (a[0] !== b[0] || a[1] !== b[1]) coords.push([a[0], a[1]]);
       return { type: 'Polygon', coordinates: [coords] };
     }
+  }
+
+  m = /^MULTILINESTRING(?:\s+Z|\s+M|\s+ZM)?\s*\(\s*(.+)\s*\)\s*$/i.exec(s);
+  if (m) {
+    const lines: [number, number][][] = [];
+    const inner = m[1]!;
+    const parts = inner.split(/\)\s*,\s*\(/);
+    for (let part of parts) {
+      part = part.replace(/^\(/, '').replace(/\)$/, '');
+      const coords = parseWktCoordinatePairs(part);
+      if (coords.length >= 2) lines.push(coords);
+    }
+    if (lines.length === 1) return { type: 'LineString', coordinates: lines[0]! };
+    if (lines.length > 1) return { type: 'MultiLineString', coordinates: lines };
+  }
+
+  m = /^MULTIPOINT(?:\s+Z|\s+M|\s+ZM)?\s*\(\s*(.+)\s*\)\s*$/i.exec(s);
+  if (m) {
+    const coords = parseWktCoordinatePairs(m[1]!);
+    if (coords.length >= 1) return { type: 'MultiPoint', coordinates: coords };
   }
 
   return null;
@@ -518,10 +556,8 @@ function extractEsriShapefileFeatures(
 
     if (geom) {
       let outGeom: GeoJsonGeometry = geom;
-      if (geometryNeedsReproject(outGeom)) {
-        const reproj = reprojectGeoJsonToWgs84Auto(outGeom, null, null);
-        if (reproj) outGeom = reproj;
-      }
+      const reproj = reprojectGeoJsonToWgs84Auto(outGeom, null, null);
+      if (reproj) outGeom = reproj;
       const attrs = dbfRows[dbfIndex] ?? {};
       features.push({
         type: 'Feature',
@@ -547,9 +583,45 @@ function extractEsriShapefileFeatures(
   return { features, bounds };
 }
 
-async function initSqlJsForGeopackage() {
-  const initSqlJs = (await import('sql.js')).default;
-  const opts: Parameters<typeof initSqlJs>[0] = {};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WkxModule = { Geometry: { parse: (input: Buffer | Uint8Array) => { toGeoJSON: () => unknown } } };
+
+let cachedWkx: WkxModule | null = null;
+
+async function loadWkxModule(): Promise<WkxModule> {
+  if (cachedWkx) return cachedWkx;
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    const { createRequire } = await import('node:module');
+    const { join } = await import('node:path');
+    const require = createRequire(join(process.cwd(), 'package.json'));
+    cachedWkx = require('wkx') as WkxModule;
+    return cachedWkx;
+  }
+  const wkxMod = await import('wkx');
+  cachedWkx = (wkxMod.default ?? wkxMod) as WkxModule;
+  return cachedWkx;
+}
+
+type SqlJsStatic = Awaited<ReturnType<typeof import('sql.js').default>>;
+type SqlJsInit = typeof import('sql.js').default;
+
+let cachedSqlJs: SqlJsStatic | null = null;
+
+async function loadSqlJsInit(): Promise<SqlJsInit> {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    const { createRequire } = await import('node:module');
+    const { join } = await import('node:path');
+    const require = createRequire(join(process.cwd(), 'package.json'));
+    const mod = require('sql.js') as { default?: SqlJsInit } & SqlJsInit;
+    return mod.default ?? mod;
+  }
+  return (await import('sql.js')).default;
+}
+
+async function initSqlJsForGeopackage(): Promise<SqlJsStatic> {
+  if (cachedSqlJs) return cachedSqlJs;
+  const initSqlJs = await loadSqlJsInit();
+  const opts: Parameters<SqlJsInit>[0] = {};
   if (typeof process !== 'undefined' && process.versions?.node) {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
@@ -608,7 +680,8 @@ async function initSqlJsForGeopackage() {
   } else {
     opts.locateFile = (file: string) => `https://unpkg.com/sql.js@1.14.1/dist/${file}`;
   }
-  return initSqlJs(opts);
+  cachedSqlJs = await initSqlJs(opts);
+  return cachedSqlJs;
 }
 
 function isFiniteCoord(n: number): boolean {
@@ -1107,8 +1180,6 @@ async function extractGpkgDataTables(
       /* ignore */
     }
 
-    const { srsById, srsByTable } = loadGpkgSpatialRefs(db, quoteId);
-
     const tableNames = new Set<string>();
     const listStmt = db.prepare(
       "SELECT name AS n FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'"
@@ -1162,14 +1233,6 @@ async function extractGpkgDataTables(
 
       if (columns.length === 0 && geomCol) {
         columns = ['(geometry column only)'];
-      }
-
-      const { fromProj, epsg } = proj4SourceForTable(table, srsById, srsByTable);
-      if (rows.length > 0) {
-        enrichRowsWithWgs84(rows, fromProj, epsg);
-        if (!columns.includes('latitude') && rows.some((r) => r.latitude != null)) {
-          columns = [...columns, 'latitude', 'longitude'];
-        }
       }
 
       tables.push({
@@ -1228,11 +1291,11 @@ async function extractGpkgVectorFeatures(
   const shortName = opts.packagePath.split('/').pop() ?? opts.packagePath;
 
   try {
-    const wkxMod = await import('wkx');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wkx = wkxMod as any;
+    const wkx = await loadWkxModule();
     const SQL = await initSqlJsForGeopackage();
-    const db = new SQL.Database(bytes);
+    const dbBytes =
+      bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer);
+    const db = new SQL.Database(dbBytes);
 
     const quoteId = (ident: string) => ident.replace(/"/g, '""');
 
@@ -1269,8 +1332,9 @@ async function extractGpkgVectorFeatures(
       } catch {
         /* not SpatiaLite */
       }
-      if (tables.length > 0) return tables;
-      return discoverGeometryColumnsFallback(db, quoteId);
+      const discovered = discoverGeometryColumnsFallback(db, quoteId);
+      for (const { t, c } of discovered) push(t, c);
+      return tables;
     };
 
     const tables = loadGeometryTables();
@@ -1311,23 +1375,19 @@ async function extractGpkgVectorFeatures(
         let geom: GeoJsonGeometry | null = null;
         if (typeof raw === 'string') {
           geom = tryParseWktGeometry(raw);
-        } else if (raw instanceof Uint8Array) {
-          if (raw.length >= 5) geom = parseGeometryBlobToGeoJson(wkx, raw);
-        } else if (raw instanceof ArrayBuffer) {
-          const buf = new Uint8Array(raw);
-          if (buf.length >= 5) geom = parseGeometryBlobToGeoJson(wkx, buf);
+        } else {
+          const buf = geometryBlobToUint8Array(raw);
+          if (buf && buf.length >= 5) geom = parseGeometryBlobToGeoJson(wkx, buf);
         }
         if (!geom) continue;
 
         const { fromProj, epsg } = proj4SourceForTable(table, srsById, srsByTable);
-        if (geometryNeedsReproject(geom)) {
-          const reproj = reprojectGeoJsonToWgs84Auto(geom, fromProj, epsg);
-          if (reproj) geom = reproj;
-        }
+        const reproj = reprojectGeoJsonToWgs84Auto(geom, fromProj, epsg);
+        if (reproj) geom = reproj;
 
         expandFromGeometry(geom);
         const properties: Record<string, string | number | boolean | null> = {
-          layer: table,
+          layer: table.trim(),
           package: shortName,
           packagePath: opts.packagePath,
           source: 'geopackage',
@@ -1351,7 +1411,10 @@ async function extractGpkgVectorFeatures(
         : null;
 
     return { features, bounds };
-  } catch {
+  } catch (err) {
+    if (process.env.QFIELD_MAP_DEBUG === '1') {
+      console.error('[extractGpkgVectorFeatures]', err);
+    }
     return { features: [], bounds: null };
   }
 }
@@ -1656,12 +1719,6 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
       const xml = strFromU8(files[qgsKey], true);
       const ext = parseQgsCanvasExtent(xml);
       if (ext) {
-        merged.push(
-          boundsToPolygonFeature(ext, {
-            projectFile: qgsKey.split('/').pop() ?? qgsKey,
-            source: 'qgis_project',
-          })
-        );
         unionBounds = mergeBounds(unionBounds, ext);
         extentAdded = true;
       }

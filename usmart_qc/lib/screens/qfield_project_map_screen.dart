@@ -13,7 +13,7 @@ import '../utils/qfield_map_features.dart';
 import '../utils/responsive_layout.dart';
 import '../widgets/qfield_project_map_sheet.dart';
 
-/// Full-screen immersive QField map with SQL points on-map and editable attributes.
+/// Full-screen QField map: draws file geometries (lines, polygons, points) from GeoJSON preview.
 class QFieldProjectMapScreen extends StatefulWidget {
   const QFieldProjectMapScreen({
     super.key,
@@ -67,9 +67,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   final Map<String, Map<String, dynamic>> _propertyEdits = {};
   final Map<String, TextEditingController> _fieldCtrls = {};
   bool _saving = false;
-
-  static const _polygonFill = Color(0xFF8BC34A);
-  static const _lineStroke = Color(0xFFE53935);
 
   @override
   void initState() {
@@ -140,7 +137,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           final layer = row['layer']?.toString() ?? '';
           final pkg = row['package']?.toString() ?? '';
           if (layer.isEmpty && pkg.isEmpty) continue;
-          final key = '$pkg|$layer';
+          final key = normalizeLayerKey(pkg, layer);
           final crs = row['crsEpsg'];
           if (crs is num) layerCrs[key] = crs.toInt();
           layers.add(_LayerChip(
@@ -167,8 +164,9 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               if (r is Map) rows.add(Map<String, dynamic>.from(r));
             }
           }
-          sqlTables.add((name: name, package: pkg.isNotEmpty ? pkg : name, rows: rows));
-          final key = '${pkg.isNotEmpty ? pkg : name}|$name';
+          final pkgNorm = pkg.isNotEmpty ? pkg : name;
+          sqlTables.add((name: name, package: pkgNorm, rows: rows));
+          final key = normalizeLayerKey(pkgNorm, name);
           if (!layers.any((l) => l.key == key)) {
             layers.add(_LayerChip(
               key: key,
@@ -195,20 +193,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
   }
 
-  int _drawableOnMapCount() {
-    var n = 0;
-    for (final f in _features) {
-      if (f.point != null) n++;
-      n += f.polylines.where((l) => l.length >= 2).length;
-      n += f.polygons.where((p) => p.length >= 3).length;
-    }
-    return n;
-  }
+  int _drawableOnMapCount() => countDrawables(_features);
 
   void _syncMapFeatures() {
     _features = buildMapFeatures(
       geojson: _geojson,
-      sqlTables: _sqlTables,
       hiddenLayerKeys: _hiddenLayerKeys,
       defaultCrsEpsg: _defaultCrsEpsg,
       layerEpsgByKey: _layerEpsgByKey,
@@ -216,10 +205,9 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final onMap = <String, int>{};
     for (final f in _features) {
       var n = 0;
-      if (f.point != null) n++;
+      n += f.points.length;
       n += f.polylines.where((l) => l.length >= 2).length;
       n += f.polygons.where((p) => p.length >= 3).length;
-      if (n == 0) n = 1;
       onMap[f.layerKey] = (onMap[f.layerKey] ?? 0) + n;
     }
     _layers = _layers
@@ -309,10 +297,16 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       }
     }
     setState(() {});
-    if (f?.point != null) {
-      try {
-        _mapController.move(f!.point!, _mapController.camera.zoom < 15 ? 16 : _mapController.camera.zoom);
-      } catch (_) {}
+    if (f != null) {
+      final verts = f.allVertices.toList();
+      if (verts.isNotEmpty) {
+        try {
+          _mapController.move(
+            verts.first,
+            _mapController.camera.zoom < 15 ? 16 : _mapController.camera.zoom,
+          );
+        } catch (_) {}
+      }
     }
   }
 
@@ -338,13 +332,14 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final out = <Polygon>[];
     for (final f in _features) {
       final selected = f.id == _selectedFeatureId;
+      final layerColor = _colorForLayer(f.layerKey);
       for (final ring in f.polygons) {
         if (ring.length < 3) continue;
         out.add(Polygon(
           points: ring,
-          color: _polygonFill.withAlpha(selected ? 140 : 100),
-          borderColor: selected ? const Color(0xFF6C63FF) : Colors.black87,
-          borderStrokeWidth: selected ? 3 : 1.5,
+          color: layerColor.withAlpha(selected ? 120 : 90),
+          borderColor: selected ? const Color(0xFF6C63FF) : layerColor,
+          borderStrokeWidth: selected ? 3 : 2,
         ));
       }
     }
@@ -355,40 +350,41 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final out = <Polyline>[];
     for (final f in _features) {
       final selected = f.id == _selectedFeatureId;
+      final layerColor = _colorForLayer(f.layerKey);
       for (final line in f.polylines) {
         if (line.length < 2) continue;
         out.add(Polyline(
           points: line,
-          color: selected ? const Color(0xFF6C63FF) : _lineStroke,
-          strokeWidth: selected ? 6 : 5,
-          borderColor: _lineStroke.withAlpha(80),
-          borderStrokeWidth: selected ? 8 : 7,
+          color: selected ? const Color(0xFF6C63FF) : layerColor,
+          strokeWidth: selected ? 6 : 4.5,
+          borderColor: layerColor.withAlpha(100),
+          borderStrokeWidth: selected ? 8 : 6,
         ));
       }
     }
     return out;
   }
 
-  List<Marker> _buildMarkers(AppLocalizations l10n) {
-    final out = <Marker>[];
+  List<CircleMarker> _buildPointCircles() {
+    final out = <CircleMarker>[];
     for (final f in _features) {
-      if (f.point == null) continue;
       final selected = f.id == _selectedFeatureId;
-      final color = _colorForLayer(f.layerKey);
-      out.add(Marker(
-        point: f.point!,
-        width: selected ? 44 : 36,
-        height: selected ? 52 : 44,
-        child: GestureDetector(
-          onTap: () => _selectFeature(f),
-          child: _MapDataMarker(
-            color: color,
-            label: f.label,
-            selected: selected,
-          ),
-        ),
-      ));
+      final layerColor = _colorForLayer(f.layerKey);
+      for (final pt in f.points) {
+        out.add(CircleMarker(
+          point: pt,
+          radius: selected ? 7 : 5,
+          color: layerColor.withAlpha(selected ? 240 : 200),
+          borderColor: selected ? Colors.white : layerColor.withAlpha(255),
+          borderStrokeWidth: selected ? 2 : 1.2,
+        ));
+      }
     }
+    return out;
+  }
+
+  List<Marker> _buildOverlayMarkers(AppLocalizations l10n) {
+    final out = <Marker>[];
     final siteLat = widget.ticket?.siteLatitude;
     final siteLng = widget.ticket?.siteLongitude;
     if (siteLat != null && siteLng != null) {
@@ -491,7 +487,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                 ),
                 if (_buildPolygons().isNotEmpty) PolygonLayer(polygons: _buildPolygons()),
                 if (_buildPolylines().isNotEmpty) PolylineLayer(polylines: _buildPolylines()),
-                MarkerLayer(markers: _buildMarkers(l10n)),
+                if (_buildPointCircles().isNotEmpty) CircleLayer(circles: _buildPointCircles()),
+                MarkerLayer(markers: _buildOverlayMarkers(l10n)),
                 SimpleAttributionWidget(
                   alignment: Alignment.bottomLeft,
                   backgroundColor: const Color(0x8805051A),
@@ -600,6 +597,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               scrollController: scroll,
               l10n: l10n,
               layers: _layers,
+              sqlTableCount: _sqlTables.length,
               hiddenKeys: _hiddenLayerKeys,
               selected: _selected,
               canWrite: widget.canWrite,
@@ -684,56 +682,12 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
-class _MapDataMarker extends StatelessWidget {
-  const _MapDataMarker({
-    required this.color,
-    this.label,
-    this.selected = false,
-  });
-
-  final Color color;
-  final String? label;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (label != null && label!.isNotEmpty)
-          Container(
-            constraints: const BoxConstraints(maxWidth: 120),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: selected ? const Color(0xFF6C63FF) : const Color(0xE612122A),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: color.withAlpha(200)),
-            ),
-            child: Text(
-              label!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
-            ),
-          ),
-        const SizedBox(height: 2),
-        Icon(
-          Icons.location_on,
-          color: selected ? const Color(0xFF6C63FF) : color,
-          size: selected ? 40 : 34,
-          shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
-        ),
-      ],
-    );
-  }
-}
-
 class _BottomPanel extends StatelessWidget {
   const _BottomPanel({
     required this.scrollController,
     required this.l10n,
     required this.layers,
+    required this.sqlTableCount,
     required this.hiddenKeys,
     required this.selected,
     required this.canWrite,
@@ -750,6 +704,7 @@ class _BottomPanel extends StatelessWidget {
   final ScrollController scrollController;
   final AppLocalizations l10n;
   final List<_LayerChip> layers;
+  final int sqlTableCount;
   final Set<String> hiddenKeys;
   final QFieldMapFeature? selected;
   final bool canWrite;
@@ -839,7 +794,9 @@ class _BottomPanel extends StatelessWidget {
               const SizedBox(height: 14),
               if (selected == null)
                 Text(
-                  l10n.t('qfield_map_tap_feature'),
+                  sqlTableCount > 0
+                      ? '${l10n.t('qfield_map_tap_feature')} · $sqlTableCount SQL ${l10n.t('qfield_map_layers').toLowerCase()}'
+                      : l10n.t('qfield_map_tap_feature'),
                   style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
                 )
               else ...[
