@@ -346,38 +346,28 @@ export function reprojectGeoJsonToWgs84Auto(
 }
 
 function firstCoordinatePair(geom: GeoJsonGeometry): [number, number] | null {
-  let sample: [number, number] | null = null;
+  let x: number | undefined;
+  let y: number | undefined;
   const walk = (coords: unknown): void => {
-    if (sample || !Array.isArray(coords)) return;
+    if (x !== undefined || !Array.isArray(coords)) return;
     if (
       coords.length >= 2 &&
       typeof coords[0] === 'number' &&
       typeof coords[1] === 'number'
     ) {
-      sample = [coords[0] as number, coords[1] as number];
+      x = coords[0];
+      y = coords[1];
       return;
     }
     for (const c of coords) walk(c);
   };
   if ('coordinates' in geom && geom.coordinates) walk(geom.coordinates);
-  return sample;
+  if (x === undefined || y === undefined) return null;
+  return [x, y];
 }
 
 export function geometryNeedsReproject(geom: GeoJsonGeometry): boolean {
-  let sample: [number, number] | null = null;
-  const walk = (coords: unknown): void => {
-    if (sample || !Array.isArray(coords)) return;
-    if (
-      coords.length >= 2 &&
-      typeof coords[0] === 'number' &&
-      typeof coords[1] === 'number'
-    ) {
-      sample = [coords[0] as number, coords[1] as number];
-      return;
-    }
-    for (const c of coords) walk(c);
-  };
-  if ('coordinates' in geom && geom.coordinates) walk(geom.coordinates);
+  const sample = firstCoordinatePair(geom);
   if (!sample) return false;
   const [x, y] = sample;
   if (isWgs84LatLng(y, x)) return false;
