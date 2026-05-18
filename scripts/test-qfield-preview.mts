@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs';
-import { extractQfieldMapPreviewFromBytes } from '../lib/qfield-map-preview.ts';
+import { extractQfieldMapPreviewFromBytes } from '../lib/qfield-map-preview';
 
 const zipPath = process.argv[2];
 if (!zipPath) {

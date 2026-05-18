@@ -10,7 +10,7 @@ async function main() {
     console.error('Usage: npx tsx scripts/test-qfield-preview.mts <zip-path>');
     process.exit(1);
   }
-  const { extractQfieldMapPreviewFromBytes } = await import('../lib/qfield-map-preview.ts');
+  const { extractQfieldMapPreviewFromBytes } = await import('../lib/qfield-map-preview');
   const zip = readFileSync(zipPath);
   const preview = await extractQfieldMapPreviewFromBytes('sample.zip', new Uint8Array(zip));
   const feats = preview.geojson?.features ?? [];
