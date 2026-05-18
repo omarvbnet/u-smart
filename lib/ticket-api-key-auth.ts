@@ -44,6 +44,7 @@ export type ResolvedTicketApiKey = {
   id: string;
   requesterId: string;
   label: string | null;
+  allowedDepartmentIds: string[];
 };
 
 export async function resolveTicketApiKey(
@@ -61,7 +62,7 @@ export async function resolveTicketApiKey(
       keyHash: hash,
       revokedAt: null,
     },
-    select: { id: true, requesterId: true, label: true },
+    select: { id: true, requesterId: true, label: true, allowedDepartmentIds: true },
   });
   if (!row) return null;
 
@@ -74,5 +75,6 @@ export async function resolveTicketApiKey(
     id: row.id,
     requesterId: row.requesterId,
     label: row.label ?? null,
+    allowedDepartmentIds: Array.isArray(row.allowedDepartmentIds) ? row.allowedDepartmentIds : [],
   };
 }

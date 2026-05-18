@@ -211,17 +211,17 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> deleteAccount() async {
+  Future<({bool ok, String? message, String? error})> scheduleAccountDeletion() async {
     _error = null;
     notifyListeners();
-    final ok = await _authService.deleteAccount();
-    if (ok) {
+    final result = await _authService.scheduleAccountDeletion();
+    if (result.ok) {
       _user = null;
     } else {
-      _error = 'Failed to delete account. Please try again.';
+      _error = result.error ?? 'Failed to schedule account deletion.';
     }
     notifyListeners();
-    return ok;
+    return result;
   }
 
   Future<({String username, String password})?> getSavedCredentials() async {

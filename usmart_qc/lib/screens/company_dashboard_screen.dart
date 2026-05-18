@@ -35,6 +35,7 @@ import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../widgets/available_tickets_pool_tab.dart';
 import '../widgets/personal_company_upgrade_card.dart';
 import '../widgets/ticket_api_access_card.dart';
+import '../utils/account_deletion_ui.dart';
 import '../utils/requester_role_labels.dart';
 import '../config/api_config.dart';
 
@@ -2863,7 +2864,7 @@ class _ProfileTab extends StatelessWidget {
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
-                  onTap: () => _confirmDeleteAccount(context, auth),
+                  onTap: () => confirmScheduleAccountDeletion(context, auth),
                   borderRadius: BorderRadius.circular(16),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -2877,7 +2878,7 @@ class _ProfileTab extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Delete my account',
+                          l10n.t('delete_account_button'),
                           style: TextStyle(
                             color: const Color(0xFFFF6B6B).withAlpha(220),
                             fontSize: 15,
@@ -3006,59 +3007,6 @@ class _ProfileTab extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _confirmDeleteAccount(
-    BuildContext context,
-    AuthProvider auth,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF12122A),
-        title: const Text(
-          'Delete account',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'This will permanently delete your account and related data from our server. This action cannot be undone.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Color(0xFFFF6B6B)),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final ok = await auth.deleteAccount();
-    if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop();
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(auth.error ?? 'Failed to delete account.'),
-          backgroundColor: const Color(0xFFFF4757),
-        ),
-      );
-    }
   }
 
   Widget _languageRow(

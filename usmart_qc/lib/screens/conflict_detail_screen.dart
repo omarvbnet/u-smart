@@ -5,6 +5,7 @@ import '../models/conflict.dart';
 import '../models/evidence.dart';
 import '../providers/auth_provider.dart';
 import '../providers/conflicts_provider.dart';
+import '../providers/private_company_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../config/api_config.dart';
 import 'attachment_viewer_screen.dart';
@@ -165,6 +166,10 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
           ),
         );
         context.read<TicketsProvider>().fetchTickets();
+        final pc = context.read<PrivateCompanyProvider>();
+        if (pc.canManageWorkspaceConflicts) {
+          context.read<ConflictsProvider>().fetchWorkspaceConflicts(status: 'all');
+        }
         if (mounted) Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -288,6 +293,7 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                 ]),
 
                 if (!context.read<AuthProvider>().isAdmin &&
+                    !context.read<PrivateCompanyProvider>().canManageWorkspaceConflicts &&
                     c.isPending) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -514,7 +520,9 @@ class _ConflictDetailScreenState extends State<ConflictDetailScreen> {
                   ]),
                 ],
 
-                if (c.isPending && context.read<AuthProvider>().isAdmin) ...[
+                if (c.isPending &&
+                    (context.read<AuthProvider>().isAdmin ||
+                        context.read<PrivateCompanyProvider>().canManageWorkspaceConflicts)) ...[
                   const SizedBox(height: 24),
                   Text(
                     l10n.t('resolve_conflict'),

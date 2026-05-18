@@ -11,19 +11,56 @@ class ConflictsProvider extends ChangeNotifier {
   ConflictCase? _selectedConflict;
   bool _loading = false;
   String? _error;
+  int _workspacePendingCount = 0;
+  bool _workspaceMode = false;
 
   ConflictsProvider(this._api);
 
   List<ConflictCase> get conflicts => _conflicts;
+  int get workspacePendingCount => _workspacePendingCount;
+  bool get workspaceMode => _workspaceMode;
   List<ConflictCase> get pendingConflicts =>
       _conflicts.where((c) => c.isPending).toList();
   ConflictCase? get selectedConflict => _selectedConflict;
   bool get loading => _loading;
   String? get error => _error;
 
+  Future<void> fetchWorkspaceConflicts({String status = 'open'}) async {
+    _loading = true;
+    _error = null;
+    _workspaceMode = true;
+    notifyListeners();
+    try {
+      final data = await _api.getSafe(
+        ApiConfig.privateCompanyConflicts,
+        query: {'status': status},
+      );
+      if (data != null &&
+          data['success'] == true &&
+          data['conflicts'] is List) {
+        _conflicts = (data['conflicts'] as List)
+            .map((e) => ConflictCase.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _workspacePendingCount = data['pendingCount'] is int
+            ? data['pendingCount'] as int
+            : pendingConflicts.length;
+      } else {
+        _conflicts = [];
+        _workspacePendingCount = 0;
+      }
+    } catch (e) {
+      _error = 'Failed to load conflicts';
+      _conflicts = [];
+      _workspacePendingCount = 0;
+    }
+    _loading = false;
+    notifyListeners();
+  }
+
   Future<void> fetchConflicts() async {
     _loading = true;
     _error = null;
+    _workspaceMode = false;
     notifyListeners();
     try {
       final data = await _api.getSafe(ApiConfig.conflicts, query: {

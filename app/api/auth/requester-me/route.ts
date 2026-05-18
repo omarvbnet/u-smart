@@ -4,6 +4,12 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { REQUESTER_COOKIE_NAME } from '@/lib/requester-auth';
 import { getLinkedCoordinatorCompanyId } from '@/lib/linked-coordinator-company';
 import { decodeProfileSkills } from '@/lib/coordinator-access';
+import {
+  cancelScheduledDeletionIfPending,
+  purgeExpiredAccountDeletions,
+  scheduleTicketRequesterDeletion,
+  ACCOUNT_DELETION_GRACE_DAYS,
+} from '@/lib/ticket-requester-account-deletion';
 
 export async function GET(req: NextRequest) {
   const auth = getRequesterFromRequest(req);
@@ -11,6 +17,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, user: null });
   }
   const payload = auth.payload;
+
+  await purgeExpiredAccountDeletions().catch((e) =>
+    console.error('purgeExpiredAccountDeletions on GET me:', e)
+  );
 
   if (payload.identitySource === 'coordinator_user') {
     try {
@@ -90,6 +100,13 @@ export async function GET(req: NextRequest) {
   if (!requester) {
     return NextResponse.json({ success: false, user: null });
   }
+
+  try {
+    await cancelScheduledDeletionIfPending(payload.requesterId);
+  } catch {
+    return NextResponse.json({ success: false, user: null });
+  }
+
   // Optional fields - may not exist in generated client
   let companyCertificationUrl: string | null = null;
   let status = 'ACTIVE';
@@ -179,18 +196,23 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    await prisma.ticketRequester.delete({
-      where: { id: auth.payload.requesterId },
+    const { scheduledDeletionAt: deleteAt } = await scheduleTicketRequesterDeletion(
+      auth.payload.requesterId
+    );
+    const res = NextResponse.json({
+      success: true,
+      scheduled: true,
+      scheduledDeletionAt: deleteAt,
+      graceDays: ACCOUNT_DELETION_GRACE_DAYS,
+      message: `Account scheduled for deletion. If you do not sign in within ${ACCOUNT_DELETION_GRACE_DAYS} days, your data will be permanently removed. Sign in anytime before then to cancel.`,
     });
+    res.cookies.delete(REQUESTER_COOKIE_NAME);
+    return res;
   } catch (err) {
     console.error('DELETE /api/auth/requester-me:', err);
     return NextResponse.json(
-      { success: false, message: 'Failed to delete account' },
+      { success: false, message: 'Failed to schedule account deletion' },
       { status: 500 }
     );
   }
-
-  const res = NextResponse.json({ success: true, message: 'Account deleted successfully' });
-  res.cookies.delete(REQUESTER_COOKIE_NAME);
-  return res;
 }

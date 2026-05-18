@@ -126,6 +126,7 @@ class ApiConfig {
       '/api/provisor-private-company/techniques/$id';
   static const String privateCompanyNotifications = '/api/provisor-private-company/notifications';
   static const String privateCompanyKpis = '/api/provisor-private-company/kpis';
+  static const String privateCompanyConflicts = '/api/provisor-private-company/conflicts';
   static const String privateCompanySiteArrivalCheck =
       '/api/provisor-private-company/site-arrival/check';
   static const String privateCompanyExpenseSettings =

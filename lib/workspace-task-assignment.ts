@@ -26,6 +26,17 @@ export async function fetchWorkspaceTechniqueRows(prisma: any, companyId: string
   }
 }
 
+const PC_DEPT_QC_PREFIX = 'pc_dept_qc_';
+const PC_DEPT_M_PREFIX = 'pc_dept_m_';
+
+/** Workspace tickets routed by department use synthetic slugs from [departmentQcTechniqueSlug]. */
+export function departmentIdFromWorkspaceTechniqueSlug(technique: string): string | null {
+  const t = technique.trim().toLowerCase();
+  if (t.startsWith(PC_DEPT_QC_PREFIX)) return t.slice(PC_DEPT_QC_PREFIX.length) || null;
+  if (t.startsWith(PC_DEPT_M_PREFIX)) return t.slice(PC_DEPT_M_PREFIX.length) || null;
+  return null;
+}
+
 /**
  * When no active technique rows exist for the workspace, all configured staff
  * still receive notifications / list rows (backward compatible).
@@ -38,6 +49,13 @@ export function staffTicketTechniqueAllowed(args: {
 }): boolean {
   const tech = args.technique.trim().toLowerCase();
   if (!tech) return true;
+
+  const deptFromSlug = departmentIdFromWorkspaceTechniqueSlug(tech);
+  if (deptFromSlug) {
+    const staffDept = args.staffDepartmentId?.trim() || '';
+    return !!staffDept && staffDept === deptFromSlug;
+  }
+
   const rows = args.workspaceRows.filter((r) => r.active && r.slug);
   if (rows.length === 0) return true;
 

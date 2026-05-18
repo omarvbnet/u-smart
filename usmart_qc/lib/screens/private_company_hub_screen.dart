@@ -15,6 +15,8 @@ import '../models/private_company_warehouse.dart';
 import '../providers/auth_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
+import '../providers/conflicts_provider.dart';
+import 'conflicts_screen.dart';
 import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
@@ -61,11 +63,24 @@ String _pcStatusLabel(PrivateCompanyStatus s, AppLocalizations l10n) {
   }
 }
 
+bool _pcHubShowsConflictsTab(PrivateCompanyProvider pc) {
+  if (!pc.hasWorkspace || !pc.isApproved) return false;
+  if (_pcUsesFieldStaffHub(pc)) return false;
+  return pc.canManageWorkspaceConflicts;
+}
+
 bool _pcHubShowsExpensesTab(PrivateCompanyProvider pc) {
   if (!pc.hasWorkspace || !pc.isApproved) return false;
   final w = pc.workspace;
   if (w == null) return false;
-  return w.ticketExpensesEnabled || pc.canManageStaff;
+  if (w.ticketExpensesEnabled) {
+    return pc.isOwner || pc.canManageStaff || pc.isPrivateWorkspaceFieldStaff;
+  }
+  return pc.canManageStaff;
+}
+
+bool _pcUsesFieldStaffHub(PrivateCompanyProvider pc) {
+  return pc.isPrivateWorkspaceFieldStaff && !pc.isOwner && !pc.isDepartmentManager;
 }
 
 String _pcStatusDescription(
@@ -508,32 +523,25 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
   int _tabLength = 6;
   PrivateCompanyProvider? _pcAttached;
 
-  void _syncExpensesTab(PrivateCompanyProvider pc) {
-    final n = _pcHubShowsExpensesTab(pc) ? 7 : 6;
+  int _hubTabCount(PrivateCompanyProvider pc) {
+    if (_pcUsesFieldStaffHub(pc)) {
+      return _pcHubShowsExpensesTab(pc) ? 4 : 3;
+    }
+    var n = _pcHubShowsExpensesTab(pc) ? 7 : 6;
+    if (_pcHubShowsConflictsTab(pc)) n += 1;
+    return n;
+  }
+
+  void _syncHubTabs(PrivateCompanyProvider pc) {
+    final n = _hubTabCount(pc);
     if (n == _tabLength) return;
     final prevIndex = _tabs.index;
-    final oldLen = _tabLength;
     _tabs.dispose();
     _tabLength = n;
     _tabs = TabController(length: n, vsync: this);
-
-    int newIndex;
-    if (n > oldLen) {
-      // Inserted "Expenses" before warehouse (at index 5).
-      newIndex = prevIndex >= 5 ? prevIndex + 1 : prevIndex;
-    } else {
-      // Removed expenses tab at index 5.
-      if (prevIndex == 5) {
-        newIndex = 5; // was expenses → warehouse is now at 5
-      } else if (prevIndex > 5) {
-        newIndex = prevIndex - 1;
-      } else {
-        newIndex = prevIndex;
-      }
-    }
+    var newIndex = prevIndex;
     if (newIndex >= n) newIndex = n - 1;
     if (newIndex < 0) newIndex = 0;
-    _tabs.index = newIndex;
   }
 
   void _attachPcListener(PrivateCompanyProvider pc) {
@@ -547,7 +555,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     final pc = _pcAttached;
     if (pc == null || !mounted) return;
     final lenBefore = _tabLength;
-    _syncExpensesTab(pc);
+    _syncHubTabs(pc);
     if (lenBefore != _tabLength) setState(() {});
   }
 
@@ -559,6 +567,10 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final wh = context.read<PrivateCompanyWarehouseProvider>();
       if (wh.dashboard == null && !wh.loading) wh.refreshAll();
+      final pc = context.read<PrivateCompanyProvider>();
+      if (_pcHubShowsConflictsTab(pc)) {
+        context.read<ConflictsProvider>().fetchWorkspaceConflicts();
+      }
     });
   }
 
@@ -568,7 +580,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     final pc = context.read<PrivateCompanyProvider>();
     _attachPcListener(pc);
     final lenBefore = _tabLength;
-    _syncExpensesTab(pc);
+    _syncHubTabs(pc);
     if (lenBefore != _tabLength) setState(() {});
   }
 
@@ -585,6 +597,9 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     final ws = widget.workspace;
     final l10n = AppLocalizations.of(context);
     final showExpensesTab = _pcHubShowsExpensesTab(pc);
+    final showConflictsTab = _pcHubShowsConflictsTab(pc);
+    final fieldHub = _pcUsesFieldStaffHub(pc);
+    final conflictsPending = context.watch<ConflictsProvider>().workspacePendingCount;
     return Column(
       children: [
         _WorkspaceHeader(workspace: ws),
@@ -675,30 +690,89 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                 const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             isScrollable: true,
             tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(icon: const Icon(Icons.dashboard_rounded, size: 18), text: l10n.t('pc_ws_tab_overview')),
-              Tab(icon: const Icon(Icons.account_tree_rounded, size: 18), text: l10n.t('pc_ws_tab_departments')),
-              Tab(icon: const Icon(Icons.groups_rounded, size: 18), text: l10n.t('pc_ws_tab_staff')),
-              Tab(icon: const Icon(Icons.checklist_rounded, size: 18), text: l10n.t('pc_ws_tab_checklists')),
-              Tab(icon: const Icon(Icons.speed_rounded, size: 18), text: l10n.t('pc_ws_tab_performance')),
-              if (showExpensesTab)
-                Tab(icon: const Icon(Icons.payments_rounded, size: 18), text: l10n.t('pc_ws_tab_expenses')),
-              Tab(icon: const Icon(Icons.inventory_2_rounded, size: 18), text: l10n.t('pc_ws_tab_warehouse')),
-            ],
+            tabs: fieldHub
+                ? [
+                    Tab(
+                      icon: const Icon(Icons.dashboard_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_overview'),
+                    ),
+                    Tab(
+                      icon: const Icon(Icons.speed_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_performance'),
+                    ),
+                    if (showExpensesTab)
+                      Tab(
+                        icon: const Icon(Icons.payments_rounded, size: 18),
+                        text: l10n.t('pc_ws_tab_expenses'),
+                      ),
+                    Tab(
+                      icon: const Icon(Icons.inventory_2_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_warehouse'),
+                    ),
+                  ]
+                : [
+                    Tab(
+                      icon: const Icon(Icons.dashboard_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_overview'),
+                    ),
+                    Tab(
+                      icon: const Icon(Icons.account_tree_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_departments'),
+                    ),
+                    Tab(
+                      icon: const Icon(Icons.groups_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_staff'),
+                    ),
+                    Tab(
+                      icon: const Icon(Icons.checklist_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_checklists'),
+                    ),
+                    Tab(
+                      icon: const Icon(Icons.speed_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_performance'),
+                    ),
+                    if (showConflictsTab)
+                      Tab(
+                        icon: Badge(
+                          isLabelVisible: conflictsPending > 0,
+                          label: Text('$conflictsPending'),
+                          child: const Icon(Icons.gavel_rounded, size: 18),
+                        ),
+                        text: l10n.t('pc_ws_tab_conflicts'),
+                      ),
+                    if (showExpensesTab)
+                      Tab(
+                        icon: const Icon(Icons.payments_rounded, size: 18),
+                        text: l10n.t('pc_ws_tab_expenses'),
+                      ),
+                    Tab(
+                      icon: const Icon(Icons.inventory_2_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_warehouse'),
+                    ),
+                  ],
           ),
         ),
         Expanded(
           child: TabBarView(
             controller: _tabs,
-            children: [
-              _OverviewTab(workspace: ws),
-              _DepartmentsTab(workspace: ws),
-              _StaffTab(workspace: ws),
-              _ChecklistsTab(workspace: ws),
-              _KpisTab(workspace: ws),
-              if (showExpensesTab) const _ExpensesTab(),
-              _WarehouseTab(workspace: ws),
-            ],
+            children: fieldHub
+                ? [
+                    _OverviewTab(workspace: ws),
+                    _KpisTab(workspace: ws),
+                    if (showExpensesTab) const _ExpensesTab(),
+                    _WarehouseTab(workspace: ws),
+                  ]
+                : [
+                    _OverviewTab(workspace: ws),
+                    _DepartmentsTab(workspace: ws),
+                    _StaffTab(workspace: ws),
+                    _ChecklistsTab(workspace: ws),
+                    _KpisTab(workspace: ws),
+                    if (showConflictsTab)
+                      const ConflictsScreen(embedded: true, workspaceMode: true),
+                    if (showExpensesTab) const _ExpensesTab(),
+                    _WarehouseTab(workspace: ws),
+                  ],
           ),
         ),
       ],
@@ -4647,10 +4721,13 @@ class _KpisTabState extends State<_KpisTab> {
                               )),
                           const SizedBox(height: 18),
                         ],
-                        if (pc.isOwner &&
-                            pc.kpiSnapshot!.byDepartment.isNotEmpty &&
+                        if (pc.kpiSnapshot!.byDepartment.isNotEmpty &&
                             _provinceFilter == null) ...[
-                          _SectionTitle(l10n.t('pc_kpi_by_department')),
+                          _SectionTitle(
+                            pc.isOwner
+                                ? l10n.t('pc_kpi_by_department')
+                                : l10n.t('pc_kpi_your_department'),
+                          ),
                           const SizedBox(height: 8),
                           ...pc.kpiSnapshot!.byDepartment.map((d) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),

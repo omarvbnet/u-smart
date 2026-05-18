@@ -355,6 +355,8 @@ model TicketRequester {
   phonePushToken          String?
   phonePlatform           String?
   preferredLocale         String? // en | ar | tr | ku (Provisor UI language)
+  /// Set when user requests account deletion; purged after 7 days without login.
+  deletionRequestedAt     DateTime?
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   tickets                 VisitorRequest[]
@@ -520,6 +522,8 @@ model TicketApiKey {
   keyPrefix        String
   keyHash          String
   label            String?
+  /// Empty = no extra restriction (non-workspace keys). Otherwise API may only target these workspace departments.
+  allowedDepartmentIds String[]               @default([])
   revokedAt        DateTime?
   lastUsedAt       DateTime?
   createdByAdminId String?

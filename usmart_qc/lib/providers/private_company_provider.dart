@@ -40,6 +40,34 @@ class PrivateCompanyProvider extends ChangeNotifier {
   String? get lastSuccess => _lastSuccess;
 
   bool get hasWorkspace => _workspace != null;
+
+  /// Approved private-workspace company display name (owner or staff).
+  String? get workspaceCompanyName {
+    final n = _workspace?.name.trim();
+    if (n == null || n.isEmpty) return null;
+    return n;
+  }
+
+  /// Owner or active staff in an approved workspace.
+  bool get canOpenPrivateWorkspace =>
+      hasWorkspace && isApproved && (isOwner || isStaff);
+
+  static const _fieldStaffRoles = {
+    'ENGINEER',
+    'TECHNICIAN',
+    'WORKER',
+    'QUALITY_ENGINEER',
+    'SUPERVISION_ENGINEER',
+  };
+
+  /// Execution roles created inside a workspace (not owner / manager / coordinator / keeper).
+  bool get isPrivateWorkspaceFieldStaff {
+    if (!isApproved || !isStaff || isOwner) return false;
+    final role = _resolvedRole;
+    if (role == null || role.isEmpty) return false;
+    return _fieldStaffRoles.contains(role);
+  }
+
   /// All approved workspace members can open the Performance tab (scoped by role server-side).
   bool get canViewKpis => hasWorkspace && isApproved && (isOwner || isStaff);
 
@@ -220,6 +248,13 @@ class PrivateCompanyProvider extends ChangeNotifier {
     if (r == 'WAREHOUSE_KEEPER') return true;
     if (r != 'MANAGER' && r != 'COORDINATOR') return false;
     return myDepartmentId != null && myDepartmentId!.isNotEmpty;
+  }
+
+  /// Workspace owner or department manager/coordinator — view and resolve conflict cases.
+  bool get canManageWorkspaceConflicts {
+    if (!hasWorkspace || !isApproved) return false;
+    if (isOwner) return true;
+    return isDepartmentManager && myDepartmentId != null && myDepartmentId!.isNotEmpty;
   }
 
   /// True for managers/coordinators (non-owner) — they are scoped to their own

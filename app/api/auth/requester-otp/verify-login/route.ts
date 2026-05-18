@@ -7,10 +7,18 @@ import {
   nextResponseLegacyOwnerSession,
   nextResponseTicketRequesterSession,
 } from '@/lib/provisor-otp-login-issue';
+import {
+  purgeExpiredAccountDeletions,
+  resolveDeletionOnLogin,
+} from '@/lib/ticket-requester-account-deletion';
 
 /** Phone + OTP sign-in for ticket requesters and coordinator users (no password). */
 export async function POST(req: NextRequest) {
   try {
+    await purgeExpiredAccountDeletions().catch((e) =>
+      console.error('purgeExpiredAccountDeletions on OTP login:', e)
+    );
+
     const body = await req.json();
     const phone = normalizePhoneE164(typeof body.phone === 'string' ? body.phone : '');
     const code = body.code != null ? String(body.code).trim() : '';
@@ -49,6 +57,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { success: false, message: 'Your account is blocked or suspended. Please contact support.' },
           { status: 403 }
+        );
+      }
+
+      const deletion = await resolveDeletionOnLogin(requester.id);
+      if (deletion === 'deleted') {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Your account was deleted after the scheduled deletion period. Contact support if this is a mistake.',
+          },
+          { status: 410 }
         );
       }
 

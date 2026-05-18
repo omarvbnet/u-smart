@@ -9,6 +9,11 @@ import {
   invalidateVisitorRequestsCoordinatorCompanyIdCache,
 } from '@/lib/visitor-request-db-columns';
 import { isConflictInspectionLowercase, rowToConflictPayload } from '@/lib/qc-conflict-mapper';
+import {
+  getWorkspaceConflictManageContext,
+  ticketInWorkspaceConflictScope,
+} from '@/lib/private-company-conflict-access';
+import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 
 const VALID_RESOLUTIONS = ['accepted', 'not_accepted', 'ncr', 'accepted_with_comments', 're_inspection', 'keep_same', 're_maintain', 'no_need'];
 
@@ -44,6 +49,8 @@ export async function GET(
       requesterId: string | null;
       technique: string;
       coordinatorCompanyId?: string | null;
+      privateCompanyId?: string | null;
+      privateCompanyTargetDepartmentId?: string | null;
     } | null;
     let coordinatorColumnSelectable = true;
     try {
@@ -56,6 +63,8 @@ export async function GET(
           requesterId: true,
           technique: true,
           coordinatorCompanyId: true,
+          privateCompanyId: true,
+          privateCompanyTargetDepartmentId: true,
         },
       });
     } catch (e: unknown) {
@@ -64,7 +73,15 @@ export async function GET(
         coordinatorColumnSelectable = false;
         row = await prisma.visitorRequest.findUnique({
           where: { id },
-          select: { id: true, company: true, status: true, requesterId: true, technique: true },
+          select: {
+            id: true,
+            company: true,
+            status: true,
+            requesterId: true,
+            technique: true,
+            privateCompanyId: true,
+            privateCompanyTargetDepartmentId: true,
+          },
         });
       } else {
         throw e;
@@ -95,7 +112,17 @@ export async function GET(
         coordinatorContext.role === 'COMPANY_OWNER' ||
         coordinatorContext.role === 'MANAGER' ||
         hasPrivilege(coordinatorContext.privileges, 'MANAGE_CONFLICTS'));
-    if (!isOwner && !isAssigned && !isCoordinatorAllowed) {
+    const wsCtx = await getWorkspaceConflictManageContext(auth.payload.requesterId);
+    const isWorkspaceManagerAllowed =
+      !!wsCtx &&
+      ticketInWorkspaceConflictScope(
+        {
+          privateCompanyId: row.privateCompanyId ?? null,
+          privateCompanyTargetDepartmentId: row.privateCompanyTargetDepartmentId ?? null,
+        },
+        wsCtx
+      );
+    if (!isOwner && !isAssigned && !isCoordinatorAllowed && !isWorkspaceManagerAllowed) {
       return NextResponse.json({ success: false, message: 'Conflict not found' }, { status: 404 });
     }
 
@@ -141,13 +168,21 @@ export async function PATCH(
     }
   }
 
+  const wsManageCtx = await getWorkspaceConflictManageContext(auth.payload.requesterId);
+
   const canResolveAsCoordinator =
     coordinatorContext &&
     (coordinatorContext.role === 'ADMIN' ||
       coordinatorContext.role === 'COMPANY_OWNER' ||
       coordinatorContext.role === 'MANAGER' ||
       hasPrivilege(coordinatorContext.privileges, 'MANAGE_CONFLICTS'));
-  if (!canResolveAsCoordinator && requesterRole !== 'ENGINEER' && requesterRole !== 'ADMIN') {
+  const canResolveAsWorkspaceManager = !!wsManageCtx;
+  if (
+    !canResolveAsCoordinator &&
+    !canResolveAsWorkspaceManager &&
+    requesterRole !== 'ENGINEER' &&
+    requesterRole !== 'ADMIN'
+  ) {
     return NextResponse.json({ success: false, message: 'Only authorized roles can resolve conflicts' }, { status: 403 });
   }
 
@@ -168,40 +203,68 @@ export async function PATCH(
   }
 
   try {
-    const whereClause: any = { id };
-    if (coordinatorContext) {
-      whereClause.coordinatorCompanyId = coordinatorContext.companyId;
-    } else if (requesterRole !== 'ADMIN') {
-      whereClause.company = { contains: auth.payload.requesterId };
-    }
-
     let ticket: {
       id: string;
       company: string | null;
       requesterId: string | null;
       technique: string;
-    } | null;
+      privateCompanyId?: string | null;
+      privateCompanyTargetDepartmentId?: string | null;
+    } | null = null;
 
-    try {
+    if (canResolveAsWorkspaceManager && wsManageCtx) {
       ticket = await prisma.visitorRequest.findFirst({
-        where: whereClause,
-        select: { id: true, company: true, requesterId: true, technique: true },
+        where: { id, privateCompanyId: wsManageCtx.companyId },
+        select: {
+          id: true,
+          company: true,
+          requesterId: true,
+          technique: true,
+          privateCompanyId: true,
+          privateCompanyTargetDepartmentId: true,
+        },
       });
-    } catch (e: unknown) {
-      if (isMissingVisitorRequestsCoordinatorCompanyIdColumn(e)) {
-        invalidateVisitorRequestsCoordinatorCompanyIdCache();
-        if (coordinatorContext) {
-          return NextResponse.json(
-            {
-              success: false,
-              message:
-                'Database migration required for coordinator conflict actions. Run: npx prisma migrate deploy',
-            },
-            { status: 503 }
-          );
-        }
+      if (
+        ticket &&
+        !ticketInWorkspaceConflictScope(
+          {
+            privateCompanyId: ticket.privateCompanyId ?? null,
+            privateCompanyTargetDepartmentId: ticket.privateCompanyTargetDepartmentId ?? null,
+          },
+          wsManageCtx
+        )
+      ) {
+        ticket = null;
       }
-      throw e;
+    } else {
+      const whereClause: any = { id };
+      if (coordinatorContext) {
+        whereClause.coordinatorCompanyId = coordinatorContext.companyId;
+      } else if (requesterRole !== 'ADMIN') {
+        whereClause.company = { contains: auth.payload.requesterId };
+      }
+
+      try {
+        ticket = await prisma.visitorRequest.findFirst({
+          where: whereClause,
+          select: { id: true, company: true, requesterId: true, technique: true },
+        });
+      } catch (e: unknown) {
+        if (isMissingVisitorRequestsCoordinatorCompanyIdColumn(e)) {
+          invalidateVisitorRequestsCoordinatorCompanyIdCache();
+          if (coordinatorContext) {
+            return NextResponse.json(
+              {
+                success: false,
+                message:
+                  'Database migration required for coordinator conflict actions. Run: npx prisma migrate deploy',
+              },
+              { status: 503 }
+            );
+          }
+        }
+        throw e;
+      }
     }
 
     if (!ticket) {
@@ -271,6 +334,56 @@ export async function PATCH(
         });
       } catch {
         /* ticketStatusLog may not exist */
+      }
+    }
+
+    if (canResolveAsWorkspaceManager) {
+      const recipientIds = new Set<string>();
+      if (ticket.requesterId) recipientIds.add(ticket.requesterId);
+      const handlerId =
+        typeof parsed.assignedEngineerId === 'string' && parsed.assignedEngineerId
+          ? (parsed.assignedEngineerId as string)
+          : null;
+      if (handlerId) recipientIds.add(handlerId);
+      const siteName = String(parsed.siteName ?? '').trim();
+      const isReinspection = resolution === 're_inspection' || resolution === 'keep_same';
+      const isMaintenanceResolution = resolution === 're_maintain' || resolution === 'no_need';
+      const isOverride =
+        !isReinspection &&
+        !isMaintenanceResolution &&
+        resolution !== 'keep_same' &&
+        resolution !== 'no_need';
+      const previousResult = String(parsed.inspectionResult ?? '').toLowerCase();
+
+      for (const requesterId of recipientIds) {
+        try {
+          if (isReinspection) {
+            await notifyRequesterI18n({
+              prisma,
+              type: 'conflict_reinspection',
+              ticketId: id,
+              requesterId,
+              payload: { key: 'conflict_reinspection', vars: { siteName } },
+              data: { ticketId: id, type: 'conflict_reinspection' },
+            });
+          } else {
+            const resultKey = isMaintenanceResolution
+              ? resolution
+              : isOverride
+                ? resolution
+                : previousResult || 'accepted';
+            await notifyRequesterI18n({
+              prisma,
+              type: 'conflict_resolved',
+              ticketId: id,
+              requesterId,
+              payload: { key: 'conflict_resolved', vars: { siteName, resultKey } },
+              data: { ticketId: id, type: 'conflict_resolved', resolution },
+            });
+          }
+        } catch (e) {
+          console.error('notifyRequesterI18n (workspace conflict):', e);
+        }
       }
     }
 

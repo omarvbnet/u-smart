@@ -189,17 +189,23 @@ class AuthService {
     // Keep saved credentials for next login (do not delete)
   }
 
-  Future<bool> deleteAccount() async {
+  /// Schedules account deletion after 7 days without login; signs out immediately.
+  Future<({bool ok, String? message, String? error})> scheduleAccountDeletion() async {
     try {
       final data = await _api.delete(ApiConfig.deleteAccount);
       if (data['success'] == true) {
         await clearToken();
         await _storage.delete(key: _savedUsernameKey);
-        return true;
+        final msg = data['message'] as String?;
+        return (ok: true, message: msg, error: null);
       }
-      return false;
-    } catch (_) {
-      return false;
+      return (
+        ok: false,
+        message: null,
+        error: data['message'] as String? ?? 'Failed to schedule deletion',
+      );
+    } catch (e) {
+      return (ok: false, message: null, error: e.toString());
     }
   }
 

@@ -397,6 +397,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  function finalizeDeptRow(d: DeptAgg) {
+    return {
+      departmentId: d.departmentId,
+      departmentName: d.departmentName,
+      ticketsAssigned: d.ticketsAssigned,
+      completedTickets: d.completedTickets,
+      avgTicketAssignmentsPerDay:
+        days > 0 ? Math.round((d.ticketsAssigned / days) * 100) / 100 : 0,
+      totalTaskHours: Math.round(d.taskSumH * 100) / 100,
+      avgTaskHours: d.taskN > 0 ? Math.round((d.taskSumH / d.taskN) * 100) / 100 : null,
+      totalArrivalHours: Math.round(d.arrivalSumH * 100) / 100,
+      avgArrivalHours: d.arrivalN > 0 ? Math.round((d.arrivalSumH / d.arrivalN) * 100) / 100 : null,
+      totalResubmissionHours: Math.round(d.resubmitSumH * 100) / 100,
+      avgResubmissionHours:
+        d.resubmitN > 0 ? Math.round((d.resubmitSumH / d.resubmitN) * 100) / 100 : null,
+    };
+  }
+
   let byDepartment: Array<{
     departmentId: string | null;
     departmentName: string;
@@ -411,22 +429,13 @@ export async function GET(req: NextRequest) {
 
   if (isOwner) {
     byDepartment = [...perDept.values()]
-      .map((d) => ({
-        departmentId: d.departmentId,
-        departmentName: d.departmentName,
-        ticketsAssigned: d.ticketsAssigned,
-        completedTickets: d.completedTickets,
-        avgTicketAssignmentsPerDay:
-          days > 0 ? Math.round((d.ticketsAssigned / days) * 100) / 100 : 0,
-        totalTaskHours: Math.round(d.taskSumH * 100) / 100,
-        avgTaskHours: d.taskN > 0 ? Math.round((d.taskSumH / d.taskN) * 100) / 100 : null,
-        totalArrivalHours: Math.round(d.arrivalSumH * 100) / 100,
-        avgArrivalHours: d.arrivalN > 0 ? Math.round((d.arrivalSumH / d.arrivalN) * 100) / 100 : null,
-        totalResubmissionHours: Math.round(d.resubmitSumH * 100) / 100,
-        avgResubmissionHours:
-          d.resubmitN > 0 ? Math.round((d.resubmitSumH / d.resubmitN) * 100) / 100 : null,
-      }))
+      .map(finalizeDeptRow)
       .sort((a, b) => b.ticketsAssigned - a.ticketsAssigned);
+  } else if (actorDepartmentId) {
+    const deptAgg = perDept.get(actorDepartmentId);
+    if (deptAgg) {
+      byDepartment = [finalizeDeptRow(deptAgg)];
+    }
   }
 
   const byProvince = [...perProvince.values()]

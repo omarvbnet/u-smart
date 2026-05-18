@@ -5,9 +5,17 @@ import { createRequesterToken, getRequesterCookieOptions, REQUESTER_COOKIE_NAME 
 import { registerRequesterPushToken } from '@/lib/push-notifications';
 import { tryCompanyOwnerCoordinatorInsteadOfLegacy } from '@/lib/linked-coordinator-company';
 import { decodeProfileSkills } from '@/lib/coordinator-access';
+import {
+  purgeExpiredAccountDeletions,
+  resolveDeletionOnLogin,
+} from '@/lib/ticket-requester-account-deletion';
 
 export async function POST(req: NextRequest) {
   try {
+    await purgeExpiredAccountDeletions().catch((e) =>
+      console.error('purgeExpiredAccountDeletions on login:', e)
+    );
+
     const body = await req.json();
     const usernameOrEmail =
       (typeof body.usernameOrEmail === 'string' ? body.usernameOrEmail.trim() : '') ||
@@ -57,6 +65,18 @@ export async function POST(req: NextRequest) {
     });
 
     if (requester && (await bcrypt.compare(password, requester.passwordHash))) {
+      const deletion = await resolveDeletionOnLogin(requester.id);
+      if (deletion === 'deleted') {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Your account was deleted after the scheduled deletion period. Contact support if this is a mistake.',
+          },
+          { status: 410 }
+        );
+      }
+
       const ownerCoord = await tryCompanyOwnerCoordinatorInsteadOfLegacy(prisma, {
         id: requester.id,
         username: requester.username,

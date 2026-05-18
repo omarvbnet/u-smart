@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/notifications_provider.dart';
 import 'ticket_detail_screen.dart';
+import 'conflict_detail_screen.dart';
+import '../providers/private_company_provider.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -91,12 +93,24 @@ class _NotificationTile extends StatelessWidget {
                 .read<NotificationsProvider>()
                 .markAsRead(notification.id);
           }
-          if (notification.ticketId != null) {
+          final ticketId = notification.ticketId;
+          if (ticketId != null) {
+            if (notification.type == 'workspace_conflict_reported') {
+              final pc = context.read<PrivateCompanyProvider>();
+              if (pc.canManageWorkspaceConflicts) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ConflictDetailScreen(conflictId: ticketId),
+                  ),
+                );
+                return;
+              }
+            }
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    TicketDetailScreen(ticketId: notification.ticketId!),
+                builder: (_) => TicketDetailScreen(ticketId: ticketId),
               ),
             );
           }

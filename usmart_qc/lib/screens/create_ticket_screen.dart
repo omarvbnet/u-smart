@@ -11,6 +11,7 @@ import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
 import '../providers/private_company_provider.dart';
+import '../utils/workspace_department_technique.dart';
 import 'attachment_viewer_screen.dart';
 import 'site_map_picker_screen.dart';
 
@@ -152,6 +153,26 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       }
     }
 
+    final pc = context.read<PrivateCompanyProvider>();
+    final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
+    final String? scopeForApi = inWorkspace
+        ? (_assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : 'GLOBAL')
+        : null;
+    final routeByDept = _usesWorkspaceDepartmentRouting(pc);
+    final targetDeptId = routeByDept ? _resolveWorkspaceTargetDepartmentId(pc) : null;
+    if (routeByDept && (targetDeptId == null || targetDeptId.isEmpty)) {
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('ticket_target_department_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
     final techProv = context.read<ProvisorTechniquesProvider>();
@@ -160,14 +181,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     final validIds = inspectionOpts.isEmpty
         ? fallbackIds
         : inspectionOpts.map((e) => e.slug).toList();
-    final technique =
+    String technique =
         validIds.contains(_technique) ? _technique : validIds.first;
+    if (routeByDept && targetDeptId != null) {
+      technique = departmentQcTechniqueSlug(targetDeptId);
+    }
     final designSpecs = _designSpecsCtrl.text.trim();
-    final pc = context.read<PrivateCompanyProvider>();
-    final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
-    final String? scopeForApi = inWorkspace
-        ? (_assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : 'GLOBAL')
-        : null;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
@@ -194,8 +213,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       checklistTemplateId: _selectedChecklistId,
       assignmentScope: scopeForApi,
       privateCompanyTargetDepartmentId:
-          inWorkspace && scopeForApi == 'PRIVATE_COMPANY' && pc.canChooseWorkspaceTicketTargetDepartment
-              ? _workspaceTargetDepartmentId
+          routeByDept && targetDeptId != null && targetDeptId.isNotEmpty
+              ? targetDeptId
               : null,
     );
 
@@ -223,6 +242,20 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  bool _usesWorkspaceDepartmentRouting(PrivateCompanyProvider pc) {
+    if (!pc.isApproved || !(pc.isOwner || pc.isStaff)) return false;
+    if (_assignmentScope != 'PRIVATE_COMPANY') return false;
+    return (pc.workspace?.departments ?? []).isNotEmpty;
+  }
+
+  String? _resolveWorkspaceTargetDepartmentId(PrivateCompanyProvider pc) {
+    if (!_usesWorkspaceDepartmentRouting(pc)) return null;
+    if (pc.canChooseWorkspaceTicketTargetDepartment) {
+      return _workspaceTargetDepartmentId ?? pc.myDepartmentId;
+    }
+    return pc.myDepartmentId;
   }
 
   void _onSiteIdEdited() {
@@ -611,6 +644,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final sites = context.watch<SitesProvider>().sites;
+    final pc = context.watch<PrivateCompanyProvider>();
+    final routeByDept = _usesWorkspaceDepartmentRouting(pc);
     final techProv = context.watch<ProvisorTechniquesProvider>();
     final inspectionOpts = techProv.inspection;
     final fallbackIds = _qcTechniqueIds;
@@ -704,49 +739,51 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           _buildSiteCoordinatesSection(l10n),
           const SizedBox(height: 16),
 
-          Text(
-            l10n.t('technique'),
-            style: TextStyle(
-              color: Colors.white.withAlpha(80),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF12122A),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withAlpha(10)),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selectedTechnique,
-                isExpanded: true,
-                dropdownColor: const Color(0xFF12122A),
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-                icon: Icon(Icons.expand_more_rounded,
-                    color: Colors.white.withAlpha(80)),
-                items: inspectionOpts.isEmpty
-                    ? List.generate(fallbackIds.length, (i) => DropdownMenuItem(
-                          value: fallbackIds[i],
-                          child: Text(l10n.t(_qcTechniqueKeys[i])),
-                        ))
-                    : inspectionOpts
-                        .map((e) => DropdownMenuItem(
-                              value: e.slug,
-                              child: Text(e.labelForLocale(l10n.locale.languageCode)),
-                            ))
-                        .toList(),
-                onChanged: (v) {
-                  if (v != null) setState(() => _technique = v);
-                },
+          if (!routeByDept) ...[
+            Text(
+              l10n.t('technique'),
+              style: TextStyle(
+                color: Colors.white.withAlpha(80),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withAlpha(10)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedTechnique,
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  icon: Icon(Icons.expand_more_rounded,
+                      color: Colors.white.withAlpha(80)),
+                  items: inspectionOpts.isEmpty
+                      ? List.generate(fallbackIds.length, (i) => DropdownMenuItem(
+                            value: fallbackIds[i],
+                            child: Text(l10n.t(_qcTechniqueKeys[i])),
+                          ))
+                      : inspectionOpts
+                          .map((e) => DropdownMenuItem(
+                                value: e.slug,
+                                child: Text(e.labelForLocale(l10n.locale.languageCode)),
+                              ))
+                          .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _technique = v);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           _buildField(
             controller: _slaCtrl,
             label: l10n.t('sla_hours'),
@@ -757,7 +794,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           const SizedBox(height: 16),
           _buildAssignmentScopePicker(l10n),
           const SizedBox(height: 16),
-          _buildOptionalChecklistPicker(l10n, selectedTechnique),
+          _buildOptionalChecklistPicker(l10n, selectedTechnique, routeByDept: routeByDept),
           const SizedBox(height: 16),
           _buildDesignSpecsField(l10n),
           const SizedBox(height: 16),
@@ -860,7 +897,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 ],
               ),
             ),
-            if (isPrivate && pc.canChooseWorkspaceTicketTargetDepartment) ...[
+            if (isPrivate && (pc.workspace?.departments ?? []).isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
                 l10n.t('ticket_target_department').toUpperCase(),
@@ -881,29 +918,25 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _workspaceTargetDepartmentId ?? '',
-                dropdownColor: const Color(0xFF1E1E36),
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF12122A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
+              if (pc.canChooseWorkspaceTicketTargetDepartment)
+                DropdownButtonFormField<String>(
+                  value: _workspaceTargetDepartmentId ?? pc.myDepartmentId ?? '',
+                  dropdownColor: const Color(0xFF1E1E36),
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF12122A),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.white.withAlpha(10)),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                ),
-                items: [
-                  DropdownMenuItem(
-                    value: '',
-                    child: Text(l10n.t('ticket_all_departments')),
-                  ),
-                  ...(() {
+                  items: () {
                     final list = List.of(pc.workspace?.departments ?? []);
                     list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
                     return list
@@ -914,13 +947,36 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                           ),
                         )
                         .toList();
-                  })(),
-                ],
-                onChanged: (v) => setState(() {
-                  _workspaceTargetDepartmentId =
-                      (v == null || v.isEmpty) ? null : v;
-                }),
-              ),
+                  }(),
+                  onChanged: (v) => setState(() {
+                    _workspaceTargetDepartmentId =
+                        (v == null || v.isEmpty) ? null : v;
+                  }),
+                )
+              else if (pc.myDepartmentId != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF12122A),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withAlpha(10)),
+                  ),
+                  child: Text(
+                    () {
+                      final list = pc.workspace?.departments ?? [];
+                      for (final d in list) {
+                        if (d.id == pc.myDepartmentId) return d.name;
+                      }
+                      return pc.myDepartmentId!;
+                    }(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
             ],
           ],
         );
@@ -996,7 +1052,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     );
   }
 
-  Widget _buildOptionalChecklistPicker(AppLocalizations l10n, String technique) {
+  Widget _buildOptionalChecklistPicker(
+    AppLocalizations l10n,
+    String technique, {
+    bool routeByDept = false,
+  }) {
     return Consumer<PrivateCompanyProvider>(
       builder: (context, pc, _) {
         final ws = pc.workspace;
@@ -1006,10 +1066,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         final checklists = ws.checklists;
         if (checklists.isEmpty) return const SizedBox.shrink();
 
-        final filtered = checklists.where((c) {
-          if (c.techniqueTypes.isEmpty) return true;
-          return c.techniqueTypes.contains(technique);
-        }).toList();
+        final filtered = routeByDept
+            ? checklists
+            : checklists.where((c) {
+                if (c.techniqueTypes.isEmpty) return true;
+                return c.techniqueTypes.contains(technique);
+              }).toList();
         if (filtered.isEmpty) return const SizedBox.shrink();
 
         final hasSelection = _selectedChecklistId != null &&

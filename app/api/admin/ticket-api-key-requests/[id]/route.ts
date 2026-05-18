@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateTicketApiKey } from '@/lib/ticket-api-key-auth';
+import {
+  buildTicketApiIntegrationExample,
+  getRequesterWorkspaceApiContext,
+  validateApiKeyDepartmentIds,
+} from '@/lib/ticket-api-key-workspace';
 
 export async function PATCH(
   req: NextRequest,
@@ -36,7 +41,7 @@ export async function PATCH(
       where: { id },
       include: {
         requester: {
-          select: { id: true, status: true, role: true },
+          select: { id: true, status: true, role: true, username: true, company: true },
         },
         apiKey: { select: { id: true, revokedAt: true } },
       },
@@ -63,7 +68,13 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
-      const requester = accessRequest.requester as { id: string; status?: string };
+      const requester = accessRequest.requester as {
+        id: string;
+        status?: string;
+        role?: string;
+        username?: string;
+        company?: string | null;
+      };
       if (requester.status === 'BLOCKED' || requester.status === 'SUSPENDED') {
         return NextResponse.json(
           { success: false, message: 'Requester account is blocked or suspended.' },
@@ -78,6 +89,22 @@ export async function PATCH(
         typeof body.label === 'string' && body.label.trim()
           ? body.label.trim().slice(0, 120)
           : (accessRequest.label as string | null) || 'Ticket API';
+
+      const workspace = await getRequesterWorkspaceApiContext(requester.id, requester.role ?? null);
+      let allowedDepartmentIds: string[] = [];
+      let selectedDepartments: Array<{ id: string; name: string }> = [];
+
+      if (workspace?.requiresDepartmentSelection) {
+        const rawIds = Array.isArray(body.departmentIds)
+          ? body.departmentIds.filter((x: unknown) => typeof x === 'string')
+          : [];
+        const validated = await validateApiKeyDepartmentIds(workspace.companyId, rawIds);
+        if (!validated.ok) {
+          return NextResponse.json({ success: false, message: validated.message }, { status: 400 });
+        }
+        allowedDepartmentIds = validated.departments.map((d) => d.id);
+        selectedDepartments = validated.departments;
+      }
 
       const { fullKey, prefix, hash } = generateTicketApiKey();
 
@@ -105,8 +132,15 @@ export async function PATCH(
           keyPrefix: prefix,
           keyHash: hash,
           label: keyLabel,
+          allowedDepartmentIds,
           createdByAdminId: (adminPayload as { sub?: string }).sub ?? null,
         },
+      });
+
+      const integration = buildTicketApiIntegrationExample({
+        apiKey: fullKey,
+        departments: selectedDepartments,
+        includePrivateScope: !!workspace,
       });
 
       return NextResponse.json({
@@ -114,6 +148,14 @@ export async function PATCH(
         status: 'APPROVED',
         apiKey: fullKey,
         keyPrefix: prefix,
+        selectedDepartments,
+        workspace: workspace
+          ? {
+              companyId: workspace.companyId,
+              companyName: workspace.companyName,
+            }
+          : null,
+        integration,
         message:
           'Copy this API key now. It will not be shown again. Use Authorization: Bearer <key> on POST /api/tickets.',
       });

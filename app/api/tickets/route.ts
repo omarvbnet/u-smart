@@ -19,6 +19,10 @@ import {
 } from '@/lib/private-company-kpi';
 import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
 import {
+  departmentMaintenanceTechniqueSlug,
+  departmentQcTechniqueSlug,
+} from '@/lib/private-company-department-techniques';
+import {
   MAINTENANCE_DISPATCH_ENGINEER,
   normalizeMaintenanceDispatchMode,
 } from '@/lib/private-company-maintenance-dispatch';
@@ -255,6 +259,7 @@ async function notifyPrivateCompanyMembersNewTicket(
       const staffProv = (s.province ?? '').trim().toLowerCase();
       if (filterActive && s.province && staffProv && staffProv !== provNorm) continue;
       if (
+        !targetDept &&
         !staffTicketTechniqueAllowed({
           technique,
           staffDepartmentId: s.privateCompanyDepartmentId ?? null,
@@ -306,7 +311,7 @@ export async function POST(req: NextRequest) {
     const siteCoordinator = typeof body.siteCoordinator === 'string' ? body.siteCoordinator.trim() : '';
     let slaHours = typeof body.slaHours === 'number' ? body.slaHours : (typeof body.slaHours === 'string' ? parseInt(body.slaHours, 10) : 24);
     if (Number.isNaN(slaHours) || slaHours < 0) slaHours = 24;
-    const technique = typeof body.technique === 'string' ? body.technique.trim().toLowerCase() : '';
+    let technique = typeof body.technique === 'string' ? body.technique.trim().toLowerCase() : '';
     let name = typeof body.name === 'string' ? body.name.trim() : '';
     let company = typeof body.company === 'string' ? body.company.trim() : '';
     let phone = typeof body.phone === 'string' ? body.phone.trim() : '';
@@ -344,6 +349,7 @@ export async function POST(req: NextRequest) {
     }
 
     const usingApiKeyAuth = apiKeyAuth != null;
+    const apiKeyAllowedDepartmentIds = apiKeyAuth?.allowedDepartmentIds ?? [];
     const auth = usingApiKeyAuth ? null : getRequesterFromRequest(req);
     const payload = usingApiKeyAuth
       ? { requesterId: apiKeyAuth!.requesterId, identitySource: 'ticket_requester' as const }
@@ -678,7 +684,9 @@ export async function POST(req: NextRequest) {
           if (
             myWorkspaceId &&
             !wantsOpenPoolAssignmentScope &&
-            (wantsPrivateCompanyAssignmentScope || requestedAssignmentScopeRaw === '')
+            (wantsPrivateCompanyAssignmentScope ||
+              requestedAssignmentScopeRaw === '' ||
+              (usingApiKeyAuth && apiKeyAllowedDepartmentIds.length > 0))
           ) {
             assignmentScope = 'PRIVATE_COMPANY_STAFF';
             privateCompanyIdForTicket = myWorkspaceId;
@@ -785,10 +793,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const explicitSpecTags = normalizeSpecializationTags(body.specializationTags);
-    const specializationTags =
-      explicitSpecTags.length > 0 ? explicitSpecTags : deriveSpecializationTagsFromTechnique(technique);
-
     let privateCompanyTargetDepartmentId: string | null = null;
     if (
       !coordinatorContext &&
@@ -796,53 +800,129 @@ export async function POST(req: NextRequest) {
       privateCompanyIdForTicket &&
       payload?.requesterId
     ) {
-      const creator = await prisma.ticketRequester.findUnique({
-        where: { id: payload.requesterId },
-        select: {
-          role: true,
-          privateCompanyDepartmentId: true,
-          privateCompanyOwned: { select: { id: true, status: true } },
-        },
-      });
-      const roleUpper = String(creator?.role ?? '').toUpperCase();
-      const isWorkspaceOwner =
-        creator?.privateCompanyOwned?.status === 'APPROVED' &&
-        creator.privateCompanyOwned.id === privateCompanyIdForTicket;
-      const canPickTargetDept =
-        roleUpper === 'COORDINATOR' || (roleUpper === 'COMPANY' && isWorkspaceOwner);
-
-      if (canPickTargetDept) {
-        const raw =
+      if (usingApiKeyAuth && apiKeyAllowedDepartmentIds.length > 0) {
+        let targetId =
           typeof body.privateCompanyTargetDepartmentId === 'string'
             ? body.privateCompanyTargetDepartmentId.trim()
             : '';
-        if (raw) {
-          const deptRow = await prisma.privateCompanyDepartment.findFirst({
-            where: { id: raw, companyId: privateCompanyIdForTicket },
-            select: { id: true },
-          });
-          if (!deptRow) {
-            return NextResponse.json(
-              { success: false, message: 'Target department is not part of this workspace.' },
-              { status: 400 }
-            );
-          }
-          privateCompanyTargetDepartmentId = deptRow.id;
+        if (!targetId && apiKeyAllowedDepartmentIds.length === 1) {
+          targetId = apiKeyAllowedDepartmentIds[0];
         }
-      } else {
-        privateCompanyTargetDepartmentId = creator?.privateCompanyDepartmentId ?? null;
-        if (!privateCompanyTargetDepartmentId) {
+        if (!targetId) {
           return NextResponse.json(
             {
               success: false,
               message:
-                'Workspace staff tickets require your profile department. Ask the workspace owner to assign you to a department.',
+                'privateCompanyTargetDepartmentId is required. This API key is limited to specific workspace departments.',
+              allowedDepartmentIds: apiKeyAllowedDepartmentIds,
             },
             { status: 400 }
           );
         }
+        if (!apiKeyAllowedDepartmentIds.includes(targetId)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Target department is not allowed for this API key.',
+              allowedDepartmentIds: apiKeyAllowedDepartmentIds,
+            },
+            { status: 403 }
+          );
+        }
+        const deptRow = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: targetId, companyId: privateCompanyIdForTicket },
+          select: { id: true },
+        });
+        if (!deptRow) {
+          return NextResponse.json(
+            { success: false, message: 'Target department is not part of this workspace.' },
+            { status: 400 }
+          );
+        }
+        privateCompanyTargetDepartmentId = deptRow.id;
+      } else {
+        const creator = await prisma.ticketRequester.findUnique({
+          where: { id: payload.requesterId },
+          select: {
+            role: true,
+            privateCompanyDepartmentId: true,
+            privateCompanyOwned: { select: { id: true, status: true } },
+          },
+        });
+        const roleUpper = String(creator?.role ?? '').toUpperCase();
+        const isWorkspaceOwner =
+          creator?.privateCompanyOwned?.status === 'APPROVED' &&
+          creator.privateCompanyOwned.id === privateCompanyIdForTicket;
+        const canPickTargetDept =
+          roleUpper === 'COORDINATOR' || (roleUpper === 'COMPANY' && isWorkspaceOwner);
+
+        if (canPickTargetDept) {
+          const raw =
+            typeof body.privateCompanyTargetDepartmentId === 'string'
+              ? body.privateCompanyTargetDepartmentId.trim()
+              : '';
+          if (raw) {
+            const deptRow = await prisma.privateCompanyDepartment.findFirst({
+              where: { id: raw, companyId: privateCompanyIdForTicket },
+              select: { id: true },
+            });
+            if (!deptRow) {
+              return NextResponse.json(
+                { success: false, message: 'Target department is not part of this workspace.' },
+                { status: 400 }
+              );
+            }
+            privateCompanyTargetDepartmentId = deptRow.id;
+          }
+        } else {
+          privateCompanyTargetDepartmentId = creator?.privateCompanyDepartmentId ?? null;
+          if (!privateCompanyTargetDepartmentId) {
+            return NextResponse.json(
+              {
+                success: false,
+                message:
+                  'Workspace staff tickets require your profile department. Ask the workspace owner to assign you to a department.',
+              },
+              { status: 400 }
+            );
+          }
+        }
       }
     }
+
+    if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket && !coordinatorContext) {
+      try {
+        const deptCount = await prisma.privateCompanyDepartment.count({
+          where: { companyId: privateCompanyIdForTicket },
+        });
+        if (deptCount > 0 && !privateCompanyTargetDepartmentId) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'Select a target department for workspace tickets. Notifications and visibility are scoped by department.',
+            },
+            { status: 400 }
+          );
+        }
+      } catch {
+        /* departments table may be absent on legacy databases */
+      }
+    }
+
+    if (
+      assignmentScope === 'PRIVATE_COMPANY_STAFF' &&
+      privateCompanyIdForTicket &&
+      privateCompanyTargetDepartmentId
+    ) {
+      technique = ticketIsMaintenanceKind
+        ? departmentMaintenanceTechniqueSlug(privateCompanyTargetDepartmentId)
+        : departmentQcTechniqueSlug(privateCompanyTargetDepartmentId);
+    }
+
+    const explicitSpecTags = normalizeSpecializationTags(body.specializationTags);
+    const specializationTags =
+      explicitSpecTags.length > 0 ? explicitSpecTags : deriveSpecializationTagsFromTechnique(technique);
 
     const companyPayloadObj: Record<string, unknown> = {
       _ticket: 1,
@@ -1748,13 +1828,15 @@ export async function GET(req: NextRequest) {
         if (ticketFieldStaffInvolvesRequester(parsed, payload.requesterId)) return true;
         const targetDept = r.privateCompanyTargetDepartmentId ?? null;
         if (targetDept && deptId && targetDept !== deptId) return false;
-        const allowedByTechnique = staffTicketTechniqueAllowed({
-          technique: r.technique,
-          staffDepartmentId: deptId,
-          staffAllowedSlugs: allowedSlugs,
-          workspaceRows: techRows,
-        });
-        if (!allowedByTechnique) return false;
+        if (!targetDept) {
+          const allowedByTechnique = staffTicketTechniqueAllowed({
+            technique: r.technique,
+            staffDepartmentId: deptId,
+            staffAllowedSlugs: allowedSlugs,
+            workspaceRows: techRows,
+          });
+          if (!allowedByTechnique) return false;
+        }
         const pendingUnassigned =
           String(r.status).toUpperCase() === 'PENDING' && !assignedStaffIdFromCompanyJson(parsed);
         if (

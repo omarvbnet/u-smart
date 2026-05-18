@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { notifyWorkspaceConflictReported } from '@/lib/private-company-conflict-access';
 
 const prisma = _prisma as any;
 
@@ -71,7 +72,15 @@ export async function POST(
   try {
     const ticket = await prisma.visitorRequest.findFirst({
       where: { id, requesterId: auth.payload.requesterId },
-      select: { id: true, company: true, status: true, technique: true, completedAt: true },
+      select: {
+        id: true,
+        company: true,
+        status: true,
+        technique: true,
+        completedAt: true,
+        privateCompanyId: true,
+        privateCompanyTargetDepartmentId: true,
+      },
     });
 
     if (!ticket) {
@@ -147,6 +156,27 @@ export async function POST(
     });
 
     const conflict = toConflictPayload(ticket, parsed, technique);
+
+    const pcId = (ticket as { privateCompanyId?: string | null }).privateCompanyId ?? null;
+    if (pcId) {
+      let siteName = '';
+      try {
+        const p = typeof ticket.company === 'string' ? JSON.parse(ticket.company) : {};
+        siteName = String((p as { siteName?: string }).siteName ?? '').trim();
+      } catch {
+        /* ignore */
+      }
+      notifyWorkspaceConflictReported({
+        ticketId: id,
+        privateCompanyId: pcId,
+        targetDepartmentId:
+          (ticket as { privateCompanyTargetDepartmentId?: string | null })
+            .privateCompanyTargetDepartmentId ?? null,
+        siteName,
+        isMaintenance,
+      }).catch((e) => console.error('notifyWorkspaceConflictReported:', e));
+    }
+
     return NextResponse.json({ success: true, conflict });
   } catch (err) {
     console.error('POST /api/tickets/[id]/report-conflict:', err);

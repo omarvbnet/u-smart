@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-require';
 import { prisma } from '@/lib/prisma';
+import {
+  getRequesterWorkspaceApiContext,
+  isPrivateWorkspaceApiRole,
+  resolveDepartmentNames,
+} from '@/lib/ticket-api-key-workspace';
 
 export async function GET(req: NextRequest) {
   const admin = requireAdmin(req);
@@ -34,6 +39,7 @@ export async function GET(req: NextRequest) {
             id: true,
             keyPrefix: true,
             label: true,
+            allowedDepartmentIds: true,
             revokedAt: true,
             lastUsedAt: true,
             createdAt: true,
@@ -42,7 +48,38 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, requests });
+    const enriched = await Promise.all(
+      (requests as Array<{
+        requester: { id: string; role: string };
+        apiKey: { allowedDepartmentIds?: string[] } | null;
+        [key: string]: unknown;
+      }>).map(async (row) => {
+        const workspace = await getRequesterWorkspaceApiContext(
+          row.requester.id,
+          row.requester.role
+        );
+        let allowedDepartments: Array<{ id: string; name: string }> = [];
+        const deptIds = row.apiKey?.allowedDepartmentIds ?? [];
+        if (workspace && deptIds.length > 0) {
+          allowedDepartments = await resolveDepartmentNames(workspace.companyId, deptIds);
+        }
+        return {
+          ...row,
+          isPrivateWorkspaceRequester: isPrivateWorkspaceApiRole(row.requester.role) && !!workspace,
+          workspace: workspace
+            ? {
+                companyId: workspace.companyId,
+                companyName: workspace.companyName,
+                departments: workspace.departments,
+                requiresDepartmentSelection: workspace.requiresDepartmentSelection,
+              }
+            : null,
+          allowedDepartments,
+        };
+      })
+    );
+
+    return NextResponse.json({ success: true, requests: enriched });
   } catch (err) {
     console.error('GET /api/admin/ticket-api-key-requests:', err);
     return NextResponse.json({ success: false, message: 'Failed to fetch requests' }, { status: 500 });

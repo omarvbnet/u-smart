@@ -21,9 +21,8 @@ Future<void> refreshWorkspaceFieldStaffAnalytics(BuildContext context) async {
   final auth = context.read<AuthProvider>();
   final pc = context.read<PrivateCompanyProvider>();
   final wh = context.read<PrivateCompanyWarehouseProvider>();
-  if (!pc.hasWorkspace ||
-      !pc.isApproved ||
-      (!auth.isEngineer && !auth.isTechnician)) {
+  if (!pc.canOpenPrivateWorkspace) return;
+  if (!auth.isEngineer && !auth.isTechnician && !pc.isPrivateWorkspaceFieldStaff) {
     return;
   }
   await Future.wait([
@@ -91,9 +90,8 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
     final pc = context.watch<PrivateCompanyProvider>();
     final wh = context.watch<PrivateCompanyWarehouseProvider>();
 
-    final show = pc.hasWorkspace &&
-        pc.isApproved &&
-        (auth.isEngineer || auth.isTechnician);
+    final show = pc.canOpenPrivateWorkspace &&
+        (auth.isEngineer || auth.isTechnician || pc.isPrivateWorkspaceFieldStaff);
 
     if (!show) return const SizedBox.shrink();
 
@@ -234,6 +232,60 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
                 ],
               ),
             ),
+          if (snap.byDepartment.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              l10n.t('pc_kpi_your_department'),
+              style: TextStyle(
+                color: Colors.white.withAlpha(200),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...snap.byDepartment.map((d) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF12122A),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withAlpha(14)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      d.departmentName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        _miniStat(l10n.t('analytics_kpi_assigned'), '${d.ticketsAssigned}'),
+                        _miniStat(l10n.t('analytics_kpi_completed'), '${d.completedTickets}'),
+                        _miniStat(
+                          l10n.t('pc_kpi_avg_assignments_per_day'),
+                          d.avgTicketAssignmentsPerDay.toStringAsFixed(2),
+                        ),
+                        _miniStat(
+                          l10n.t('analytics_kpi_task_hours'),
+                          _fmtHours(d.totalTaskHours),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
         const SizedBox(height: 22),
         Text(

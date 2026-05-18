@@ -180,7 +180,7 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
     final snap = pc.expenseAnalytics;
     final enabled = pc.workspace?.ticketExpensesEnabled == true;
 
-    if (!pc.hasWorkspace || !pc.isApproved) return const SizedBox.shrink();
+    if (!pc.canOpenPrivateWorkspace) return const SizedBox.shrink();
     if (!enabled && !pc.canManageStaff) return const SizedBox.shrink();
 
     final hero = Container(
@@ -557,6 +557,39 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
                 );
               },
             ),
+            if (widget.compact &&
+                pc.isPrivateWorkspaceFieldStaff &&
+                snap.byDepartment.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _sectionLabel(l10n.t('pc_kpi_your_department')),
+              const SizedBox(height: 8),
+              ...snap.byDepartment.map(
+                (d) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _glass(
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        d.departmentName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${l10n.t('pc_expenses_total')}: ${d.totalAmount.toStringAsFixed(2)} · '
+                        '${d.expenseCount} ${l10n.t('pc_expenses_lines')}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.65),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (!widget.compact && snap.byStaff.isNotEmpty) ...[
               const SizedBox(height: 18),
               _sectionLabel(l10n.t('pc_expenses_by_staff')),

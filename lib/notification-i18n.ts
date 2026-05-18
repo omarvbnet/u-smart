@@ -19,6 +19,7 @@ export type NotificationCopyKey =
   | 'site_shared_received'
   | 'conflict_resolved'
   | 'conflict_reinspection'
+  | 'workspace_conflict_reported'
   | 'workspace_announcement'
   | 'material_assigned'
   | 'material_used'
@@ -483,6 +484,32 @@ const TEMPLATES: Record<
           : `بەڕێوەبەر ململانێی ئەم تیکەتە چارەسەر کرد. ئەنجامی کۆتایی: ${label}.`,
       };
     },
+  },
+  workspace_conflict_reported: {
+    en: (v) => ({
+      title: 'New conflict case',
+      body: v.siteName
+        ? `A ${v.kind === 'maintenance' ? 'maintenance' : 'QC'} conflict was reported on "${v.siteName}". Open the workspace Conflicts tab to review.`
+        : 'A new conflict was reported on a workspace ticket. Open the workspace Conflicts tab to review.',
+    }),
+    ar: (v) => ({
+      title: 'حالة تعارض جديدة',
+      body: v.siteName
+        ? `تم الإبلاغ عن تعارض ${v.kind === 'maintenance' ? 'صيانة' : 'فحص جودة'} على "${v.siteName}". راجع تبويب التعارضات في مساحة العمل.`
+        : 'تم الإبلاغ عن تعارض جديد على تذكرة مساحة العمل. راجع تبويب التعارضات.',
+    }),
+    tr: (v) => ({
+      title: 'Yeni anlaşmazlık vakası',
+      body: v.siteName
+        ? `"${v.siteName}" için ${v.kind === 'maintenance' ? 'bakım' : 'KG'} anlaşmazlığı bildirildi. Çalışma alanı Anlaşmazlıklar sekmesini açın.`
+        : 'Çalışma alanı biletinde yeni anlaşmazlık bildirildi. Anlaşmazlıklar sekmesini açın.',
+    }),
+    ku: (v) => ({
+      title: 'کەیسی ململانێی نوێ',
+      body: v.siteName
+        ? `ململانێی ${v.kind === 'maintenance' ? 'چاککردنەوە' : 'کوالێتی'} لەسەر "${v.siteName}" ڕاگەیاندرا. تابی ململانێکان لە کۆگای کار بکەرەوە.`
+        : 'ململانێی نوێ لەسەر تیکەتی کۆگای کار ڕاگەیاندرا. تابی ململانێکان بکەرەوە.',
+    }),
   },
   conflict_reinspection: {
     en: (v) => ({

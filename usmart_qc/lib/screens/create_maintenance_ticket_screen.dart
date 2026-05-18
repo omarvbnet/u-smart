@@ -9,6 +9,7 @@ import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
 import '../providers/private_company_provider.dart';
+import '../utils/workspace_department_technique.dart';
 import 'attachment_viewer_screen.dart';
 
 /// Maintenance types. Values must match backend MAINTENANCE_TECHNIQUES.
@@ -75,6 +76,20 @@ class _CreateMaintenanceTicketScreenState
     });
   }
 
+  bool _usesWorkspaceDepartmentRouting(PrivateCompanyProvider pc) {
+    if (!pc.isApproved || !(pc.isOwner || pc.isStaff)) return false;
+    if (_assignmentScope != 'PRIVATE_COMPANY') return false;
+    return (pc.workspace?.departments ?? []).isNotEmpty;
+  }
+
+  String? _resolveWorkspaceTargetDepartmentId(PrivateCompanyProvider pc) {
+    if (!_usesWorkspaceDepartmentRouting(pc)) return null;
+    if (pc.canChooseWorkspaceTicketTargetDepartment) {
+      return _workspaceTargetDepartmentId ?? pc.myDepartmentId;
+    }
+    return pc.myDepartmentId;
+  }
+
   Future<void> _submit() async {
     final siteName = _siteNameCtrl.text.trim();
     final coordinator = _coordinatorCtrl.text.trim();
@@ -120,6 +135,25 @@ class _CreateMaintenanceTicketScreenState
       return;
     }
 
+    final pc = context.read<PrivateCompanyProvider>();
+    final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
+    final String? scopeForApi = inWorkspace
+        ? (_assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : 'GLOBAL')
+        : null;
+    final routeByDept = _usesWorkspaceDepartmentRouting(pc);
+    final targetDeptId = routeByDept ? _resolveWorkspaceTargetDepartmentId(pc) : null;
+    if (routeByDept && (targetDeptId == null || targetDeptId.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('ticket_target_department_required')),
+          backgroundColor: const Color(0xFFFF4757),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     final provider = context.read<TicketsProvider>();
     final techProv = context.read<ProvisorTechniquesProvider>();
@@ -128,15 +162,13 @@ class _CreateMaintenanceTicketScreenState
     final validIds = maintOpts.isEmpty
         ? fallbackIds
         : maintOpts.map((e) => e.slug).toList();
-    final technique = validIds.contains(_maintenanceType)
+    String technique = validIds.contains(_maintenanceType)
         ? _maintenanceType
         : validIds.first;
+    if (routeByDept && targetDeptId != null) {
+      technique = departmentMaintenanceTechniqueSlug(targetDeptId);
+    }
     final designSpecs = _designSpecsCtrl.text.trim();
-    final pc = context.read<PrivateCompanyProvider>();
-    final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
-    final String? scopeForApi = inWorkspace
-        ? (_assignmentScope == 'PRIVATE_COMPANY' ? 'PRIVATE_COMPANY' : 'GLOBAL')
-        : null;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
@@ -162,8 +194,8 @@ class _CreateMaintenanceTicketScreenState
       }(),
       assignmentScope: scopeForApi,
       privateCompanyTargetDepartmentId:
-          inWorkspace && scopeForApi == 'PRIVATE_COMPANY' && pc.canChooseWorkspaceTicketTargetDepartment
-              ? _workspaceTargetDepartmentId
+          routeByDept && targetDeptId != null && targetDeptId.isNotEmpty
+              ? targetDeptId
               : null,
     );
 
@@ -448,6 +480,8 @@ class _CreateMaintenanceTicketScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final sites = context.watch<SitesProvider>().sites;
+    final pc = context.watch<PrivateCompanyProvider>();
+    final routeByDept = _usesWorkspaceDepartmentRouting(pc);
     final techProv = context.watch<ProvisorTechniquesProvider>();
     final maintOpts = techProv.maintenance;
     final fallbackIds = _maintenanceTypeIds;
@@ -538,53 +572,55 @@ class _CreateMaintenanceTicketScreenState
             icon: Icons.person_outline_rounded,
           ),
           const SizedBox(height: 16),
-          Text(
-            l10n.t('maint_type_of_maintenance').toUpperCase(),
-            style: TextStyle(
-              color: Colors.white.withAlpha(80),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF12122A),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withAlpha(10)),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selectedType,
-                isExpanded: true,
-                dropdownColor: const Color(0xFF12122A),
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-                icon: Icon(Icons.expand_more_rounded,
-                    color: Colors.white.withAlpha(80)),
-                items: maintOpts.isEmpty
-                    ? List.generate(
-                        fallbackIds.length,
-                        (i) => DropdownMenuItem(
-                          value: fallbackIds[i],
-                          child: Text(l10n.t(_maintenanceTypeKeys[i])),
-                        ),
-                      )
-                    : maintOpts
-                        .map((e) => DropdownMenuItem(
-                              value: e.slug,
-                              child: Text(
-                                  e.labelForLocale(l10n.locale.languageCode)),
-                            ))
-                        .toList(),
-                onChanged: (v) {
-                  if (v != null) setState(() => _maintenanceType = v);
-                },
+          if (!routeByDept) ...[
+            Text(
+              l10n.t('maint_type_of_maintenance').toUpperCase(),
+              style: TextStyle(
+                color: Colors.white.withAlpha(80),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF12122A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withAlpha(10)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedType,
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  icon: Icon(Icons.expand_more_rounded,
+                      color: Colors.white.withAlpha(80)),
+                  items: maintOpts.isEmpty
+                      ? List.generate(
+                          fallbackIds.length,
+                          (i) => DropdownMenuItem(
+                            value: fallbackIds[i],
+                            child: Text(l10n.t(_maintenanceTypeKeys[i])),
+                          ),
+                        )
+                      : maintOpts
+                          .map((e) => DropdownMenuItem(
+                                value: e.slug,
+                                child: Text(
+                                    e.labelForLocale(l10n.locale.languageCode)),
+                              ))
+                          .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _maintenanceType = v);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           _buildField(
             controller: _reasonCtrl,
             label: l10n.t('maint_reason'),
@@ -751,7 +787,7 @@ class _CreateMaintenanceTicketScreenState
                 ],
               ),
             ),
-            if (isPrivate && pc.canChooseWorkspaceTicketTargetDepartment) ...[
+            if (isPrivate && (pc.workspace?.departments ?? []).isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
                 l10n.t('ticket_target_department').toUpperCase(),
@@ -772,29 +808,25 @@ class _CreateMaintenanceTicketScreenState
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _workspaceTargetDepartmentId ?? '',
-                dropdownColor: const Color(0xFF1E1E36),
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF12122A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
+              if (pc.canChooseWorkspaceTicketTargetDepartment)
+                DropdownButtonFormField<String>(
+                  value: _workspaceTargetDepartmentId ?? pc.myDepartmentId ?? '',
+                  dropdownColor: const Color(0xFF1E1E36),
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF12122A),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: Colors.white.withAlpha(10)),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                ),
-                items: [
-                  DropdownMenuItem(
-                    value: '',
-                    child: Text(l10n.t('ticket_all_departments')),
-                  ),
-                  ...(() {
+                  items: () {
                     final list = List.of(pc.workspace?.departments ?? []);
                     list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
                     return list
@@ -805,13 +837,36 @@ class _CreateMaintenanceTicketScreenState
                           ),
                         )
                         .toList();
-                  })(),
-                ],
-                onChanged: (v) => setState(() {
-                  _workspaceTargetDepartmentId =
-                      (v == null || v.isEmpty) ? null : v;
-                }),
-              ),
+                  }(),
+                  onChanged: (v) => setState(() {
+                    _workspaceTargetDepartmentId =
+                        (v == null || v.isEmpty) ? null : v;
+                  }),
+                )
+              else if (pc.myDepartmentId != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF12122A),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withAlpha(10)),
+                  ),
+                  child: Text(
+                    () {
+                      final list = pc.workspace?.departments ?? [];
+                      for (final d in list) {
+                        if (d.id == pc.myDepartmentId) return d.name;
+                      }
+                      return pc.myDepartmentId!;
+                    }(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
             ],
           ],
         );

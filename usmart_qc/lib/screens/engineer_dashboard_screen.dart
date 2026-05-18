@@ -30,6 +30,8 @@ import '../widgets/site_bulk_import_menu.dart';
 import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../widgets/available_tickets_pool_tab.dart';
 import '../providers/private_company_provider.dart';
+import '../utils/account_deletion_ui.dart';
+import 'private_company_hub_screen.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -58,12 +60,14 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
     final tickets = context.read<TicketsProvider>();
     final sites = context.read<SitesProvider>();
     final conflicts = context.read<ConflictsProvider>();
+    final pc = context.read<PrivateCompanyProvider>();
     await Future.wait([
       tickets.fetchTickets(),
       tickets.loadProvinceFilter(),
       sites.fetchSites(),
       conflicts.fetchConflicts(),
       context.read<ProvisorTechniquesProvider>().ensureLoaded(),
+      pc.refresh(),
     ]);
   }
 
@@ -186,6 +190,38 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
   }
 }
 
+class _PrivateWorkspaceNavButton extends StatelessWidget {
+  const _PrivateWorkspaceNavButton({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PrivateCompanyProvider>(
+      builder: (context, pc, _) {
+        if (!pc.canOpenPrivateWorkspace) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PrivateCompanyHubScreen(),
+              ),
+            ),
+            tooltip: l10n.t('tooltip_private_workspace'),
+            icon: ShaderMask(
+              shaderCallback: (b) => const LinearGradient(
+                colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+              ).createShader(b),
+              child: const Icon(Icons.workspaces_rounded, color: Colors.white),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ─── Engineer Inbox Tab (NCR resubmits + conflicts) ───
 class _EngineerInboxTab extends StatelessWidget {
   const _EngineerInboxTab();
@@ -241,6 +277,7 @@ class _EngineerInboxTab extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
+                    _PrivateWorkspaceNavButton(l10n: l10n),
                     Consumer<NotificationsProvider>(
                       builder: (context, notifProvider, _) {
                         final count = notifProvider.unreadCount;
@@ -1065,7 +1102,7 @@ class _EngineerAnalyticsTab extends StatelessWidget {
             await conflictsProvider.fetchConflicts();
             if (!context.mounted) return;
             final pc = context.read<PrivateCompanyProvider>();
-            if (pc.hasWorkspace && pc.isApproved) {
+            if (pc.canOpenPrivateWorkspace) {
               await refreshWorkspaceFieldStaffAnalytics(context);
             }
           },
@@ -1075,18 +1112,25 @@ class _EngineerAnalyticsTab extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
-                  ).createShader(bounds),
-                  child: Text(
-                    l10n.t('nav_analytics'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                        ).createShader(bounds),
+                        child: Text(
+                          l10n.t('nav_analytics'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    _PrivateWorkspaceNavButton(l10n: l10n),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -1702,8 +1746,8 @@ class _EngineerProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<AuthProvider, TicketsProvider, LocaleProvider>(
-      builder: (context, auth, tickets, localeProv, _) {
+    return Consumer4<AuthProvider, TicketsProvider, LocaleProvider, PrivateCompanyProvider>(
+      builder: (context, auth, tickets, localeProv, pc, _) {
         final l10n = AppLocalizations.of(context);
         final user = auth.user;
         if (user == null) return const SizedBox.shrink();
@@ -1788,6 +1832,58 @@ class _EngineerProfileTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 28),
+            if (pc.canOpenPrivateWorkspace &&
+                (pc.workspaceCompanyName ?? '').isNotEmpty) ...[
+              Material(
+                color: const Color(0xFF38BDF8).withAlpha(18),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PrivateCompanyHubScreen(),
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.workspaces_rounded,
+                            color: Color(0xFF38BDF8), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.t('profile_workspace_company'),
+                                style: TextStyle(
+                                  color: Colors.white.withAlpha(140),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                pc.workspaceCompanyName!,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded,
+                            color: Colors.white.withAlpha(120)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             _profileRow(
               context,
               Icons.person_outline_rounded,
@@ -1832,7 +1928,7 @@ class _EngineerProfileTab extends StatelessWidget {
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
-                  onTap: () => _confirmDeleteAccount(context, auth),
+                  onTap: () => confirmScheduleAccountDeletion(context, auth),
                   borderRadius: BorderRadius.circular(16),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1843,7 +1939,7 @@ class _EngineerProfileTab extends StatelessWidget {
                             color: Color(0xFFFF6B6B), size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          'Delete my account',
+                          l10n.t('delete_account_button'),
                           style: TextStyle(
                             color: const Color(0xFFFF6B6B).withAlpha(220),
                             fontSize: 15,
@@ -1968,59 +2064,6 @@ class _EngineerProfileTab extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _confirmDeleteAccount(
-    BuildContext context,
-    AuthProvider auth,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF12122A),
-        title: const Text(
-          'Delete account',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'This will permanently delete your account and related data from our server. This action cannot be undone.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Color(0xFFFF6B6B)),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final ok = await auth.deleteAccount();
-    if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop();
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(auth.error ?? 'Failed to delete account.'),
-          backgroundColor: const Color(0xFFFF4757),
-        ),
-      );
-    }
   }
 
   Widget _languageRow(BuildContext context, AppLocalizations l10n, LocaleProvider localeProv) {

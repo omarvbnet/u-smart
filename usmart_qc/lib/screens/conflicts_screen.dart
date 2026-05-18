@@ -5,27 +5,65 @@ import '../providers/conflicts_provider.dart';
 import 'conflict_detail_screen.dart';
 import 'ticket_detail_screen.dart';
 
-class ConflictsScreen extends StatelessWidget {
+class ConflictsScreen extends StatefulWidget {
   /// When true (e.g. used as tab), hides the app bar back button.
   final bool embedded;
 
-  const ConflictsScreen({super.key, this.embedded = false});
+  /// Load conflicts from the private workspace API (owner / managers).
+  final bool workspaceMode;
+
+  const ConflictsScreen({
+    super.key,
+    this.embedded = false,
+    this.workspaceMode = false,
+  });
+
+  @override
+  State<ConflictsScreen> createState() => _ConflictsScreenState();
+}
+
+class _ConflictsScreenState extends State<ConflictsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<ConflictsProvider>();
+      if (widget.workspaceMode) {
+        provider.fetchWorkspaceConflicts(status: 'all');
+      } else {
+        provider.fetchConflicts();
+      }
+    });
+  }
+
+  Future<void> _onRefresh(ConflictsProvider provider) {
+    if (widget.workspaceMode) {
+      return provider.fetchWorkspaceConflicts(status: 'all');
+    }
+    return provider.fetchConflicts();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final emptyTitle =
+        widget.workspaceMode ? l10n.t('pc_ws_no_conflicts') : l10n.t('no_conflicts');
+    final emptyDesc = widget.workspaceMode
+        ? l10n.t('pc_ws_no_conflicts_desc')
+        : l10n.t('no_conflicts_desc');
+
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: embedded
+        leading: widget.embedded
             ? null
             : IconButton(
                 icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                 onPressed: () => Navigator.pop(context),
               ),
-        automaticallyImplyLeading: !embedded,
+        automaticallyImplyLeading: !widget.embedded,
         title: Text(
           l10n.t('conflict_cases'),
           style: const TextStyle(
@@ -61,7 +99,7 @@ class ConflictsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      l10n.t('no_conflicts'),
+                      emptyTitle,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -71,7 +109,7 @@ class ConflictsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      l10n.t('no_conflicts_desc'),
+                      emptyDesc,
                       style: TextStyle(
                         color: Colors.white.withAlpha(120),
                         fontSize: 14,
@@ -85,7 +123,7 @@ class ConflictsScreen extends StatelessWidget {
           }
 
           return RefreshIndicator(
-            onRefresh: () => provider.fetchConflicts(),
+            onRefresh: () => _onRefresh(provider),
             color: const Color(0xFF6C63FF),
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
