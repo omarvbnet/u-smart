@@ -90,6 +90,14 @@ class PrivateCompanyProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Owner, manager, or coordinator — may update checklists and notify the department.
+  bool get canManageChecklists {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole;
+    return role == 'MANAGER' || role == 'COORDINATOR';
+  }
+
   /// Roles that can create checklists (engineers, managers, coordinators, owner).
   bool get canCreateChecklists {
     if (isOwner) return true;
@@ -1074,6 +1082,50 @@ class PrivateCompanyProvider extends ChangeNotifier {
         return true;
       }
       _setError(res['message']?.toString() ?? 'Failed to save checklist.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateChecklist({
+    required String id,
+    required String name,
+    String? description,
+    String? category,
+    List<String> techniqueTypes = const [],
+    required List<PrivateCompanyChecklistItem> items,
+    String? departmentId,
+  }) async {
+    if (items.isEmpty) {
+      _setError('Add at least one checklist item.');
+      return false;
+    }
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.patch(
+        ApiConfig.privateCompanyChecklistDetail(id),
+        body: {
+          'name': name,
+          if (description != null && description.trim().isNotEmpty)
+            'description': description.trim(),
+          if (category != null && category.isNotEmpty) 'category': category,
+          'techniqueTypes': techniqueTypes,
+          'items': items.map((e) => e.toJson()).toList(),
+          'departmentId': departmentId ?? '',
+        },
+      );
+      if (res['success'] == true) {
+        await refresh();
+        _setSuccess('Checklist "$name" updated.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to update checklist.');
       return false;
     } catch (_) {
       _setError('Network error.');

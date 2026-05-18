@@ -17,6 +17,7 @@ import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
 import '../providers/conflicts_provider.dart';
 import 'conflicts_screen.dart';
+import 'workspace_checklist_detail_screen.dart';
 import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
@@ -2749,11 +2750,38 @@ class _ChecklistsTab extends StatefulWidget {
 
 class _ChecklistsTabState extends State<_ChecklistsTab> {
   void _openCreate() {
+    _openEditor();
+  }
+
+  void _openEditor({PrivateCompanyChecklist? existing}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ChecklistEditorSheet(workspace: widget.workspace),
+      builder: (_) => _ChecklistEditorSheet(
+        workspace: widget.workspace,
+        existing: existing,
+      ),
+    );
+  }
+
+  void _openDetail(PrivateCompanyChecklist c) {
+    final pc = context.read<PrivateCompanyProvider>();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkspaceChecklistDetailScreen(
+          checklist: c,
+          workspace: widget.workspace,
+          onEdit: pc.canManageChecklists ? () => _openEditor(existing: c) : null,
+          onDelete: pc.canCreateChecklists
+              ? () async {
+                  await _confirmDelete(c);
+                  if (mounted) Navigator.pop(context);
+                }
+              : null,
+        ),
+      ),
     );
   }
 
@@ -2820,133 +2848,65 @@ class _ChecklistsTabState extends State<_ChecklistsTab> {
           )
         else
           ...widget.workspace.checklists.map((c) {
+            final l10n = AppLocalizations.of(context);
             final color = _categoryColor(c.category);
+            final desc = (c.description ?? '').trim();
             return _GlassCard(
               margin: const EdgeInsets.only(bottom: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              onTap: () => _openDetail(c),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: color.withAlpha(35),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.checklist_rounded, color: color, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              c.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${c.items.length} item${c.items.length == 1 ? '' : 's'}'
-                              '${c.category != null ? ' · ${c.category}' : ''}',
-                              style: TextStyle(
-                                  color: Colors.white.withAlpha(140),
-                                  fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (pc.canCreateChecklists)
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              color: Color(0xFFFF4757), size: 20),
-                          onPressed: () => _confirmDelete(c),
-                        ),
-                    ],
-                  ),
-                  if (c.techniqueTypes.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: c.techniqueTypes.map((t) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white12,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white24),
-                          ),
-                          child: Text(
-                            t,
-                            style: TextStyle(
-                                color: Colors.white.withAlpha(180), fontSize: 10),
-                          ),
-                        );
-                      }).toList(),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color.withAlpha(35),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
-                  if (c.items.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    ...c.items.take(4).map((it) {
-                      final severityColor = it.isMajor
-                          ? const Color(0xFFFF4757)
-                          : const Color(0xFF8B83FF);
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle_outline_rounded,
-                                size: 16, color: color),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                it.label,
-                                style: TextStyle(
-                                    color: Colors.white.withAlpha(220),
-                                    fontSize: 12),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: severityColor.withAlpha(28),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: severityColor.withAlpha(70),
-                                ),
-                              ),
-                              child: Text(
-                                it.isMajor ? 'MAJOR' : 'MINOR',
-                                style: TextStyle(
-                                  color: severityColor,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ),
-                          ],
+                    child: Icon(Icons.checklist_rounded, color: color, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      );
-                    }),
-                    if (c.items.length > 4)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '+ ${c.items.length - 4} more',
+                        if (desc.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            desc,
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(150),
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Text(
+                          '${c.items.length} ${l10n.t('pc_checklist_items')}',
                           style: TextStyle(
-                              color: Colors.white.withAlpha(120), fontSize: 11),
+                            color: Colors.white.withAlpha(120),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded,
+                      color: Colors.white.withAlpha(100)),
                 ],
               ),
             );
@@ -2957,29 +2917,59 @@ class _ChecklistsTabState extends State<_ChecklistsTab> {
 }
 
 class _ChecklistEditorSheet extends StatefulWidget {
-  const _ChecklistEditorSheet({required this.workspace});
+  const _ChecklistEditorSheet({
+    required this.workspace,
+    this.existing,
+  });
   final PrivateCompanyWorkspace workspace;
+  final PrivateCompanyChecklist? existing;
 
   @override
   State<_ChecklistEditorSheet> createState() => _ChecklistEditorSheetState();
 }
 
 class _ChecklistDraftItem {
-  _ChecklistDraftItem({String? text}) : controller = TextEditingController(text: text ?? '');
+  _ChecklistDraftItem({
+    String? text,
+    PrivateCompanyChecklistItemSeverity severity =
+        PrivateCompanyChecklistItemSeverity.minor,
+  })  : controller = TextEditingController(text: text ?? ''),
+        severity = severity;
 
   final TextEditingController controller;
-  PrivateCompanyChecklistItemSeverity severity =
-      PrivateCompanyChecklistItemSeverity.minor;
+  PrivateCompanyChecklistItemSeverity severity;
 
   void dispose() => controller.dispose();
 }
 
 class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
-  final _name = TextEditingController();
-  final _description = TextEditingController();
-  String? _category;
-  String? _departmentId;
-  final List<_ChecklistDraftItem> _items = [_ChecklistDraftItem()];
+  late final TextEditingController _name;
+  late final TextEditingController _description;
+  late String? _category;
+  late String? _departmentId;
+  late final List<_ChecklistDraftItem> _items;
+
+  bool get _isEdit => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final ex = widget.existing;
+    _name = TextEditingController(text: ex?.name ?? '');
+    _description = TextEditingController(text: ex?.description ?? '');
+    _category = ex?.category;
+    _departmentId = ex?.departmentId;
+    if (ex != null && ex.items.isNotEmpty) {
+      _items = ex.items
+          .map((it) => _ChecklistDraftItem(
+                text: it.label,
+                severity: it.severity,
+              ))
+          .toList();
+    } else {
+      _items = [_ChecklistDraftItem()];
+    }
+  }
 
   @override
   void dispose() {
@@ -3003,19 +2993,37 @@ class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
               severity: it.severity,
             ))
         .toList();
-    final ok = await pc.createChecklist(
-      name: name,
-      description: _description.text.trim(),
-      category: _category,
-      items: items,
-      departmentId: _departmentId,
-    );
-    if (ok && mounted) Navigator.pop(context);
+    final ok = _isEdit
+        ? await pc.updateChecklist(
+            id: widget.existing!.id,
+            name: name,
+            description: _description.text.trim(),
+            category: _category,
+            items: items,
+            departmentId: _departmentId,
+          )
+        : await pc.createChecklist(
+            name: name,
+            description: _description.text.trim(),
+            category: _category,
+            items: items,
+            departmentId: _departmentId,
+          );
+    if (ok && mounted) {
+      Navigator.pop(context);
+      if (_isEdit) Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
+    if (_isEdit && !pc.canManageChecklists) {
+      return const SizedBox.shrink();
+    }
+    if (!_isEdit && !pc.canCreateChecklists) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -3042,9 +3050,9 @@ class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'New checklist',
-                  style: TextStyle(
+                Text(
+                  _isEdit ? 'Edit checklist' : 'New checklist',
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w800),
@@ -3232,7 +3240,9 @@ class _ChecklistEditorSheetState extends State<_ChecklistEditorSheet> {
                 const SizedBox(height: 16),
                 _GradientButton(
                   onPressed: pc.submitting ? null : _submit,
-                  label: pc.submitting ? 'Saving…' : 'Save checklist',
+                  label: pc.submitting
+                      ? 'Saving…'
+                      : (_isEdit ? 'Update checklist' : 'Save checklist'),
                   icon: Icons.save_rounded,
                   stretch: true,
                 ),
@@ -3667,9 +3677,11 @@ class _GlassCard extends StatelessWidget {
   const _GlassCard({
     required this.child,
     this.margin = EdgeInsets.zero,
+    this.onTap,
   });
   final Widget child;
   final EdgeInsetsGeometry margin;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -3679,14 +3691,19 @@ class _GlassCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF12122A).withAlpha(180),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withAlpha(15)),
+          child: Material(
+            color: const Color(0xFF12122A).withAlpha(180),
+            child: InkWell(
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withAlpha(15)),
+                ),
+                child: child,
+              ),
             ),
-            child: child,
           ),
         ),
       ),

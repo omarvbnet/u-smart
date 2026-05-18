@@ -20,6 +20,7 @@ export type NotificationCopyKey =
   | 'conflict_resolved'
   | 'conflict_reinspection'
   | 'workspace_conflict_reported'
+  | 'workspace_checklist_updated'
   | 'workspace_announcement'
   | 'material_assigned'
   | 'material_used'
@@ -484,6 +485,32 @@ const TEMPLATES: Record<
           : `بەڕێوەبەر ململانێی ئەم تیکەتە چارەسەر کرد. ئەنجامی کۆتایی: ${label}.`,
       };
     },
+  },
+  workspace_checklist_updated: {
+    en: (v) => ({
+      title: 'Checklist updated',
+      body: v.checklistName
+        ? `"${v.checklistName}" was updated in ${v.companyName}. Open the workspace Checklists tab to review.`
+        : `A checklist was updated in ${v.companyName}. Open the workspace Checklists tab to review.`,
+    }),
+    ar: (v) => ({
+      title: 'تم تحديث قائمة التحقق',
+      body: v.checklistName
+        ? `تم تحديث "${v.checklistName}" في ${v.companyName}. افتح تبويب قوائم التحقق في مساحة العمل.`
+        : `تم تحديث قائمة تحقق في ${v.companyName}. افتح تبويب قوائم التحقق.`,
+    }),
+    tr: (v) => ({
+      title: 'Kontrol listesi güncellendi',
+      body: v.checklistName
+        ? `"${v.checklistName}" ${v.companyName} içinde güncellendi. Çalışma alanı Kontrol listeleri sekmesini açın.`
+        : `${v.companyName} içinde bir kontrol listesi güncellendi. Kontrol listeleri sekmesini açın.`,
+    }),
+    ku: (v) => ({
+      title: 'لیستی پشکنین نوێکرایەوە',
+      body: v.checklistName
+        ? `"${v.checklistName}" لە ${v.companyName} نوێکرایەوە. تابی لیستی پشکنین لە کۆگای کار بکەرەوە.`
+        : `لیستی پشکنین لە ${v.companyName} نوێکرایەوە. تابی لیستی پشکنین بکەرەوە.`,
+    }),
   },
   workspace_conflict_reported: {
     en: (v) => ({
