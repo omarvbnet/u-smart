@@ -5,10 +5,17 @@
  * are opened and their inner `.gpkg` / `.shp` / `.qgs` / GeoJSON are merged into one preview.
  * Canvas extent from `.qgs` is appended only when no vector features were extracted (extent is often in
  * project CRS and would otherwise appear as a lone rectangle on the basemap).
- * Coordinates are assumed WGS84 where possible; other CRS may appear mis-placed (open in QField for accuracy).
+ * Non‑WGS84 geometries (e.g. Iraq UTM) are reprojected to EPSG:4326 when SRS is known or UTM can be inferred.
  */
 
 import { gunzipSync, strFromU8, unzipSync } from 'fflate';
+import {
+  enrichRowsWithWgs84,
+  geometryNeedsReproject,
+  loadGpkgSpatialRefs,
+  proj4SourceForTable,
+  reprojectGeoJsonToWgs84Auto,
+} from '@/lib/coordinate-transform';
 
 type GeoJsonGeometry =
   | { type: 'Point'; coordinates: [number, number] }
@@ -1100,6 +1107,8 @@ async function extractGpkgDataTables(
       /* ignore */
     }
 
+    const { srsById, srsByTable } = loadGpkgSpatialRefs(db, quoteId);
+
     const tableNames = new Set<string>();
     const listStmt = db.prepare(
       "SELECT name AS n FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'"
@@ -1153,6 +1162,14 @@ async function extractGpkgDataTables(
 
       if (columns.length === 0 && geomCol) {
         columns = ['(geometry column only)'];
+      }
+
+      const { fromProj, epsg } = proj4SourceForTable(table, srsById, srsByTable);
+      if (rows.length > 0) {
+        enrichRowsWithWgs84(rows, fromProj, epsg);
+        if (!columns.includes('latitude') && rows.some((r) => r.latitude != null)) {
+          columns = [...columns, 'latitude', 'longitude'];
+        }
       }
 
       tables.push({
@@ -1263,6 +1280,8 @@ async function extractGpkgVectorFeatures(
       return { features: [], bounds: null };
     }
 
+    const { srsById, srsByTable } = loadGpkgSpatialRefs(db, quoteId);
+
     const perTableLimit = Math.max(20, Math.ceil(opts.maxFeatures / Math.max(1, tables.length)));
 
     for (const { t: table, c: geomCol } of tables) {
@@ -1299,12 +1318,20 @@ async function extractGpkgVectorFeatures(
           if (buf.length >= 5) geom = parseGeometryBlobToGeoJson(wkx, buf);
         }
         if (!geom) continue;
+
+        const { fromProj, epsg } = proj4SourceForTable(table, srsById, srsByTable);
+        if (geometryNeedsReproject(geom)) {
+          const reproj = reprojectGeoJsonToWgs84Auto(geom, fromProj, epsg);
+          if (reproj) geom = reproj;
+        }
+
         expandFromGeometry(geom);
         const properties: Record<string, string | number | boolean | null> = {
           layer: table,
           package: shortName,
           packagePath: opts.packagePath,
           source: 'geopackage',
+          ...(epsg != null ? { crsEpsg: epsg } : {}),
           ...rowToProperties(row, new Set(['g'])),
         };
         features.push({
@@ -1342,7 +1369,7 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
       geojson: null,
       bounds: null,
       dataTables: [],
-      message: 'No readable geometries or attribute tables in GeoPackage (CRS may be non‑WGS84 or empty).',
+      message: 'No readable geometries or attribute tables in GeoPackage (empty or unsupported format).',
     };
   }
   const layerSummaries = buildLayerSummaries(features, dataTables);
@@ -1359,7 +1386,7 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
     message:
       features.length > 0
         ? `${features.length} feature(s) from GeoPackage “${displayName}” across ${layerSummaries.length} layer(s).${tableNote}`
-        : `No map geometries in WGS84; ${dataTables.length} attribute table(s) loaded from “${displayName}”.${tableNote}`,
+        : `No map geometries extracted; ${dataTables.length} attribute table(s) loaded from “${displayName}” (UTM rows reprojected when possible).${tableNote}`,
   };
 }
 

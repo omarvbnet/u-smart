@@ -9,6 +9,8 @@ import '../l10n/app_localizations.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
+import '../utils/coordinate_transform.dart';
+import '../utils/qfield_map_features.dart';
 import '../utils/responsive_layout.dart';
 
 /// Long server preview lines: split on "Archive listing:" and "Map fields:" for readable rows.
@@ -704,10 +706,11 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       if (g is! Map<String, dynamic>) continue;
       final t = g['type'] as String?;
       final c = g['coordinates'];
+      final props = featureProperties(f);
       if (t == 'Polygon' && c is List && c.isNotEmpty) {
         final ring = c.first;
         if (ring is List) {
-          final pts = _ringToLatLng(ring);
+          final pts = ringToLatLng(ring, crsProps: props);
           if (pts.length >= 3) {
             out.add(Polygon(
               points: pts,
@@ -722,7 +725,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           if (poly is! List || poly.isEmpty) continue;
           final ring = poly.first;
           if (ring is List) {
-            final pts = _ringToLatLng(ring);
+            final pts = ringToLatLng(ring, crsProps: props);
             if (pts.length >= 3) {
               out.add(Polygon(
                 points: pts,
@@ -751,8 +754,9 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       if (g is! Map<String, dynamic>) continue;
       final t = g['type'] as String?;
       final c = g['coordinates'];
+      final props = featureProperties(f);
       if (t == 'LineString' && c is List) {
-        final pts = _ringToLatLng(c);
+        final pts = ringToLatLng(c, crsProps: props);
         if (pts.length >= 2) {
           out.add(Polyline(
             points: pts,
@@ -765,7 +769,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       } else if (t == 'MultiLineString' && c is List) {
         for (final line in c) {
           if (line is List) {
-            final pts = _ringToLatLng(line);
+            final pts = ringToLatLng(line, crsProps: props);
             if (pts.length >= 2) {
               out.add(Polyline(
                 points: pts,
@@ -794,10 +798,17 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           final color = _colorForFeature(f);
           final g = f['geometry'];
           if (g is! Map<String, dynamic>) continue;
+          final props = featureProperties(f);
           if (g['type'] == 'Point') {
             final c = g['coordinates'];
             if (c is List && c.length >= 2) {
-              final pt = LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble());
+              final pt = CoordinateTransform.reprojectXY(
+                (c[0] as num).toDouble(),
+                (c[1] as num).toDouble(),
+                epsg: CoordinateTransform.epsgFromProperties(props),
+                crsEpsg: props['crsEpsg']?.toString(),
+              );
+              if (pt == null) continue;
               out.add(Marker(
                 point: pt,
                 width: 26,
@@ -810,7 +821,13 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
             if (c is List) {
               for (final p in c) {
                 if (p is List && p.length >= 2) {
-                  final pt = LatLng((p[1] as num).toDouble(), (p[0] as num).toDouble());
+                  final pt = CoordinateTransform.reprojectXY(
+                    (p[0] as num).toDouble(),
+                    (p[1] as num).toDouble(),
+                    epsg: CoordinateTransform.epsgFromProperties(props),
+                    crsEpsg: props['crsEpsg']?.toString(),
+                  );
+                  if (pt == null) continue;
                   out.add(Marker(
                     point: pt,
                     width: 22,
@@ -1077,16 +1094,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
         ],
       ),
     );
-  }
-
-  static List<LatLng> _ringToLatLng(List<dynamic> ring) {
-    final pts = <LatLng>[];
-    for (final p in ring) {
-      if (p is List && p.length >= 2 && p[0] is num && p[1] is num) {
-        pts.add(LatLng((p[1] as num).toDouble(), (p[0] as num).toDouble()));
-      }
-    }
-    return pts;
   }
 
   LatLng _initialCenter() {

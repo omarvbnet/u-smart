@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import 'coordinate_transform.dart';
+
 /// One drawable item on the QField map (GeoJSON geometry and/or SQL row with coordinates).
 class QFieldMapFeature {
   QFieldMapFeature({
@@ -39,8 +41,7 @@ class QFieldMapFeature {
 const _latKeys = ['lat', 'latitude', 'y', 'northing', 'LAT', 'Latitude'];
 const _lngKeys = ['lon', 'lng', 'longitude', 'long', 'x', 'easting', 'LON', 'Longitude'];
 
-bool isWgs84LatLng(double lat, double lng) =>
-    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+bool isWgs84LatLng(double lat, double lng) => CoordinateTransform.isWgs84LatLng(lat, lng);
 
 double? _num(dynamic v) {
   if (v is num) return v.toDouble();
@@ -67,12 +68,23 @@ double? _pick(Map<String, dynamic> m, List<String> keys) {
   return null;
 }
 
+LatLng? _toWgs84(double x, double y, {int? epsg, Map<String, dynamic>? props}) {
+  if (isWgs84LatLng(y, x)) return LatLng(y, x);
+  return CoordinateTransform.reprojectXY(
+    x,
+    y,
+    epsg: epsg ?? (props != null ? CoordinateTransform.epsgFromProperties(props) : null),
+    crsEpsg: props?['crsEpsg']?.toString(),
+  );
+}
+
 /// Try WGS84 lat/lng from attribute map (QField / shapefile / GPKG columns).
 LatLng? latLngFromProperties(Map<String, dynamic> props) {
-  var lat = _pick(props, _latKeys);
-  var lng = _pick(props, _lngKeys);
-  if (lat != null && lng != null && isWgs84LatLng(lat, lng)) {
-    return LatLng(lat, lng);
+  final lat = _pick(props, _latKeys);
+  final lng = _pick(props, _lngKeys);
+  if (lat != null && lng != null) {
+    final wgs = _toWgs84(lng, lat, props: props);
+    if (wgs != null) return wgs;
   }
   return null;
 }
@@ -94,13 +106,15 @@ String? labelFromProperties(Map<String, dynamic> props) {
   return null;
 }
 
-List<LatLng> ringToLatLng(List<dynamic> ring) {
+List<LatLng> ringToLatLng(List<dynamic> ring, {Map<String, dynamic>? crsProps}) {
   final pts = <LatLng>[];
+  final epsg = crsProps != null ? CoordinateTransform.epsgFromProperties(crsProps) : null;
   for (final p in ring) {
     if (p is List && p.length >= 2 && p[0] is num && p[1] is num) {
-      final lng = (p[0] as num).toDouble();
-      final lat = (p[1] as num).toDouble();
-      if (isWgs84LatLng(lat, lng)) pts.add(LatLng(lat, lng));
+      final x = (p[0] as num).toDouble();
+      final y = (p[1] as num).toDouble();
+      final ll = _toWgs84(x, y, epsg: epsg, props: crsProps);
+      if (ll != null) pts.add(ll);
     }
   }
   return pts;
@@ -137,25 +151,22 @@ QFieldMapFeature? geoJsonToMapFeature(Map<String, dynamic> f, int index) {
   var polygons = <List<LatLng>>[];
 
   if (t == 'Point' && c is List && c.length >= 2) {
-    final lng = (c[0] as num).toDouble();
-    final lat = (c[1] as num).toDouble();
-    if (isWgs84LatLng(lat, lng)) point = LatLng(lat, lng);
+    point = _toWgs84((c[0] as num).toDouble(), (c[1] as num).toDouble(), props: props);
   } else if (t == 'MultiPoint' && c is List) {
     for (final p in c) {
       if (p is List && p.length >= 2) {
-        final lng = (p[0] as num).toDouble();
-        final lat = (p[1] as num).toDouble();
-        if (isWgs84LatLng(lat, lng)) {
-          point ??= LatLng(lat, lng);
+        final ll = _toWgs84((p[0] as num).toDouble(), (p[1] as num).toDouble(), props: props);
+        if (ll != null) {
+          point ??= ll;
         }
       }
     }
   } else if (t == 'LineString' && c is List) {
-    polyline = ringToLatLng(c);
+    polyline = ringToLatLng(c, crsProps: props);
   } else if (t == 'MultiLineString' && c is List) {
     for (final line in c) {
       if (line is List) {
-        final pts = ringToLatLng(line);
+        final pts = ringToLatLng(line, crsProps: props);
         if (pts.length >= 2) {
           if (polyline.isEmpty) polyline = pts;
         }
@@ -164,7 +175,7 @@ QFieldMapFeature? geoJsonToMapFeature(Map<String, dynamic> f, int index) {
   } else if (t == 'Polygon' && c is List && c.isNotEmpty) {
     final ring = c.first;
     if (ring is List) {
-      final pts = ringToLatLng(ring);
+      final pts = ringToLatLng(ring, crsProps: props);
       if (pts.length >= 3) polygons = [pts];
     }
   } else if (t == 'MultiPolygon' && c is List) {
@@ -172,7 +183,7 @@ QFieldMapFeature? geoJsonToMapFeature(Map<String, dynamic> f, int index) {
       if (poly is List && poly.isNotEmpty) {
         final ring = poly.first;
         if (ring is List) {
-          final pts = ringToLatLng(ring);
+          final pts = ringToLatLng(ring, crsProps: props);
           if (pts.length >= 3) polygons.add(pts);
         }
       }
