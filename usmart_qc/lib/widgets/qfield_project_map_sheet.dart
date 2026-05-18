@@ -18,7 +18,8 @@ class _PreviewHintText extends StatelessWidget {
 
   final String text;
   static const String _archiveSep = 'Archive listing:';
-  static const String _mapFieldsSep = 'Map fields:';
+  static const String _filesSep = '. Files:';
+  static const String _mapFieldsSep = 'Tap map features';
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +32,11 @@ class _PreviewHintText extends StatelessWidget {
     if (ai > 0) {
       chunks.add(rest.substring(0, ai).trim());
       rest = rest.substring(ai).trim();
+    }
+    final fi = rest.indexOf(_filesSep);
+    if (fi > 0) {
+      chunks.add(rest.substring(0, fi).trim());
+      rest = rest.substring(fi).trim();
     }
     final mi = rest.indexOf(_mapFieldsSep);
     if (mi > 0) {

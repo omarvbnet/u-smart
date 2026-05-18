@@ -933,6 +933,30 @@ function collectQgsDatasourceVectorKeys(
   return { gpkg, shp };
 }
 
+/** QGIS style / changelog SQLite inside .qgz — not field map layers. */
+function isAuxiliaryProjectDb(path: string): boolean {
+  const base = path.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? '';
+  if (!base.endsWith('.db') && !base.endsWith('.sqlite')) return false;
+  if (base.includes('style')) return true;
+  if (base === 'changelog.db' || base === 'qgis.db') return true;
+  return false;
+}
+
+/** Prefer shortest path when the same basename appears in nested .qgz folders. */
+function dedupeArchivePathsByBasename(paths: string[]): string[] {
+  const best = new Map<string, string>();
+  for (const p of paths) {
+    const leaf = p.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? p.toLowerCase();
+    const prev = best.get(leaf);
+    if (!prev || p.length < prev.length) best.set(leaf, p);
+  }
+  return [...best.values()];
+}
+
+function archiveBasename(path: string): string {
+  return path.replace(/\\/g, '/').split('/').pop() ?? path;
+}
+
 function summarizeVectorishFiles(keys: string[]): string {
   const countEnds = (suffix: string) => keys.filter((k) => k.toLowerCase().endsWith(suffix)).length;
   const gpkg = countEnds('.gpkg');
@@ -1572,16 +1596,26 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   const keys = Object.keys(files);
   const refVec = collectQgsDatasourceVectorKeys(keys, files);
 
-  const gpkgKeys = keys
-    .filter((k) => k.toLowerCase().endsWith('.gpkg'))
-    .sort(sortArchivePathsForVectors);
+  const rawGpkgCount = keys.filter((k) => k.toLowerCase().endsWith('.gpkg')).length;
+  const rawDbCount = keys.filter((k) => {
+    const x = k.toLowerCase();
+    return (x.endsWith('.sqlite') || x.endsWith('.db')) && !x.includes('-wal');
+  }).length;
 
-  const sqliteVectorKeys = keys
-    .filter((k) => {
+  const gpkgKeys = dedupeArchivePathsByBasename(
+    keys.filter((k) => k.toLowerCase().endsWith('.gpkg'))
+  ).sort(sortArchivePathsForVectors);
+
+  const sqliteVectorKeys = dedupeArchivePathsByBasename(
+    keys.filter((k) => {
       const x = k.toLowerCase();
       return (x.endsWith('.sqlite') || x.endsWith('.db')) && !x.includes('-wal');
-    })
-    .sort(sortArchivePathsForVectors);
+    }).filter((k) => !isAuxiliaryProjectDb(k))
+  ).sort(sortArchivePathsForVectors);
+
+  const auxDbSkipped = keys.filter(
+    (k) => isAuxiliaryProjectDb(k) && !sqliteVectorKeys.includes(k)
+  ).length;
 
   const shpKeysAll = keys
     .filter((k) => k.toLowerCase().endsWith('.shp'))
@@ -1606,19 +1640,26 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   let unionBounds: QFieldMapBounds | null = null;
   let remaining = MAX_FEATURES_TOTAL;
   let gpkgOk = 0;
+  let gpkgAttrOnly = 0;
   let gpkgSkipped = 0;
   let shpOk = 0;
   let shpSkipped = 0;
+  const sourceNotes: string[] = [];
 
   if (gpkgKeysOrdered.length > 0) {
     const divisor = Math.min(gpkgKeysOrdered.length + shpKeysOrdered.length, 8);
-    const budgetEach = Math.max(40, Math.floor(MAX_FEATURES_TOTAL / Math.max(1, divisor)));
+    const budgetEach = Math.max(
+      40,
+      Math.floor(MAX_FEATURES_TOTAL / Math.max(1, divisor))
+    );
     for (const path of gpkgKeysOrdered) {
       if (remaining <= 0 && allDataTables.length >= MAX_DATA_TABLES) break;
       const take = Math.min(remaining, budgetEach);
       const gBytes = files[path];
+      const shortName = archiveBasename(path);
       if (!gBytes || gBytes.length < 64) {
         gpkgSkipped++;
+        sourceNotes.push(`${shortName} (unreadable)`);
         continue;
       }
       const normPath = path.replace(/\\/g, '/');
@@ -1636,8 +1677,15 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
         gpkgOk++;
         unionBounds = mergeBounds(unionBounds, bounds);
         remaining -= features.length;
-      } else if (dataTables.length === 0) {
+        sourceNotes.push(`${shortName} (${features.length} on map)`);
+      } else if (dataTables.length > 0) {
+        gpkgAttrOnly++;
+        sourceNotes.push(
+          `${shortName} (attributes only, ${dataTables.length} table(s) in panel)`
+        );
+      } else {
         gpkgSkipped++;
+        sourceNotes.push(`${shortName} (no layers)`);
       }
     }
   }
@@ -1756,7 +1804,12 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   }
   if (gpkgOk > 0) {
     parts.push(
-      `${gpkgOk} spatial DB layer source(s) (${gpkgKeysOrdered.length} .gpkg/.sqlite/.db scanned)`
+      `${gpkgOk} GeoPackage${gpkgOk > 1 ? 's' : ''} with map geometry`
+    );
+  }
+  if (gpkgAttrOnly > 0) {
+    parts.push(
+      `${gpkgAttrOnly} database${gpkgAttrOnly > 1 ? 's' : ''} attributes-only (panel, not drawn)`
     );
   }
   if (shpOk > 0) {
@@ -1767,23 +1820,40 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
   if (extentAdded) {
     parts.push('project canvas extent (fallback - map CRS may differ from WGS84)');
   }
-  if (gpkgSkipped > 0 && gpkgOk === 0 && !extentAdded && shpOk === 0) {
-    parts.push(`${gpkgSkipped} GeoPackage(s) had no readable layers`);
+  if (gpkgSkipped > 0 && gpkgOk === 0 && gpkgAttrOnly === 0 && !extentAdded && shpOk === 0) {
+    parts.push(`${gpkgSkipped} spatial DB file(s) had no readable layers`);
   }
   if (shpSkipped > 0 && shpOk === 0 && gpkgOk === 0 && !extentAdded) {
     parts.push(`${shpSkipped} shapefile(s) had no readable geometries`);
   }
 
   const objectPhrase = merged.length === 1 ? 'one map object' : `${merged.length} map objects`;
-  let msg = `Archive "${archiveLabel}": ${parts.join(' + ')} - ${objectPhrase}.`;
-  if (gpkgOk === 0 && shpOk === 0 && extentAdded) {
-    msg += ` Archive listing: ${summarizeVectorishFiles(keys)} (paths found in zip).`;
+  let msg = `Archive "${archiveLabel}": ${parts.join(' + ')} — ${objectPhrase} drawn on the map.`;
+
+  const uniqueSpatialCandidates = new Set([
+    ...gpkgKeysOrdered.map((p) => archiveBasename(p).toLowerCase()),
+  ]).size;
+  const scannedNote =
+    rawGpkgCount + rawDbCount > uniqueSpatialCandidates
+      ? ` (${rawGpkgCount + rawDbCount} file entries in zip, ${uniqueSpatialCandidates} unique spatial DB name(s) after dedupe)`
+      : gpkgKeysOrdered.length > 0
+        ? ` (${gpkgKeysOrdered.length} spatial DB file(s) processed)`
+        : '';
+  if (scannedNote) msg += scannedNote;
+  if (auxDbSkipped > 0) {
+    msg += `; ${auxDbSkipped} QGIS style DB(s) ignored`;
   }
-  msg += ' Map fields: package / layer / source.';
+  if (sourceNotes.length > 0) {
+    msg += `. Files: ${sourceNotes.join('; ')}`;
+  }
+  if (gpkgOk === 0 && shpOk === 0 && extentAdded) {
+    msg += ` Archive listing: ${summarizeVectorishFiles(keys)}.`;
+  }
+  msg += ' Tap map features for package / layer / field values.';
 
   const layerSummaries = buildLayerSummaries(merged, allDataTables.slice(0, MAX_DATA_TABLES));
   if (allDataTables.length > 0) {
-    msg += ` ${allDataTables.length} SQL table(s) with attributes.`;
+    msg += ` ${allDataTables.length} SQL table(s) in the layer panel (up to ${MAX_DATA_TABLE_ROWS} rows each).`;
   }
 
   return {
