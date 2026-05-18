@@ -177,17 +177,15 @@ export function reprojectGeoJsonToWgs84(
 ): GeoJsonGeometry | null {
   const walk = (coords: unknown): unknown => {
     if (!Array.isArray(coords)) return coords;
-    if (
-      coords.length >= 2 &&
-      typeof coords[0] === 'number' &&
-      typeof coords[1] === 'number' &&
-      (coords.length === 2 || typeof coords[2] !== 'number')
-    ) {
+    if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
       const x = coords[0] as number;
       const y = coords[1] as number;
-      if (isWgs84LatLng(y, x)) return [x, y];
+      if (isWgs84LatLng(y, x)) {
+        return coords.length > 2 ? [x, y, ...coords.slice(2)] : [x, y];
+      }
       const t = transformPair(x, y, fromProj);
-      return t ?? coords;
+      if (!t) return coords;
+      return coords.length > 2 ? [t[0], t[1], ...coords.slice(2)] : t;
     }
     return coords.map((c) => walk(c));
   };

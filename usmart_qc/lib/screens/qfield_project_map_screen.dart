@@ -60,6 +60,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   List<_LayerChip> _layers = const [];
   List<({String name, String package, List<Map<String, dynamic>> rows})> _sqlTables = const [];
   List<QFieldMapFeature> _features = const [];
+  int? _defaultCrsEpsg;
+  Map<String, int> _layerEpsgByKey = const {};
   final Set<String> _hiddenLayerKeys = {};
   String? _selectedFeatureId;
   final Map<String, Map<String, dynamic>> _propertyEdits = {};
@@ -110,8 +112,12 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     String? hint;
     var layers = <_LayerChip>[];
     var sqlTables = <({String name, String package, List<Map<String, dynamic>> rows})>[];
+    int? defaultCrs;
+    final layerCrs = <String, int>{};
 
     if (data != null && data['success'] == true) {
+      final rawDefaultCrs = data['defaultCrsEpsg'];
+      if (rawDefaultCrs is num) defaultCrs = rawDefaultCrs.toInt();
       final g = data['geojson'];
       if (g is Map<String, dynamic>) gj = g;
       final rawB = data['bounds'];
@@ -134,8 +140,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           final layer = row['layer']?.toString() ?? '';
           final pkg = row['package']?.toString() ?? '';
           if (layer.isEmpty && pkg.isEmpty) continue;
+          final key = '$pkg|$layer';
+          final crs = row['crsEpsg'];
+          if (crs is num) layerCrs[key] = crs.toInt();
           layers.add(_LayerChip(
-            key: '$pkg|$layer',
+            key: key,
             label: pkg.isNotEmpty ? '$pkg › $layer' : layer,
             color: _layerPalette[i % _layerPalette.length],
             count: (row['featureCount'] as num?)?.toInt() ?? 0,
@@ -178,10 +187,22 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       _hint = hint;
       _layers = layers;
       _sqlTables = sqlTables;
+      _defaultCrsEpsg = defaultCrs;
+      _layerEpsgByKey = layerCrs;
       _loading = false;
     });
     _syncMapFeatures();
     WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
+  }
+
+  int _drawableOnMapCount() {
+    var n = 0;
+    for (final f in _features) {
+      if (f.point != null) n++;
+      n += f.polylines.where((l) => l.length >= 2).length;
+      n += f.polygons.where((p) => p.length >= 3).length;
+    }
+    return n;
   }
 
   void _syncMapFeatures() {
@@ -189,10 +210,17 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       geojson: _geojson,
       sqlTables: _sqlTables,
       hiddenLayerKeys: _hiddenLayerKeys,
+      defaultCrsEpsg: _defaultCrsEpsg,
+      layerEpsgByKey: _layerEpsgByKey,
     );
     final onMap = <String, int>{};
     for (final f in _features) {
-      onMap[f.layerKey] = (onMap[f.layerKey] ?? 0) + 1;
+      var n = 0;
+      if (f.point != null) n++;
+      n += f.polylines.where((l) => l.length >= 2).length;
+      n += f.polygons.where((p) => p.length >= 3).length;
+      if (n == 0) n = 1;
+      onMap[f.layerKey] = (onMap[f.layerKey] ?? 0) + n;
     }
     _layers = _layers
         .map(
@@ -326,15 +354,17 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   List<Polyline> _buildPolylines() {
     final out = <Polyline>[];
     for (final f in _features) {
-      if (f.polyline.length < 2) continue;
       final selected = f.id == _selectedFeatureId;
-      out.add(Polyline(
-        points: f.polyline,
-        color: selected ? const Color(0xFF6C63FF) : _lineStroke,
-        strokeWidth: selected ? 6 : 5,
-        borderColor: _lineStroke.withAlpha(80),
-        borderStrokeWidth: selected ? 8 : 7,
-      ));
+      for (final line in f.polylines) {
+        if (line.length < 2) continue;
+        out.add(Polyline(
+          points: line,
+          color: selected ? const Color(0xFF6C63FF) : _lineStroke,
+          strokeWidth: selected ? 6 : 5,
+          borderColor: _lineStroke.withAlpha(80),
+          borderStrokeWidth: selected ? 8 : 7,
+        ));
+      }
     }
     return out;
   }
@@ -430,7 +460,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final top = MediaQuery.paddingOf(context).top;
-    final onMapCount = _features.length;
+    final onMapCount = _drawableOnMapCount();
 
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),

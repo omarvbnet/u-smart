@@ -73,6 +73,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       bounds: preview.bounds,
       layers: preview.layers ?? [],
       dataTables: preview.dataTables ?? [],
+      defaultCrsEpsg: preview.defaultCrsEpsg ?? null,
       message: preview.message ?? null,
       mapAnnotation: proj.mapAnnotation ?? null,
     });

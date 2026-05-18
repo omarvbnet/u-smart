@@ -42,6 +42,7 @@ export type QFieldMapLayerSummary = {
   packagePath?: string;
   featureCount: number;
   geometryTypes: string[];
+  crsEpsg?: number | null;
 };
 
 export type QFieldDataTableRow = Record<string, string | number | boolean | null>;
@@ -62,6 +63,8 @@ export type QFieldMapPreviewResult = {
   layers?: QFieldMapLayerSummary[];
   dataTables?: QFieldDataTable[];
   message?: string;
+  /** Default projected CRS when all layers share one (e.g. EPSG:32638). */
+  defaultCrsEpsg?: number | null;
 };
 
 const MAX_BYTES = 45 * 1024 * 1024;
@@ -522,6 +525,11 @@ function extractEsriShapefileFeatures(
     }
 
     if (geom) {
+      let outGeom = geom;
+      if (geometryNeedsReproject(outGeom)) {
+        const reproj = reprojectGeoJsonToWgs84Auto(outGeom, null, null);
+        if (reproj) outGeom = reproj;
+      }
       const attrs = dbfRows[dbfIndex] ?? {};
       features.push({
         type: 'Feature',
@@ -532,7 +540,7 @@ function extractEsriShapefileFeatures(
           source: 'shapefile',
           ...attrs,
         },
-        geometry: geom,
+        geometry: outGeom,
       });
     }
     dbfIndex += 1;
@@ -1383,6 +1391,7 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
     bounds,
     layers: layerSummaries,
     dataTables,
+    defaultCrsEpsg: defaultCrsFromFeatures(features),
     message:
       features.length > 0
         ? `${features.length} feature(s) from GeoPackage “${displayName}” across ${layerSummaries.length} layer(s).${tableNote}`
@@ -1392,6 +1401,25 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
 
 function layerSummaryKey(packageName: string, layerName: string): string {
   return `${packageName}\0${layerName}`;
+}
+
+function defaultCrsFromFeatures(features: GeoJsonFeature[]): number | null {
+  const counts = new Map<number, number>();
+  for (const f of features) {
+    const raw = f.properties?.crsEpsg;
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
+    const code = Math.trunc(raw);
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let bestN = 0;
+  for (const [code, n] of counts) {
+    if (n > bestN) {
+      bestN = n;
+      best = code;
+    }
+  }
+  return best;
 }
 
 function countSqliteTableRows(db: SqlJsDb, table: string, quoteId: (ident: string) => string): number {
@@ -1426,6 +1454,10 @@ function buildLayerSummaries(
     const layer = String(props.layer ?? props.name ?? 'layer');
     const pkg = String(props.package ?? props.packagePath ?? '');
     const key = layerSummaryKey(pkg, layer);
+    const featEpsg =
+      typeof props.crsEpsg === 'number' && Number.isFinite(props.crsEpsg)
+        ? Math.trunc(props.crsEpsg)
+        : null;
     let row = byKey.get(key);
     if (!row) {
       row = {
@@ -1434,10 +1466,12 @@ function buildLayerSummaries(
         packagePath: typeof props.packagePath === 'string' ? props.packagePath : undefined,
         featureCount: 0,
         geometryTypes: [],
+        crsEpsg: featEpsg,
       };
       byKey.set(key, row);
     }
     row.featureCount += 1;
+    if (featEpsg != null && row.crsEpsg == null) row.crsEpsg = featEpsg;
     const gt = f.geometry?.type;
     if (gt && !row.geometryTypes.includes(gt)) row.geometryTypes.push(gt);
   }
@@ -1708,6 +1742,7 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     bounds: unionBounds,
     layers: layerSummaries,
     dataTables: allDataTables.slice(0, MAX_DATA_TABLES),
+    defaultCrsEpsg: defaultCrsFromFeatures(merged),
     message: msg,
   };
 }
