@@ -48,12 +48,22 @@ export type QFieldDataTable = {
   hasGeometry: boolean;
 };
 
+export type QFieldMapPreviewStats = {
+  featureCount: number;
+  featureCap: number;
+  featuresTruncated: boolean;
+  dataTableCount: number;
+  maxDataTableRows: number;
+  dataTablesTruncated: boolean;
+};
+
 export type QFieldMapPreviewResult = {
   geojson: GeoJsonFeatureCollection | null;
   bounds: QFieldMapBounds | null;
   layers?: QFieldMapLayerSummary[];
   dataTables?: QFieldDataTable[];
   message?: string;
+  stats?: QFieldMapPreviewStats;
   /** Default projected CRS when all layers share one (e.g. EPSG:32638). */
   defaultCrsEpsg?: number | null;
 };
@@ -1475,6 +1485,14 @@ async function previewFromGpkg(bytes: Uint8Array, displayName: string): Promise<
       features.length > 0
         ? `${features.length} feature(s) from GeoPackage “${displayName}” across ${layerSummaries.length} layer(s).${tableNote}`
         : `No map geometries extracted; ${dataTables.length} attribute table(s) loaded from “${displayName}” (UTM rows reprojected when possible).${tableNote}`,
+    stats: {
+      featureCount: features.length,
+      featureCap: MAX_FEATURES_TOTAL,
+      featuresTruncated: features.length >= MAX_FEATURES_TOTAL,
+      dataTableCount: dataTables.length,
+      maxDataTableRows: MAX_DATA_TABLE_ROWS,
+      dataTablesTruncated: false,
+    },
   };
 }
 
@@ -1856,13 +1874,22 @@ async function previewFromZipArchive(bytes: Uint8Array, archiveLabel: string): P
     msg += ` ${allDataTables.length} SQL table(s) in the layer panel (up to ${MAX_DATA_TABLE_ROWS} rows each).`;
   }
 
+  const dataTablesOut = allDataTables.slice(0, MAX_DATA_TABLES);
   return {
     geojson: { type: 'FeatureCollection', features: merged },
     bounds: unionBounds,
     layers: layerSummaries,
-    dataTables: allDataTables.slice(0, MAX_DATA_TABLES),
+    dataTables: dataTablesOut,
     defaultCrsEpsg: defaultCrsFromFeatures(merged),
     message: msg,
+    stats: {
+      featureCount: merged.length,
+      featureCap: MAX_FEATURES_TOTAL,
+      featuresTruncated: merged.length >= MAX_FEATURES_TOTAL,
+      dataTableCount: dataTablesOut.length,
+      maxDataTableRows: MAX_DATA_TABLE_ROWS,
+      dataTablesTruncated: allDataTables.length > MAX_DATA_TABLES,
+    },
   };
 }
 

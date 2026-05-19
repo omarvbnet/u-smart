@@ -62,7 +62,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   final TextEditingController _noteCtrl = TextEditingController();
 
   List<_LayerChip> _layers = const [];
-  List<({String name, String package, List<Map<String, dynamic>> rows})> _sqlTables = const [];
+  List<_SqlTableData> _sqlTables = const [];
+  Map<String, dynamic>? _previewStats;
   List<QFieldMapFeature> _features = const [];
   int? _defaultCrsEpsg;
   Map<String, int> _layerEpsgByKey = const {};
@@ -119,7 +120,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     Map<String, double>? b;
     String? hint;
     var layers = <_LayerChip>[];
-    var sqlTables = <({String name, String package, List<Map<String, dynamic>> rows})>[];
+    var sqlTables = <_SqlTableData>[];
+    Map<String, dynamic>? previewStats;
     int? defaultCrs;
     final layerCrs = <String, int>{};
 
@@ -139,6 +141,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       }
       final m = data['message'];
       if (m is String && m.trim().isNotEmpty) hint = m.trim();
+      final rawStats = data['stats'];
+      if (rawStats is Map) previewStats = Map<String, dynamic>.from(rawStats);
 
       final rawLayers = data['layers'];
       if (rawLayers is List) {
@@ -175,8 +179,24 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               if (r is Map) rows.add(Map<String, dynamic>.from(r));
             }
           }
+          final columns = <String>[];
+          final rawCols = row['columns'];
+          if (rawCols is List) {
+            for (final c in rawCols) {
+              if (c != null && '$c'.trim().isNotEmpty) columns.add('$c'.trim());
+            }
+          }
           final pkgNorm = pkg.isNotEmpty ? pkg : name;
-          sqlTables.add((name: name, package: pkgNorm, rows: rows));
+          final layerKey = normalizeLayerKey(pkgNorm, name);
+          sqlTables.add(_SqlTableData(
+            name: name,
+            package: pkgNorm,
+            layerKey: layerKey,
+            columns: columns,
+            rows: rows,
+            rowCount: (row['rowCount'] as num?)?.toInt() ?? rows.length,
+            hasGeometry: row['hasGeometry'] == true,
+          ));
           final key = normalizeLayerKey(pkgNorm, name);
           if (!layers.any((l) => l.key == key)) {
             layers.add(_LayerChip(
@@ -196,6 +216,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       _hint = hint;
       _layers = layers;
       _sqlTables = sqlTables;
+      _previewStats = previewStats;
       _defaultCrsEpsg = defaultCrs;
       _layerEpsgByKey = layerCrs;
       _loading = false;
@@ -205,6 +226,131 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   }
 
   int _drawableOnMapCount() => countDrawables(_features);
+
+  void _showSqlTableDetails(_SqlTableData table) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.92,
+          builder: (_, scroll) {
+            final shown = table.rows.length;
+            final total = table.rowCount;
+            final truncated = shown < total;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          table.package.isNotEmpty
+                              ? '${table.package} › ${table.name}'
+                              : table.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    truncated
+                        ? l10n.t('qfield_sql_rows_shown', {
+                            'shown': '$shown',
+                            'total': '$total',
+                          })
+                        : '$total ${l10n.t('qfield_layer_feature_count')}',
+                    style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: table.rows.isEmpty
+                      ? Center(
+                          child: Text(
+                            l10n.t('qfield_layer_no_features'),
+                            style: TextStyle(color: Colors.white.withAlpha(140)),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scroll,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          itemCount: table.rows.length,
+                          itemBuilder: (_, i) {
+                            final row = table.rows[i];
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A1A35),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${l10n.t('qfield_sql_row')} ${i + 1}',
+                                    style: TextStyle(
+                                      color: Colors.white.withAlpha(160),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ...row.entries.map(
+                                    (e) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: _FeatureDataRow(
+                                        label: e.key,
+                                        value: '${e.value ?? ''}',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _syncMapFeatures() {
     _features = buildMapFeatures(
@@ -360,6 +506,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     if (_selectedFeatureId != null) {
       if (f.id == _selectedFeatureId) return true;
       if (_relatedCableIds.contains(f.id)) return true;
+      return false;
     }
     if (_locationHits.isNotEmpty) {
       return _locationHits.any((h) => h.feature.id == f.id);
@@ -375,7 +522,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     return true;
   }
 
-  void _selectFeature(QFieldMapFeature? f, {bool expandPanel = false}) {
+  void _selectFeature(
+    QFieldMapFeature? f, {
+    bool expandPanel = false,
+    List<FeatureTapHit>? tapHits,
+  }) {
     for (final c in _fieldCtrls.values) {
       c.dispose();
     }
@@ -383,20 +534,25 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     if (f != null) {
       final props = _propsFor(f);
       const skip = {'layer', 'package', 'packagePath', 'source', 'kind'};
+      final hideFid =
+          isCableFeature(f) && cableIdFromProperties(props) != null;
       for (final e in props.entries) {
         if (skip.contains(e.key)) continue;
+        if (hideFid && e.key.toLowerCase() == 'fid') continue;
         if (e.value == null) continue;
         final s = e.value.toString();
         if (s == '[binary]') continue;
         _fieldCtrls[e.key] = TextEditingController(text: s);
       }
     }
-    var hits = _locationHits;
+    var hits = tapHits ?? _locationHits;
     if (f != null) {
       final anchor = featureAnchorPoint(f);
       if (anchor != null) {
         hits = featuresNearPoint(_features, anchor, maxMeters: 12);
       }
+    } else if (tapHits != null) {
+      hits = tapHits;
     }
     final related = f == null
         ? const <String>{}
@@ -446,11 +602,30 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   void _onMapTap(TapPosition _, LatLng point) {
     final hits = findFeaturesNearTap(_features, point, maxMeters: 80);
     if (hits.isNotEmpty) {
-      setState(() => _locationHits = hits);
       if (hits.length == 1) {
-        _selectFeature(hits.first.feature, expandPanel: true);
+        final picked = hits.first.feature;
+        _selectFeature(
+          picked,
+          expandPanel: true,
+          tapHits: hits,
+        );
       } else {
-        _selectFeature(null, expandPanel: true);
+        setState(() {
+          _selectedFeatureId = null;
+          _relatedCableIds = const {};
+          _locationHits = hits;
+        });
+        for (final c in _fieldCtrls.values) {
+          c.dispose();
+        }
+        _fieldCtrls.clear();
+        try {
+          _panelCtrl.animateTo(
+            0.45,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOut,
+          );
+        } catch (_) {}
       }
       return;
     }
@@ -585,6 +760,28 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
             ),
           ),
         );
+        if (isHandholeLayerName(layerName) &&
+            handholeContainsClosure(f.properties)) {
+          final closureId = closureOrOdfIdFromProperties(f.properties);
+          if (closureId != null && closureId.isNotEmpty) {
+            out.add(
+              Marker(
+                point: pt,
+                width: 50,
+                height: 36,
+                alignment: Alignment.bottomCenter,
+                child: Transform.translate(
+                  offset: const Offset(0, -38),
+                  child: QFieldMapPointLabel(
+                    text: closureId,
+                    highlighted: hi,
+                    compact: true,
+                  ),
+                ),
+              ),
+            );
+          }
+        }
       }
     }
     return out;
@@ -811,7 +1008,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               scrollController: scroll,
               l10n: l10n,
               layers: _layers,
-              sqlTableCount: _sqlTables.length,
+              sqlTables: _sqlTables,
+              previewStats: _previewStats,
               hiddenKeys: _hiddenLayerKeys,
               selected: _selected,
               layerGroups: _layerGroups,
@@ -838,8 +1036,12 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                 _propertyEdits.putIfAbsent(featureId, () => {})[key] = value;
               },
               onClearSelection: _clearTapSelection,
-              onPickTapFeature: (f) => _selectFeature(f, expandPanel: true),
+              onPickTapFeature: (f) {
+                if (_selectedFeatureId == f.id) return;
+                _selectFeature(f, expandPanel: true);
+              },
               onShowAllOnMap: _fitMap,
+              onOpenSqlTable: _showSqlTableDetails,
             ),
           ),
         ],
@@ -851,6 +1053,26 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final cam = _mapController.camera;
     _mapController.move(cam.center, (cam.zoom + delta).clamp(3, 19));
   }
+}
+
+class _SqlTableData {
+  const _SqlTableData({
+    required this.name,
+    required this.package,
+    required this.layerKey,
+    required this.columns,
+    required this.rows,
+    required this.rowCount,
+    required this.hasGeometry,
+  });
+
+  final String name;
+  final String package;
+  final String layerKey;
+  final List<String> columns;
+  final List<Map<String, dynamic>> rows;
+  final int rowCount;
+  final bool hasGeometry;
 }
 
 class _LayerChip {
@@ -902,12 +1124,133 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
+class _PreviewStatsBanner extends StatelessWidget {
+  const _PreviewStatsBanner({required this.l10n, required this.stats});
+
+  final AppLocalizations l10n;
+  final Map<String, dynamic> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = (stats['featureCount'] as num?)?.toInt() ?? 0;
+    final cap = (stats['featureCap'] as num?)?.toInt() ?? 800;
+    final truncated = stats['featuresTruncated'] == true;
+    final tables = (stats['dataTableCount'] as num?)?.toInt() ?? 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00D4AA).withAlpha(28),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF00D4AA).withAlpha(80)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            truncated ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
+            color: truncated ? const Color(0xFFFBBF24) : const Color(0xFF00D4AA),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              truncated
+                  ? l10n.t('qfield_map_preview_truncated', {'count': '$count', 'cap': '$cap'})
+                  : l10n.t('qfield_map_preview_features', {'count': '$count'}),
+              style: TextStyle(
+                color: Colors.white.withAlpha(220),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (tables > 0)
+            Text(
+              '$tables SQL',
+              style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArchiveHintText extends StatelessWidget {
+  const _ArchiveHintText({required this.hint});
+
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = hint
+        .split(RegExp(r'\.\s+(?=[\d"A-Z•])'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (lines.length <= 1) {
+      return Text(
+        hint,
+        style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11, height: 1.35),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines
+          .map(
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• ', style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11)),
+                  Expanded(
+                    child: Text(
+                      line.endsWith('.') ? line : '$line.',
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(140),
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+String _tapHeaderSubtitle(AppLocalizations l10n, QFieldTapContext ctx) {
+  final sel = ctx.selected;
+  final layer = sel.properties['layer']?.toString();
+  final parts = <String>[];
+
+  if (ctx.isRouteSelection) {
+    return layer?.trim().isNotEmpty == true ? layer! : l10n.t('qfield_map_route_label');
+  }
+
+  if (ctx.fatId != null) {
+    parts.add('${l10n.t('qfield_map_fat_label')} ${ctx.fatId}');
+  }
+  if (isHandholeLayerName(layer) && handholeContainsClosure(sel.properties)) {
+    final closureId = closureOrOdfIdFromProperties(sel.properties);
+    if (closureId != null && closureId.isNotEmpty) {
+      parts.add('${l10n.t('qfield_map_closure_odf_id')}: $closureId');
+    }
+  }
+  if (parts.isNotEmpty) return parts.join(' · ');
+  return featureTapListSubtitle(sel);
+}
+
 class _BottomPanel extends StatelessWidget {
   const _BottomPanel({
     required this.scrollController,
     required this.l10n,
     required this.layers,
-    required this.sqlTableCount,
+    required this.sqlTables,
+    this.previewStats,
     required this.hiddenKeys,
     required this.selected,
     required this.layerGroups,
@@ -923,12 +1266,14 @@ class _BottomPanel extends StatelessWidget {
     required this.onClearSelection,
     required this.onPickTapFeature,
     required this.onShowAllOnMap,
+    required this.onOpenSqlTable,
   });
 
   final ScrollController scrollController;
   final AppLocalizations l10n;
   final List<_LayerChip> layers;
-  final int sqlTableCount;
+  final List<_SqlTableData> sqlTables;
+  final Map<String, dynamic>? previewStats;
   final Set<String> hiddenKeys;
   final QFieldMapFeature? selected;
   final List<LayerHitGroup> layerGroups;
@@ -944,6 +1289,7 @@ class _BottomPanel extends StatelessWidget {
   final VoidCallback onClearSelection;
   final void Function(QFieldMapFeature feature) onPickTapFeature;
   final VoidCallback onShowAllOnMap;
+  final void Function(_SqlTableData table) onOpenSqlTable;
 
   @override
   Widget build(BuildContext context) {
@@ -1015,9 +1361,82 @@ class _BottomPanel extends StatelessWidget {
                   },
                 ),
               ),
+              if (previewStats != null) ...[
+                const SizedBox(height: 8),
+                _PreviewStatsBanner(l10n: l10n, stats: previewStats!),
+              ],
               if (hint != null && hint!.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Text(hint!, style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11)),
+                _ArchiveHintText(hint: hint!),
+              ],
+              if (sqlTables.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.t('qfield_map_sql_tables', {'count': '${sqlTables.length}'}),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...sqlTables.map(
+                  (t) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Material(
+                      color: const Color(0xFF1A1A35),
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () => onOpenSqlTable(t),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Icon(
+                                t.hasGeometry ? Icons.polyline_rounded : Icons.table_rows_rounded,
+                                color: const Color(0xFF00D4AA),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      t.package.isNotEmpty
+                                          ? '${t.package} › ${t.name}'
+                                          : t.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Text(
+                                      t.rows.length < t.rowCount
+                                          ? l10n.t('qfield_sql_rows_shown', {
+                                              'shown': '${t.rows.length}',
+                                              'total': '${t.rowCount}',
+                                            })
+                                          : '${t.rowCount} ${l10n.t('qfield_layer_feature_count')}'
+                                              '${t.hasGeometry ? '' : ' · ${l10n.t('qfield_sql_attributes_only')}'}',
+                                      style: TextStyle(
+                                        color: Colors.white.withAlpha(130),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
               if (userLocationLabel != null) ...[
                 const SizedBox(height: 8),
@@ -1035,9 +1454,7 @@ class _BottomPanel extends StatelessWidget {
               const SizedBox(height: 14),
               if (layerGroups.isEmpty)
                 Text(
-                  sqlTableCount > 0
-                      ? '${l10n.t('qfield_map_tap_feature')} · $sqlTableCount SQL ${l10n.t('qfield_map_layers').toLowerCase()}'
-                      : l10n.t('qfield_map_tap_feature'),
+                  l10n.t('qfield_map_tap_feature'),
                   style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
                 )
               else ...[
@@ -1076,13 +1493,120 @@ class _BottomPanel extends StatelessWidget {
                         onPick: onPickTapFeature,
                       ),
                   ],
+                ] else if (tapContext != null && tapContext!.isRouteSelection) ...[
+                  _SelectedElementHeader(
+                    title: tapContext!.routeId ?? featureTapListTitle(tapContext!.selected),
+                    subtitle: _tapHeaderSubtitle(l10n, tapContext!),
+                  ),
+                  if (tapContext!.routeSiteInfo.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      l10n.t('qfield_map_route_site_info'),
+                      style: const TextStyle(
+                        color: Color(0xFF00D4AA),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...tapContext!.routeSiteInfo.entries.map(
+                      (e) => _FeatureDataRow(
+                        label: e.key,
+                        value: e.value,
+                        accent: true,
+                      ),
+                    ),
+                  ],
+                  if (tapContext!.routeCablesByType.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      l10n.t('qfield_map_cables_in_route'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final entry in tapContext!.routeCablesByType.entries) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: cableTypeColorForLabel(entry.key),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              entry.key,
+                              style: TextStyle(
+                                color: Colors.white.withAlpha(210),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      for (final h in entry.value) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, bottom: 4),
+                          child: _FeatureDataRow(
+                            label: cableIdPropertyKey(h.feature.properties) ??
+                                l10n.t('qfield_map_cable_id'),
+                            value: cableIdFromProperties(h.feature.properties) ??
+                                featureTapListTitle(h.feature),
+                            accent: true,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        l10n.t('qfield_map_no_cables_on_route'),
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(140),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.t('qfield_map_feature_data'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...displayPropsForFeature(tapContext!.selected).entries.map(
+                        (e) => _FeatureDataRow(
+                          label: e.key,
+                          value: '${e.value ?? ''}',
+                        ),
+                      ),
                 ] else if (tapContext != null) ...[
                   _SelectedElementHeader(
                     title: featureTapListTitle(tapContext!.selected),
-                    subtitle: tapContext!.fatId != null
-                        ? '${l10n.t('qfield_map_fat_label')} ${tapContext!.fatId}'
-                        : featureTapListSubtitle(tapContext!.selected),
+                    subtitle: _tapHeaderSubtitle(l10n, tapContext!),
                   ),
+                  if (tapContext!.fatClosuresId != null) ...[
+                    const SizedBox(height: 8),
+                    _FeatureDataRow(
+                      label: tapContext!.fatClosuresPropertyKey ??
+                          l10n.t('qfield_map_fat_closures_id'),
+                      value: tapContext!.fatClosuresId!,
+                      accent: true,
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                     l10n.t('qfield_map_feature_data'),
@@ -1093,7 +1617,21 @@ class _BottomPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  ...tapContext!.primaryProps.entries.map(
+                  if (isHandholeLayerName(
+                          tapContext!.selected.properties['layer']?.toString()) &&
+                      handholeContainsClosure(tapContext!.selected.properties) &&
+                      closureOrOdfIdFromProperties(tapContext!.selected.properties) !=
+                          null &&
+                      tapContext!.handholes.every((b) =>
+                          b.handhole.feature.id != tapContext!.selected.id)) ...[
+                    _FeatureDataRow(
+                      label: closureOrOdfIdPropertyKey(tapContext!.selected.properties) ??
+                          l10n.t('qfield_map_closure_odf_id'),
+                      value: closureOrOdfIdFromProperties(tapContext!.selected.properties)!,
+                      accent: true,
+                    ),
+                  ],
+                  ...displayPropsForFeature(tapContext!.selected).entries.map(
                     (e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}'),
                   ),
                   if (tapContext!.primaryProps.isEmpty)
@@ -1133,7 +1671,22 @@ class _BottomPanel extends StatelessWidget {
                         selected: selected,
                         onPick: onPickTapFeature,
                       ),
-                      ...displayPropsForFeature(bundle.handhole.feature).entries.map(
+                      if (bundle.closureOrOdfId != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, bottom: 4),
+                          child: _FeatureDataRow(
+                            label: bundle.closurePropertyKey ??
+                                l10n.t('qfield_map_closure_odf_id'),
+                            value: bundle.closureOrOdfId!,
+                            accent: true,
+                          ),
+                        ),
+                      ...displayPropsForFeature(bundle.handhole.feature)
+                          .entries
+                          .where((e) =>
+                              bundle.closurePropertyKey == null ||
+                              e.key != bundle.closurePropertyKey)
+                          .map(
                             (e) => Padding(
                               padding: const EdgeInsets.only(left: 12, bottom: 2),
                               child: _FeatureDataRow(
@@ -1501,10 +2054,15 @@ class _TapElementTile extends StatelessWidget {
 }
 
 class _FeatureDataRow extends StatelessWidget {
-  const _FeatureDataRow({required this.label, required this.value});
+  const _FeatureDataRow({
+    required this.label,
+    required this.value,
+    this.accent = false,
+  });
 
   final String label;
   final String value;
+  final bool accent;
 
   @override
   Widget build(BuildContext context) {
@@ -1513,9 +2071,13 @@ class _FeatureDataRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A35),
+        color: accent ? const Color(0xFF6C63FF).withAlpha(45) : const Color(0xFF1A1A35),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withAlpha(20)),
+        border: Border.all(
+          color: accent
+              ? const Color(0xFF6C63FF).withAlpha(120)
+              : Colors.white.withAlpha(20),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1523,9 +2085,9 @@ class _FeatureDataRow extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withAlpha(150),
+              color: accent ? const Color(0xFF00D4AA) : Colors.white.withAlpha(150),
               fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),

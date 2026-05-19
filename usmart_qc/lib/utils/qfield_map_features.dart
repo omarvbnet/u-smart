@@ -93,12 +93,163 @@ String? _propValue(Map<String, dynamic> props, Iterable<String> keys) {
   return null;
 }
 
+const _cableIdKeys = [
+  'cable_id',
+  'cableid',
+  'cable_no',
+  'cableno',
+  'cable_number',
+  'cable_num',
+  'cable_name',
+  'cable_code',
+  'cableid_no',
+  'fibercable_id',
+  'fiber_cable_id',
+  'fiber_id',
+  'fiberid',
+  'line_id',
+  'line_no',
+  'segment_id',
+  'segment_no',
+  'foc_id',
+  'foc_no',
+  'pulling_id',
+  'pulling_no',
+  'name',
+  'label',
+  'code',
+];
+
+const _routeIdKeys = [
+  'route_id',
+  'routeid',
+  'route_no',
+  'routeno',
+  'route_number',
+  'route_num',
+  'route_name',
+  'route_code',
+  'trench_id',
+  'trench_no',
+  'excavation_id',
+  'excavation_no',
+];
+
+String? routeIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, _routeIdKeys);
+}
+
+String? routeIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in _routeIdKeys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return e.key;
+    }
+  }
+  return null;
+}
+
+bool isRouteLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('route')) return true;
+  if (n.contains('excavation') || n.contains('excav')) return true;
+  if (n.contains('trench')) return true;
+  if (n.contains('duct') && !n.contains('product')) return true;
+  return false;
+}
+
+bool _idsEqual(String? a, String? b) {
+  final na = (a ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  final nb = (b ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  return na.isNotEmpty && na == nb;
+}
+
+/// Trench / excavation / route polyline (not a fiber cable).
+bool isRouteFeature(QFieldMapFeature f) {
+  if (isCableLayer(f.properties['layer']?.toString())) return false;
+  final layer = f.properties['layer']?.toString();
+  final hasLine = f.polylines.any((l) => l.length >= 2);
+  if (!hasLine) return false;
+  if (isRouteLayerName(layer)) return true;
+  if (routeIdFromProperties(f.properties) != null) return true;
+  return false;
+}
+
+bool featureBelongsToRoute(QFieldMapFeature f, String routeId) {
+  final ref = routeIdFromProperties(f.properties);
+  if (ref != null && _idsEqual(ref, routeId)) return true;
+  return false;
+}
+
+/// Shortest distance from a point to a route polyline (meters).
+double distancePointToRoutePolyline(LatLng point, QFieldMapFeature route) {
+  var best = double.infinity;
+  for (final line in route.polylines) {
+    if (line.length < 2) continue;
+    for (var i = 0; i < line.length - 1; i++) {
+      final d = _distancePointToSegment(point, line[i], line[i + 1]);
+      if (d < best) best = d;
+    }
+  }
+  return best;
+}
+
+/// Cable line runs along / near the selected route geometry.
+bool featureNearRouteGeometry(
+  QFieldMapFeature feature,
+  QFieldMapFeature route, {
+  double maxMeters = 35,
+}) {
+  if (route.polylines.isEmpty) return false;
+  for (final line in feature.polylines) {
+    for (final p in line) {
+      if (distancePointToRoutePolyline(p, route) <= maxMeters) return true;
+    }
+  }
+  for (final p in feature.points) {
+    if (distancePointToRoutePolyline(p, route) <= maxMeters) return true;
+  }
+  return false;
+}
+
+String? cableIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, _cableIdKeys);
+}
+
+/// Original attribute column name for the cable identifier (e.g. `cable_id`).
+String? cableIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in _cableIdKeys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return e.key;
+    }
+  }
+  return null;
+}
+
+bool _isCableLayerName(String? layerName) {
+  return isCableLayer(layerName);
+}
+
 String? labelFromProperties(Map<String, dynamic> props) {
   final layer = props['layer']?.toString();
   final fromLayer = mapLabelForFeature(props, layer);
   if (fromLayer != null) return fromLayer;
 
-  const prefer = ['name', 'label', 'title', 'id', 'code', 'fid', 'Name', 'LABEL'];
+  if (_isCableLayerName(layer)) {
+    final cableId = cableIdFromProperties(props);
+    if (cableId != null) return cableId;
+  }
+
+  const prefer = ['name', 'label', 'title', 'id', 'code', 'Name', 'LABEL'];
   for (final k in prefer) {
     final v = props[k];
     if (v != null && '$v'.trim().isNotEmpty) return '$v'.trim();
@@ -177,8 +328,14 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
       'label',
     ]);
   }
+  if (n.contains('closure') || n.contains('odf')) {
+    return closureOrOdfIdFromProperties(props);
+  }
   if (n.contains('hole')) {
     return _propValue(props, ['hole_id', 'hole_no', 'id', 'name', 'label']);
+  }
+  if (isCableLayer(layerName) || n.contains('ftth') || (n.contains('fiber') && !n.contains('region'))) {
+    return cableIdFromProperties(props);
   }
   return null;
 }
@@ -201,23 +358,154 @@ bool useCompactMapLabel(String? layerName) {
   return false;
 }
 
+bool isHandholeLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  return n.contains('handhole') || n == 'hh';
+}
+
+const _closureOrOdfIdKeys = [
+  'closure_or_odf_id',
+  'clouser_or_odf_id',
+  'closure_odf_id',
+  'closureorodfid',
+  'closure_or_odf',
+  'odf_id',
+  'odf_no',
+  'odf_number',
+  'closure_id',
+  'closure_no',
+];
+
+const _fatClosuresIdKeys = [
+  'fat_closures_id',
+  'fat_clousers_id',
+  'fat_closure_id',
+  'fat_closures_ids',
+  'fat_closure_ids',
+  'fat_clouser_id',
+  'closures_id',
+];
+
+String? closureOrOdfIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, _closureOrOdfIdKeys);
+}
+
+String? closureOrOdfIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in _closureOrOdfIdKeys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return e.key;
+    }
+  }
+  return null;
+}
+
+String? fatClosuresIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, _fatClosuresIdKeys);
+}
+
+String? fatClosuresIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in _fatClosuresIdKeys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return e.key;
+    }
+  }
+  return null;
+}
+
+/// Handhole record has closure / ODF (attribute or non-empty closure_or_odf_id).
+bool handholeContainsClosure(Map<String, dynamic> props) {
+  final closureId = closureOrOdfIdFromProperties(props);
+  if (closureId != null && closureId.isNotEmpty) return true;
+
+  for (final e in props.entries) {
+    final lk = e.key.toLowerCase();
+    if (lk.contains('fat_closure')) continue;
+    if (!lk.contains('closure') && !lk.contains('odf')) continue;
+    if (lk == 'layer' || lk == 'package') continue;
+
+    final v = e.value;
+    if (v == null) continue;
+    final s = v.toString().trim().toLowerCase();
+    if (s.isEmpty || s == '[binary]') continue;
+
+    if (lk.contains('has_') ||
+        lk.contains('contain') ||
+        lk == 'closures' ||
+        lk == 'closure') {
+      if (s == 'yes' || s == 'true' || s == '1' || s == 'y') return true;
+      if (s != 'no' && s != 'false' && s != '0' && s != 'n') {
+        if (s.length <= 64) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /// Title in the tap list (ID/number first, then layer).
 String featureTapListTitle(QFieldMapFeature f) {
   final layer = f.properties['layer']?.toString();
+  if (isRouteFeature(f)) {
+    final routeId = routeIdFromProperties(f.properties);
+    if (routeId != null && routeId.isNotEmpty) return routeId;
+  }
+  if (_isCableLayerName(layer)) {
+    final cableId = cableIdFromProperties(f.properties);
+    if (cableId != null && cableId.isNotEmpty) return cableId;
+  }
   final id = mapLabelForFeature(f.properties, layer) ?? f.label;
-  if (id != null && id.isNotEmpty) return id;
+  if (id != null && id.isNotEmpty) {
+    final lk = id.toLowerCase();
+    if (lk != 'fid' && !lk.startsWith('gj_')) return id;
+  }
+  if (_isCableLayerName(layer)) {
+    final cableId = cableIdFromProperties(f.properties);
+    if (cableId != null && cableId.isNotEmpty) return cableId;
+  }
   return layer?.trim().isNotEmpty == true ? layer! : f.id;
 }
 
 String featureTapListSubtitle(QFieldMapFeature f) {
   final layer = f.properties['layer']?.toString().trim() ?? '';
-  final pkg = f.properties['package']?.toString().trim() ?? '';
-  final gt = f.geometryType;
+  final props = f.properties;
   final parts = <String>[];
+
+  if (isHandholeLayerName(layer) && handholeContainsClosure(props)) {
+    final closureId = closureOrOdfIdFromProperties(props);
+    if (closureId != null && closureId.isNotEmpty) {
+      parts.add('Closure/ODF $closureId');
+    } else {
+      parts.add('Closure/ODF');
+    }
+  }
+
+  if (isFatLayerName(layer)) {
+    final fatClosures = fatClosuresIdFromProperties(props);
+    if (fatClosures != null && fatClosures.isNotEmpty) {
+      parts.add('FAT closures $fatClosures');
+    }
+  }
+
+  final pkg = props['package']?.toString().trim() ?? '';
+  final gt = f.geometryType;
   if (layer.isNotEmpty) parts.add(layer);
   if (pkg.isNotEmpty && pkg != layer) parts.add(pkg);
   if (gt != null && gt.isNotEmpty) parts.add(gt);
   return parts.isEmpty ? f.source : parts.join(' · ');
+}
+
+bool isFatLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  return n.contains('fat') && !n.contains('region');
 }
 
 /// All features within [maxMeters] of [point] (same location cluster).

@@ -75,6 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       dataTables: preview.dataTables ?? [],
       defaultCrsEpsg: preview.defaultCrsEpsg ?? null,
       message: preview.message ?? null,
+      stats: preview.stats ?? null,
       mapAnnotation: proj.mapAnnotation ?? null,
     });
   } catch (err) {

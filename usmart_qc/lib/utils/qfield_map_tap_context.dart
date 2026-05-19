@@ -188,13 +188,24 @@ const _excavationFieldKeys = [
   'excavation_depth',
 ];
 
+/// Excavation depth, duct count, contractor — on routes, FAT, or excavation features.
+Map<String, String> siteInfoFieldsFromProperties(Map<String, dynamic> props) {
+  return fatSummaryFields(props);
+}
+
 Map<String, String> fatSummaryFields(Map<String, dynamic> props) {
   final out = <String, String>{};
+  final fatClosures = fatClosuresIdFromProperties(props);
+  final fatClosuresKey = fatClosuresIdPropertyKey(props);
+  if (fatClosures != null && fatClosuresKey != null) {
+    out[fatClosuresKey] = fatClosures;
+  }
   for (final e in props.entries) {
     if (e.value == null) continue;
     final lk = e.key.toLowerCase();
     final v = e.value.toString().trim();
     if (v.isEmpty || v == '[binary]') continue;
+    if (fatClosuresKey != null && e.key == fatClosuresKey) continue;
     final isDuct = _ductKeys.any((k) => lk.contains(k.replaceAll('_', '')) || lk == k);
     final isContractor =
         _contractorKeys.any((k) => lk.contains('contractor') || lk == k);
@@ -218,8 +229,11 @@ Map<String, dynamic> displayPropsForFeature(
   },
 }) {
   final m = <String, dynamic>{};
+  final hideFid = isCableFeature(f) && cableIdFromProperties(f.properties) != null;
+
   for (final e in f.properties.entries) {
     if (skipKeys.contains(e.key)) continue;
+    if (hideFid && e.key.toLowerCase() == 'fid') continue;
     if (e.value == null) continue;
     final s = e.value.toString();
     if (s == '[binary]') continue;
@@ -228,6 +242,46 @@ Map<String, dynamic> displayPropsForFeature(
   if (f.geometryType != null && f.geometryType!.isNotEmpty) {
     m['geometryType'] = f.geometryType;
   }
+
+  if (isCableFeature(f)) {
+    final cableKey = cableIdPropertyKey(f.properties);
+    final cableId = cableIdFromProperties(f.properties);
+    if (cableKey != null && cableId != null) {
+      m.remove('fid');
+      m.remove('FID');
+      final ordered = <String, dynamic>{cableKey: cableId};
+      for (final e in m.entries) {
+        if (e.key != cableKey) ordered[e.key] = e.value;
+      }
+      return ordered;
+    }
+  }
+
+  final layer = f.properties['layer']?.toString();
+  if (isHandholeLayerName(layer) && handholeContainsClosure(f.properties)) {
+    final closureKey = closureOrOdfIdPropertyKey(f.properties);
+    final closureId = closureOrOdfIdFromProperties(f.properties);
+    if (closureKey != null && closureId != null) {
+      final ordered = <String, dynamic>{closureKey: closureId};
+      for (final e in m.entries) {
+        if (e.key != closureKey) ordered[e.key] = e.value;
+      }
+      return ordered;
+    }
+  }
+
+  if (isFatLayerName(layer)) {
+    final closuresKey = fatClosuresIdPropertyKey(f.properties);
+    final closuresId = fatClosuresIdFromProperties(f.properties);
+    if (closuresKey != null && closuresId != null) {
+      final ordered = <String, dynamic>{closuresKey: closuresId};
+      for (final e in m.entries) {
+        if (e.key != closuresKey) ordered[e.key] = e.value;
+      }
+      return ordered;
+    }
+  }
+
   final sorted = Map.fromEntries(
     m.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
   );
@@ -238,17 +292,27 @@ class HandholeTapBundle {
   const HandholeTapBundle({
     required this.handhole,
     required this.cablesByType,
+    this.closureOrOdfId,
+    this.closurePropertyKey,
   });
 
   final FeatureTapHit handhole;
   final Map<String, List<FeatureTapHit>> cablesByType;
+  final String? closureOrOdfId;
+  final String? closurePropertyKey;
 }
 
 /// Structured tap detail when an element (e.g. FAT 41) is selected.
 class QFieldTapContext {
   const QFieldTapContext({
     required this.selected,
+    this.isRouteSelection = false,
+    this.routeId,
+    this.routeSiteInfo = const {},
+    this.routeCablesByType = const {},
     this.fatId,
+    this.fatClosuresId,
+    this.fatClosuresPropertyKey,
     this.primaryProps = const {},
     this.fatSummary = const {},
     this.handholes = const [],
@@ -258,7 +322,13 @@ class QFieldTapContext {
   });
 
   final QFieldMapFeature selected;
+  final bool isRouteSelection;
+  final String? routeId;
+  final Map<String, String> routeSiteInfo;
+  final Map<String, List<FeatureTapHit>> routeCablesByType;
   final String? fatId;
+  final String? fatClosuresId;
+  final String? fatClosuresPropertyKey;
   final Map<String, dynamic> primaryProps;
   final Map<String, String> fatSummary;
   final List<HandholeTapBundle> handholes;
@@ -289,12 +359,83 @@ bool _cableMatchesHandhole(FeatureTapHit cable, FeatureTapHit handhole) {
   return false;
 }
 
+QFieldTapContext _buildRouteTapContext({
+  required QFieldMapFeature selected,
+  required List<FeatureTapHit> locationHits,
+  required List<QFieldMapFeature> allFeatures,
+}) {
+  final routeId = routeIdFromProperties(selected.properties) ??
+      featureTapListTitle(selected);
+
+  final cables = <FeatureTapHit>[];
+  final seen = <String>{};
+
+  void addCable(QFieldMapFeature f) {
+    if (!isCableFeature(f)) return;
+    if (seen.add(f.id)) {
+      cables.add(FeatureTapHit(feature: f, distanceMeters: 0));
+    }
+  }
+
+  for (final f in allFeatures) {
+    if (!isCableFeature(f)) continue;
+    if (routeId.isNotEmpty && featureBelongsToRoute(f, routeId)) {
+      addCable(f);
+      continue;
+    }
+    if (featureNearRouteGeometry(f, selected)) {
+      addCable(f);
+    }
+  }
+  for (final h in locationHits) {
+    if (isCableFeature(h.feature)) addCable(h.feature);
+  }
+
+  var siteInfo = siteInfoFieldsFromProperties(selected.properties);
+  void mergeSite(Map<String, String> extra) {
+    for (final e in extra.entries) {
+      siteInfo.putIfAbsent(e.key, () => e.value);
+    }
+  }
+
+  for (final f in allFeatures) {
+    final layer = f.properties['layer']?.toString();
+    if (!isExcavationLayer(layer) && !isRouteLayerName(layer)) continue;
+    if (f.id == selected.id) continue;
+    if (routeId.isNotEmpty && featureBelongsToRoute(f, routeId)) {
+      mergeSite(siteInfoFieldsFromProperties(f.properties));
+      continue;
+    }
+    if (featureNearRouteGeometry(f, selected, maxMeters: 20)) {
+      mergeSite(siteInfoFieldsFromProperties(f.properties));
+    }
+  }
+
+  return QFieldTapContext(
+    selected: selected,
+    isRouteSelection: true,
+    routeId: routeId,
+    routeSiteInfo: siteInfo,
+    routeCablesByType: groupCableHitsByDisplayType(cables),
+    primaryProps: displayPropsForFeature(selected),
+    otherLayerGroups: const [],
+  );
+}
+
 QFieldTapContext buildTapContext({
   required QFieldMapFeature selected,
   required List<FeatureTapHit> locationHits,
   required List<QFieldMapFeature> allFeatures,
   LatLng? anchor,
 }) {
+  if (isRouteFeature(selected)) {
+    return _buildRouteTapContext(
+      selected: selected,
+      locationHits: locationHits,
+      allFeatures: allFeatures,
+    );
+  }
+
   final fatId = fatIdFromFeature(selected) ??
       (isHandholeLayer(selected.properties['layer']?.toString())
           ? fatIdFromProperties(selected.properties)
@@ -379,10 +520,18 @@ QFieldTapContext buildTapContext({
     for (final c in cables) {
       assignedCableIds.add(c.feature.id);
     }
+    String? closureId;
+    String? closureKey;
+    if (handholeContainsClosure(hh.feature.properties)) {
+      closureId = closureOrOdfIdFromProperties(hh.feature.properties);
+      closureKey = closureOrOdfIdPropertyKey(hh.feature.properties);
+    }
     bundles.add(
       HandholeTapBundle(
         handhole: hh,
         cablesByType: groupCableHitsByDisplayType(cables),
+        closureOrOdfId: closureId,
+        closurePropertyKey: closureKey,
       ),
     );
   }
@@ -419,9 +568,26 @@ QFieldTapContext buildTapContext({
   }).toList();
   otherGroups.addAll(groupHitsByLayer(otherHits));
 
+  String? fatClosuresId;
+  String? fatClosuresKey;
+  if (isFatLayer(selected.properties['layer']?.toString())) {
+    fatClosuresId = fatClosuresIdFromProperties(selected.properties);
+    fatClosuresKey = fatClosuresIdPropertyKey(selected.properties);
+  } else if (fatId != null) {
+    for (final f in allFeatures) {
+      if (!isFatLayer(f.properties['layer']?.toString())) continue;
+      if (!featureBelongsToFat(f, fatId)) continue;
+      fatClosuresId = fatClosuresIdFromProperties(f.properties);
+      fatClosuresKey = fatClosuresIdPropertyKey(f.properties);
+      if (fatClosuresId != null) break;
+    }
+  }
+
   return QFieldTapContext(
     selected: selected,
     fatId: fatId,
+    fatClosuresId: fatClosuresId,
+    fatClosuresPropertyKey: fatClosuresKey,
     primaryProps: primaryProps,
     fatSummary: summary,
     handholes: bundles,
@@ -433,6 +599,14 @@ QFieldTapContext buildTapContext({
 
 Set<String> relatedCableIdsForContext(QFieldTapContext ctx) {
   final ids = <String>{};
+  if (ctx.isRouteSelection) {
+    for (final list in ctx.routeCablesByType.values) {
+      for (final h in list) {
+        ids.add(h.feature.id);
+      }
+    }
+    return ids;
+  }
   for (final hh in ctx.handholes) {
     for (final list in hh.cablesByType.values) {
       for (final h in list) {
