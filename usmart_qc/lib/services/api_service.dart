@@ -48,22 +48,19 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  /// Safe get: returns null instead of throwing on HTML or parse errors.
+  /// Safe get: returns null on HTML or parse errors; still parses JSON error bodies (4xx/5xx).
   Future<Map<String, dynamic>?> getSafe(String path,
       {Map<String, String>? query}) async {
     try {
       final response =
           await http.get(_uri(path, query), headers: _headers);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
       var body = response.body.trim();
-      // Strip BOM if present (can cause body.startsWith('<') to fail)
       if (body.startsWith('\uFEFF')) body = body.substring(1);
       if (body.isEmpty) return null;
-      // Reject HTML (404, auth redirect, error pages)
       if (body.startsWith('<')) return null;
-      return jsonDecode(body) as Map<String, dynamic>;
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      data['_httpStatus'] = response.statusCode;
+      return data;
     } catch (_) {
       return null;
     }

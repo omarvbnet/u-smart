@@ -726,6 +726,17 @@ const Map<String, String> _en = {
   'reg_upload_evidence': 'Upload PDF or image',
   'reg_submit': 'Submit request',
   'site_add': 'Add Site',
+  'site_tab_workspace': 'Workspace sites',
+  'site_tab_my_sites': 'My sites',
+  'site_tab_workspace_hint': 'Sites shared in your company workspace',
+  'profile_job_title_default': 'Field staff',
+  'ticket_qfield_from_site': 'From site',
+  'ticket_qfield_from_site_hint':
+      'QField files from this site are included on the ticket. You can add more below.',
+  'pc_site_add_another_qfield': 'Add another QField file',
+  'pc_expenses_my_expenses': 'My expenses',
+  'pc_expenses_my_expenses_hint':
+      'Expenses you submitted on workspace tickets in the selected period.',
   'site_edit': 'Edit Site',
   'site_delete': 'Delete',
   'site_save': 'Save',

@@ -79,7 +79,7 @@ Future<void> openSiteQFieldMap(
   final pc = context.read<PrivateCompanyProvider>();
   final canWriteMap = site.isWorkspace
       ? (pc.canProposeSiteChanges || pc.canManageSites)
-      : site.canEdit;
+      : (site.canEdit || site.sharedWithMe);
 
   await Navigator.of(context).push(
     MaterialPageRoute(

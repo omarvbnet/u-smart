@@ -88,6 +88,56 @@ function ticketCrewRecipientIds(
  * Notify workspace staff (or ticket crew) when an engineer / technician / coordinator
  * posts a shared QField map comment.
  */
+/** Notify all workspace staff when a map comment is posted on a company site. */
+export async function notifySiteQFieldMapCommentAdded(args: {
+  companyId: string;
+  authorRequesterId: string;
+  authorName: string;
+  authorRole: string;
+  siteCode: string;
+  comment: string;
+  projectId?: string;
+}): Promise<void> {
+  const role = String(args.authorRole ?? '').toUpperCase();
+  if (!QFIELD_MAP_COMMENT_AUTHOR_ROLES.has(role)) return;
+
+  const siteId = args.siteCode.trim() || 'Site';
+  const authorName = args.authorName.trim() || 'Staff';
+  const commentPreview = truncateComment(args.comment);
+  const payload = {
+    key: 'qfield_map_comment' as const,
+    vars: { siteId, authorName, comment: commentPreview },
+  };
+
+  const recipientIds = await workspaceStaffRecipientIds(
+    args.companyId,
+    args.authorRequesterId
+  );
+  if (recipientIds.length === 0) return;
+
+  const data: Record<string, string> = {
+    type: 'qfield_map_comment',
+    siteId,
+    scope: 'workspace_site',
+  };
+  if (args.projectId) data.projectId = args.projectId;
+
+  for (const requesterId of recipientIds) {
+    try {
+      await notifyRequesterI18n({
+        prisma,
+        type: 'qfield_map_comment',
+        ticketId: undefined,
+        requesterId,
+        payload,
+        data,
+      });
+    } catch (e) {
+      console.error('notifySiteQFieldMapCommentAdded failed for', requesterId, e);
+    }
+  }
+}
+
 export async function notifyQFieldMapCommentAdded(args: {
   ticketId: string;
   authorRequesterId: string;

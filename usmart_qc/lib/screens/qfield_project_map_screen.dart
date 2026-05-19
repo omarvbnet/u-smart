@@ -164,10 +164,12 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     if (!mounted) return;
 
     if (data == null || data['success'] != true) {
+      final l10n = AppLocalizations.of(context);
       setState(() {
         _loading = false;
-        _loadError = data?['message'] as String? ??
-            'Could not load QField map layers.';
+        _loadError = (data?['message'] as String?)?.trim().isNotEmpty == true
+            ? (data!['message'] as String).trim()
+            : l10n.t('pc_site_map_load_failed');
       });
       return;
     }
@@ -668,8 +670,21 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     _selectFeature(null);
   }
 
+  bool get _isSiteMap =>
+      widget.workspaceSiteId != null || widget.ownedSiteId != null;
+
+  Site _siteForMapActions() => Site(
+        id: widget.ownedSiteId ?? 'ws-${widget.workspaceSiteId}',
+        workspaceSiteId: widget.workspaceSiteId,
+        siteId: widget.project.title,
+        location: '',
+        province: '',
+        isWorkspace: widget.workspaceSiteId != null,
+      );
+
   void _onMapLongPress(TapPosition _, LatLng point) {
-    if (!widget.canWrite || widget.ticketId == null) return;
+    if (!widget.canWrite) return;
+    if (widget.ticketId == null && !_isSiteMap) return;
     _promptAddMapComment(point);
   }
 
@@ -732,7 +747,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
 
   Future<void> _deleteMapNote(QFieldMapNote note) async {
     final ticketId = widget.ticketId;
-    if (ticketId == null) return;
+    final isSite = _isSiteMap;
+    if (ticketId == null && !isSite) return;
     final l10n = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
@@ -761,11 +777,23 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     );
     if (confirm != true || !mounted) return;
 
-    final res = await context.read<TicketsProvider>().postTicketQFieldAction(ticketId, {
-      'action': 'delete_map_note',
-      'projectId': widget.project.id,
-      'noteId': note.id,
-    });
+    final ({bool ok, String? message, List<QFieldProject>? projects}) res;
+    if (isSite) {
+      res = await context.read<SitesProvider>().postSiteQFieldMapAction(
+            _siteForMapActions(),
+            {
+              'action': 'delete_map_note',
+              'projectId': widget.project.id,
+              'noteId': note.id,
+            },
+          );
+    } else {
+      res = await context.read<TicketsProvider>().postTicketQFieldAction(ticketId!, {
+        'action': 'delete_map_note',
+        'projectId': widget.project.id,
+        'noteId': note.id,
+      });
+    }
     if (!mounted) return;
     if (res.ok && res.projects != null) {
       final proj = res.projects!.firstWhere(
@@ -892,7 +920,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   }
 
   Future<void> _promptAddMapComment(LatLng point) async {
-    if (!widget.canWrite || widget.ticketId == null) return;
+    if (!widget.canWrite) return;
+    if (widget.ticketId == null && !_isSiteMap) return;
     final l10n = AppLocalizations.of(context);
     final ctrl = TextEditingController();
     final text = await showDialog<String>(
@@ -939,17 +968,31 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
 
   Future<void> _postMapComment(LatLng point, String text) async {
     final ticketId = widget.ticketId;
-    if (ticketId == null) return;
+    final isSite = _isSiteMap;
+    if (ticketId == null && !isSite) return;
     setState(() => _postingComment = true);
-    final prov = context.read<TicketsProvider>();
     final l10n = AppLocalizations.of(context);
-    final res = await prov.postTicketQFieldAction(ticketId, {
-      'action': 'add_map_note',
-      'projectId': widget.project.id,
-      'latitude': point.latitude,
-      'longitude': point.longitude,
-      'note': text,
-    });
+    final ({bool ok, String? message, List<QFieldProject>? projects}) res;
+    if (isSite) {
+      res = await context.read<SitesProvider>().postSiteQFieldMapAction(
+            _siteForMapActions(),
+            {
+              'action': 'add_map_note',
+              'projectId': widget.project.id,
+              'latitude': point.latitude,
+              'longitude': point.longitude,
+              'note': text,
+            },
+          );
+    } else {
+      res = await context.read<TicketsProvider>().postTicketQFieldAction(ticketId!, {
+        'action': 'add_map_note',
+        'projectId': widget.project.id,
+        'latitude': point.latitude,
+        'longitude': point.longitude,
+        'note': text,
+      });
+    }
     if (!mounted) return;
     setState(() => _postingComment = false);
     if (res.ok && res.projects != null) {
@@ -1277,7 +1320,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                       );
                     },
                   ),
-                  if (widget.canWrite && widget.ticketId != null) ...[
+                  if (widget.canWrite) ...[
                     const SizedBox(width: 6),
                     _GlassIconButton(
                       icon: Icons.chat_bubble_rounded,
@@ -1293,13 +1336,15 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                             },
                       accent: false,
                     ),
-                    const SizedBox(width: 6),
-                    _GlassIconButton(
-                      icon: Icons.save_rounded,
-                      onTap: _saving ? null : _saveAll,
-                      accent: true,
-                      loading: _saving,
-                    ),
+                    if (widget.ticketId != null) ...[
+                      const SizedBox(width: 6),
+                      _GlassIconButton(
+                        icon: Icons.save_rounded,
+                        onTap: _saving ? null : _saveAll,
+                        accent: true,
+                        loading: _saving,
+                      ),
+                    ],
                   ],
                 ],
               ),

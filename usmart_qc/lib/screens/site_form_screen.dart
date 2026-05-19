@@ -35,6 +35,8 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   String? _qfieldUrl;
   String? _qfieldFileName;
   bool _uploadingQfield = false;
+  final List<Map<String, dynamic>> _existingQfield = [];
+  final List<Map<String, dynamic>> _newQfieldPayloads = [];
 
   @override
   void initState() {
@@ -49,7 +51,16 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         _coordinatesCtrl.text =
             '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}';
       }
-      _attachQfield = widget.site!.hasQfield;
+      _attachQfield = widget.site!.hasQfield || widget.site!.qfieldProjects.isNotEmpty;
+      for (final p in widget.site!.qfieldProjects) {
+        if (p.currentUrl.trim().isEmpty) continue;
+        _existingQfield.add({
+          'id': p.id,
+          'url': p.currentUrl,
+          'fileName': p.fileName,
+          'title': p.title,
+        });
+      }
     }
   }
 
@@ -76,6 +87,9 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
           _qfieldUrl = url;
           _qfieldFileName = file.name;
           _attachQfield = true;
+          _newQfieldPayloads.addAll(
+            SitesProvider.qfieldProjectPayload(url, file.name, title: _siteIdCtrl.text.trim()),
+          );
         }
       });
     }
@@ -137,12 +151,26 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
     final l10n = AppLocalizations.of(context);
 
     List<Map<String, dynamic>>? qf;
-    if (_attachQfield && _qfieldUrl != null && _qfieldFileName != null) {
-      qf = SitesProvider.qfieldProjectPayload(
-        _qfieldUrl!,
-        _qfieldFileName!,
-        title: siteId,
-      );
+    if (_attachQfield) {
+      if (widget.isEditing && _existingQfield.isNotEmpty) {
+        qf = [
+          ..._existingQfield.map((e) {
+            return {
+              'id': e['id'],
+              'currentUrl': e['url'],
+              'fileName': e['fileName'],
+              'title': e['title'] ?? siteId,
+            };
+          }),
+          ..._newQfieldPayloads,
+        ];
+      } else if (_qfieldUrl != null && _qfieldFileName != null) {
+        qf = SitesProvider.qfieldProjectPayload(
+          _qfieldUrl!,
+          _qfieldFileName!,
+          title: siteId,
+        );
+      }
     }
 
     bool success;
@@ -339,6 +367,22 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
               activeThumbColor: const Color(0xFF6C63FF),
               onChanged: (v) => setState(() => _attachQfield = v),
             ),
+            if (_existingQfield.isNotEmpty) ...[
+              ..._existingQfield.map(
+                (e) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.layers_rounded, color: Color(0xFF6C63FF)),
+                  title: Text(
+                    '${e['title'] ?? e['fileName']}',
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                  subtitle: Text(
+                    e['fileName'] as String? ?? '',
+                    style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+                  ),
+                ),
+              ),
+            ],
             if (_attachQfield)
               OutlinedButton.icon(
                 onPressed: _uploadingQfield ? null : _pickQfield,
@@ -349,7 +393,11 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.folder_zip_rounded),
-                label: Text(_qfieldFileName ?? l10n.t('pc_site_pick_qfield')),
+                label: Text(
+                  _newQfieldPayloads.isNotEmpty
+                      ? l10n.t('pc_site_add_another_qfield')
+                      : (_qfieldFileName ?? l10n.t('pc_site_pick_qfield')),
+                ),
               ),
           ],
           if (!widget.readOnly) ...[

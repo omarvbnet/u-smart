@@ -4990,7 +4990,24 @@ class _ExpensesTab extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        const WorkspaceExpensesAnalyticsPanel(),
+        if (pc.isPrivateWorkspaceFieldStaff) ...[
+          Text(
+            l10n.t('pc_expenses_my_expenses'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.t('pc_expenses_my_expenses_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          const WorkspaceExpensesAnalyticsPanel(compact: true),
+        ] else
+          const WorkspaceExpensesAnalyticsPanel(),
       ],
     );
   }

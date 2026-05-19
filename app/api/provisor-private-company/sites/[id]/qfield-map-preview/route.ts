@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
-import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
+import { parseQFieldProjectsFromCompanyJson, pickQfieldProjectForPreview } from '@/lib/qfield-projects';
 import {
   extractQfieldMapPreviewFromBytes,
   resolveTicketAssetAbsoluteUrl,
@@ -30,9 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const projects = parseQFieldProjectsFromCompanyJson({ qfieldProjects: row.qfieldProjects });
-  let proj = projectId ? projects.find((p) => p.id === projectId) : undefined;
-  if (!proj && projects.length === 1) proj = projects[0];
-  if (!proj && projects.length > 0 && !projectId) proj = projects[0];
+  const proj = pickQfieldProjectForPreview(projects, projectId);
   if (!proj) {
     return NextResponse.json({ success: false, message: 'QField project not found.' }, { status: 404 });
   }

@@ -88,6 +88,20 @@ export function newQfieldEntityId(): string {
   return `qfp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Resolve stored project for map preview (tolerates client id mismatch). */
+export function pickQfieldProjectForPreview(
+  projects: QFieldProjectStored[],
+  projectId?: string | null
+): QFieldProjectStored | undefined {
+  if (!projects.length) return undefined;
+  const pid = (projectId ?? '').trim();
+  if (pid) {
+    const exact = projects.find((p) => p.id === pid);
+    if (exact) return exact;
+  }
+  return projects[0];
+}
+
 function isRecord(x: unknown): x is Record<string, unknown> {
   return x !== null && typeof x === 'object' && !Array.isArray(x);
 }
@@ -98,13 +112,21 @@ export function parseQFieldProjectsFromCompanyJson(parsed: Record<string, unknow
   const out: QFieldProjectStored[] = [];
   for (const item of raw) {
     if (!isRecord(item)) continue;
-    const id = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : '';
-    const title = typeof item.title === 'string' ? item.title.trim() : '';
-    const currentUrl = typeof item.currentUrl === 'string' ? item.currentUrl.trim() : '';
+    const currentUrl =
+      (typeof item.currentUrl === 'string' && item.currentUrl.trim()) ||
+      (typeof item.url === 'string' && item.url.trim()) ||
+      '';
     const fileName = typeof item.fileName === 'string' ? item.fileName.trim() : '';
-    const createdAt = typeof item.createdAt === 'string' ? item.createdAt : '';
+    if (!currentUrl || !fileName) continue;
+    const id =
+      typeof item.id === 'string' && item.id.trim() ? item.id.trim() : newQfieldEntityId();
+    const title = typeof item.title === 'string' ? item.title.trim() : '';
+    const now = new Date().toISOString();
+    const createdAt =
+      (typeof item.createdAt === 'string' && item.createdAt) ||
+      (typeof item.updatedAt === 'string' && item.updatedAt) ||
+      now;
     const updatedAt = typeof item.updatedAt === 'string' ? item.updatedAt : createdAt;
-    if (!id || !currentUrl || !fileName || !createdAt) continue;
     const description = typeof item.description === 'string' ? item.description : null;
     const revRaw = item.revisions;
     const revisions: QFieldRevisionStored[] = [];

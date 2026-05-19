@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
+import '../models/qfield_project.dart';
 import '../models/site.dart';
 import '../services/api_service.dart';
 
@@ -20,6 +21,40 @@ class SitesProvider extends ChangeNotifier {
   bool get canManageWorkspaceSites => _canManageWorkspaceSites;
   /// Owner/manager/coordinator can add workspace sites; non-workspace users can add personal sites.
   bool get canAddSite => !_isWorkspaceMember || _canManageWorkspaceSites;
+
+  /// Seed flags before [fetchSites] completes to avoid showing Add Site to field staff briefly.
+  void seedWorkspaceFromMembership({
+    required bool isMember,
+    required bool canManageWorkspace,
+  }) {
+    _isWorkspaceMember = isMember;
+    _canManageWorkspaceSites = canManageWorkspace;
+    notifyListeners();
+  }
+
+  Future<({bool ok, String? message, List<QFieldProject>? projects})>
+      postSiteQFieldMapAction(
+    Site site,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final path = site.isWorkspace && site.workspaceSiteId != null
+          ? ApiConfig.privateCompanySiteQFieldProjects(site.workspaceSiteId!)
+          : ApiConfig.siteQFieldProjects(site.id);
+      final data = await _api.post(path, body: body);
+      if (data['success'] == true && data['qfieldProjects'] is List) {
+        final list = (data['qfieldProjects'] as List)
+            .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+            .toList();
+        return (ok: true, message: null, projects: list);
+      }
+      final msg = data['message'];
+      if (msg is String && msg.trim().isNotEmpty) {
+        return (ok: false, message: msg.trim(), projects: null);
+      }
+    } catch (_) {}
+    return (ok: false, message: null, projects: null);
+  }
 
   Future<void> fetchSites({bool includeWorkspace = false}) async {
     _loading = true;
@@ -126,10 +161,8 @@ class SitesProvider extends ChangeNotifier {
       final base = site.isWorkspace && site.workspaceSiteId != null
           ? ApiConfig.privateCompanySiteDetail(site.workspaceSiteId!)
           : ApiConfig.siteDetail(site.isWorkspace ? site.workspaceSiteId! : site.id);
-      final path = pid.isNotEmpty
-          ? '$base/qfield-map-preview?projectId=${Uri.encodeComponent(pid)}'
-          : '$base/qfield-map-preview';
-      return await _api.get(path);
+      final query = pid.isNotEmpty ? {'projectId': pid} : null;
+      return await _api.getSafe('$base/qfield-map-preview', query: query);
     } catch (_) {
       return null;
     }

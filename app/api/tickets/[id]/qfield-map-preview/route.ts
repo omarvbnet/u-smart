@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
+import { parseQFieldProjectsFromCompanyJson, pickQfieldProjectForPreview } from '@/lib/qfield-projects';
 import { canPreviewQFieldMapOnTicket } from '@/lib/qfield-map-preview-auth';
 import {
   extractQfieldMapPreviewFromBytes,
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     parsed = {};
   }
   const projects = parseQFieldProjectsFromCompanyJson(parsed);
-  const proj = projects.find((p) => p.id === projectId);
+  const proj = pickQfieldProjectForPreview(projects, projectId);
   if (!proj) {
     return NextResponse.json({ success: false, message: 'QField project not found' }, { status: 404 });
   }

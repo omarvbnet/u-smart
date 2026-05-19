@@ -63,6 +63,7 @@ Future<void> showWorkspaceSiteDetailSheet(
               }
 
               final s = currentSite;
+              final pc = context.read<PrivateCompanyProvider>();
               return ListView(
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

@@ -61,6 +61,17 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     } else {
       _coordsCtrl.clear();
     }
+    _qfieldDrafts.clear();
+    for (final p in s.qfieldProjects) {
+      final url = p.currentUrl.trim();
+      if (url.isEmpty) continue;
+      _qfieldDrafts.add({
+        'url': url,
+        'fileName': p.fileName,
+        'title': p.title.isNotEmpty ? p.title : p.fileName,
+        'fromSite': '1',
+      });
+    }
   }
 
   @override
@@ -1429,9 +1440,18 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   Widget _buildQFieldSection(AppLocalizations l10n) {
+    final fromSite =
+        _qfieldDrafts.any((d) => d['fromSite'] == '1');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (fromSite) ...[
+          Text(
+            l10n.t('ticket_qfield_from_site_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+        ],
         Text(
           l10n.t('qfield_add_package').toUpperCase(),
           style: TextStyle(
@@ -1493,7 +1513,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
-                    d['fileName'] ?? '',
+                    d['fromSite'] == '1'
+                        ? '${d['fileName'] ?? ''} · ${l10n.t('ticket_qfield_from_site')}'
+                        : (d['fileName'] ?? ''),
                     style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
                   ),
                   trailing: IconButton(

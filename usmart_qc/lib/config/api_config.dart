@@ -96,6 +96,7 @@ class ApiConfig {
 
   static const String sites = '/api/sites';
   static String siteDetail(String id) => '/api/sites/$id';
+  static String siteQFieldProjects(String id) => '/api/sites/$id/qfield-projects';
   static String siteShare(String siteDbId) => '/api/sites/$siteDbId/share';
   static String siteVisitorLink(String siteDbId) => '/api/sites/$siteDbId/visitor-link';
 
@@ -134,6 +135,8 @@ class ApiConfig {
   static const String privateCompanySites = '/api/provisor-private-company/sites';
   static String privateCompanySiteDetail(String id) =>
       '/api/provisor-private-company/sites/$id';
+  static String privateCompanySiteQFieldProjects(String id) =>
+      '/api/provisor-private-company/sites/$id/qfield-projects';
   static String privateCompanySiteConfirm(String id) =>
       '/api/provisor-private-company/sites/$id/confirm';
   static const String privateCompanyExpenseSettings =

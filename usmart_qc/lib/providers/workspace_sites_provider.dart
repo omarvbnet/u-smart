@@ -137,12 +137,15 @@ class WorkspaceSitesProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> fetchQFieldMapPreview(
-    String siteId,
-    String projectId,
-  ) async {
+    String siteId, {
+    String? projectId,
+  }) async {
     try {
-      return await _api.get(
-        '${ApiConfig.privateCompanySiteDetail(siteId)}/qfield-map-preview?projectId=$projectId',
+      final pid = projectId?.trim() ?? '';
+      final query = pid.isNotEmpty ? {'projectId': pid} : null;
+      return await _api.getSafe(
+        '${ApiConfig.privateCompanySiteDetail(siteId)}/qfield-map-preview',
+        query: query,
       );
     } catch (_) {
       return null;

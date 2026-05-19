@@ -17,7 +17,6 @@ class SiteListCard extends StatelessWidget {
     this.onShare,
     this.onViewShared,
     this.onRemoveShare,
-    this.formatDate,
     this.formatHours,
   });
 
@@ -31,7 +30,6 @@ class SiteListCard extends StatelessWidget {
   final VoidCallback? onShare;
   final VoidCallback? onViewShared;
   final VoidCallback? onRemoveShare;
-  final String Function(DateTime)? formatDate;
   final String Function(double)? formatHours;
 
   String? get _addedByLabel {
@@ -46,10 +44,83 @@ class SiteListCard extends StatelessWidget {
     return null;
   }
 
+  List<Widget> _actionButtons() {
+    final actions = <Widget>[
+      _ActionChip(
+        icon: Icons.note_add_outlined,
+        label: l10n.t('site_create_ticket_here'),
+        color: const Color(0xFF00D4AA),
+        onPressed: onCreateTicket,
+      ),
+    ];
+    if (site.canOpenQFieldMap && onOpenMap != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.map_rounded,
+          label: l10n.t('pc_site_view_qfield_map'),
+          color: const Color(0xFF6C63FF),
+          onPressed: onOpenMap!,
+        ),
+      );
+    }
+    if (onEdit != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.edit_rounded,
+          label: l10n.t('site_edit'),
+          color: const Color(0xFF6C63FF),
+          onPressed: onEdit!,
+        ),
+      );
+    }
+    if (onDelete != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.delete_outline_rounded,
+          label: l10n.t('site_delete'),
+          color: const Color(0xFFFF4757),
+          onPressed: onDelete!,
+        ),
+      );
+    }
+    if (onShare != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.person_add_alt_1_rounded,
+          label: l10n.t('site_share_title'),
+          color: const Color(0xFF00D4AA),
+          onPressed: onShare!,
+        ),
+      );
+    }
+    if (onViewShared != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.visibility_rounded,
+          label: l10n.t('site_view_shared'),
+          color: const Color(0xFF6C63FF),
+          onPressed: onViewShared!,
+        ),
+      );
+    }
+    if (onRemoveShare != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.link_off_rounded,
+          label: l10n.t('site_remove_share'),
+          color: const Color(0xFFFFA502),
+          onPressed: onRemoveShare!,
+        ),
+      );
+    }
+    return actions;
+  }
+
   @override
   Widget build(BuildContext context) {
     final addedBy = _addedByLabel;
     final fmtH = formatHours ?? _fmtHours;
+    final actions = _actionButtons();
 
     return Material(
       color: Colors.transparent,
@@ -58,108 +129,98 @@ class SiteListCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
           decoration: BoxDecoration(
             color: const Color(0xFF141428),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withAlpha(18)),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: site.isWorkspace
-                        ? [
-                            const Color(0xFF6C63FF).withAlpha(70),
-                            const Color(0xFF00D4AA).withAlpha(40),
-                          ]
-                        : [
-                            const Color(0xFF6C63FF).withAlpha(45),
-                            const Color(0xFF1A1A35),
-                          ],
-                  ),
-                ),
-                child: Icon(
-                  site.canOpenQFieldMap ? Icons.map_rounded : Icons.location_on_rounded,
-                  color: site.canOpenQFieldMap
-                      ? const Color(0xFF00D4AA)
-                      : const Color(0xFF8B83FF),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            site.siteId,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: site.isWorkspace
+                              ? [
+                                  const Color(0xFF6C63FF).withAlpha(70),
+                                  const Color(0xFF00D4AA).withAlpha(40),
+                                ]
+                              : [
+                                  const Color(0xFF6C63FF).withAlpha(45),
+                                  const Color(0xFF1A1A35),
+                                ],
                         ),
-                        if (site.isWorkspace) ...[
-                          const SizedBox(width: 6),
-                          _Chip(
-                            label: l10n.t('pc_ws_tab_sites'),
-                            color: const Color(0xFF6C63FF),
-                          ),
-                        ],
-                        if (site.isWorkspacePending) ...[
-                          const SizedBox(width: 4),
-                          _Chip(
-                            label: l10n.t('pc_site_pending'),
-                            color: const Color(0xFFFF9F43),
-                          ),
-                        ],
-                        if (site.canOpenQFieldMap) ...[
-                          const SizedBox(width: 4),
-                          _Chip(
-                            label: 'QField',
-                            color: const Color(0xFF00D4AA),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${site.location} · ${site.province}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withAlpha(130),
-                        fontSize: 11,
-                        height: 1.25,
+                      ),
+                      child: Icon(
+                        site.canOpenQFieldMap
+                            ? Icons.map_rounded
+                            : Icons.location_on_rounded,
+                        color: site.canOpenQFieldMap
+                            ? const Color(0xFF00D4AA)
+                            : const Color(0xFF8B83FF),
+                        size: 19,
                       ),
                     ),
-                    if (addedBy != null) ...[
-                      const SizedBox(height: 3),
-                      Row(
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.person_outline_rounded,
-                            size: 12,
-                            color: Colors.white.withAlpha(100),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  site.siteId,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (site.isWorkspace)
+                                _Tag(
+                                  label: l10n.t('pc_ws_tab_sites'),
+                                  color: const Color(0xFF6C63FF),
+                                ),
+                              if (site.isWorkspacePending) ...[
+                                const SizedBox(width: 4),
+                                _Tag(
+                                  label: l10n.t('pc_site_pending'),
+                                  color: const Color(0xFFFF9F43),
+                                ),
+                              ],
+                              if (site.canOpenQFieldMap) ...[
+                                const SizedBox(width: 4),
+                                _Tag(label: 'QField', color: const Color(0xFF00D4AA)),
+                              ],
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
+                          const SizedBox(height: 2),
+                          Text(
+                            '${site.location} · ${site.province}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(130),
+                              fontSize: 11,
+                            ),
+                          ),
+                          if (addedBy != null) ...[
+                            const SizedBox(height: 3),
+                            Text(
                               l10n.t('site_added_by', {'name': addedBy}),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -169,86 +230,42 @@ class SiteListCard extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            '${l10n.t('site_row_inspection', {
+                              'n': '${site.inspectionQcCount}',
+                              'h': fmtH(site.inspectionHoursTotal),
+                            })} · ${l10n.t('site_row_maintenance', {
+                              'n': '${site.maintenanceQcCount}',
+                              'h': fmtH(site.maintenanceHoursTotal),
+                            })}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(72),
+                              fontSize: 10,
+                              height: 1.3,
+                            ),
                           ),
                         ],
                       ),
-                    ],
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 2,
-                      children: [
-                        _Meta(
-                          icon: Icons.fact_check_outlined,
-                          text: l10n.t('site_row_inspection', {
-                            'n': '${site.inspectionQcCount}',
-                            'h': fmtH(site.inspectionHoursTotal),
-                          }),
-                        ),
-                        _Meta(
-                          icon: Icons.build_outlined,
-                          text: l10n.t('site_row_maintenance', {
-                            'n': '${site.maintenanceQcCount}',
-                            'h': fmtH(site.maintenanceHoursTotal),
-                          }),
-                        ),
-                      ],
                     ),
                   ],
                 ),
               ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _IconBtn(
-                    icon: Icons.note_add_outlined,
-                    color: const Color(0xFF00D4AA),
-                    tooltip: l10n.t('site_create_ticket_here'),
-                    onPressed: onCreateTicket,
-                  ),
-                  if (site.canOpenQFieldMap && onOpenMap != null)
-                    _IconBtn(
-                      icon: Icons.map_rounded,
-                      color: const Color(0xFF6C63FF),
-                      tooltip: l10n.t('pc_site_view_qfield_map'),
-                      onPressed: onOpenMap!,
-                    ),
-                  if (onEdit != null)
-                    _IconBtn(
-                      icon: Icons.edit_rounded,
-                      color: const Color(0xFF6C63FF),
-                      tooltip: l10n.t('site_edit'),
-                      onPressed: onEdit!,
-                    ),
-                  if (onDelete != null)
-                    _IconBtn(
-                      icon: Icons.delete_outline_rounded,
-                      color: const Color(0xFFFF4757),
-                      tooltip: l10n.t('site_delete'),
-                      onPressed: onDelete!,
-                    ),
-                  if (onShare != null)
-                    _IconBtn(
-                      icon: Icons.person_add_alt_1_rounded,
-                      color: const Color(0xFF00D4AA),
-                      tooltip: l10n.t('site_share_title'),
-                      onPressed: onShare!,
-                    ),
-                  if (onViewShared != null)
-                    _IconBtn(
-                      icon: Icons.visibility_rounded,
-                      color: const Color(0xFF6C63FF),
-                      tooltip: l10n.t('site_view_shared'),
-                      onPressed: onViewShared!,
-                    ),
-                  if (onRemoveShare != null)
-                    _IconBtn(
-                      icon: Icons.link_off_rounded,
-                      color: const Color(0xFFFFA502),
-                      tooltip: l10n.t('site_remove_share'),
-                      onPressed: onRemoveShare!,
-                    ),
-                ],
+              Divider(height: 1, color: Colors.white.withAlpha(14)),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < actions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 6),
+                      actions[i],
+                    ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -263,8 +280,8 @@ class SiteListCard extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.color});
+class _Tag extends StatelessWidget {
+  const _Tag({required this.label, required this.color});
   final String label;
   final Color color;
 
@@ -279,62 +296,51 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: color,
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-        ),
+        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
-class _Meta extends StatelessWidget {
-  const _Meta({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 11, color: Colors.white.withAlpha(80)),
-        const SizedBox(width: 3),
-        Text(
-          text,
-          style: TextStyle(color: Colors.white.withAlpha(75), fontSize: 10),
-        ),
-      ],
-    );
-  }
-}
-
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({
+class _ActionChip extends StatelessWidget {
+  const _ActionChip({
     required this.icon,
+    required this.label,
     required this.color,
-    required this.tooltip,
     required this.onPressed,
   });
 
   final IconData icon;
+  final String label;
   final Color color;
-  final String tooltip;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 34,
-      height: 34,
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon, color: color, size: 18),
-        tooltip: tooltip,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-        visualDensity: VisualDensity.compact,
+    return Material(
+      color: color.withAlpha(28),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
