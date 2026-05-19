@@ -225,20 +225,36 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
     BuildContext context,
     SitesProvider provider,
     List<Site> visible,
-    AppLocalizations l10n,
-  ) {
+    AppLocalizations l10n, {
+    required bool workspace,
+  }) {
     if (visible.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.explore_off_rounded,
-                size: 48, color: Colors.white.withAlpha(80)),
-            const SizedBox(height: 12),
-            Text(l10n.t('no_sites'),
-                style: const TextStyle(color: Colors.white, fontSize: 16)),
-          ],
-        ),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.sizeOf(context).height * 0.22),
+          Icon(Icons.explore_off_rounded,
+              size: 56, color: Colors.white.withAlpha(70)),
+          const SizedBox(height: 16),
+          Text(
+            workspace ? l10n.t('sites_empty_workspace') : l10n.t('sites_empty_own'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withAlpha(200),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              l10n.t('no_sites'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white.withAlpha(110), fontSize: 13),
+            ),
+          ),
+        ],
       );
     }
     return ListView.builder(
@@ -342,7 +358,13 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
                   child: RefreshIndicator(
                     onRefresh: () => _reloadSites(provider),
                     color: const Color(0xFF6C63FF),
-                    child: _buildSiteList(context, provider, visible, l10n),
+                    child: _buildSiteList(
+                      context,
+                      provider,
+                      visible,
+                      l10n,
+                      workspace: workspace,
+                    ),
                   ),
                 ),
               ],
@@ -426,15 +448,47 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
               ),
             ),
             if (dualTabs) ...[
-              TabBar(
-                controller: _subTabs,
-                indicatorColor: const Color(0xFF6C63FF),
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white54,
-                tabs: [
-                  Tab(text: l10n.t('site_tab_workspace')),
-                  Tab(text: l10n.t('site_tab_my_sites')),
-                ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF12122A),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withAlpha(12)),
+                  ),
+                  child: TabBar(
+                    controller: _subTabs,
+                    dividerColor: Colors.transparent,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+                      ),
+                    ),
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    labelStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    tabs: [
+                      Tab(
+                        child: _SiteTabLabel(
+                          label: l10n.t('site_tab_workspace'),
+                          count: provider.sites.where((s) => s.isWorkspace).length,
+                        ),
+                      ),
+                      Tab(
+                        child: _SiteTabLabel(
+                          label: l10n.t('site_tab_my_sites'),
+                          count: provider.sites.where((s) => !s.isWorkspace).length,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               Expanded(
                 child: TabBarView(
@@ -469,6 +523,39 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
           ],
         );
       },
+    );
+  }
+}
+
+class _SiteTabLabel extends StatelessWidget {
+  const _SiteTabLabel({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+        ),
+        if (count > 0) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(30),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

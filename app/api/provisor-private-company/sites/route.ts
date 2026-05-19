@@ -7,6 +7,10 @@ import {
   serializeWorkspaceSite,
   ticketCountsForSite,
 } from '@/lib/private-company-sites';
+import {
+  normalizeSiteDesignDocumentsInput,
+  siteDesignDocumentsToJsonValue,
+} from '@/lib/site-design-documents';
 import { prisma as _prisma } from '@/lib/prisma';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,6 +115,13 @@ export async function POST(req: NextRequest) {
         longitude: coords.longitude,
         hasQfield: hasQfieldInput && projects.length > 0,
         qfieldProjects: projects.length > 0 ? qfieldJsonValue(projects) : null,
+        designDocuments:
+          body.designDocuments !== undefined
+            ? (() => {
+                const docs = normalizeSiteDesignDocumentsInput(body.designDocuments);
+                return docs.length > 0 ? siteDesignDocumentsToJsonValue(docs) : null;
+              })()
+            : undefined,
         confirmationStatus: 'CONFIRMED',
         createdByRequesterId: guard.requesterId,
         confirmedByRequesterId: guard.requesterId,

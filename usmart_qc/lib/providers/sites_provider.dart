@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/qfield_project.dart';
 import '../models/site.dart';
+import '../models/site_design_document.dart';
 import '../services/api_service.dart';
 
 class SitesProvider extends ChangeNotifier {
@@ -98,6 +99,7 @@ class SitesProvider extends ChangeNotifier {
     double? longitude,
     bool hasQfield = false,
     List<Map<String, dynamic>>? qfieldProjects,
+    List<Map<String, dynamic>>? designDocuments,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -111,6 +113,9 @@ class SitesProvider extends ChangeNotifier {
         body['qfieldProjects'] = qfieldProjects;
       } else if (hasQfield) {
         body['hasQfield'] = true;
+      }
+      if (designDocuments != null) {
+        body['designDocuments'] = designDocuments;
       }
 
       final data = await _api.post(ApiConfig.sites, body: body);
@@ -129,6 +134,7 @@ class SitesProvider extends ChangeNotifier {
     double? latitude,
     double? longitude,
     List<Map<String, dynamic>>? qfieldProjects,
+    List<Map<String, dynamic>>? designDocuments,
     bool removeQfield = false,
   }) async {
     try {
@@ -139,6 +145,7 @@ class SitesProvider extends ChangeNotifier {
       if (latitude != null) body['latitude'] = latitude;
       if (longitude != null) body['longitude'] = longitude;
       if (qfieldProjects != null) body['qfieldProjects'] = qfieldProjects;
+      if (designDocuments != null) body['designDocuments'] = designDocuments;
       if (removeQfield) body['removeQfield'] = true;
 
       if (body.isEmpty) return false;
@@ -185,6 +192,11 @@ class SitesProvider extends ChangeNotifier {
       },
     ];
   }
+
+  static List<Map<String, dynamic>> designDocumentsPayload(
+    List<SiteDesignDocument> docs,
+  ) =>
+      docs.map((d) => d.toPayload()).toList();
 
   Future<bool> deleteSite(String id) async {
     try {

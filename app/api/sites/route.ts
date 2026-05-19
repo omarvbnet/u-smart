@@ -9,6 +9,11 @@ import {
   normalizeQfieldProjectsInput,
   qfieldJsonValue,
 } from '@/lib/private-company-sites';
+import {
+  normalizeSiteDesignDocumentsInput,
+  parseSiteDesignDocuments,
+  siteDesignDocumentsToJsonValue,
+} from '@/lib/site-design-documents';
 
 function getSiteDelegate() {
   return (prisma as any).site;
@@ -54,6 +59,7 @@ type SiteRow = {
   longitude: number | null;
   hasQfield?: boolean;
   qfieldProjects?: unknown;
+  designDocuments?: unknown;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -63,6 +69,7 @@ function siteQfieldFields(row: SiteRow) {
   return {
     hasQfield: row.hasQfield === true,
     qfieldProjects: projects,
+    designDocuments: parseSiteDesignDocuments(row.designDocuments),
   };
 }
 
@@ -154,6 +161,7 @@ export async function GET(req: NextRequest) {
         longitude: true,
         hasQfield: true,
         qfieldProjects: true,
+        designDocuments: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -211,6 +219,7 @@ export async function GET(req: NextRequest) {
                 longitude: true,
                 hasQfield: true,
                 qfieldProjects: true,
+                designDocuments: true,
                 createdAt: true,
                 updatedAt: true,
                 requesterId: true,
@@ -235,6 +244,7 @@ export async function GET(req: NextRequest) {
                 longitude: sh.site.longitude ?? null,
                 hasQfield: sh.site.hasQfield === true,
                 qfieldProjects: sh.site.qfieldProjects,
+                designDocuments: sh.site.designDocuments,
                 createdAt: sh.site.createdAt,
                 updatedAt: sh.site.updatedAt,
               };
@@ -426,6 +436,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (body.designDocuments !== undefined) {
+      const docs = normalizeSiteDesignDocumentsInput(body.designDocuments);
+      createData.designDocuments =
+        docs.length > 0 ? siteDesignDocumentsToJsonValue(docs) : null;
+    }
+
     const created = await siteDelegate.create({
       data: createData,
     });
@@ -442,6 +458,7 @@ export async function POST(req: NextRequest) {
         longitude: created.longitude ?? null,
         hasQfield: created.hasQfield === true,
         qfieldProjects: projects,
+        designDocuments: parseSiteDesignDocuments(created.designDocuments),
         ticketCount: 0,
         qualityControlCount: 0,
         enterpriseCount: 0,

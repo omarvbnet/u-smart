@@ -8,6 +8,10 @@ import {
   serializeWorkspaceSite,
   ticketCountsForSite,
 } from '@/lib/private-company-sites';
+import {
+  normalizeSiteDesignDocumentsInput,
+  siteDesignDocumentsToJsonValue,
+} from '@/lib/site-design-documents';
 import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
 import { prisma as _prisma } from '@/lib/prisma';
 
@@ -103,6 +107,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
       pending.hasQfield = true;
     }
+    if (body.designDocuments !== undefined) {
+      pending.designDocuments = normalizeSiteDesignDocumentsInput(body.designDocuments);
+    }
     if (Object.keys(pending).length <= 3) {
       return NextResponse.json({ success: false, message: 'No changes to submit.' }, { status: 400 });
     }
@@ -154,6 +161,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data.hasQfield = false;
     data.latitude = null;
     data.longitude = null;
+  }
+
+  if (body.designDocuments !== undefined) {
+    const docs = normalizeSiteDesignDocumentsInput(body.designDocuments);
+    data.designDocuments =
+      docs.length > 0 ? siteDesignDocumentsToJsonValue(docs) : null;
   }
 
   try {

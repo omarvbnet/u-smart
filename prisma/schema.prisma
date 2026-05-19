@@ -547,6 +547,8 @@ model Site {
   longitude   Float?
   hasQfield   Boolean         @default(false)
   qfieldProjects Json?
+  /// Optional design / specification PDFs: [{ id, url, fileName, title?, uploadedAt, mimeType? }]
+  designDocuments Json?
   requesterId String
   requester   TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
   shares      SiteShare[]
@@ -1485,6 +1487,7 @@ model PrivateCompanySite {
   longitude              Float?
   hasQfield              Boolean                             @default(false)
   qfieldProjects         Json?
+  designDocuments        Json?
   confirmationStatus     PrivateCompanySiteConfirmationStatus @default(CONFIRMED)
   /// Engineer-proposed changes awaiting manager / coordinator / owner approval.
   pendingChange          Json?

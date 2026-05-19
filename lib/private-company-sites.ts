@@ -18,6 +18,11 @@ import {
   getPrivateCompanyMembership,
 } from '@/lib/private-company-context';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import {
+  normalizeSiteDesignDocumentsInput,
+  parseSiteDesignDocuments,
+  siteDesignDocumentsToJsonValue,
+} from '@/lib/site-design-documents';
 import { prisma as _prisma } from '@/lib/prisma';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,6 +173,7 @@ type SiteRow = {
   longitude: number | null;
   hasQfield: boolean;
   qfieldProjects: unknown;
+  designDocuments?: unknown;
   confirmationStatus: string;
   pendingChange: unknown;
   createdByRequesterId: string;
@@ -198,6 +204,7 @@ export function serializeWorkspaceSite(
     hasQfield: row.hasQfield,
     hasMapCoordinates: mapReady,
     qfieldProjects: projects,
+    designDocuments: parseSiteDesignDocuments(row.designDocuments),
     confirmationStatus: row.confirmationStatus,
     isConfirmed: row.confirmationStatus === 'CONFIRMED',
     pendingChange: row.pendingChange ?? null,

@@ -4,6 +4,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 import { getSharedSiteTicketOrClauses } from '@/lib/site-share-access';
+import { isWorkspaceTicketLeader, workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
 
 export async function GET(req: NextRequest) {
   try {
@@ -95,7 +96,14 @@ export async function GET(req: NextRequest) {
 
     const requester = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { serviceSlug: true, role: true, username: true, email: true },
+      select: {
+        serviceSlug: true,
+        role: true,
+        username: true,
+        email: true,
+        privateCompanyId: true,
+        privateCompanyOwned: { select: { id: true, status: true } },
+      },
     });
     if (!requester) {
       return NextResponse.json(
@@ -130,16 +138,62 @@ export async function GET(req: NextRequest) {
       ? await getSharedSiteTicketOrClauses(prisma, payload.requesterId, filterServiceSlug)
       : [];
 
+    const ownedPrivateCompanyId =
+      (requester as { privateCompanyOwned?: { id: string; status: string } | null }).privateCompanyOwned
+        ?.status === 'APPROVED'
+        ? (requester as { privateCompanyOwned?: { id: string } | null }).privateCompanyOwned?.id ?? null
+        : null;
+    const staffPrivateCompanyId =
+      (requester as { privateCompanyId?: string | null }).privateCompanyId ?? null;
+    const privateCompanyId = ownedPrivateCompanyId ?? staffPrivateCompanyId;
+
+    let privateCompanyMemberIds: string[] = [];
+    if (privateCompanyId) {
+      try {
+        const members = await prisma.ticketRequester.findMany({
+          where: {
+            OR: [
+              { privateCompanyOwned: { is: { id: privateCompanyId } } },
+              { privateCompanyId },
+            ],
+          },
+          select: { id: true },
+        });
+        privateCompanyMemberIds = (members as Array<{ id: string }>).map((m) => m.id);
+      } catch {
+        privateCompanyMemberIds = [];
+      }
+    }
+
+    const useWorkspaceWideStats =
+      privateCompanyId && isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let where: any = linkedCompanyId
-      ? {
-          serviceSlug: filterServiceSlug,
-          OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }],
-        }
-      : {
-          requesterId: payload.requesterId,
-          serviceSlug: filterServiceSlug,
-        };
+    let where: any;
+    if (useWorkspaceWideStats) {
+      const memberIds =
+        privateCompanyMemberIds.length > 0 ? privateCompanyMemberIds : [payload.requesterId];
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: workspaceTicketVisibilityOrClauses({
+          memberRequesterIds: memberIds,
+          privateCompanyId,
+          role: requesterRole,
+          ownedPrivateCompanyId,
+          linkedCoordinatorCompanyId: linkedCompanyId,
+        }),
+      };
+    } else if (linkedCompanyId) {
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }],
+      };
+    } else {
+      where = {
+        requesterId: payload.requesterId,
+        serviceSlug: filterServiceSlug,
+      };
+    }
 
     if (sharedClausesMain.length > 0) {
       if (where.OR && Array.isArray(where.OR)) {

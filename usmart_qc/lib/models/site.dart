@@ -1,4 +1,5 @@
 import 'qfield_project.dart';
+import 'site_design_document.dart';
 
 class Site {
   final String id;
@@ -30,6 +31,7 @@ class Site {
   final String? workspaceSiteId;
   final bool hasQfield;
   final List<QFieldProject> qfieldProjects;
+  final List<SiteDesignDocument> designDocuments;
   final bool isWorkspacePending;
   final String? createdByName;
 
@@ -58,6 +60,7 @@ class Site {
     this.workspaceSiteId,
     this.hasQfield = false,
     this.qfieldProjects = const [],
+    this.designDocuments = const [],
     this.isWorkspacePending = false,
     this.createdByName,
   });
@@ -74,6 +77,8 @@ class Site {
 
   bool get canOpenQFieldMap => hasQfield && primaryQFieldProject != null;
 
+  bool get hasDesignDocuments => designDocuments.isNotEmpty;
+
   factory Site.fromJson(Map<String, dynamic> json) {
     final canEditRaw = json['canEdit'];
     final sharedRaw = json['sharedWithMe'];
@@ -82,6 +87,7 @@ class Site {
     final sharedWithMe = sharedRaw is bool ? sharedRaw : false;
     final shareIncludesTickets = shareTkRaw is bool ? shareTkRaw : true;
     final qRaw = json['qfieldProjects'];
+    final dRaw = json['designDocuments'];
 
     return Site(
       id: json['id'] as String,
@@ -115,6 +121,13 @@ class Site {
               .where((p) => p.currentUrl.trim().isNotEmpty)
               .toList()
           : const [],
+      designDocuments: dRaw is List
+          ? dRaw
+              .map((e) =>
+                  SiteDesignDocument.fromJson(e as Map<String, dynamic>))
+              .where((d) => d.url.trim().isNotEmpty)
+              .toList()
+          : const [],
       createdByName: json['createdByName'] as String?,
     );
   }
@@ -122,6 +135,7 @@ class Site {
   /// Private-company workspace site merged into the main Sites list.
   factory Site.fromWorkspaceJson(Map<String, dynamic> json) {
     final qRaw = json['qfieldProjects'];
+    final dRaw = json['designDocuments'];
     final status = json['confirmationStatus'] as String? ?? 'CONFIRMED';
     return Site(
       id: 'ws-${json['id']}',
@@ -142,6 +156,13 @@ class Site {
           ? qRaw
               .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
               .where((p) => p.currentUrl.trim().isNotEmpty)
+              .toList()
+          : const [],
+      designDocuments: dRaw is List
+          ? dRaw
+              .map((e) =>
+                  SiteDesignDocument.fromJson(e as Map<String, dynamic>))
+              .where((d) => d.url.trim().isNotEmpty)
               .toList()
           : const [],
       isWorkspacePending: status == 'PENDING',

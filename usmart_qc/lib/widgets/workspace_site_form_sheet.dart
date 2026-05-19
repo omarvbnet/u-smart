@@ -8,7 +8,9 @@ import '../models/workspace_site.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/sites_provider.dart';
+import '../models/site_design_document.dart';
 import '../providers/workspace_sites_provider.dart';
+import 'site_design_documents_section.dart';
 
 Future<void> showWorkspaceSiteFormSheet(
   BuildContext context, {
@@ -56,6 +58,7 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
   String? _qfieldFileName;
   bool _uploading = false;
   bool _saving = false;
+  List<SiteDesignDocument> _designDocuments = [];
 
   @override
   void initState() {
@@ -66,6 +69,7 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
       _location.text = s.location;
       _province = s.province;
       _attachQfield = s.hasQfield;
+      _designDocuments = List<SiteDesignDocument>.from(s.designDocuments);
     }
   }
 
@@ -125,6 +129,9 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
         title: code,
       );
     }
+    final designPayload =
+        WorkspaceSitesProvider.designDocumentsPayload(_designDocuments);
+
     bool ok;
     if (widget.site == null) {
       ok = await ws.createSite(
@@ -133,6 +140,7 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
         province: prov,
         hasQfield: _attachQfield && qf != null,
         qfieldProjects: qf,
+        designDocuments: designPayload,
       );
     } else {
       ok = await ws.updateSite(
@@ -141,6 +149,7 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
         location: loc,
         province: prov,
         qfieldProjects: qf,
+        designDocuments: designPayload,
       );
     }
     if (mounted) {
@@ -263,6 +272,11 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
                   ),
                 ),
             ],
+            const SizedBox(height: 16),
+            SiteDesignDocumentsSection(
+              documents: _designDocuments,
+              onChanged: (docs) => setState(() => _designDocuments = docs),
+            ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _saving ? null : _save,

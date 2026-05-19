@@ -35,6 +35,7 @@ import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup
 import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-rows';
 import { normalizeQFieldProjectsFromCreateBody, qfieldProjectsToJsonValue } from '@/lib/qfield-projects';
 import { extractTicketApiKeyFromRequest, resolveTicketApiKey } from '@/lib/ticket-api-key-auth';
+import { workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1682,20 +1683,16 @@ export async function GET(req: NextRequest) {
       const ownedRequesterIds = privateCompanyMemberIds.length > 0
         ? privateCompanyMemberIds
         : [payload.requesterId];
-      if (linkedCompanyId) {
-        where = {
-          serviceSlug: filterServiceSlug,
-          OR: [
-            { requesterId: { in: ownedRequesterIds } },
-            { coordinatorCompanyId: linkedCompanyId },
-          ],
-        };
-      } else {
-        where = {
-          serviceSlug: filterServiceSlug,
-          requesterId: { in: ownedRequesterIds },
-        };
-      }
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: workspaceTicketVisibilityOrClauses({
+          memberRequesterIds: ownedRequesterIds,
+          privateCompanyId,
+          role: requesterRole,
+          ownedPrivateCompanyId,
+          linkedCoordinatorCompanyId: linkedCompanyId,
+        }),
+      };
       if (requesterRole === 'COMPANY' || requesterRole === 'PERSONAL') {
         await applySharedSiteTicketsToVisitorWhere(prisma, payload.requesterId, filterServiceSlug, where);
       }

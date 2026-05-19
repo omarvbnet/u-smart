@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../config/api_config.dart';
+import '../models/site_design_document.dart';
 import '../models/workspace_site.dart';
 import '../providers/sites_provider.dart';
 import '../services/api_service.dart';
@@ -46,6 +47,7 @@ class WorkspaceSitesProvider extends ChangeNotifier {
     required String province,
     bool hasQfield = false,
     List<Map<String, dynamic>>? qfieldProjects,
+    List<Map<String, dynamic>>? designDocuments,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -56,6 +58,9 @@ class WorkspaceSitesProvider extends ChangeNotifier {
       };
       if (qfieldProjects != null && qfieldProjects.isNotEmpty) {
         body['qfieldProjects'] = qfieldProjects;
+      }
+      if (designDocuments != null) {
+        body['designDocuments'] = designDocuments;
       }
       final data = await _api.post(ApiConfig.privateCompanySites, body: body);
       if (data['success'] == true) {
@@ -72,6 +77,7 @@ class WorkspaceSitesProvider extends ChangeNotifier {
     String? location,
     String? province,
     List<Map<String, dynamic>>? qfieldProjects,
+    List<Map<String, dynamic>>? designDocuments,
     bool removeQfield = false,
   }) async {
     try {
@@ -80,6 +86,7 @@ class WorkspaceSitesProvider extends ChangeNotifier {
       if (location != null) body['location'] = location;
       if (province != null) body['province'] = province;
       if (qfieldProjects != null) body['qfieldProjects'] = qfieldProjects;
+      if (designDocuments != null) body['designDocuments'] = designDocuments;
       if (removeQfield) body['removeQfield'] = true;
       final data = await _api.patch(ApiConfig.privateCompanySiteDetail(id), body: body);
       if (data['success'] == true) {
@@ -165,4 +172,9 @@ class WorkspaceSitesProvider extends ChangeNotifier {
     String? title,
   }) =>
       SitesProvider.qfieldProjectPayload(url, fileName, title: title);
+
+  static List<Map<String, dynamic>> designDocumentsPayload(
+    List<SiteDesignDocument> docs,
+  ) =>
+      SitesProvider.designDocumentsPayload(docs);
 }

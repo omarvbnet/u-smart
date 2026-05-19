@@ -339,6 +339,7 @@ class _TicketsTabState extends State<_TicketsTab> {
   bool _useDepartmentTicketFilter(PrivateCompanyProvider pc) {
     if (!pc.hasWorkspace || !pc.isApproved) return false;
     if (!(pc.isOwner || pc.isStaff)) return false;
+    if (pc.canViewAllWorkspaceTickets) return true;
     final depts = pc.workspace?.departments ?? [];
     return depts.isNotEmpty;
   }

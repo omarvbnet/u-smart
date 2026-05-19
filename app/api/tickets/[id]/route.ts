@@ -24,6 +24,7 @@ import {
   MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY,
 } from '@/lib/maintenance-requester-confirmation';
 import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
+import { isWorkspaceTicketLeader } from '@/lib/private-company-ticket-visibility';
 
 const prisma = _prisma as any;
 
@@ -236,6 +237,7 @@ export async function GET(
   try {
     // ENGINEER: QC tickets + workspace-scoped maintenance (dispatch / triage). TECHNICIAN: maintenance. COMPANY/PERSONAL: own tickets only.
     let engineerWorkspaceId: string | null = null;
+    let ownedPrivateCompanyId: string | null = null;
     try {
       const meWs = await prisma.ticketRequester.findUnique({
         where: { id: payload.requesterId },
@@ -246,9 +248,11 @@ export async function GET(
       });
       const owned =
         meWs?.privateCompanyOwned?.status === 'APPROVED' ? meWs.privateCompanyOwned?.id ?? null : null;
+      ownedPrivateCompanyId = owned;
       engineerWorkspaceId = owned ?? meWs?.privateCompanyId ?? null;
     } catch {
       engineerWorkspaceId = null;
+      ownedPrivateCompanyId = null;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let whereClause: any;
@@ -258,7 +262,9 @@ export async function GET(
       requesterRole === 'SUPERVISION_ENGINEER' ||
       requesterRole === 'MANAGER' ||
       requesterRole === 'COORDINATOR';
-    if (isQcPoolEngineer) {
+    if (engineerWorkspaceId && isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId)) {
+      whereClause = { id, privateCompanyId: engineerWorkspaceId };
+    } else if (isQcPoolEngineer) {
       whereClause = {
         id,
         OR: [

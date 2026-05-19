@@ -111,6 +111,13 @@ class PrivateCompanyProvider extends ChangeNotifier {
         role == 'SUPERVISION_ENGINEER';
   }
 
+  /// Owner or manager — see every workspace ticket across all departments (API-enforced).
+  bool get canViewAllWorkspaceTickets {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    return _resolvedRole == 'MANAGER';
+  }
+
   /// Owner, manager, or coordinator — add workspace sites and attach QField directly.
   bool get canManageSites {
     if (isOwner) return true;

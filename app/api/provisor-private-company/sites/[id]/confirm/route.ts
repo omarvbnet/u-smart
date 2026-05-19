@@ -7,6 +7,10 @@ import {
   ticketCountsForSite,
 } from '@/lib/private-company-sites';
 import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
+import {
+  normalizeSiteDesignDocumentsInput,
+  siteDesignDocumentsToJsonValue,
+} from '@/lib/site-design-documents';
 import { prisma as _prisma } from '@/lib/prisma';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,6 +97,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data.latitude = coords.latitude;
       data.longitude = coords.longitude;
     }
+  }
+
+  if (pending.designDocuments !== undefined) {
+    const docs = normalizeSiteDesignDocumentsInput(pending.designDocuments);
+    data.designDocuments =
+      docs.length > 0 ? siteDesignDocumentsToJsonValue(docs) : null;
   }
 
   try {

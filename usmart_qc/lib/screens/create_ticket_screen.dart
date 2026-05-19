@@ -72,6 +72,13 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         'fromSite': '1',
       });
     }
+    for (final d in s.designDocuments) {
+      final url = d.url.trim();
+      if (url.isEmpty) continue;
+      if (!_attachmentUrls.contains(url)) {
+        _attachmentUrls.add(url);
+      }
+    }
   }
 
   @override
@@ -1306,9 +1313,28 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   }
 
   Widget _buildAttachmentsSection(AppLocalizations l10n) {
+    final siteForDocs = _linkedSite ?? widget.prefillSite;
+    final fromSitePdfs =
+        siteForDocs != null && siteForDocs.designDocuments.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (fromSitePdfs) ...[
+          Text(
+            l10n.t('ticket_attachments_from_site'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.t('ticket_attachments_from_site_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+        ],
         Text(
           l10n.t('add_attachments').toUpperCase(),
           style: TextStyle(

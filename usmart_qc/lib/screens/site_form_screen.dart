@@ -7,7 +7,9 @@ import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
+import '../models/site_design_document.dart';
 import '../utils/site_qfield_map.dart';
+import '../widgets/site_design_documents_section.dart';
 import 'site_map_picker_screen.dart';
 
 /// Screen for adding a new site or editing an existing one.
@@ -37,6 +39,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   bool _uploadingQfield = false;
   final List<Map<String, dynamic>> _existingQfield = [];
   final List<Map<String, dynamic>> _newQfieldPayloads = [];
+  List<SiteDesignDocument> _designDocuments = [];
 
   @override
   void initState() {
@@ -61,6 +64,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
           'title': p.title,
         });
       }
+      _designDocuments = List<SiteDesignDocument>.from(widget.site!.designDocuments);
     }
   }
 
@@ -173,6 +177,8 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
       }
     }
 
+    final designPayload = SitesProvider.designDocumentsPayload(_designDocuments);
+
     bool success;
     if (widget.isEditing) {
       success = await provider.updateSite(
@@ -183,6 +189,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         latitude: _latitude,
         longitude: _longitude,
         qfieldProjects: qf,
+        designDocuments: designPayload,
       );
     } else {
       success = await provider.createSite(
@@ -193,6 +200,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         longitude: _longitude,
         hasQfield: _attachQfield && qf != null,
         qfieldProjects: qf,
+        designDocuments: designPayload,
       );
     }
 
@@ -400,6 +408,12 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
                 ),
               ),
           ],
+          const SizedBox(height: 20),
+          SiteDesignDocumentsSection(
+            documents: _designDocuments,
+            enabled: !widget.readOnly,
+            onChanged: (docs) => setState(() => _designDocuments = docs),
+          ),
           if (!widget.readOnly) ...[
             const SizedBox(height: 32),
             SizedBox(

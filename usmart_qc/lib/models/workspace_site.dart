@@ -1,4 +1,5 @@
 import 'qfield_project.dart';
+import 'site_design_document.dart';
 
 class WorkspaceSite {
   WorkspaceSite({
@@ -11,6 +12,7 @@ class WorkspaceSite {
     this.hasQfield = false,
     this.hasMapCoordinates = false,
     this.qfieldProjects = const [],
+    this.designDocuments = const [],
     this.confirmationStatus = 'CONFIRMED',
     this.isConfirmed = true,
     this.pendingChange,
@@ -33,6 +35,7 @@ class WorkspaceSite {
   final bool hasQfield;
   final bool hasMapCoordinates;
   final List<QFieldProject> qfieldProjects;
+  final List<SiteDesignDocument> designDocuments;
   final String confirmationStatus;
   final bool isConfirmed;
   final Map<String, dynamic>? pendingChange;
@@ -50,6 +53,7 @@ class WorkspaceSite {
 
   factory WorkspaceSite.fromJson(Map<String, dynamic> json) {
     final qRaw = json['qfieldProjects'];
+    final dRaw = json['designDocuments'];
     return WorkspaceSite(
       id: json['id'] as String,
       siteCode: json['siteCode'] as String? ?? json['siteId'] as String? ?? '',
@@ -61,6 +65,13 @@ class WorkspaceSite {
       hasMapCoordinates: json['hasMapCoordinates'] == true,
       qfieldProjects: qRaw is List
           ? qRaw.map((e) => QFieldProject.fromJson(e as Map<String, dynamic>)).toList()
+          : const [],
+      designDocuments: dRaw is List
+          ? dRaw
+              .map((e) =>
+                  SiteDesignDocument.fromJson(e as Map<String, dynamic>))
+              .where((d) => d.url.trim().isNotEmpty)
+              .toList()
           : const [],
       confirmationStatus: json['confirmationStatus'] as String? ?? 'CONFIRMED',
       isConfirmed: json['isConfirmed'] == true || json['confirmationStatus'] == 'CONFIRMED',

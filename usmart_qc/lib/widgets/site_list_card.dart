@@ -190,6 +190,12 @@ class SiteListCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                              if (site.hasDesignDocuments)
+                                _Tag(
+                                  label: l10n.t('site_design_docs_count',
+                                      {'count': '${site.designDocuments.length}'}),
+                                  color: const Color(0xFFFF6B6B),
+                                ),
                               if (site.isWorkspace)
                                 _Tag(
                                   label: l10n.t('pc_ws_tab_sites'),

@@ -7,6 +7,11 @@ import {
   qfieldJsonValue,
 } from '@/lib/private-company-sites';
 import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
+import {
+  normalizeSiteDesignDocumentsInput,
+  parseSiteDesignDocuments,
+  siteDesignDocumentsToJsonValue,
+} from '@/lib/site-design-documents';
 
 function getSiteDelegate() {
   return (prisma as any).site;
@@ -66,6 +71,7 @@ export async function PATCH(
       longitude?: number | null;
       hasQfield?: boolean;
       qfieldProjects?: unknown;
+      designDocuments?: unknown;
     } = {};
     if (siteId !== undefined) data.siteId = siteId;
     if (location !== undefined) data.location = location;
@@ -91,6 +97,12 @@ export async function PATCH(
     } else if (body.removeQfield === true) {
       data.qfieldProjects = null;
       data.hasQfield = false;
+    }
+
+    if (body.designDocuments !== undefined) {
+      const docs = normalizeSiteDesignDocumentsInput(body.designDocuments);
+      data.designDocuments =
+        docs.length > 0 ? siteDesignDocumentsToJsonValue(docs) : null;
     }
 
     if (Object.keys(data).length === 0) {
@@ -142,6 +154,7 @@ export async function PATCH(
         longitude: updated.longitude,
         hasQfield: updated.hasQfield === true,
         qfieldProjects: projects,
+        designDocuments: parseSiteDesignDocuments(updated.designDocuments),
         ticketCount,
       },
     });
