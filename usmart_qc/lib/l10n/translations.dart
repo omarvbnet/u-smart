@@ -479,6 +479,8 @@ const Map<String, String> _en = {
   'qfield_map_my_location': 'My location',
   'map_live_staff_count': '{count} staff live',
   'map_live_staff_tracking': 'Live team locations',
+  'map_location_permission_denied':
+      'Location permission is required to show live positions on the map.',
   'qfield_map_fat_label': 'FAT',
   'qfield_map_fat_site_info': 'Site info (ducts · contractor · excavation)',
   'qfield_map_handholes_for_fat': 'Handholes for this FAT',
@@ -1484,6 +1486,7 @@ const Map<String, String> _ar = {
   'qfield_map_my_location': 'موقعي',
   'map_live_staff_count': '{count} موظف مباشر',
   'map_live_staff_tracking': 'مواقع الفريق المباشرة',
+  'map_location_permission_denied': 'يلزم إذن الموقع لعرض المواقع المباشرة على الخريطة.',
   'qfield_map_fat_label': 'FAT',
   'qfield_map_fat_site_info': 'معلومات الموقع (قنوات · مقاول · حفر)',
   'qfield_map_handholes_for_fat': 'مناهل لهذا FAT',
@@ -2516,6 +2519,8 @@ const Map<String, String> _ku = {
   'qfield_map_my_location': 'شوێنی من',
   'map_live_staff_count': '{count} کارمەندی ڕاستەوخۆ',
   'map_live_staff_tracking': 'شوێنی تیم بە ڕاستەوخۆ',
+  'map_location_permission_denied':
+      'مۆڵەتی شوێن پێویستە بۆ پیشاندانی شوێنی ڕاستەوخۆ لەسەر نەخشە.',
   'qfield_map_fat_label': 'FAT',
   'qfield_map_fat_site_info': 'زانیاری شوێن (تۆیب · بەڵێندەر · کۆندەر)',
   'qfield_map_handholes_for_fat': 'دەستەپێکەکان بۆ ئەم FAT',
@@ -3558,6 +3563,8 @@ const Map<String, String> _tr = {
   'qfield_map_my_location': 'Konumum',
   'map_live_staff_count': '{count} canlı personel',
   'map_live_staff_tracking': 'Canlı ekip konumları',
+  'map_location_permission_denied':
+      'Canlı konumlar için konum izni gereklidir.',
   'qfield_map_fat_label': 'FAT',
   'qfield_map_fat_site_info': 'Saha bilgisi (kanal · yüklenici · kazı)',
   'qfield_map_handholes_for_fat': 'Bu FAT için ızgaralar',

@@ -124,8 +124,22 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
     _loadFieldEditsFromProject();
     _loadPreview();
-    _liveLoc.start();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startTeamLiveTracking());
+    _initMapLocation();
+  }
+
+  Future<void> _initMapLocation() async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await MapLiveLocation.ensurePermission();
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('map_location_permission_denied')),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+    }
+    await _liveLoc.start();
+    if (mounted) _startTeamLiveTracking();
   }
 
   void _startTeamLiveTracking() {
@@ -133,11 +147,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final pc = context.read<PrivateCompanyProvider>();
     if (!pc.canOpenPrivateWorkspace) return;
     final auth = context.read<AuthProvider>();
+    _teamTracker?.stop();
     _teamTracker = MapTeamLiveTracker(
       api: context.read<ApiService>(),
       currentUserId: auth.user?.id,
       workspaceEnabled: true,
-      viewTeam: pc.canViewTeamLiveOnMap,
       onTeamChanged: () {
         if (mounted) setState(() {});
       },
@@ -1198,6 +1212,12 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final pc = context.watch<PrivateCompanyProvider>();
+    if (pc.canOpenPrivateWorkspace && _teamTracker == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _teamTracker == null) _startTeamLiveTracking();
+      });
+    }
     final top = MediaQuery.paddingOf(context).top;
     final onMapCount = _drawableOnMapCount();
     if (!_loading) _ensureMapGeometryCache();
@@ -1260,20 +1280,20 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                     PolygonLayer(polygons: _cachedPolygons),
                   if (_cachedPolylines.isNotEmpty)
                     PolylineLayer(polylines: _cachedPolylines),
-                  ...buildUserLocationMapLayers(
-                    _liveLoc.position,
-                    _liveLoc.accuracyM,
-                  ),
-                  ...buildTeamLiveLocationMapLayers(
-                    _teamTracker?.team ?? const [],
-                    showNames: context.read<PrivateCompanyProvider>().canViewTeamLiveOnMap,
-                  ),
                   MarkerLayer(
                     markers: [
                       ..._cachedFeatureMarkers,
                       ..._cachedLabelMarkers,
                       ..._buildOverlayMarkers(l10n),
                     ],
+                  ),
+                  ...buildTeamLiveLocationMapLayers(
+                    _teamTracker?.team ?? const [],
+                    showNames: _teamTracker?.showNames ?? false,
+                  ),
+                  ...buildUserLocationMapLayers(
+                    _liveLoc.position,
+                    _liveLoc.accuracyM,
                   ),
                 SimpleAttributionWidget(
                   alignment: Alignment.bottomLeft,
@@ -1415,10 +1435,14 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               layerGroups: _layerGroups,
               tapContext: _tapContext,
               userLocationLabel: _liveLoc.hasPosition
-                  ? (_teamTracker != null && _teamTracker!.team.isNotEmpty
+                  ? (_teamTracker != null &&
+                          _teamTracker!.canViewTeam &&
+                          _teamTracker!.team.isNotEmpty
                       ? '${l10n.t('qfield_map_my_location')} · ${l10n.t('map_live_staff_count', {'count': '${_teamTracker!.team.length}'})}'
                       : l10n.t('qfield_map_my_location'))
-                  : (_teamTracker != null && _teamTracker!.team.isNotEmpty
+                  : (_teamTracker != null &&
+                          _teamTracker!.canViewTeam &&
+                          _teamTracker!.team.isNotEmpty
                       ? l10n.t('map_live_staff_count',
                           {'count': '${_teamTracker!.team.length}'})
                       : null),

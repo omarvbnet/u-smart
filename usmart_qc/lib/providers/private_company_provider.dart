@@ -126,11 +126,12 @@ class PrivateCompanyProvider extends ChangeNotifier {
     return role == 'MANAGER' || role == 'COORDINATOR';
   }
 
-  /// Owner / manager — see live staff on QField maps (with names).
+  /// Owner, manager, or coordinator — see live staff on QField maps (with names).
   bool get canViewTeamLiveOnMap {
     if (isOwner) return true;
     if (!isStaff) return false;
-    return _resolvedRole == 'MANAGER';
+    final role = _resolvedRole;
+    return role == 'MANAGER' || role == 'COORDINATOR';
   }
 
   /// Field staff may propose site / QField updates (requires lead confirmation).

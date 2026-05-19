@@ -21,35 +21,54 @@ class MapLiveLocation {
   double? get accuracyM => _accuracyM;
   bool get hasPosition => _position != null;
 
-  Future<void> start() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return;
+  static Future<bool> ensurePermission() async {
+    if (!await Geolocator.isLocationServiceEnabled()) return false;
     var perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
     }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      return;
+    return perm == LocationPermission.always ||
+        perm == LocationPermission.whileInUse;
+  }
+
+  void _applyPosition(Position pos) {
+    final next = LatLng(pos.latitude, pos.longitude);
+    if (_position != null) {
+      const dist = Distance();
+      if (dist(_position!, next) < 2) {
+        _accuracyM = pos.accuracy;
+        return;
+      }
     }
+    _position = next;
+    _accuracyM = pos.accuracy;
+    onPositionChanged?.call();
+  }
+
+  /// One-shot fix (call before stream updates).
+  Future<void> refreshCurrentPosition() async {
+    if (!await ensurePermission()) return;
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      _applyPosition(pos);
+    } catch (_) {}
+  }
+
+  Future<void> start() async {
+    if (!await ensurePermission()) return;
+    await refreshCurrentPosition();
     await _sub?.cancel();
     _sub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 4,
+        distanceFilter: 3,
       ),
-    ).listen((pos) {
-      final next = LatLng(pos.latitude, pos.longitude);
-      if (_position != null) {
-        const dist = Distance();
-        if (dist(_position!, next) < 3) {
-          _accuracyM = pos.accuracy;
-          return;
-        }
-      }
-      _position = next;
-      _accuracyM = pos.accuracy;
-      onPositionChanged?.call();
-    });
+    ).listen(_applyPosition);
   }
 
   void stop() {

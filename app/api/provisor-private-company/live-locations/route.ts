@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { handleStaffLocationSiteProximity } from '@/lib/staff-live-location-site-notify';
 import {
   getStaffLiveLocationGuard,
   listActiveStaffLiveLocations,
@@ -52,6 +53,12 @@ export async function POST(req: NextRequest) {
       longitude,
       accuracy
     );
+    handleStaffLocationSiteProximity(
+      guard.companyId,
+      guard.requesterId,
+      latitude,
+      longitude
+    ).catch((e) => console.error('staff site proximity:', e));
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('POST /api/provisor-private-company/live-locations:', err);

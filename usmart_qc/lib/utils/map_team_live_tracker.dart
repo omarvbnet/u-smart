@@ -11,36 +11,35 @@ class MapTeamLiveTracker {
     required ApiService api,
     required this.currentUserId,
     required this.workspaceEnabled,
-    required this.viewTeam,
     this.onTeamChanged,
   }) : _api = api;
 
   final ApiService _api;
   final String? currentUserId;
   final bool workspaceEnabled;
-  final bool viewTeam;
   final void Function()? onTeamChanged;
 
   List<TeamLiveLocation> _team = const [];
+  bool _canViewTeam = false;
+  bool _showNames = false;
   Timer? _postTimer;
   Timer? _pollTimer;
   MapLiveLocation? _liveLoc;
 
   List<TeamLiveLocation> get team => _team;
+  bool get canViewTeam => _canViewTeam;
+  bool get showNames => _showNames;
 
   void start(MapLiveLocation liveLoc) {
     if (!workspaceEnabled) return;
     stop();
     _liveLoc = liveLoc;
     unawaited(_postOnce());
-    _postTimer = Timer.periodic(const Duration(seconds: 15), (_) => _postOnce());
-    if (viewTeam) {
-      unawaited(_pollOnce());
-      _pollTimer = Timer.periodic(const Duration(seconds: 12), (_) => _pollOnce());
-    }
+    _postTimer = Timer.periodic(const Duration(seconds: 10), (_) => _postOnce());
+    unawaited(_pollOnce());
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _pollOnce());
   }
 
-  /// Push latest GPS to the server (e.g. when device position updates).
   void syncPosition() {
     unawaited(_postOnce());
   }
@@ -51,6 +50,7 @@ class MapTeamLiveTracker {
     _postTimer = null;
     _pollTimer = null;
     _liveLoc = null;
+    _canViewTeam = false;
     if (_team.isNotEmpty) {
       _team = const [];
       onTeamChanged?.call();
@@ -58,6 +58,7 @@ class MapTeamLiveTracker {
   }
 
   Future<void> _postOnce() async {
+    await _liveLoc?.refreshCurrentPosition();
     final pos = _liveLoc?.position;
     if (pos == null) return;
     try {
@@ -73,16 +74,24 @@ class MapTeamLiveTracker {
   }
 
   Future<void> _pollOnce() async {
-    if (!viewTeam) return;
     try {
       final data = await _api.get(ApiConfig.privateCompanyLiveLocations);
-      if (data['success'] != true || data['locations'] is! List) return;
+      if (data['success'] != true) return;
+      _canViewTeam = data['canViewTeam'] == true;
+      _showNames = data['canViewNames'] == true;
+      if (!_canViewTeam) {
+        if (_team.isNotEmpty) {
+          _team = const [];
+          onTeamChanged?.call();
+        }
+        return;
+      }
+      if (data['locations'] is! List) return;
       final list = (data['locations'] as List)
           .map((e) => TeamLiveLocation.fromJson(e as Map<String, dynamic>))
           .where((t) =>
               t.requesterId.isNotEmpty &&
-              t.latitude != 0 &&
-              t.longitude != 0 &&
+              (t.latitude.abs() > 0.0001 || t.longitude.abs() > 0.0001) &&
               t.requesterId != currentUserId)
           .toList();
       _team = list;

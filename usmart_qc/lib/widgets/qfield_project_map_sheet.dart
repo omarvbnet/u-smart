@@ -181,8 +181,19 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       }
     }
     _loadPreview();
-    _liveLoc.start();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startTeamLiveTracking());
+    _initMapLocation();
+  }
+
+  Future<void> _initMapLocation() async {
+    final ok = await MapLiveLocation.ensurePermission();
+    await _liveLoc.start();
+    if (mounted) _startTeamLiveTracking();
+    if (!ok && mounted) {
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('map_location_permission_denied'))),
+      );
+    }
   }
 
   void _startTeamLiveTracking() {
@@ -190,11 +201,11 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     final pc = context.read<PrivateCompanyProvider>();
     if (!pc.canOpenPrivateWorkspace) return;
     final auth = context.read<AuthProvider>();
+    _teamTracker?.stop();
     _teamTracker = MapTeamLiveTracker(
       api: context.read<ApiService>(),
       currentUserId: auth.user?.id,
       workspaceEnabled: true,
-      viewTeam: pc.canViewTeamLiveOnMap,
       onTeamChanged: () {
         if (mounted) setState(() {});
       },
@@ -1497,16 +1508,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                                   PolygonLayer(polygons: _polygons()),
                                 if (_polylines().isNotEmpty)
                                   PolylineLayer(polylines: _polylines()),
-                                ...buildUserLocationMapLayers(
-                                  _liveLoc.position,
-                                  _liveLoc.accuracyM,
-                                ),
-                                ...buildTeamLiveLocationMapLayers(
-                                  _teamTracker?.team ?? const [],
-                                  showNames: context
-                                      .read<PrivateCompanyProvider>()
-                                      .canViewTeamLiveOnMap,
-                                ),
                                 MarkerLayer(
                                   markers: [
                                     ..._pointMarkers(),
@@ -1534,6 +1535,14 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                                       ),
                                     ..._mapNoteMarkers(),
                                   ],
+                                ),
+                                ...buildTeamLiveLocationMapLayers(
+                                  _teamTracker?.team ?? const [],
+                                  showNames: _teamTracker?.showNames ?? false,
+                                ),
+                                ...buildUserLocationMapLayers(
+                                  _liveLoc.position,
+                                  _liveLoc.accuracyM,
                                 ),
                                 SimpleAttributionWidget(
                                   alignment: Alignment.bottomLeft,

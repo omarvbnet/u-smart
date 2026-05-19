@@ -23,6 +23,7 @@ export type NotificationCopyKey =
   | 'workspace_checklist_updated'
   | 'workspace_announcement'
   | 'qfield_map_comment'
+  | 'staff_near_site'
   | 'material_assigned'
   | 'material_used'
   | 'material_request_created'
@@ -877,6 +878,24 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: v.title?.trim() || 'ڕاگەیەنراوی ئۆفیس',
       body: v.body?.trim() || 'خاوەنی شوێنی کار پەیامێکی بۆ ناردووی.',
+    }),
+  },
+  staff_near_site: {
+    en: (v) => ({
+      title: 'Staff near site',
+      body: `${v.staffName} is within ${v.distanceM}m of site ${v.siteCode} (${v.siteLocation}).`,
+    }),
+    ar: (v) => ({
+      title: 'موظف قرب الموقع',
+      body: `${v.staffName} على بُعد ${v.distanceM}م من الموقع ${v.siteCode} (${v.siteLocation}).`,
+    }),
+    tr: (v) => ({
+      title: 'Personel site yakınında',
+      body: `${v.staffName}, ${v.siteCode} sitesine ${v.distanceM}m mesafede (${v.siteLocation}).`,
+    }),
+    ku: (v) => ({
+      title: 'کارمەند نزیکی شوێن',
+      body: `${v.staffName} لە ${v.distanceM}م لە شوێنی ${v.siteCode} (${v.siteLocation}).`,
     }),
   },
   qfield_map_comment: {

@@ -7,6 +7,7 @@ import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/geofence_service.dart';
+import 'services/workspace_live_location_service.dart';
 import 'services/firebase_messaging_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/tickets_provider.dart';
@@ -37,6 +38,8 @@ void main() async {
   await notifications.init();
   final firebaseMessaging = FirebaseMessagingService(apiService, notifications);
   final geofenceService = GeofenceService(apiService, notifications);
+  final workspaceLiveLocationService =
+      WorkspaceLiveLocationService(apiService);
 
   final authProvider = AuthProvider(authService, apiService);
   final ticketsProvider = TicketsProvider(apiService, notifications);
@@ -67,6 +70,7 @@ void main() async {
     } else {
       ticketsProvider.setCurrentUserId(null);
       geofenceService.stop();
+      workspaceLiveLocationService.stop();
       ticketsProvider.stopPolling();
       notificationsProvider.stopPolling();
       notificationsProvider.resetSession();
@@ -104,16 +108,26 @@ void main() async {
   authProvider.addListener(() {
     privateCompanyProvider.setCurrentRequesterId(authProvider.user?.id);
     if (authProvider.isLoggedIn) {
-      privateCompanyProvider.refresh();
+      privateCompanyProvider.refresh().then((_) {
+        workspaceLiveLocationService.setWorkspaceActive(
+          privateCompanyProvider.canOpenPrivateWorkspace,
+        );
+      });
     } else {
       privateCompanyProvider.reset();
       privateCompanyWarehouseProvider.reset();
       workspaceSitesProvider.reset();
+      workspaceLiveLocationService.stop();
     }
   });
 
   // Keep warehouse data fresh once the workspace is approved.
   privateCompanyProvider.addListener(() {
+    if (authProvider.isLoggedIn) {
+      workspaceLiveLocationService.setWorkspaceActive(
+        privateCompanyProvider.canOpenPrivateWorkspace,
+      );
+    }
     if (privateCompanyProvider.isApproved &&
         authProvider.isLoggedIn &&
         privateCompanyWarehouseProvider.dashboard == null &&
@@ -149,6 +163,8 @@ void main() async {
     notificationsProvider: notificationsProvider,
     firebaseMessaging: firebaseMessaging,
     geofenceService: geofenceService,
+    workspaceLiveLocationService: workspaceLiveLocationService,
+    privateCompanyProvider: privateCompanyProvider,
     techniquesProvider: techniquesProvider,
   );
 }
@@ -162,6 +178,8 @@ Future<void> _bootstrapAfterLaunch({
   required NotificationsProvider notificationsProvider,
   required FirebaseMessagingService firebaseMessaging,
   required GeofenceService geofenceService,
+  required WorkspaceLiveLocationService workspaceLiveLocationService,
+  required PrivateCompanyProvider privateCompanyProvider,
   required ProvisorTechniquesProvider techniquesProvider,
 }) async {
   await authProvider.tryAutoLogin();
@@ -172,8 +190,12 @@ Future<void> _bootstrapAfterLaunch({
     await ticketsProvider.fetchTickets();
     await sitesProvider.fetchSites();
     await techniquesProvider.fetch();
+    await privateCompanyProvider.refresh();
     geofenceService.updateData(sitesProvider.sites, ticketsProvider.tickets);
     geofenceService.start();
+    workspaceLiveLocationService.setWorkspaceActive(
+      privateCompanyProvider.canOpenPrivateWorkspace,
+    );
     ticketsProvider.startPolling();
     notificationsProvider.startPolling();
   }

@@ -37,7 +37,7 @@ export function canViewTeamStaffLiveLocations(opts: {
 }): boolean {
   if (opts.isOwner) return true;
   const r = opts.role.toUpperCase();
-  return r === 'MANAGER' || r === 'COMPANY';
+  return r === 'MANAGER' || r === 'COORDINATOR' || r === 'COMPANY';
 }
 
 export function canViewStaffLiveLocationNames(opts: {

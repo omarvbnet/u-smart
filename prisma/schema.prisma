@@ -1522,6 +1522,19 @@ model StaffLiveLocation {
   @@map("staff_live_locations")
 }
 
+/// Tracks staff inside site geofence so owners/managers are notified once per visit.
+model StaffSiteProximityState {
+  id                 String   @id @default(cuid())
+  companyId          String
+  siteId             String
+  staffRequesterId   String
+  enteredAt          DateTime @default(now())
+
+  @@unique([siteId, staffRequesterId])
+  @@index([companyId])
+  @@map("staff_site_proximity_states")
+}
+
 /// Staff-reported cost on a workspace ticket (before ticket completion).
 model PrivateCompanyTicketExpense {
   id               String           @id @default(cuid())
