@@ -9,9 +9,12 @@ import '../models/qfield_project.dart';
 import 'qfield_map_note_bubble.dart';
 import '../models/ticket.dart';
 import '../providers/auth_provider.dart';
+import '../providers/private_company_provider.dart';
 import '../providers/tickets_provider.dart';
+import '../services/api_service.dart';
 import '../utils/coordinate_transform.dart';
 import '../utils/map_live_location.dart';
+import '../utils/map_team_live_tracker.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/qfield_map_point_labels.dart';
 import '../utils/responsive_layout.dart';
@@ -135,9 +138,13 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   final TextEditingController _noteCtrl = TextEditingController();
   late final MapLiveLocation _liveLoc = MapLiveLocation(
     onPositionChanged: () {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        _teamTracker?.syncPosition();
+      }
     },
   );
+  MapTeamLiveTracker? _teamTracker;
 
   static const _layerPalette = [
     Color(0xFF6C63FF),
@@ -175,10 +182,29 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     }
     _loadPreview();
     _liveLoc.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startTeamLiveTracking());
+  }
+
+  void _startTeamLiveTracking() {
+    if (!mounted) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    if (!pc.canOpenPrivateWorkspace) return;
+    final auth = context.read<AuthProvider>();
+    _teamTracker = MapTeamLiveTracker(
+      api: context.read<ApiService>(),
+      currentUserId: auth.user?.id,
+      workspaceEnabled: true,
+      viewTeam: pc.canViewTeamLiveOnMap,
+      onTeamChanged: () {
+        if (mounted) setState(() {});
+      },
+    );
+    _teamTracker!.start(_liveLoc);
   }
 
   @override
   void dispose() {
+    _teamTracker?.stop();
     _liveLoc.stop();
     _noteCtrl.dispose();
     super.dispose();
@@ -1474,6 +1500,12 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                                 ...buildUserLocationMapLayers(
                                   _liveLoc.position,
                                   _liveLoc.accuracyM,
+                                ),
+                                ...buildTeamLiveLocationMapLayers(
+                                  _teamTracker?.team ?? const [],
+                                  showNames: context
+                                      .read<PrivateCompanyProvider>()
+                                      .canViewTeamLiveOnMap,
                                 ),
                                 MarkerLayer(
                                   markers: [

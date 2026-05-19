@@ -11,9 +11,12 @@ import '../models/qfield_project.dart';
 import '../models/site.dart';
 import '../models/ticket.dart';
 import '../providers/auth_provider.dart';
+import '../providers/private_company_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
+import '../services/api_service.dart';
 import '../utils/map_live_location.dart';
+import '../utils/map_team_live_tracker.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/qfield_map_point_labels.dart';
 import '../utils/qfield_map_tap_context.dart';
@@ -89,9 +92,13 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   Set<String> _relatedCableIds = const {};
   late final MapLiveLocation _liveLoc = MapLiveLocation(
     onPositionChanged: () {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        _teamTracker?.syncPosition();
+      }
     },
   );
+  MapTeamLiveTracker? _teamTracker;
   final Map<String, Map<String, dynamic>> _propertyEdits = {};
   final Map<String, TextEditingController> _fieldCtrls = {};
   bool _saving = false;
@@ -118,6 +125,24 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     _loadFieldEditsFromProject();
     _loadPreview();
     _liveLoc.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startTeamLiveTracking());
+  }
+
+  void _startTeamLiveTracking() {
+    if (!mounted) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    if (!pc.canOpenPrivateWorkspace) return;
+    final auth = context.read<AuthProvider>();
+    _teamTracker = MapTeamLiveTracker(
+      api: context.read<ApiService>(),
+      currentUserId: auth.user?.id,
+      workspaceEnabled: true,
+      viewTeam: pc.canViewTeamLiveOnMap,
+      onTeamChanged: () {
+        if (mounted) setState(() {});
+      },
+    );
+    _teamTracker!.start(_liveLoc);
   }
 
   void _loadFieldEditsFromProject() {
@@ -126,6 +151,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
 
   @override
   void dispose() {
+    _teamTracker?.stop();
     _liveLoc.stop();
     _noteCtrl.dispose();
     _panelCtrl.dispose();
@@ -1238,6 +1264,10 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                     _liveLoc.position,
                     _liveLoc.accuracyM,
                   ),
+                  ...buildTeamLiveLocationMapLayers(
+                    _teamTracker?.team ?? const [],
+                    showNames: context.read<PrivateCompanyProvider>().canViewTeamLiveOnMap,
+                  ),
                   MarkerLayer(
                     markers: [
                       ..._cachedFeatureMarkers,
@@ -1385,8 +1415,13 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               layerGroups: _layerGroups,
               tapContext: _tapContext,
               userLocationLabel: _liveLoc.hasPosition
-                  ? l10n.t('qfield_map_my_location')
-                  : null,
+                  ? (_teamTracker != null && _teamTracker!.team.isNotEmpty
+                      ? '${l10n.t('qfield_map_my_location')} · ${l10n.t('map_live_staff_count', {'count': '${_teamTracker!.team.length}'})}'
+                      : l10n.t('qfield_map_my_location'))
+                  : (_teamTracker != null && _teamTracker!.team.isNotEmpty
+                      ? l10n.t('map_live_staff_count',
+                          {'count': '${_teamTracker!.team.length}'})
+                      : null),
               canWrite: widget.canWrite,
               hint: _hint,
               noteCtrl: _noteCtrl,

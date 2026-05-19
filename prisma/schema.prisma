@@ -381,6 +381,7 @@ model TicketRequester {
   privateCompanyChecklistsCreated PrivateCompanyChecklist[] @relation("PrivateCompanyChecklistCreator")
   privateCompanySitesCreated      PrivateCompanySite[]      @relation("PrivateCompanySiteCreator")
   privateCompanySitesConfirmed    PrivateCompanySite[]      @relation("PrivateCompanySiteConfirmer")
+  staffLiveLocation               StaffLiveLocation?
 
   // ── Private company warehouse ─────────────────────────────────────────
   assignedMaterialItems          PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemAssignee")
@@ -1462,6 +1463,7 @@ model PrivateCompany {
   ticketExpensesEnabledById              String?
   ticketExpensesEnabledBy                TicketRequester? @relation("PrivateCompanyTicketExpensesEnabledBy", fields: [ticketExpensesEnabledById], references: [id], onDelete: SetNull)
   ticketExpenses                         PrivateCompanyTicketExpense[] @relation("PrivateCompanyTicketExpenses")
+  staffLiveLocations                     StaffLiveLocation[]           @relation("PrivateCompanyStaffLiveLocations")
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
@@ -1503,6 +1505,21 @@ model PrivateCompanySite {
   @@index([companyId])
   @@index([companyId, confirmationStatus])
   @@map("private_company_sites")
+}
+
+/// Last known GPS for workspace staff (updated while viewing QField maps).
+model StaffLiveLocation {
+  requesterId String          @id
+  companyId   String
+  company     PrivateCompany  @relation("PrivateCompanyStaffLiveLocations", fields: [companyId], references: [id], onDelete: Cascade)
+  requester   TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  latitude    Float
+  longitude   Float
+  accuracy    Float?
+  updatedAt   DateTime        @updatedAt
+
+  @@index([companyId, updatedAt])
+  @@map("staff_live_locations")
 }
 
 /// Staff-reported cost on a workspace ticket (before ticket completion).

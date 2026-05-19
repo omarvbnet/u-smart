@@ -133,6 +133,8 @@ class ApiConfig {
   static const String privateCompanySiteArrivalCheck =
       '/api/provisor-private-company/site-arrival/check';
   static const String privateCompanySites = '/api/provisor-private-company/sites';
+  static const String privateCompanyLiveLocations =
+      '/api/provisor-private-company/live-locations';
   static String privateCompanySiteDetail(String id) =>
       '/api/provisor-private-company/sites/$id';
   static String privateCompanySiteQFieldProjects(String id) =>
