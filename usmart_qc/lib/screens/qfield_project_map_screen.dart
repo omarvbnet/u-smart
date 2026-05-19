@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import '../models/qfield_map_note.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
+import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/workspace_sites_provider.dart';
 import '../utils/qfield_map_features.dart';
@@ -722,8 +723,76 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
   }
 
+  bool _canDeleteMapNote(QFieldMapNote note) {
+    final auth = context.read<AuthProvider>();
+    final uid = auth.user?.id;
+    if (uid != null &&
+        note.byRequesterId != null &&
+        note.byRequesterId!.isNotEmpty &&
+        note.byRequesterId == uid) {
+      return true;
+    }
+    return auth.isManager || auth.isCompanyOwner;
+  }
+
+  Future<void> _deleteMapNote(QFieldMapNote note) async {
+    final ticketId = widget.ticketId;
+    if (ticketId == null) return;
+    final l10n = AppLocalizations.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          l10n.t('qfield_map_comment_delete_title'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          l10n.t('qfield_map_comment_delete_confirm'),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('qfield_map_comment_delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    final res = await context.read<TicketsProvider>().postTicketQFieldAction(ticketId, {
+      'action': 'delete_map_note',
+      'projectId': widget.project.id,
+      'noteId': note.id,
+    });
+    if (!mounted) return;
+    if (res.ok && res.projects != null) {
+      final proj = res.projects!.firstWhere(
+        (p) => p.id == widget.project.id,
+        orElse: () => res.projects!.first,
+      );
+      setState(() => _mapNotes = List<QFieldMapNote>.from(proj.mapNotes));
+      _invalidateMapGeometry();
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('qfield_map_comment_deleted'))),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.message ?? l10n.t('ticket_failed'))),
+      );
+    }
+  }
+
   void _showMapNoteDetails(QFieldMapNote note) {
     final l10n = AppLocalizations.of(context);
+    final canDelete = _canDeleteMapNote(note);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF12122A),
@@ -803,6 +872,23 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                   style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.45),
                 ),
               ),
+              if (canDelete) ...[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _deleteMapNote(note);
+                  },
+                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE53935)),
+                  label: Text(
+                    l10n.t('qfield_map_comment_delete'),
+                    style: const TextStyle(color: Color(0xFFE53935)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE53935)),
+                  ),
+                ),
+              ],
             ],
           ),
         );

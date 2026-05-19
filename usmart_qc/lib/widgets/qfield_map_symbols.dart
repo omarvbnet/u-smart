@@ -187,6 +187,7 @@ class QFieldMapPointLabel extends StatelessWidget {
     this.highlighted = false,
     this.closureCircle = false,
     this.cabinetBox = false,
+    this.boldBlackId = false,
   });
 
   final String text;
@@ -195,6 +196,30 @@ class QFieldMapPointLabel extends StatelessWidget {
   final bool closureCircle;
   /// Slightly larger box with CAB_ID inside (passive cabinet).
   final bool cabinetBox;
+  /// FAT / handhole / closure ID — larger bold black label.
+  final bool boldBlackId;
+
+  static const _boldBlackStyle = TextStyle(
+    color: Colors.black,
+    fontSize: 10,
+    fontWeight: FontWeight.w800,
+    height: 1.05,
+    shadows: [
+      Shadow(color: Color(0xFFFFFFFF), blurRadius: 3),
+      Shadow(color: Color(0xEEFFFFFF), blurRadius: 1),
+    ],
+  );
+
+  static const _boldBlackCircleStyle = TextStyle(
+    color: Colors.black,
+    fontSize: 7.5,
+    fontWeight: FontWeight.w800,
+    height: 1.0,
+    shadows: [
+      Shadow(color: Color(0xFFFFFFFF), blurRadius: 2.5),
+      Shadow(color: Color(0xDDFFFFFF), blurRadius: 1),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -229,15 +254,20 @@ class QFieldMapPointLabel extends StatelessWidget {
     }
 
     if (closureCircle) {
+      final size = boldBlackId ? 30.0 : 26.0;
       return Container(
-        width: 26,
-        height: 26,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: highlighted ? const Color(0xFF6C63FF) : const Color(0xFFE53935),
+          color: highlighted
+              ? const Color(0xFF6C63FF)
+              : (boldBlackId ? const Color(0xFFF5F5F5) : const Color(0xFFE53935)),
           border: Border.all(
-            color: Colors.white.withAlpha(highlighted ? 255 : 220),
-            width: 1.2,
+            color: boldBlackId
+                ? Colors.black.withAlpha(200)
+                : Colors.white.withAlpha(highlighted ? 255 : 220),
+            width: boldBlackId ? 1.4 : 1.2,
           ),
           boxShadow: const [
             BoxShadow(color: Color(0x66000000), blurRadius: 2, offset: Offset(0, 1)),
@@ -251,13 +281,30 @@ class QFieldMapPointLabel extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 5.5,
-              fontWeight: FontWeight.w700,
-              height: 1.0,
-            ),
+            style: boldBlackId
+                ? _boldBlackCircleStyle
+                : const TextStyle(
+                    color: Colors.white,
+                    fontSize: 5.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                  ),
           ),
+        ),
+      );
+    }
+
+    if (boldBlackId) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 58),
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: highlighted
+              ? _boldBlackStyle.copyWith(color: const Color(0xFF6C63FF))
+              : _boldBlackStyle,
         ),
       );
     }

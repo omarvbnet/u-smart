@@ -8,6 +8,7 @@ import '../models/qfield_map_note.dart';
 import '../models/qfield_project.dart';
 import 'qfield_map_note_bubble.dart';
 import '../models/ticket.dart';
+import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/coordinate_transform.dart';
 import '../utils/qfield_map_features.dart';
@@ -789,8 +790,70 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     return out;
   }
 
+  bool _canDeleteMapNote(QFieldMapNote note) {
+    final auth = context.read<AuthProvider>();
+    final uid = auth.user?.id;
+    if (uid != null &&
+        note.byRequesterId != null &&
+        note.byRequesterId!.isNotEmpty &&
+        note.byRequesterId == uid) {
+      return true;
+    }
+    return auth.isManager || auth.isCompanyOwner;
+  }
+
+  Future<void> _deleteMapNote(QFieldMapNote note) async {
+    final l10n = AppLocalizations.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          l10n.t('qfield_map_comment_delete_title'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          l10n.t('qfield_map_comment_delete_confirm'),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.t('cancel'))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('qfield_map_comment_delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final res = await context.read<TicketsProvider>().postTicketQFieldAction(widget.ticketId, {
+      'action': 'delete_map_note',
+      'projectId': widget.project.id,
+      'noteId': note.id,
+    });
+    if (!mounted) return;
+    if (res.ok && res.projects != null) {
+      final proj = res.projects!.firstWhere(
+        (p) => p.id == widget.project.id,
+        orElse: () => res.projects!.first,
+      );
+      setState(() => _mapNotes = List<QFieldMapNote>.from(proj.mapNotes));
+      Navigator.of(context).pop();
+      widget.onSaved?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('qfield_map_comment_deleted'))),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.message ?? l10n.t('ticket_failed'))),
+      );
+    }
+  }
+
   void _showMapNoteDetails(QFieldMapNote note) {
     final l10n = AppLocalizations.of(context);
+    final canDelete = _canDeleteMapNote(note);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF12122A),
@@ -821,6 +884,23 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               ),
               child: Text(note.note, style: const TextStyle(color: Colors.white, height: 1.4)),
             ),
+            if (canDelete) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _deleteMapNote(note);
+                },
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE53935)),
+                label: Text(
+                  l10n.t('qfield_map_comment_delete'),
+                  style: const TextStyle(color: Color(0xFFE53935)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE53935)),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -869,13 +949,13 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                   final h = spec.cabinetBox
                       ? 30.0
                       : spec.closureCircle
-                          ? 26.0
-                          : 22.0;
+                          ? (spec.boldBlackId ? 30.0 : 26.0)
+                          : (spec.boldBlackId ? 26.0 : 22.0);
                   final w = spec.cabinetBox
                       ? 64.0
                       : spec.closureCircle
-                          ? 26.0
-                          : 50.0;
+                          ? (spec.boldBlackId ? 30.0 : 26.0)
+                          : (spec.boldBlackId ? 58.0 : 50.0);
                   out.add(Marker(
                     point: pt,
                     width: w,
@@ -887,6 +967,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                         text: spec.text,
                         closureCircle: spec.closureCircle,
                         cabinetBox: spec.cabinetBox,
+                        boldBlackId: spec.boldBlackId,
                       ),
                     ),
                   ));

@@ -11,12 +11,15 @@ class QFieldPointLabelSpec {
     this.textOnly = false,
     this.closureCircle = false,
     this.cabinetBox = false,
+    this.boldBlackId = false,
   });
 
   final String text;
   final bool textOnly;
   final bool closureCircle;
   final bool cabinetBox;
+  /// FAT / handhole / hole / closure IDs — larger bold black text.
+  final bool boldBlackId;
 }
 
 /// Resolve which labels to show for a layer / properties bundle.
@@ -40,17 +43,19 @@ List<QFieldPointLabelSpec> qfieldPointLabelSpecs({
     final hh = handholeIdFromProperties(props);
     final hole = holeIdFromProperties(props);
     if (hh != null && hh.isNotEmpty) {
-      labels.add(QFieldPointLabelSpec(text: hh, textOnly: true));
+      labels.add(QFieldPointLabelSpec(text: hh, textOnly: true, boldBlackId: true));
     }
     if (hole != null &&
         hole.isNotEmpty &&
         hole.toLowerCase() != (hh ?? '').toLowerCase()) {
-      labels.add(QFieldPointLabelSpec(text: hole, textOnly: true));
+      labels.add(QFieldPointLabelSpec(text: hole, textOnly: true, boldBlackId: true));
     }
     if (handholeContainsClosure(props)) {
       final closureId = closureOrOdfIdFromProperties(props);
       if (closureId != null && closureId.isNotEmpty) {
-        labels.add(QFieldPointLabelSpec(text: closureId, closureCircle: true));
+        labels.add(
+          QFieldPointLabelSpec(text: closureId, closureCircle: true, boldBlackId: true),
+        );
       }
     }
     if (labels.isEmpty) {
@@ -81,7 +86,7 @@ List<QFieldPointLabelSpec> qfieldPointLabelSpecs({
   if (useClosureCircleMapLabel(layerName)) {
     final t = closureOrOdfIdFromProperties(props);
     if (t != null && t.isNotEmpty) {
-      labels.add(QFieldPointLabelSpec(text: t, closureCircle: true));
+      labels.add(QFieldPointLabelSpec(text: t, closureCircle: true, boldBlackId: true));
     }
     return labels;
   }
@@ -89,12 +94,14 @@ List<QFieldPointLabelSpec> qfieldPointLabelSpecs({
   if (isFdtFatLayerName(layerName) && !isFdtFatClosureLayerName(layerName)) {
     final fatId = fatIdFromProperties(props);
     if (fatId != null && fatId.isNotEmpty) {
-      labels.add(QFieldPointLabelSpec(text: fatId, textOnly: true));
+      labels.add(QFieldPointLabelSpec(text: fatId, textOnly: true, boldBlackId: true));
     }
     if (handholeContainsClosure(props)) {
       final closureId = closureOrOdfIdFromProperties(props);
       if (closureId != null && closureId.isNotEmpty) {
-        labels.add(QFieldPointLabelSpec(text: closureId, closureCircle: true));
+        labels.add(
+          QFieldPointLabelSpec(text: closureId, closureCircle: true, boldBlackId: true),
+        );
       }
     }
     return labels;
@@ -109,13 +116,15 @@ List<QFieldPointLabelSpec> qfieldPointLabelSpecs({
 
 double _labelWidth(QFieldPointLabelSpec spec) {
   if (spec.cabinetBox) return 64;
-  if (spec.closureCircle) return 26;
+  if (spec.closureCircle) return spec.boldBlackId ? 30 : 26;
+  if (spec.boldBlackId) return 58;
   return 50;
 }
 
 double _labelHeight(QFieldPointLabelSpec spec) {
   if (spec.cabinetBox) return 30;
-  if (spec.closureCircle) return 26;
+  if (spec.closureCircle) return spec.boldBlackId ? 30 : 26;
+  if (spec.boldBlackId) return 26;
   return 22;
 }
 
@@ -150,6 +159,7 @@ List<Marker> buildQFieldPointLabelMarkers({
                 highlighted: hi,
                 closureCircle: spec.closureCircle,
                 cabinetBox: spec.cabinetBox,
+                boldBlackId: spec.boldBlackId,
               ),
             ),
           ),

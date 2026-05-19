@@ -10,6 +10,27 @@ import { prisma as _prisma } from '@/lib/prisma';
 const prisma = _prisma as any;
 
 /** Roles that trigger staff broadcast when posting a QField map comment. */
+/** Comment author or workspace manager / owner may remove a map note. */
+export async function canDeleteQFieldMapNote(
+  prisma: any,
+  requesterId: string,
+  note: { byRequesterId?: string | null }
+): Promise<boolean> {
+  if (note.byRequesterId && note.byRequesterId === requesterId) return true;
+  const me = await prisma.ticketRequester.findUnique({
+    where: { id: requesterId },
+    select: {
+      role: true,
+      privateCompanyOwned: { select: { status: true } },
+    },
+  });
+  if (!me) return false;
+  const role = String(me.role ?? '').toUpperCase();
+  if (role === 'MANAGER') return true;
+  if (role === 'COMPANY' && me.privateCompanyOwned?.status === 'APPROVED') return true;
+  return false;
+}
+
 export const QFIELD_MAP_COMMENT_AUTHOR_ROLES = new Set([
   'ENGINEER',
   'TECHNICIAN',

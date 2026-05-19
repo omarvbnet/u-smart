@@ -6,7 +6,10 @@ import {
   parseQFieldProjectsFromCompanyJson,
   qfieldProjectsToJsonValue,
 } from '@/lib/qfield-projects';
-import { notifyQFieldMapCommentAdded } from '@/lib/qfield-map-note-notify';
+import {
+  canDeleteQFieldMapNote,
+  notifyQFieldMapCommentAdded,
+} from '@/lib/qfield-map-note-notify';
 import { parseTicketCompanyJson } from '@/lib/private-company-kpi';
 import { canManageTicketQFieldProjects } from '@/lib/qfield-ticket-write';
 
@@ -32,7 +35,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
-  if (!['add_revision', 'update_meta', 'set_map_annotation', 'add_map_note'].includes(action)) {
+  if (
+    !['add_revision', 'update_meta', 'set_map_annotation', 'add_map_note', 'delete_map_note'].includes(
+      action
+    )
+  ) {
     return NextResponse.json({ success: false, message: 'Invalid action' }, { status: 400 });
   }
 
@@ -181,6 +188,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       companyJson: row.company,
       projectId,
     }).catch((e) => console.error('add_map_note notify:', e));
+  } else if (action === 'delete_map_note') {
+    const noteId = typeof body.noteId === 'string' ? body.noteId.trim() : '';
+    if (!noteId) {
+      return NextResponse.json({ success: false, message: 'noteId is required' }, { status: 400 });
+    }
+    const list = projects[idx].mapNotes ?? [];
+    const noteIdx = list.findIndex((n) => n.id === noteId);
+    if (noteIdx < 0) {
+      return NextResponse.json({ success: false, message: 'Map comment not found' }, { status: 404 });
+    }
+    const target = list[noteIdx];
+    const mayDelete = await canDeleteQFieldMapNote(prisma, auth.payload.requesterId, target);
+    if (!mayDelete) {
+      return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
+    }
+    list.splice(noteIdx, 1);
+    projects[idx].mapNotes = list;
+    projects[idx].updatedAt = new Date().toISOString();
   } else {
     const clear = body.clear === true;
     if (clear) {
