@@ -3,6 +3,12 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { DEFAULT_MAINTENANCE_SLUGS } from '@/lib/provisor-technique-defaults';
+import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
+import {
+  coordsFromQfieldProjects,
+  normalizeQfieldProjectsInput,
+  qfieldJsonValue,
+} from '@/lib/private-company-sites';
 
 function getSiteDelegate() {
   return (prisma as any).site;
@@ -46,9 +52,19 @@ type SiteRow = {
   province: string;
   latitude: number | null;
   longitude: number | null;
+  hasQfield?: boolean;
+  qfieldProjects?: unknown;
   createdAt: Date;
   updatedAt: Date;
 };
+
+function siteQfieldFields(row: SiteRow) {
+  const projects = parseQFieldProjectsFromCompanyJson({ qfieldProjects: row.qfieldProjects });
+  return {
+    hasQfield: row.hasQfield === true,
+    qfieldProjects: projects,
+  };
+}
 
 async function siteWithTicketCounts(
   siteRow: SiteRow,
@@ -87,6 +103,7 @@ async function siteWithTicketCounts(
   ]);
   return {
     ...siteRow,
+    ...siteQfieldFields(siteRow),
     ticketCount: qualityControlCount + enterpriseCount,
     qualityControlCount,
     enterpriseCount,
@@ -135,6 +152,8 @@ export async function GET(req: NextRequest) {
         province: true,
         latitude: true,
         longitude: true,
+        hasQfield: true,
+        qfieldProjects: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -190,6 +209,8 @@ export async function GET(req: NextRequest) {
                 province: true,
                 latitude: true,
                 longitude: true,
+                hasQfield: true,
+                qfieldProjects: true,
                 createdAt: true,
                 updatedAt: true,
                 requesterId: true,
@@ -338,8 +359,8 @@ export async function POST(req: NextRequest) {
     const siteId = typeof body.siteId === 'string' ? body.siteId.trim() : '';
     const location = typeof body.location === 'string' ? body.location.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() : '';
-    const latitude = typeof body.latitude === 'number' ? body.latitude : null;
-    const longitude = typeof body.longitude === 'number' ? body.longitude : null;
+    let latitude = typeof body.latitude === 'number' ? body.latitude : null;
+    let longitude = typeof body.longitude === 'number' ? body.longitude : null;
 
     if (!siteId || !location || !province) {
       return NextResponse.json(
@@ -372,17 +393,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const me = await prisma.ticketRequester.findUnique({
+      where: { id: payload.requesterId },
+      select: { name: true, username: true },
+    });
+    const actorName = me?.name ?? me?.username ?? 'User';
+
+    const createData: Record<string, unknown> = {
+      siteId,
+      location,
+      province,
+      latitude,
+      longitude,
+      requesterId: payload.requesterId,
+    };
+
+    if (body.qfieldProjects !== undefined) {
+      const projects = normalizeQfieldProjectsInput(body.qfieldProjects, {
+        id: payload.requesterId,
+        name: actorName,
+      });
+      if (projects.length > 0) {
+        const coords = await coordsFromQfieldProjects(projects);
+        createData.qfieldProjects = qfieldJsonValue(projects);
+        createData.hasQfield = true;
+        createData.latitude = coords.latitude;
+        createData.longitude = coords.longitude;
+        latitude = coords.latitude;
+        longitude = coords.longitude;
+      }
+    }
+
     const created = await siteDelegate.create({
-      data: {
-        siteId,
-        location,
-        province,
-        latitude,
-        longitude,
-        requesterId: payload.requesterId,
-      },
+      data: createData,
     });
 
+    const projects = parseQFieldProjectsFromCompanyJson({ qfieldProjects: created.qfieldProjects });
     return NextResponse.json({
       success: true,
       site: {
@@ -392,6 +438,8 @@ export async function POST(req: NextRequest) {
         province: created.province,
         latitude: created.latitude ?? null,
         longitude: created.longitude ?? null,
+        hasQfield: created.hasQfield === true,
+        qfieldProjects: projects,
         ticketCount: 0,
         qualityControlCount: 0,
         enterpriseCount: 0,

@@ -7,6 +7,8 @@ class SitesProvider extends ChangeNotifier {
   final ApiService _api;
   List<Site> _sites = [];
   bool _loading = false;
+  bool _isWorkspaceMember = false;
+  bool _canManageWorkspaceSites = false;
 
   SitesProvider(this._api);
 
@@ -14,17 +16,40 @@ class SitesProvider extends ChangeNotifier {
   List<Site> get sitesWithCoordinates =>
       _sites.where((s) => s.hasCoordinates).toList();
   bool get loading => _loading;
+  bool get isWorkspaceMember => _isWorkspaceMember;
+  bool get canManageWorkspaceSites => _canManageWorkspaceSites;
+  /// Owner/manager/coordinator can add workspace sites; non-workspace users can add personal sites.
+  bool get canAddSite => !_isWorkspaceMember || _canManageWorkspaceSites;
 
-  Future<void> fetchSites() async {
+  Future<void> fetchSites({bool includeWorkspace = false}) async {
     _loading = true;
     notifyListeners();
     try {
       final data = await _api.get(ApiConfig.sites);
+      var merged = <Site>[];
       if (data['success'] == true && data['sites'] is List) {
-        _sites = (data['sites'] as List)
+        merged = (data['sites'] as List)
             .map((e) => Site.fromJson(e as Map<String, dynamic>))
             .toList();
       }
+
+      _isWorkspaceMember = false;
+      _canManageWorkspaceSites = false;
+      if (includeWorkspace) {
+        try {
+          final ws = await _api.get(ApiConfig.privateCompanySites);
+          if (ws['success'] == true && ws['sites'] is List) {
+            _isWorkspaceMember = true;
+            _canManageWorkspaceSites = ws['canManageSites'] == true;
+            final wsSites = (ws['sites'] as List)
+                .map((e) => Site.fromWorkspaceJson(e as Map<String, dynamic>))
+                .toList();
+            merged = [...merged, ...wsSites];
+          }
+        } catch (_) {}
+      }
+
+      _sites = merged;
     } catch (_) {}
     _loading = false;
     notifyListeners();
@@ -36,6 +61,8 @@ class SitesProvider extends ChangeNotifier {
     required String province,
     double? latitude,
     double? longitude,
+    bool hasQfield = false,
+    List<Map<String, dynamic>>? qfieldProjects,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -45,10 +72,15 @@ class SitesProvider extends ChangeNotifier {
       };
       if (latitude != null) body['latitude'] = latitude;
       if (longitude != null) body['longitude'] = longitude;
+      if (qfieldProjects != null && qfieldProjects.isNotEmpty) {
+        body['qfieldProjects'] = qfieldProjects;
+      } else if (hasQfield) {
+        body['hasQfield'] = true;
+      }
 
       final data = await _api.post(ApiConfig.sites, body: body);
       if (data['success'] == true) {
-        await fetchSites();
+        await fetchSites(includeWorkspace: _isWorkspaceMember);
         return true;
       }
     } catch (_) {}
@@ -61,6 +93,8 @@ class SitesProvider extends ChangeNotifier {
     String? province,
     double? latitude,
     double? longitude,
+    List<Map<String, dynamic>>? qfieldProjects,
+    bool removeQfield = false,
   }) async {
     try {
       final body = <String, dynamic>{};
@@ -69,23 +103,52 @@ class SitesProvider extends ChangeNotifier {
       if (province != null) body['province'] = province;
       if (latitude != null) body['latitude'] = latitude;
       if (longitude != null) body['longitude'] = longitude;
+      if (qfieldProjects != null) body['qfieldProjects'] = qfieldProjects;
+      if (removeQfield) body['removeQfield'] = true;
 
       if (body.isEmpty) return false;
 
       final data = await _api.patch(ApiConfig.siteDetail(id), body: body);
       if (data['success'] == true) {
-        await fetchSites();
+        await fetchSites(includeWorkspace: _isWorkspaceMember);
         return true;
       }
     } catch (_) {}
     return false;
   }
 
+  Future<Map<String, dynamic>?> fetchSiteQFieldMapPreview(
+    String siteId,
+    String projectId,
+  ) async {
+    try {
+      return await _api.get(
+        '${ApiConfig.siteDetail(siteId)}/qfield-map-preview?projectId=$projectId',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static List<Map<String, dynamic>> qfieldProjectPayload(
+    String url,
+    String fileName, {
+    String? title,
+  }) {
+    return [
+      {
+        'currentUrl': url,
+        'fileName': fileName,
+        if (title != null) 'title': title,
+      },
+    ];
+  }
+
   Future<bool> deleteSite(String id) async {
     try {
       final data = await _api.delete(ApiConfig.siteDetail(id));
       if (data['success'] == true) {
-        await fetchSites();
+        await fetchSites(includeWorkspace: _isWorkspaceMember);
         return true;
       }
     } catch (_) {}
@@ -116,7 +179,7 @@ class SitesProvider extends ChangeNotifier {
         },
       );
       if (data['success'] == true) {
-        await fetchSites();
+        await fetchSites(includeWorkspace: _isWorkspaceMember);
         return null;
       }
       return data['message'] as String? ?? 'Failed';
@@ -154,7 +217,7 @@ class SitesProvider extends ChangeNotifier {
         query: {'shareId': shareId},
       );
       if (data['success'] == true) {
-        await fetchSites();
+        await fetchSites(includeWorkspace: _isWorkspaceMember);
         return true;
       }
     } catch (_) {}

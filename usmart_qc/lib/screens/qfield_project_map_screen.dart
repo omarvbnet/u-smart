@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -12,7 +11,9 @@ import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
+import '../providers/sites_provider.dart';
 import '../providers/workspace_sites_provider.dart';
+import '../utils/map_live_location.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/qfield_map_point_labels.dart';
 import '../utils/qfield_map_tap_context.dart';
@@ -28,14 +29,16 @@ class QFieldProjectMapScreen extends StatefulWidget {
     super.key,
     this.ticketId,
     this.workspaceSiteId,
+    this.ownedSiteId,
     required this.project,
     this.ticket,
     required this.canWrite,
     this.onSaved,
-  }) : assert(ticketId != null || workspaceSiteId != null);
+  }) : assert(ticketId != null || workspaceSiteId != null || ownedSiteId != null);
 
   final String? ticketId;
   final String? workspaceSiteId;
+  final String? ownedSiteId;
   final QFieldProject project;
   final Ticket? ticket;
   final bool canWrite;
@@ -84,9 +87,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   String? _selectedFeatureId;
   List<FeatureTapHit> _locationHits = const [];
   Set<String> _relatedCableIds = const {};
-  LatLng? _userLocation;
-  double? _userAccuracyM;
-  StreamSubscription<Position>? _positionSub;
+  late final MapLiveLocation _liveLoc = MapLiveLocation(
+    onPositionChanged: () {
+      if (mounted) setState(() {});
+    },
+  );
   final Map<String, Map<String, dynamic>> _propertyEdits = {};
   final Map<String, TextEditingController> _fieldCtrls = {};
   bool _saving = false;
@@ -111,7 +116,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
     _loadFieldEditsFromProject();
     _loadPreview();
-    _startLiveLocation();
+    _liveLoc.start();
   }
 
   void _loadFieldEditsFromProject() {
@@ -120,7 +125,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
 
   @override
   void dispose() {
-    _positionSub?.cancel();
+    _liveLoc.stop();
     _noteCtrl.dispose();
     _panelCtrl.dispose();
     for (final c in _fieldCtrls.values) {
@@ -135,6 +140,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     if (widget.workspaceSiteId != null) {
       data = await context.read<WorkspaceSitesProvider>().fetchQFieldMapPreview(
             widget.workspaceSiteId!,
+            widget.project.id,
+          );
+    } else if (widget.ownedSiteId != null) {
+      data = await context.read<SitesProvider>().fetchSiteQFieldMapPreview(
+            widget.ownedSiteId!,
             widget.project.id,
           );
     } else {
@@ -522,41 +532,9 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     return base;
   }
 
-  Future<void> _startLiveLocation() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return;
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      return;
-    }
-    _positionSub?.cancel();
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 4,
-      ),
-    ).listen((pos) {
-      if (!mounted) return;
-      final next = LatLng(pos.latitude, pos.longitude);
-      if (_userLocation != null) {
-        const dist = Distance();
-        if (dist(_userLocation!, next) < 3) return;
-      }
-      setState(() {
-        _userLocation = next;
-        _userAccuracyM = pos.accuracy;
-      });
-    });
-  }
-
   void _centerOnUser() {
-    if (_userLocation != null) {
-      try {
-        _mapController.move(_userLocation!, 17);
-      } catch (_) {}
+    if (_liveLoc.hasPosition) {
+      _liveLoc.moveMapToUser(_mapController);
     } else {
       _fitMap();
     }
@@ -1034,29 +1012,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     return out;
   }
 
-  List<CircleMarker> _buildUserLocationCircles() {
-    if (_userLocation == null) return const [];
-    final acc = _userAccuracyM;
-    final out = <CircleMarker>[];
-    if (acc != null && acc > 0 && acc < 200) {
-      out.add(CircleMarker(
-        point: _userLocation!,
-        radius: acc,
-        color: const Color(0xFF2196F3).withAlpha(35),
-        borderColor: const Color(0xFF2196F3).withAlpha(80),
-        borderStrokeWidth: 1,
-      ));
-    }
-    out.add(CircleMarker(
-      point: _userLocation!,
-      radius: 8,
-      color: const Color(0xFF2196F3),
-      borderColor: Colors.white,
-      borderStrokeWidth: 2.5,
-    ));
-    return out;
-  }
-
   List<Marker> _buildFeaturePointMarkers() {
     final out = <Marker>[];
     for (final f in _features) {
@@ -1195,8 +1150,10 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                     PolygonLayer(polygons: _cachedPolygons),
                   if (_cachedPolylines.isNotEmpty)
                     PolylineLayer(polylines: _cachedPolylines),
-                  if (_buildUserLocationCircles().isNotEmpty)
-                    CircleLayer(circles: _buildUserLocationCircles()),
+                  ...buildUserLocationMapLayers(
+                    _liveLoc.position,
+                    _liveLoc.accuracyM,
+                  ),
                   MarkerLayer(
                     markers: [
                       ..._cachedFeatureMarkers,
@@ -1341,7 +1298,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               selected: _selected,
               layerGroups: _layerGroups,
               tapContext: _tapContext,
-              userLocationLabel: _userLocation != null
+              userLocationLabel: _liveLoc.hasPosition
                   ? l10n.t('qfield_map_my_location')
                   : null,
               canWrite: widget.canWrite,

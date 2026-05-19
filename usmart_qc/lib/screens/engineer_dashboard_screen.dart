@@ -32,6 +32,8 @@ import '../widgets/available_tickets_pool_tab.dart';
 import '../providers/private_company_provider.dart';
 import '../utils/account_deletion_ui.dart';
 import 'private_company_hub_screen.dart';
+import 'qfield_project_map_screen.dart';
+import '../widgets/workspace_site_detail_sheet.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -64,7 +66,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
     await Future.wait([
       tickets.fetchTickets(),
       tickets.loadProvinceFilter(),
-      sites.fetchSites(),
+      sites.fetchSites(includeWorkspace: pc.canOpenPrivateWorkspace),
       conflicts.fetchConflicts(),
       context.read<ProvisorTechniquesProvider>().ensureLoaded(),
       pc.refresh(),
@@ -1236,12 +1238,44 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
     super.dispose();
   }
 
+  Future<void> _reloadSites(SitesProvider provider) {
+    final pc = context.read<PrivateCompanyProvider>();
+    return provider.fetchSites(includeWorkspace: pc.canOpenPrivateWorkspace);
+  }
+
+  Future<void> _openAddSite(SitesProvider provider) async {
+    if (provider.canManageWorkspaceSites) {
+      await showWorkspaceSiteCreateSheet(context);
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SiteFormScreen()),
+      );
+    }
+    if (mounted) await _reloadSites(provider);
+  }
+
+  void _openSite(BuildContext context, Site site) {
+    if (site.isWorkspace && site.workspaceSiteId != null) {
+      showWorkspaceSiteDetailSheet(context, site.workspaceSiteId!);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SiteFormScreen(
+          site: site,
+          readOnly: !site.canEdit,
+        ),
+      ),
+    ).then((_) => _reloadSites(context.read<SitesProvider>()));
+  }
+
   Future<void> _confirmDelete(
     BuildContext context,
     SitesProvider provider,
     Site site,
     AppLocalizations l10n,
   ) async {
+    if (site.isWorkspace) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1455,14 +1489,9 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                                       color: Colors.white, fontSize: 18,
                                       fontWeight: FontWeight.w600)),
                               const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () => Navigator.of(context)
-                                    .push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const SiteFormScreen(),
-                                      ),
-                                    )
-                                    .then((_) => provider.fetchSites()),
+                              if (provider.canAddSite)
+                                ElevatedButton.icon(
+                                onPressed: () => _openAddSite(provider),
                                 icon: const Icon(Icons.add_rounded, size: 20),
                                 label: Text(l10n.t('site_add')),
                                 style: ElevatedButton.styleFrom(
@@ -1481,7 +1510,7 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                           ),
                         )
                       : RefreshIndicator(
-                          onRefresh: provider.fetchSites,
+                          onRefresh: () => _reloadSites(provider),
                           color: const Color(0xFF6C63FF),
                           child: Builder(
                             builder: (context) {
@@ -1518,7 +1547,10 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                             itemCount: visible.length,
                             itemBuilder: (context, index) {
                               final site = visible[index];
-                              return Container(
+                              return InkWell(
+                                onTap: () => _openSite(context, site),
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 14, vertical: 12),
@@ -1638,7 +1670,35 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                                           ),
                                           tooltip: l10n.t('site_create_ticket_here'),
                                         ),
-                                        if (site.canEdit) ...[
+                                        if (site.hasQfield &&
+                                            site.qfieldProjects.isNotEmpty) ...[
+                                          IconButton(
+                                            onPressed: () {
+                                              final proj = site.qfieldProjects.first;
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  fullscreenDialog: true,
+                                                  builder: (_) => QFieldProjectMapScreen(
+                                                    workspaceSiteId: site.isWorkspace
+                                                        ? site.workspaceSiteId
+                                                        : null,
+                                                    ownedSiteId: site.isWorkspace
+                                                        ? null
+                                                        : site.id,
+                                                    project: proj,
+                                                    canWrite: site.canEdit ||
+                                                        site.isWorkspace,
+                                                    onSaved: () => _reloadSites(provider),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(Icons.map_rounded,
+                                                color: Color(0xFF00D4AA), size: 20),
+                                            tooltip: l10n.t('pc_site_view_qfield_map'),
+                                          ),
+                                        ],
+                                        if (site.canEdit && !site.isWorkspace) ...[
                                           IconButton(
                                             onPressed: () => Navigator.of(context)
                                                 .push(MaterialPageRoute(
@@ -1646,7 +1706,7 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                                                       SiteFormScreen(site: site),
                                                 ))
                                                 .then((_) =>
-                                                    provider.fetchSites()),
+                                                    _reloadSites(provider)),
                                             icon: const Icon(Icons.edit_rounded,
                                                 color: Color(0xFF6C63FF),
                                                 size: 20),
@@ -1688,7 +1748,7 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                                                           readOnly: true),
                                                 ))
                                                 .then((_) =>
-                                                    provider.fetchSites()),
+                                                    _reloadSites(provider)),
                                             icon: const Icon(Icons.visibility_rounded,
                                                 color: Color(0xFF6C63FF),
                                                 size: 20),
@@ -1709,7 +1769,8 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                                     ),
                                   ],
                                 ),
-                              );
+                              ),
+                            );
                             },
                           );
                             },
@@ -1718,21 +1779,16 @@ class _EngineerSitesTabState extends State<_EngineerSitesTab> {
                 ),
               ],
             ),
-            Positioned(
-              right: 20,
-              bottom: 24,
-              child: FloatingActionButton(
-                onPressed: () => Navigator.of(context)
-                    .push(
-                      MaterialPageRoute(
-                        builder: (_) => const SiteFormScreen(),
-                      ),
-                    )
-                    .then((_) => provider.fetchSites()),
-                backgroundColor: const Color(0xFF6C63FF),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
+            if (provider.canAddSite)
+              Positioned(
+                right: 20,
+                bottom: 24,
+                child: FloatingActionButton(
+                  onPressed: () => _openAddSite(provider),
+                  backgroundColor: const Color(0xFF6C63FF),
+                  child: const Icon(Icons.add_rounded, color: Colors.white),
+                ),
               ),
-            ),
           ],
         );
       },

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import {
+  coordsFromQfieldProjects,
+  normalizeQfieldProjectsInput,
+  qfieldJsonValue,
+} from '@/lib/private-company-sites';
+import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
 
 function getSiteDelegate() {
   return (prisma as any).site;
@@ -39,19 +45,53 @@ export async function PATCH(
 
     const site = await siteDelegate.findUnique({
       where: { id },
-      select: { requesterId: true, siteId: true },
+      select: { requesterId: true, siteId: true, qfieldProjects: true },
     });
 
     if (!site || site.requesterId !== payload.requesterId) {
       return NextResponse.json({ success: false, message: 'Site not found' }, { status: 404 });
     }
 
-    const data: { siteId?: string; location?: string; province?: string; latitude?: number | null; longitude?: number | null } = {};
+    const me = await prisma.ticketRequester.findUnique({
+      where: { id: payload.requesterId },
+      select: { name: true, username: true },
+    });
+    const actorName = me?.name ?? me?.username ?? 'User';
+
+    const data: {
+      siteId?: string;
+      location?: string;
+      province?: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      hasQfield?: boolean;
+      qfieldProjects?: unknown;
+    } = {};
     if (siteId !== undefined) data.siteId = siteId;
     if (location !== undefined) data.location = location;
     if (province !== undefined) data.province = province;
     if (latitude !== undefined) data.latitude = latitude;
     if (longitude !== undefined) data.longitude = longitude;
+
+    if (body.qfieldProjects !== undefined) {
+      const projects = normalizeQfieldProjectsInput(body.qfieldProjects, {
+        id: payload.requesterId,
+        name: actorName,
+      });
+      if (projects.length > 0) {
+        const coords = await coordsFromQfieldProjects(projects);
+        data.qfieldProjects = qfieldJsonValue(projects);
+        data.hasQfield = true;
+        data.latitude = coords.latitude;
+        data.longitude = coords.longitude;
+      } else {
+        data.qfieldProjects = null;
+        data.hasQfield = false;
+      }
+    } else if (body.removeQfield === true) {
+      data.qfieldProjects = null;
+      data.hasQfield = false;
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(
@@ -90,6 +130,7 @@ export async function PATCH(
       },
     });
 
+    const projects = parseQFieldProjectsFromCompanyJson({ qfieldProjects: updated.qfieldProjects });
     return NextResponse.json({
       success: true,
       site: {
@@ -97,6 +138,10 @@ export async function PATCH(
         siteId: updated.siteId,
         location: updated.location,
         province: updated.province,
+        latitude: updated.latitude,
+        longitude: updated.longitude,
+        hasQfield: updated.hasQfield === true,
+        qfieldProjects: projects,
         ticketCount,
       },
     });

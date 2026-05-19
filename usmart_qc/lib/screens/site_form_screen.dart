@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,8 @@ import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/sites_provider.dart';
+import '../providers/tickets_provider.dart';
+import 'qfield_project_map_screen.dart';
 import 'site_map_picker_screen.dart';
 
 /// Screen for adding a new site or editing an existing one.
@@ -28,6 +31,10 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
   double? _latitude;
   double? _longitude;
   bool _submitting = false;
+  bool _attachQfield = false;
+  String? _qfieldUrl;
+  String? _qfieldFileName;
+  bool _uploadingQfield = false;
 
   @override
   void initState() {
@@ -42,6 +49,35 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         _coordinatesCtrl.text =
             '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}';
       }
+      _attachQfield = widget.site!.hasQfield;
+    }
+  }
+
+  Future<void> _pickQfield() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip', 'qgz', 'gpkg', 'qgs'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.single;
+    setState(() => _uploadingQfield = true);
+    final tickets = context.read<TicketsProvider>();
+    String? url;
+    if (file.bytes != null) {
+      url = await tickets.uploadQFieldPackageFromBytes(file.bytes!, file.name);
+    } else if (file.path != null) {
+      url = await tickets.uploadQFieldPackageFromPath(file.path!);
+    }
+    if (mounted) {
+      setState(() {
+        _uploadingQfield = false;
+        if (url != null) {
+          _qfieldUrl = url;
+          _qfieldFileName = file.name;
+          _attachQfield = true;
+        }
+      });
     }
   }
 
@@ -100,6 +136,15 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
     final provider = context.read<SitesProvider>();
     final l10n = AppLocalizations.of(context);
 
+    List<Map<String, dynamic>>? qf;
+    if (_attachQfield && _qfieldUrl != null && _qfieldFileName != null) {
+      qf = SitesProvider.qfieldProjectPayload(
+        _qfieldUrl!,
+        _qfieldFileName!,
+        title: siteId,
+      );
+    }
+
     bool success;
     if (widget.isEditing) {
       success = await provider.updateSite(
@@ -109,6 +154,7 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         province: province,
         latitude: _latitude,
         longitude: _longitude,
+        qfieldProjects: qf,
       );
     } else {
       success = await provider.createSite(
@@ -117,6 +163,8 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
         province: province,
         latitude: _latitude,
         longitude: _longitude,
+        hasQfield: _attachQfield && qf != null,
+        qfieldProjects: qf,
       );
     }
 
@@ -260,6 +308,61 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
                 ),
               ),
             ),
+          if (widget.isEditing &&
+              widget.site!.hasQfield &&
+              widget.site!.qfieldProjects.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    fullscreenDialog: true,
+                    builder: (_) => QFieldProjectMapScreen(
+                      ownedSiteId: widget.site!.id,
+                      project: widget.site!.qfieldProjects.first,
+                      canWrite: !widget.readOnly,
+                      onSaved: () => context.read<SitesProvider>().fetchSites(
+                            includeWorkspace: context
+                                .read<SitesProvider>()
+                                .isWorkspaceMember,
+                          ),
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.map_rounded),
+              label: Text(l10n.t('pc_site_view_qfield_map')),
+            ),
+          ],
+          if (!widget.readOnly) ...[
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                l10n.t('pc_site_attach_qfield'),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+              subtitle: Text(
+                l10n.t('pc_site_attach_qfield_hint'),
+                style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11),
+              ),
+              value: _attachQfield,
+              activeThumbColor: const Color(0xFF6C63FF),
+              onChanged: (v) => setState(() => _attachQfield = v),
+            ),
+            if (_attachQfield)
+              OutlinedButton.icon(
+                onPressed: _uploadingQfield ? null : _pickQfield,
+                icon: _uploadingQfield
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.folder_zip_rounded),
+                label: Text(_qfieldFileName ?? l10n.t('pc_site_pick_qfield')),
+              ),
+          ],
           if (!widget.readOnly) ...[
             const SizedBox(height: 32),
             SizedBox(

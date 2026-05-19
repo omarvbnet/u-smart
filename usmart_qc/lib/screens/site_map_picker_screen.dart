@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/map_live_location.dart';
 
 /// Full-screen map to pick site coordinates.
 /// Returns [LatLng] on confirm, or null on cancel.
@@ -31,6 +32,11 @@ class _SiteMapPickerScreenState extends State<SiteMapPickerScreen> {
       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
 
   late final MapController _mapController;
+  late final MapLiveLocation _liveLoc = MapLiveLocation(
+    onPositionChanged: () {
+      if (mounted) setState(() {});
+    },
+  );
   LatLng? _selected;
 
   @override
@@ -40,6 +46,13 @@ class _SiteMapPickerScreenState extends State<SiteMapPickerScreen> {
     if (widget.initialLat != null && widget.initialLng != null) {
       _selected = LatLng(widget.initialLat!, widget.initialLng!);
     }
+    _liveLoc.start();
+  }
+
+  @override
+  void dispose() {
+    _liveLoc.stop();
+    super.dispose();
   }
 
   Future<void> _useMyLocation() async {
@@ -92,44 +105,60 @@ class _SiteMapPickerScreenState extends State<SiteMapPickerScreen> {
       body: Column(
         children: [
           Expanded(
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: center,
-                initialZoom: _selected != null ? 16 : 10,
-                onTap: (_, point) => setState(() => _selected = point),
-              ),
+            child: Stack(
               children: [
-                TileLayer(
-                  urlTemplate: _tileUrlTemplate,
-                  subdomains: _tileSubdomains,
-                  userAgentPackageName: 'usmart_qc',
-                  maxNativeZoom: 19,
-                ),
-                if (_selected != null)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: _selected!,
-                        width: 40,
-                        height: 40,
-                        child: const Icon(
-                          Icons.location_on,
-                          color: Color(0xFF6C63FF),
-                          size: 40,
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: _selected != null ? 16 : 10,
+                    onTap: (_, point) => setState(() => _selected = point),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: _tileUrlTemplate,
+                      subdomains: _tileSubdomains,
+                      userAgentPackageName: 'usmart_qc',
+                      maxNativeZoom: 19,
+                    ),
+                    ...buildUserLocationMapLayers(
+                      _liveLoc.position,
+                      _liveLoc.accuracyM,
+                    ),
+                    if (_selected != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _selected!,
+                            width: 40,
+                            height: 40,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Color(0xFF6C63FF),
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                    SimpleAttributionWidget(
+                      alignment: Alignment.bottomRight,
+                      backgroundColor: const Color(0xAA05051A),
+                      source: Text(
+                        l10n.t('site_map_attribution'),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
                         ),
                       ),
-                    ],
-                  ),
-                SimpleAttributionWidget(
-                  alignment: Alignment.bottomRight,
-                  backgroundColor: const Color(0xAA05051A),
-                  source: Text(
-                    l10n.t('site_map_attribution'),
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 10,
                     ),
+                  ],
+                ),
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: MapMyLocationButton(
+                    enabled: _liveLoc.hasPosition,
+                    onPressed: () => _liveLoc.moveMapToUser(_mapController, zoom: 16),
                   ),
                 ),
               ],

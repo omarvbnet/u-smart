@@ -545,6 +545,8 @@ model Site {
   province    String // province in Iraq
   latitude    Float?
   longitude   Float?
+  hasQfield   Boolean         @default(false)
+  qfieldProjects Json?
   requesterId String
   requester   TicketRequester @relation(fields: [requesterId], references: [id], onDelete: Cascade)
   shares      SiteShare[]

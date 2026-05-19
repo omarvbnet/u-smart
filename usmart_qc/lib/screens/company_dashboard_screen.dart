@@ -33,6 +33,8 @@ import '../widgets/site_share_dialog.dart';
 import '../widgets/site_bulk_import_menu.dart';
 import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../widgets/available_tickets_pool_tab.dart';
+import 'qfield_project_map_screen.dart';
+import '../widgets/workspace_site_detail_sheet.dart';
 import '../widgets/personal_company_upgrade_card.dart';
 import '../widgets/ticket_api_access_card.dart';
 import '../utils/account_deletion_ui.dart';
@@ -85,7 +87,9 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       futures.add(tickets.loadProvinceFilter());
     }
     if (!auth.isWorker) {
-      futures.add(context.read<SitesProvider>().fetchSites());
+      futures.add(context.read<SitesProvider>().fetchSites(
+            includeWorkspace: pc.canOpenPrivateWorkspace,
+          ));
     }
     if (!isTechnician && !auth.isWorker) {
       futures.add(context.read<ProvisorTechniquesProvider>().ensureLoaded());
@@ -1053,6 +1057,37 @@ class _SitesTabState extends State<_SitesTab> {
     super.dispose();
   }
 
+  Future<void> _reloadSites(SitesProvider provider) {
+    final pc = context.read<PrivateCompanyProvider>();
+    return provider.fetchSites(includeWorkspace: pc.canOpenPrivateWorkspace);
+  }
+
+  Future<void> _openAddSite(SitesProvider provider) async {
+    if (provider.canManageWorkspaceSites) {
+      await showWorkspaceSiteCreateSheet(context);
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SiteFormScreen()),
+      );
+    }
+    if (mounted) await _reloadSites(provider);
+  }
+
+  void _openSite(BuildContext context, Site site) {
+    if (site.isWorkspace && site.workspaceSiteId != null) {
+      showWorkspaceSiteDetailSheet(context, site.workspaceSiteId!);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SiteFormScreen(
+          site: site,
+          readOnly: !site.canEdit,
+        ),
+      ),
+    ).then((_) => _reloadSites(context.read<SitesProvider>()));
+  }
+
   static String _fmtSiteHours(double h) {
     if (h <= 0) return '0';
     return h < 1 ? h.toStringAsFixed(2) : h.toStringAsFixed(1);
@@ -1064,6 +1099,7 @@ class _SitesTabState extends State<_SitesTab> {
     Site site,
     AppLocalizations l10n,
   ) async {
+    if (site.isWorkspace) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1293,17 +1329,10 @@ class _SitesTabState extends State<_SitesTab> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              if (widget.allowCreateSite) ...[
+                              if (widget.allowCreateSite && provider.canAddSite) ...[
                                 const SizedBox(height: 24),
                                 ElevatedButton.icon(
-                                  onPressed: () => Navigator.of(context)
-                                      .push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              const SiteFormScreen(),
-                                        ),
-                                      )
-                                      .then((_) => provider.fetchSites()),
+                                  onPressed: () => _openAddSite(provider),
                                   icon: const Icon(Icons.add_rounded, size: 20),
                                   label: Text(l10n.t('site_add')),
                                   style: ElevatedButton.styleFrom(
@@ -1323,7 +1352,7 @@ class _SitesTabState extends State<_SitesTab> {
                           ),
                         )
                       : RefreshIndicator(
-                          onRefresh: provider.fetchSites,
+                          onRefresh: () => _reloadSites(provider),
                           color: const Color(0xFF6C63FF),
                           child: Builder(
                             builder: (context) {
@@ -1360,7 +1389,10 @@ class _SitesTabState extends State<_SitesTab> {
                             itemCount: visible.length,
                             itemBuilder: (context, index) {
                               final site = visible[index];
-                              return Container(
+                              return InkWell(
+                                onTap: () => _openSite(context, site),
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 14,
@@ -1508,7 +1540,35 @@ class _SitesTabState extends State<_SitesTab> {
                                           ),
                                           tooltip: l10n.t('site_create_ticket_here'),
                                         ),
-                                        if (site.canEdit) ...[
+                                        if (site.hasQfield &&
+                                            site.qfieldProjects.isNotEmpty) ...[
+                                          IconButton(
+                                            onPressed: () {
+                                              final proj = site.qfieldProjects.first;
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  fullscreenDialog: true,
+                                                  builder: (_) => QFieldProjectMapScreen(
+                                                    workspaceSiteId: site.isWorkspace
+                                                        ? site.workspaceSiteId
+                                                        : null,
+                                                    ownedSiteId: site.isWorkspace
+                                                        ? null
+                                                        : site.id,
+                                                    project: proj,
+                                                    canWrite: site.canEdit ||
+                                                        site.isWorkspace,
+                                                    onSaved: () => _reloadSites(provider),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(Icons.map_rounded,
+                                                color: Color(0xFF00D4AA), size: 20),
+                                            tooltip: l10n.t('pc_site_view_qfield_map'),
+                                          ),
+                                        ],
+                                        if (site.canEdit && !site.isWorkspace) ...[
                                           IconButton(
                                             onPressed: () => Navigator.of(
                                                     context)
@@ -1521,7 +1581,7 @@ class _SitesTabState extends State<_SitesTab> {
                                                 )
                                                 .then(
                                                   (_) =>
-                                                      provider.fetchSites(),
+                                                      _reloadSites(provider),
                                                 ),
                                             icon: const Icon(
                                               Icons.edit_rounded,
@@ -1573,7 +1633,7 @@ class _SitesTabState extends State<_SitesTab> {
                                                 )
                                                 .then(
                                                   (_) =>
-                                                      provider.fetchSites(),
+                                                      _reloadSites(provider),
                                                 ),
                                             icon: const Icon(
                                               Icons.visibility_rounded,
@@ -1627,7 +1687,8 @@ class _SitesTabState extends State<_SitesTab> {
                                     ),
                                   ],
                                 ),
-                              );
+                              ),
+                            );
                             },
                           );
                             },
@@ -1636,18 +1697,13 @@ class _SitesTabState extends State<_SitesTab> {
                 ),
               ],
             ),
-            if (widget.allowCreateSite)
+            if (widget.allowCreateSite && provider.canAddSite)
               Positioned(
                 right: 20,
                 bottom: 24,
                 child: FloatingActionButton(
                   heroTag: 'fab_new_site',
-                  onPressed: () => Navigator.of(context)
-                      .push(
-                        MaterialPageRoute(
-                            builder: (_) => const SiteFormScreen()),
-                      )
-                      .then((_) => provider.fetchSites()),
+                  onPressed: () => _openAddSite(provider),
                   backgroundColor: const Color(0xFF6C63FF),
                   child: const Icon(Icons.add_rounded, color: Colors.white),
                 ),

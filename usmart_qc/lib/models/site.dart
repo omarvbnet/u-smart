@@ -1,3 +1,5 @@
+import 'qfield_project.dart';
+
 class Site {
   final String id;
   final String siteId;
@@ -24,6 +26,11 @@ class Site {
   final String? ownerRequesterId;
   /// When receiving a shared site: whether the sharer granted ticket visibility (API).
   final bool shareIncludesTickets;
+  final bool isWorkspace;
+  final String? workspaceSiteId;
+  final bool hasQfield;
+  final List<QFieldProject> qfieldProjects;
+  final bool isWorkspacePending;
 
   Site({
     required this.id,
@@ -46,6 +53,11 @@ class Site {
     this.ownerUsername,
     this.ownerRequesterId,
     this.shareIncludesTickets = true,
+    this.isWorkspace = false,
+    this.workspaceSiteId,
+    this.hasQfield = false,
+    this.qfieldProjects = const [],
+    this.isWorkspacePending = false,
   });
 
   bool get hasCoordinates => latitude != null && longitude != null;
@@ -57,6 +69,7 @@ class Site {
     final canEdit = canEditRaw is bool ? canEditRaw : true;
     final sharedWithMe = sharedRaw is bool ? sharedRaw : false;
     final shareIncludesTickets = shareTkRaw is bool ? shareTkRaw : true;
+    final qRaw = json['qfieldProjects'];
 
     return Site(
       id: json['id'] as String,
@@ -83,6 +96,40 @@ class Site {
       ownerUsername: json['ownerUsername'] as String?,
       ownerRequesterId: json['ownerRequesterId'] as String?,
       shareIncludesTickets: shareIncludesTickets,
+      hasQfield: json['hasQfield'] == true,
+      qfieldProjects: qRaw is List
+          ? qRaw
+              .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : const [],
+    );
+  }
+
+  /// Private-company workspace site merged into the main Sites list.
+  factory Site.fromWorkspaceJson(Map<String, dynamic> json) {
+    final qRaw = json['qfieldProjects'];
+    final status = json['confirmationStatus'] as String? ?? 'CONFIRMED';
+    return Site(
+      id: 'ws-${json['id']}',
+      workspaceSiteId: json['id'] as String,
+      siteId: json['siteCode'] as String? ?? json['siteId'] as String? ?? '',
+      location: json['location'] as String? ?? '',
+      province: json['province'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      ticketCount: json['ticketCount'] as int? ?? 0,
+      inspectionQcCount: json['inspectionQcCount'] as int? ?? 0,
+      maintenanceQcCount: json['maintenanceQcCount'] as int? ?? 0,
+      sharedWithMe: false,
+      canEdit: json['canManage'] == true,
+      isWorkspace: true,
+      hasQfield: json['hasQfield'] == true,
+      qfieldProjects: qRaw is List
+          ? qRaw
+              .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : const [],
+      isWorkspacePending: status == 'PENDING',
     );
   }
 }

@@ -11,6 +11,7 @@ import '../models/ticket.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/coordinate_transform.dart';
+import '../utils/map_live_location.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/qfield_map_point_labels.dart';
 import '../utils/responsive_layout.dart';
@@ -132,6 +133,11 @@ class _QFieldDataTable {
 class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   final MapController _mapController = MapController();
   final TextEditingController _noteCtrl = TextEditingController();
+  late final MapLiveLocation _liveLoc = MapLiveLocation(
+    onPositionChanged: () {
+      if (mounted) setState(() {});
+    },
+  );
 
   static const _layerPalette = [
     Color(0xFF6C63FF),
@@ -168,10 +174,12 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
       }
     }
     _loadPreview();
+    _liveLoc.start();
   }
 
   @override
   void dispose() {
+    _liveLoc.stop();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -1463,6 +1471,10 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                                   PolygonLayer(polygons: _polygons()),
                                 if (_polylines().isNotEmpty)
                                   PolylineLayer(polylines: _polylines()),
+                                ...buildUserLocationMapLayers(
+                                  _liveLoc.position,
+                                  _liveLoc.accuracyM,
+                                ),
                                 MarkerLayer(
                                   markers: [
                                     ..._pointMarkers(),
@@ -1500,6 +1512,14 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                                   ),
                                 ),
                               ],
+                            ),
+                            Positioned(
+                              right: 10,
+                              bottom: 28,
+                              child: MapMyLocationButton(
+                                enabled: _liveLoc.hasPosition,
+                                onPressed: () => _liveLoc.moveMapToUser(_mapController),
+                              ),
                             ),
                             _mapFloatingControls(),
                           ],
