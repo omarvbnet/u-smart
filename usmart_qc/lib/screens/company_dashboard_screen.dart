@@ -33,8 +33,9 @@ import '../widgets/site_share_dialog.dart';
 import '../widgets/site_bulk_import_menu.dart';
 import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../widgets/available_tickets_pool_tab.dart';
-import 'qfield_project_map_screen.dart';
+import '../widgets/site_list_card.dart';
 import '../widgets/workspace_site_detail_sheet.dart';
+import '../utils/site_qfield_map.dart';
 import '../widgets/personal_company_upgrade_card.dart';
 import '../widgets/ticket_api_access_card.dart';
 import '../utils/account_deletion_ui.dart';
@@ -1389,306 +1390,58 @@ class _SitesTabState extends State<_SitesTab> {
                             itemCount: visible.length,
                             itemBuilder: (context, index) {
                               final site = visible[index];
-                              return InkWell(
+                              return SiteListCard(
+                                site: site,
+                                l10n: l10n,
+                                formatHours: _fmtSiteHours,
+                                formatDate: _formatDate,
                                 onTap: () => _openSite(context, site),
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFF18182C),
-                                      Color(0xFF12122A),
-                                    ],
+                                onCreateTicket: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => CreateTicketScreen(prefillSite: site),
                                   ),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Colors.white.withAlpha(20),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withAlpha(26),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
                                 ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            const Color(
-                                              0xFF6C63FF,
-                                            ).withAlpha(36),
-                                            const Color(
-                                              0xFF00D4AA,
-                                            ).withAlpha(18),
-                                          ],
-                                        ),
-                                        borderRadius:
-                                            BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.location_on_rounded,
-                                        color: Color(0xFF8B83FF),
-                                        size: 20,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            site.siteId,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                onOpenMap: site.canOpenQFieldMap
+                                    ? () => openSiteQFieldMap(
+                                          context,
+                                          site,
+                                          onSaved: () => _reloadSites(provider),
+                                        )
+                                    : null,
+                                onEdit: site.canEdit && !site.isWorkspace
+                                    ? () => Navigator.of(context)
+                                        .push(MaterialPageRoute(
+                                          builder: (_) => SiteFormScreen(site: site),
+                                        ))
+                                        .then((_) => _reloadSites(provider))
+                                    : null,
+                                onDelete: site.canEdit && !site.isWorkspace
+                                    ? () => _confirmDelete(
+                                          context, provider, site, l10n)
+                                    : null,
+                                onShare: site.canEdit && !site.isWorkspace
+                                    ? () => promptShareSite(
+                                          context: context,
+                                          provider: provider,
+                                          site: site,
+                                          l10n: l10n,
+                                        )
+                                    : null,
+                                onViewShared: site.sharedWithMe
+                                    ? () => Navigator.of(context)
+                                        .push(MaterialPageRoute(
+                                          builder: (_) => SiteFormScreen(
+                                            site: site,
+                                            readOnly: true,
                                           ),
-                                          if (site.sharedWithMe &&
-                                              site.ownerUsername != null &&
-                                              site.ownerUsername!.isNotEmpty) ...[
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              l10n.t(
-                                                'site_shared_badge',
-                                                {'owner': site.ownerUsername!},
-                                              ),
-                                              style: TextStyle(
-                                                color: Colors.amberAccent
-                                                    .withAlpha(230),
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${site.location} - ${site.province}',
-                                            style: TextStyle(
-                                              color: Colors.white.withAlpha(
-                                                100,
-                                              ),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            l10n.t('site_row_inspection', {
-                                              'n': '${site.inspectionQcCount}',
-                                              'h': _fmtSiteHours(
-                                                  site.inspectionHoursTotal),
-                                            }),
-                                            style: TextStyle(
-                                              color: Colors.white.withAlpha(60),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                          Text(
-                                            l10n.t('site_row_maintenance', {
-                                              'n': '${site.maintenanceQcCount}',
-                                              'h': _fmtSiteHours(
-                                                  site.maintenanceHoursTotal),
-                                            }),
-                                            style: TextStyle(
-                                              color: Colors.white.withAlpha(60),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                          if (site.updatedAt != null) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '${l10n.t('site_updated_on')} ${_formatDate(site.updatedAt!)}',
-                                              style: TextStyle(
-                                                color: Colors.white.withAlpha(
-                                                  50,
-                                                ),
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          onPressed: () => Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => CreateTicketScreen(
-                                                prefillSite: site,
-                                              ),
-                                            ),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.note_add_outlined,
-                                            color: Color(0xFF00D4AA),
-                                            size: 20,
-                                          ),
-                                          tooltip: l10n.t('site_create_ticket_here'),
-                                        ),
-                                        if (site.hasQfield &&
-                                            site.qfieldProjects.isNotEmpty) ...[
-                                          IconButton(
-                                            onPressed: () {
-                                              final proj = site.qfieldProjects.first;
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  fullscreenDialog: true,
-                                                  builder: (_) => QFieldProjectMapScreen(
-                                                    workspaceSiteId: site.isWorkspace
-                                                        ? site.workspaceSiteId
-                                                        : null,
-                                                    ownedSiteId: site.isWorkspace
-                                                        ? null
-                                                        : site.id,
-                                                    project: proj,
-                                                    canWrite: site.canEdit ||
-                                                        site.isWorkspace,
-                                                    onSaved: () => _reloadSites(provider),
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                            icon: const Icon(Icons.map_rounded,
-                                                color: Color(0xFF00D4AA), size: 20),
-                                            tooltip: l10n.t('pc_site_view_qfield_map'),
-                                          ),
-                                        ],
-                                        if (site.canEdit && !site.isWorkspace) ...[
-                                          IconButton(
-                                            onPressed: () => Navigator.of(
-                                                    context)
-                                                .push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        SiteFormScreen(
-                                                            site: site),
-                                                  ),
-                                                )
-                                                .then(
-                                                  (_) =>
-                                                      _reloadSites(provider),
-                                                ),
-                                            icon: const Icon(
-                                              Icons.edit_rounded,
-                                              color: Color(0xFF6C63FF),
-                                              size: 20,
-                                            ),
-                                            tooltip: l10n.t('site_edit'),
-                                          ),
-                                          IconButton(
-                                            onPressed: () => _confirmDelete(
-                                              context,
-                                              provider,
-                                              site,
-                                              l10n,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.delete_outline_rounded,
-                                              color: Color(0xFFFF4757),
-                                              size: 20,
-                                            ),
-                                            tooltip: l10n.t('site_delete'),
-                                          ),
-                                          IconButton(
-                                            onPressed: () => promptShareSite(
-                                              context: context,
-                                              provider: provider,
-                                              site: site,
-                                              l10n: l10n,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.person_add_alt_1_rounded,
-                                              color: Color(0xFF00D4AA),
-                                              size: 20,
-                                            ),
-                                            tooltip: l10n.t('site_share_title'),
-                                          ),
-                                        ] else ...[
-                                          IconButton(
-                                            onPressed: () => Navigator.of(
-                                                    context)
-                                                .push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        SiteFormScreen(
-                                                      site: site,
-                                                      readOnly: true,
-                                                    ),
-                                                  ),
-                                                )
-                                                .then(
-                                                  (_) =>
-                                                      _reloadSites(provider),
-                                                ),
-                                            icon: const Icon(
-                                              Icons.visibility_rounded,
-                                              color: Color(0xFF6C63FF),
-                                              size: 20,
-                                            ),
-                                            tooltip:
-                                                l10n.t('site_view_shared'),
-                                          ),
-                                          IconButton(
-                                            onPressed: () =>
-                                                _confirmRemoveShare(
-                                              context,
-                                              provider,
-                                              site,
-                                              l10n,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.link_off_rounded,
-                                              color: Color(0xFFFFA502),
-                                              size: 20,
-                                            ),
-                                            tooltip:
-                                                l10n.t('site_remove_share'),
-                                          ),
-                                        ],
-                                        const SizedBox(width: 4),
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: site.hasCoordinates
-                                                ? const Color(
-                                                    0xFF00D4AA,
-                                                  ).withAlpha(20)
-                                                : Colors.white.withAlpha(8),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            site.hasCoordinates
-                                                ? Icons.gps_fixed
-                                                : Icons.gps_off,
-                                            color: site.hasCoordinates
-                                                ? const Color(0xFF00D4AA)
-                                                : const Color(0xFF4B5563),
-                                            size: 18,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
+                                        ))
+                                        .then((_) => _reloadSites(provider))
+                                    : null,
+                                onRemoveShare: site.sharedWithMe
+                                    ? () => _confirmRemoveShare(
+                                          context, provider, site, l10n)
+                                    : null,
+                              );
                             },
                           );
                             },

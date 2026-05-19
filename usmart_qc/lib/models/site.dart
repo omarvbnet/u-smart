@@ -31,6 +31,7 @@ class Site {
   final bool hasQfield;
   final List<QFieldProject> qfieldProjects;
   final bool isWorkspacePending;
+  final String? createdByName;
 
   Site({
     required this.id,
@@ -58,9 +59,20 @@ class Site {
     this.hasQfield = false,
     this.qfieldProjects = const [],
     this.isWorkspacePending = false,
+    this.createdByName,
   });
 
   bool get hasCoordinates => latitude != null && longitude != null;
+
+  /// Usable QField project for map preview (non-empty file URL).
+  QFieldProject? get primaryQFieldProject {
+    for (final p in qfieldProjects) {
+      if (p.currentUrl.trim().isNotEmpty) return p;
+    }
+    return null;
+  }
+
+  bool get canOpenQFieldMap => hasQfield && primaryQFieldProject != null;
 
   factory Site.fromJson(Map<String, dynamic> json) {
     final canEditRaw = json['canEdit'];
@@ -100,8 +112,10 @@ class Site {
       qfieldProjects: qRaw is List
           ? qRaw
               .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+              .where((p) => p.currentUrl.trim().isNotEmpty)
               .toList()
           : const [],
+      createdByName: json['createdByName'] as String?,
     );
   }
 
@@ -127,9 +141,11 @@ class Site {
       qfieldProjects: qRaw is List
           ? qRaw
               .map((e) => QFieldProject.fromJson(e as Map<String, dynamic>))
+              .where((p) => p.currentUrl.trim().isNotEmpty)
               .toList()
           : const [],
       isWorkspacePending: status == 'PENDING',
+      createdByName: json['createdByName'] as String?,
     );
   }
 }

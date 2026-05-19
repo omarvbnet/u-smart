@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/api_config.dart';
 import '../models/workspace_site.dart';
+import '../providers/sites_provider.dart';
 import '../services/api_service.dart';
 
 class WorkspaceSitesProvider extends ChangeNotifier {
@@ -159,13 +160,6 @@ class WorkspaceSitesProvider extends ChangeNotifier {
     String url,
     String fileName, {
     String? title,
-  }) {
-    return [
-      {
-        'currentUrl': url,
-        'fileName': fileName,
-        if (title != null) 'title': title,
-      },
-    ];
-  }
+  }) =>
+      SitesProvider.qfieldProjectPayload(url, fileName, title: title);
 }

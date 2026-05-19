@@ -8,11 +8,11 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/qfield_map_note.dart';
 import '../models/qfield_project.dart';
+import '../models/site.dart';
 import '../models/ticket.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/sites_provider.dart';
-import '../providers/workspace_sites_provider.dart';
 import '../utils/map_live_location.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/qfield_map_point_labels.dart';
@@ -95,6 +95,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   final Map<String, Map<String, dynamic>> _propertyEdits = {};
   final Map<String, TextEditingController> _fieldCtrls = {};
   bool _saving = false;
+  String? _loadError;
 
   List<Marker> _cachedFeatureMarkers = const [];
   List<Marker> _cachedLabelMarkers = const [];
@@ -135,25 +136,41 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   }
 
   Future<void> _loadPreview() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     final Map<String, dynamic>? data;
-    if (widget.workspaceSiteId != null) {
-      data = await context.read<WorkspaceSitesProvider>().fetchQFieldMapPreview(
-            widget.workspaceSiteId!,
-            widget.project.id,
-          );
-    } else if (widget.ownedSiteId != null) {
-      data = await context.read<SitesProvider>().fetchSiteQFieldMapPreview(
-            widget.ownedSiteId!,
-            widget.project.id,
+    final projectId = widget.project.id.trim();
+    if (widget.workspaceSiteId != null || widget.ownedSiteId != null) {
+      final site = Site(
+        id: widget.ownedSiteId ?? 'ws-${widget.workspaceSiteId}',
+        workspaceSiteId: widget.workspaceSiteId,
+        siteId: widget.project.title,
+        location: '',
+        province: '',
+        isWorkspace: widget.workspaceSiteId != null,
+      );
+      data = await context.read<SitesProvider>().fetchQFieldMapPreviewForSite(
+            site,
+            projectId: projectId.isNotEmpty ? projectId : null,
           );
     } else {
       data = await context.read<TicketsProvider>().fetchQFieldMapPreview(
             widget.ticketId!,
-            widget.project.id,
+            projectId.isNotEmpty ? projectId : widget.project.id,
           );
     }
     if (!mounted) return;
+
+    if (data == null || data['success'] != true) {
+      setState(() {
+        _loading = false;
+        _loadError = data?['message'] as String? ??
+            'Could not load QField map layers.';
+      });
+      return;
+    }
 
     Map<String, dynamic>? gj;
     Map<String, double>? b;
@@ -165,7 +182,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     int? defaultCrs;
     final layerCrs = <String, int>{};
 
-    if (data != null && data['success'] == true) {
+    {
       final rawDefaultCrs = data['defaultCrsEpsg'];
       if (rawDefaultCrs is num) defaultCrs = rawDefaultCrs.toInt();
       final g = data['geojson'];
@@ -1123,6 +1140,30 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
         children: [
           if (_loading)
             const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+          else if (_loadError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.map_outlined, size: 48, color: Colors.white.withAlpha(120)),
+                    const SizedBox(height: 12),
+                    Text(
+                      _loadError!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _loadPreview,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Try again'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else
             RepaintBoundary(
               child: FlutterMap(

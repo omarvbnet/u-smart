@@ -233,6 +233,8 @@ export async function GET(req: NextRequest) {
                 province: sh.site.province,
                 latitude: sh.site.latitude ?? null,
                 longitude: sh.site.longitude ?? null,
+                hasQfield: sh.site.hasQfield === true,
+                qfieldProjects: sh.site.qfieldProjects,
                 createdAt: sh.site.createdAt,
                 updatedAt: sh.site.updatedAt,
               };

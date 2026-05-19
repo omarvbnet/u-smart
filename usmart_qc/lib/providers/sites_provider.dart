@@ -117,14 +117,19 @@ class SitesProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<Map<String, dynamic>?> fetchSiteQFieldMapPreview(
-    String siteId,
-    String projectId,
-  ) async {
+  Future<Map<String, dynamic>?> fetchQFieldMapPreviewForSite(
+    Site site, {
+    String? projectId,
+  }) async {
     try {
-      return await _api.get(
-        '${ApiConfig.siteDetail(siteId)}/qfield-map-preview?projectId=$projectId',
-      );
+      final pid = projectId?.trim() ?? '';
+      final base = site.isWorkspace && site.workspaceSiteId != null
+          ? ApiConfig.privateCompanySiteDetail(site.workspaceSiteId!)
+          : ApiConfig.siteDetail(site.isWorkspace ? site.workspaceSiteId! : site.id);
+      final path = pid.isNotEmpty
+          ? '$base/qfield-map-preview?projectId=${Uri.encodeComponent(pid)}'
+          : '$base/qfield-map-preview';
+      return await _api.get(path);
     } catch (_) {
       return null;
     }
@@ -135,10 +140,14 @@ class SitesProvider extends ChangeNotifier {
     String fileName, {
     String? title,
   }) {
+    final now = DateTime.now().toUtc().toIso8601String();
     return [
       {
+        'id': 'qfp_${DateTime.now().millisecondsSinceEpoch}',
         'currentUrl': url,
         'fileName': fileName,
+        'createdAt': now,
+        'updatedAt': now,
         if (title != null) 'title': title,
       },
     ];

@@ -7,7 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
-import 'qfield_project_map_screen.dart';
+import '../utils/site_qfield_map.dart';
 import 'site_map_picker_screen.dart';
 
 /// Screen for adding a new site or editing an existing one.
@@ -308,28 +308,17 @@ class _SiteFormScreenState extends State<SiteFormScreen> {
                 ),
               ),
             ),
-          if (widget.isEditing &&
-              widget.site!.hasQfield &&
-              widget.site!.qfieldProjects.isNotEmpty) ...[
+          if (widget.isEditing && widget.site!.canOpenQFieldMap) ...[
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    fullscreenDialog: true,
-                    builder: (_) => QFieldProjectMapScreen(
-                      ownedSiteId: widget.site!.id,
-                      project: widget.site!.qfieldProjects.first,
-                      canWrite: !widget.readOnly,
-                      onSaved: () => context.read<SitesProvider>().fetchSites(
-                            includeWorkspace: context
-                                .read<SitesProvider>()
-                                .isWorkspaceMember,
-                          ),
+              onPressed: () => openSiteQFieldMap(
+                context,
+                widget.site!,
+                onSaved: () => context.read<SitesProvider>().fetchSites(
+                      includeWorkspace:
+                          context.read<SitesProvider>().isWorkspaceMember,
                     ),
-                  ),
-                );
-              },
+              ),
               icon: const Icon(Icons.map_rounded),
               label: Text(l10n.t('pc_site_view_qfield_map')),
             ),

@@ -124,6 +124,8 @@ const Map<String, String> _en = {
   'qc_tickets': 'QC tickets',
   'site_row_inspection': 'Inspections: {{n}} · {{h}} h',
   'site_row_maintenance': 'Maintenance: {{n}} · {{h}} h',
+  'site_added_by': 'Added by {{name}}',
+  'pc_site_map_load_failed': 'Could not load QField map. Check the file is attached and try again.',
   'sla_compliance': 'SLA Compliance',
   'company_insights': 'Company workspace',
   'coordinator_insights_empty':
@@ -1185,6 +1187,8 @@ const Map<String, String> _ar = {
   'qc_tickets': 'تذاكر ضبط الجودة',
   'site_row_inspection': 'الفحص: {{n}} · {{h}} س',
   'site_row_maintenance': 'الصيانة: {{n}} · {{h}} س',
+  'site_added_by': 'أضيف بواسطة {{name}}',
+  'pc_site_map_load_failed': 'تعذر تحميل خريطة QField. تحقق من إرفاق الملف وحاول مرة أخرى.',
   'sla_compliance': 'الامتثال لـ SLA',
   'company_insights': 'مساحة عمل الشركة',
   'coordinator_insights_empty':
@@ -2194,6 +2198,8 @@ const Map<String, String> _ku = {
   'qc_tickets': 'تیکێتی کوالیتی',
   'site_row_inspection': 'پشکنین: {{n}} · {{h}} ک',
   'site_row_maintenance': 'پاراستن: {{n}} · {{h}} ک',
+  'site_added_by': 'زیادکراوە لەلایەن {{name}}',
+  'pc_site_map_load_failed': 'نەتوانرا نەخشەی QField بار بکرێت. پشکنینی پەڕگەکە بکە و دووبارە هەوڵ بدەرەوە.',
   'sla_compliance': 'گوێرانی SLA',
   'company_insights': 'شوێنی کارکردنی کۆمپانیا',
   'coordinator_insights_empty':
@@ -3218,6 +3224,8 @@ const Map<String, String> _tr = {
   'qc_tickets': 'Kalite biletleri',
   'site_row_inspection': 'Denetimler: {{n}} · {{h}} s',
   'site_row_maintenance': 'Bakım: {{n}} · {{h}} s',
+  'site_added_by': '{{name}} tarafından eklendi',
+  'pc_site_map_load_failed': 'QField haritası yüklenemedi. Dosyanın eklendiğini kontrol edip tekrar deneyin.',
   'sla_compliance': 'SLA Uyumu',
   'company_insights': 'Şirket çalışma alanı',
   'coordinator_insights_empty':

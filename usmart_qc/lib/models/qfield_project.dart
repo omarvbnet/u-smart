@@ -88,8 +88,13 @@ class QFieldProject {
 
   factory QFieldProject.fromJson(Map<String, dynamic> json) {
     final revs = json['revisions'];
+    final url = json['currentUrl'] as String? ?? '';
+    var id = json['id'] as String? ?? '';
+    if (id.trim().isEmpty && url.isNotEmpty) {
+      id = 'qfp_${url.hashCode.abs()}';
+    }
     return QFieldProject(
-      id: json['id'] as String? ?? '',
+      id: id,
       title: json['title'] as String? ?? '',
       description: json['description'] as String?,
       currentUrl: json['currentUrl'] as String? ?? '',

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/site.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/workspace_sites_provider.dart';
-import '../screens/qfield_project_map_screen.dart';
+import '../utils/site_qfield_map.dart';
 import '../screens/ticket_detail_screen.dart';
 import 'workspace_site_form_sheet.dart';
 
@@ -62,9 +63,6 @@ Future<void> showWorkspaceSiteDetailSheet(
               }
 
               final s = currentSite;
-              final pc = context.read<PrivateCompanyProvider>();
-              final canWriteMap = pc.canProposeSiteChanges || pc.canManageSites;
-
               return ListView(
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -126,23 +124,35 @@ Future<void> showWorkspaceSiteDetailSheet(
                       ),
                     ],
                   ),
-                  if (s.hasQfield && s.qfieldProjects.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            fullscreenDialog: true,
-                            builder: (_) => QFieldProjectMapScreen(
-                              workspaceSiteId: s.id,
-                              project: s.qfieldProjects.first,
-                              canWrite: canWriteMap,
-                              onSaved: () => provider.fetchSites(),
-                            ),
-                          ),
-                        );
-                      },
+                    if (s.hasQfield && s.qfieldProjects.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          final site = Site.fromWorkspaceJson({
+                            'id': s.id,
+                            'siteCode': s.siteCode,
+                            'location': s.location,
+                            'province': s.province,
+                            'hasQfield': s.hasQfield,
+                            'qfieldProjects': s.qfieldProjects
+                                .map((p) => {
+                                      'id': p.id,
+                                      'title': p.title,
+                                      'currentUrl': p.currentUrl,
+                                      'fileName': p.fileName,
+                                      'createdAt': p.createdAt,
+                                      'updatedAt': p.updatedAt,
+                                    })
+                                .toList(),
+                            'createdByName': s.createdByName,
+                          });
+                          openSiteQFieldMap(
+                            context,
+                            site,
+                            onSaved: () => provider.fetchSites(),
+                          );
+                        },
                       icon: const Icon(Icons.map_rounded, size: 18),
                       label: Text(l10n.t('pc_site_view_qfield_map')),
                       style: OutlinedButton.styleFrom(

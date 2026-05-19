@@ -17,11 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id: siteId } = await params;
   const projectId = req.nextUrl.searchParams.get('projectId')?.trim() ?? '';
-  if (!siteId || !projectId) {
-    return NextResponse.json(
-      { success: false, message: 'Site id and projectId are required.' },
-      { status: 400 }
-    );
+  if (!siteId) {
+    return NextResponse.json({ success: false, message: 'Site id is required.' }, { status: 400 });
   }
 
   const row = await prisma.privateCompanySite.findFirst({
@@ -33,7 +30,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const projects = parseQFieldProjectsFromCompanyJson({ qfieldProjects: row.qfieldProjects });
-  const proj = projects.find((p) => p.id === projectId);
+  let proj = projectId ? projects.find((p) => p.id === projectId) : undefined;
+  if (!proj && projects.length === 1) proj = projects[0];
+  if (!proj && projects.length > 0 && !projectId) proj = projects[0];
   if (!proj) {
     return NextResponse.json({ success: false, message: 'QField project not found.' }, { status: 404 });
   }
