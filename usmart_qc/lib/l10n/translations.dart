@@ -443,6 +443,8 @@ const Map<String, String> _en = {
   'qfield_map_note_hint': 'Note for this map pin (optional)',
   'qfield_map_add_comment': 'Add map comment',
   'qfield_map_add_comment_hint': 'Tap the map where you want to place a comment',
+  'qfield_map_long_press_comment_hint':
+      'Press and hold on the map (on any layer) to add a shared comment at that spot.',
   'qfield_map_comment_dialog_title': 'Map comment',
   'qfield_map_comment_dialog_hint': 'Write a note for all staff…',
   'qfield_map_comment_post': 'Post comment',
@@ -1417,6 +1419,8 @@ const Map<String, String> _ar = {
   'qfield_map_note_hint': 'ملاحظة للدبوس (اختياري)',
   'qfield_map_add_comment': 'إضافة تعليق على الخريطة',
   'qfield_map_add_comment_hint': 'اضغط على الخريطة لوضع تعليق',
+  'qfield_map_long_press_comment_hint':
+      'اضغط مطولاً على الخريطة (على أي طبقة) لإضافة تعليق مشترك في ذلك الموضع.',
   'qfield_map_comment_dialog_title': 'تعليق على الخريطة',
   'qfield_map_comment_dialog_hint': 'اكتب ملاحظة لجميع الموظفين…',
   'qfield_map_comment_post': 'نشر التعليق',
@@ -2425,6 +2429,8 @@ const Map<String, String> _ku = {
   'qfield_map_note_hint': 'تێبینی پین (ئارەزوومەندانە)',
   'qfield_map_add_comment': 'زیادکردنی لێدوان لەسەر نەخشە',
   'qfield_map_add_comment_hint': 'بۆ دانانی لێدوان لەسەر نەخشە دابگرە',
+  'qfield_map_long_press_comment_hint':
+      'بۆ زیادکردنی لێدوان لە هەمان شوێن، بە درێژی لەسەر نەخشە (هەر چینێک) دابگرە.',
   'qfield_map_comment_dialog_title': 'لێدوان لەسەر نەخشە',
   'qfield_map_comment_dialog_hint': 'تێبینی بۆ هەموو کارمەندان بنووسە…',
   'qfield_map_comment_post': 'بڵاوکردنەوە',
@@ -3443,6 +3449,8 @@ const Map<String, String> _tr = {
   'qfield_map_note_hint': 'Pin notu (isteğe bağlı)',
   'qfield_map_add_comment': 'Haritaya yorum ekle',
   'qfield_map_add_comment_hint': 'Yorum yerleştirmek için haritaya dokunun',
+  'qfield_map_long_press_comment_hint':
+      'O noktaya paylaşılan yorum eklemek için haritada (herhangi bir katmanda) basılı tutun.',
   'qfield_map_comment_dialog_title': 'Harita yorumu',
   'qfield_map_comment_dialog_hint': 'Tüm personel için bir not yazın…',
   'qfield_map_comment_post': 'Yorumu paylaş',

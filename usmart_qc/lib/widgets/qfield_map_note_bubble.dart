@@ -1,4 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' hide Path;
+
+import '../models/qfield_map_note.dart';
+
+String qfieldMapNotePreview(String text, {int max = 72}) {
+  final t = text.trim();
+  if (t.length <= max) return t;
+  return '${t.substring(0, max - 1)}…';
+}
+
+/// All shared map comments as tappable black bubbles (stacked when co-located).
+List<Marker> buildQFieldMapNoteMarkers({
+  required List<QFieldMapNote> notes,
+  required void Function(QFieldMapNote note) onNoteTap,
+}) {
+  final grouped = <String, List<QFieldMapNote>>{};
+  for (final note in notes) {
+    final key =
+        '${note.latitude.toStringAsFixed(5)}|${note.longitude.toStringAsFixed(5)}';
+    grouped.putIfAbsent(key, () => []).add(note);
+  }
+
+  final out = <Marker>[];
+  for (final notesAtPoint in grouped.values) {
+    for (var i = 0; i < notesAtPoint.length; i++) {
+      final note = notesAtPoint[i];
+      final dx = (i % 3) * 8.0 - (notesAtPoint.length > 1 ? 8.0 : 0);
+      final dy = (i ~/ 3) * 10.0;
+      out.add(
+        Marker(
+          point: LatLng(note.latitude, note.longitude),
+          width: 148,
+          height: 76,
+          alignment: Alignment.bottomCenter,
+          child: Transform.translate(
+            offset: Offset(dx, -dy),
+            child: QFieldMapNoteBubble(
+              authorName: note.authorLabel,
+              previewText: qfieldMapNotePreview(note.note),
+              onTap: () => onNoteTap(note),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+  return out;
+}
 
 /// On-map comment chip: black box, engineer name + note preview.
 class QFieldMapNoteBubble extends StatelessWidget {

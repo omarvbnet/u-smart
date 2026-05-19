@@ -186,15 +186,48 @@ class QFieldMapPointLabel extends StatelessWidget {
     required this.text,
     this.highlighted = false,
     this.closureCircle = false,
+    this.cabinetBox = false,
   });
 
   final String text;
   final bool highlighted;
   /// Small red circle + white text (closures / ODF).
   final bool closureCircle;
+  /// Slightly larger box with CAB_ID inside (passive cabinet).
+  final bool cabinetBox;
 
   @override
   Widget build(BuildContext context) {
+    if (cabinetBox) {
+      return Container(
+        constraints: const BoxConstraints(minWidth: 44, maxWidth: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        decoration: BoxDecoration(
+          color: highlighted ? const Color(0xFF6C63FF) : const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(
+            color: highlighted ? Colors.white : const Color(0xFFE53935),
+            width: 1.6,
+          ),
+          boxShadow: const [
+            BoxShadow(color: Color(0x88000000), blurRadius: 3, offset: Offset(0, 1)),
+          ],
+        ),
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+            height: 1.05,
+          ),
+        ),
+      );
+    }
+
     if (closureCircle) {
       return Container(
         width: 26,

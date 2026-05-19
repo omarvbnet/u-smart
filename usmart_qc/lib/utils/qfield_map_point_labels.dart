@@ -4,7 +4,122 @@ import 'package:flutter_map/flutter_map.dart';
 import '../widgets/qfield_map_symbols.dart';
 import 'qfield_map_features.dart';
 
-/// Builds on-map ID labels (handhole / hole / closure circle / FAT text).
+/// Label placement for one map point feature.
+class QFieldPointLabelSpec {
+  const QFieldPointLabelSpec({
+    required this.text,
+    this.textOnly = false,
+    this.closureCircle = false,
+    this.cabinetBox = false,
+  });
+
+  final String text;
+  final bool textOnly;
+  final bool closureCircle;
+  final bool cabinetBox;
+}
+
+/// Resolve which labels to show for a layer / properties bundle.
+List<QFieldPointLabelSpec> qfieldPointLabelSpecs({
+  required Map<String, dynamic> props,
+  required String? layerName,
+}) {
+  final labels = <QFieldPointLabelSpec>[];
+
+  if (isPoleLayerName(layerName)) {
+    final t = poleFatLabel(props);
+    if (t != null && t.isNotEmpty) {
+      labels.add(QFieldPointLabelSpec(text: t, textOnly: true));
+    }
+    return labels;
+  }
+
+  if (!shouldShowMapLabel(layerName)) return labels;
+
+  if (isHandholeLayerName(layerName)) {
+    final hh = handholeIdFromProperties(props);
+    final hole = holeIdFromProperties(props);
+    if (hh != null && hh.isNotEmpty) {
+      labels.add(QFieldPointLabelSpec(text: hh, textOnly: true));
+    }
+    if (hole != null &&
+        hole.isNotEmpty &&
+        hole.toLowerCase() != (hh ?? '').toLowerCase()) {
+      labels.add(QFieldPointLabelSpec(text: hole, textOnly: true));
+    }
+    if (handholeContainsClosure(props)) {
+      final closureId = closureOrOdfIdFromProperties(props);
+      if (closureId != null && closureId.isNotEmpty) {
+        labels.add(QFieldPointLabelSpec(text: closureId, closureCircle: true));
+      }
+    }
+    if (labels.isEmpty) {
+      final fallback = mapLabelForFeature(props, layerName);
+      if (fallback != null && fallback.isNotEmpty) {
+        labels.add(QFieldPointLabelSpec(text: fallback, textOnly: true));
+      }
+    }
+    return labels;
+  }
+
+  if (isHoleLayerName(layerName)) {
+    final hole = holeIdFromProperties(props);
+    if (hole != null && hole.isNotEmpty) {
+      labels.add(QFieldPointLabelSpec(text: hole, textOnly: true));
+    }
+    return labels;
+  }
+
+  if (isPassiveCabinetLayerName(layerName)) {
+    final cab = cabIdFromProperties(props);
+    if (cab != null && cab.isNotEmpty) {
+      labels.add(QFieldPointLabelSpec(text: cab, cabinetBox: true));
+    }
+    return labels;
+  }
+
+  if (useClosureCircleMapLabel(layerName)) {
+    final t = closureOrOdfIdFromProperties(props);
+    if (t != null && t.isNotEmpty) {
+      labels.add(QFieldPointLabelSpec(text: t, closureCircle: true));
+    }
+    return labels;
+  }
+
+  if (isFdtFatLayerName(layerName) && !isFdtFatClosureLayerName(layerName)) {
+    final fatId = fatIdFromProperties(props);
+    if (fatId != null && fatId.isNotEmpty) {
+      labels.add(QFieldPointLabelSpec(text: fatId, textOnly: true));
+    }
+    if (handholeContainsClosure(props)) {
+      final closureId = closureOrOdfIdFromProperties(props);
+      if (closureId != null && closureId.isNotEmpty) {
+        labels.add(QFieldPointLabelSpec(text: closureId, closureCircle: true));
+      }
+    }
+    return labels;
+  }
+
+  final t = mapLabelForFeature(props, layerName);
+  if (t != null && t.isNotEmpty) {
+    labels.add(QFieldPointLabelSpec(text: t, textOnly: true));
+  }
+  return labels;
+}
+
+double _labelWidth(QFieldPointLabelSpec spec) {
+  if (spec.cabinetBox) return 64;
+  if (spec.closureCircle) return 26;
+  return 50;
+}
+
+double _labelHeight(QFieldPointLabelSpec spec) {
+  if (spec.cabinetBox) return 30;
+  if (spec.closureCircle) return 26;
+  return 22;
+}
+
+/// Builds on-map ID labels (handhole / hole / closure / CAB box / FAT text).
 List<Marker> buildQFieldPointLabelMarkers({
   required List<QFieldMapFeature> features,
   required bool Function(QFieldMapFeature f) isHighlighted,
@@ -15,72 +130,13 @@ List<Marker> buildQFieldPointLabelMarkers({
     if (f.points.isEmpty) continue;
     final layerName = layerNameFor(f);
     final hi = isHighlighted(f);
-    final props = f.properties;
+    final labels = qfieldPointLabelSpecs(props: f.properties, layerName: layerName);
 
-    final labels = <_LabelSpec>[];
-
-    if (isPoleLayerName(layerName)) {
-      final t = poleFatLabel(props);
-      if (t != null && t.isNotEmpty) {
-        labels.add(_LabelSpec(text: t, textOnly: true));
-      }
-    } else if (shouldShowMapLabel(layerName)) {
-      if (isHandholeLayerName(layerName)) {
-        final hh = handholeIdFromProperties(props);
-        final hole = holeIdFromProperties(props);
-        if (hh != null && hh.isNotEmpty) {
-          labels.add(_LabelSpec(text: hh, textOnly: true));
-        }
-        if (hole != null &&
-            hole.isNotEmpty &&
-            hole.toLowerCase() != (hh ?? '').toLowerCase()) {
-          labels.add(_LabelSpec(text: hole, textOnly: true));
-        }
-        if (handholeContainsClosure(props)) {
-          final closureId = closureOrOdfIdFromProperties(props);
-          if (closureId != null && closureId.isNotEmpty) {
-            labels.add(_LabelSpec(text: closureId, closureCircle: true));
-          }
-        }
-        if (labels.isEmpty) {
-          final fallback = mapLabelForFeature(props, layerName);
-          if (fallback != null && fallback.isNotEmpty) {
-            labels.add(_LabelSpec(text: fallback, textOnly: true));
-          }
-        }
-      } else if (isHoleLayerName(layerName)) {
-        final hole = holeIdFromProperties(props);
-        if (hole != null && hole.isNotEmpty) {
-          labels.add(_LabelSpec(text: hole, textOnly: true));
-        }
-      } else if (useClosureCircleMapLabel(layerName)) {
-        final t = closureOrOdfIdFromProperties(props);
-        if (t != null && t.isNotEmpty) {
-          labels.add(_LabelSpec(text: t, closureCircle: true));
-        }
-      } else if (isFdtFatLayerName(layerName) && !isFdtFatClosureLayerName(layerName)) {
-        final closureId = closureOrOdfIdFromProperties(props);
-        if (closureId != null && closureId.isNotEmpty) {
-          labels.add(_LabelSpec(text: closureId, closureCircle: true));
-        }
-        final cab = cabIdFromProperties(props);
-        if (cab != null && cab.isNotEmpty) {
-          labels.add(_LabelSpec(text: cab, textOnly: true));
-        }
-      } else {
-        final t = mapLabelForFeature(props, layerName) ?? f.label;
-        if (t != null && t.isNotEmpty) {
-          labels.add(_LabelSpec(text: t, textOnly: true));
-        }
-      }
-    }
-
-    var stack = 0.0;
     for (final pt in f.points) {
-      stack = 0;
+      var stack = 0.0;
       for (final spec in labels) {
-        final h = spec.closureCircle ? 26.0 : 22.0;
-        final w = spec.closureCircle ? 26.0 : 50.0;
+        final h = _labelHeight(spec);
+        final w = _labelWidth(spec);
         out.add(
           Marker(
             point: pt,
@@ -93,6 +149,7 @@ List<Marker> buildQFieldPointLabelMarkers({
                 text: spec.text,
                 highlighted: hi,
                 closureCircle: spec.closureCircle,
+                cabinetBox: spec.cabinetBox,
               ),
             ),
           ),
@@ -102,16 +159,4 @@ List<Marker> buildQFieldPointLabelMarkers({
     }
   }
   return out;
-}
-
-class _LabelSpec {
-  const _LabelSpec({
-    required this.text,
-    this.textOnly = false,
-    this.closureCircle = false,
-  });
-
-  final String text;
-  final bool textOnly;
-  final bool closureCircle;
 }

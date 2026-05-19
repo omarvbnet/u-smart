@@ -11,6 +11,7 @@ import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/coordinate_transform.dart';
 import '../utils/qfield_map_features.dart';
+import '../utils/qfield_map_point_labels.dart';
 import '../utils/responsive_layout.dart';
 import 'qfield_map_symbols.dart';
 
@@ -788,12 +789,6 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     return out;
   }
 
-  String _notePreview(String text) {
-    final t = text.trim();
-    if (t.length <= 72) return t;
-    return '${t.substring(0, 72)}…';
-  }
-
   void _showMapNoteDetails(QFieldMapNote note) {
     final l10n = AppLocalizations.of(context);
     showModalBottomSheet<void>(
@@ -832,22 +827,10 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     );
   }
 
-  List<Marker> _mapNoteMarkers() {
-    return [
-      for (final note in _mapNotes)
-        Marker(
-          point: LatLng(note.latitude, note.longitude),
-          width: 140,
-          height: 72,
-          alignment: Alignment.bottomCenter,
-          child: QFieldMapNoteBubble(
-            authorName: note.authorLabel,
-            previewText: _notePreview(note.note),
-            onTap: () => _showMapNoteDetails(note),
-          ),
-        ),
-    ];
-  }
+  List<Marker> _mapNoteMarkers() => buildQFieldMapNoteMarkers(
+        notes: _mapNotes,
+        onNoteTap: _showMapNoteDetails,
+      );
 
   List<Marker> _pointMarkers() {
     final out = <Marker>[];
@@ -880,22 +863,34 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                 child: QFieldMapPointIcon(layerName: layerName),
               ));
               if (shouldShowMapLabel(layerName)) {
-                final text = mapLabelForFeature(props, layerName);
-                if (text != null && text.isNotEmpty) {
-                  final closureCircle = useClosureCircleMapLabel(layerName);
+                final specs = qfieldPointLabelSpecs(props: props, layerName: layerName);
+                var stack = 0.0;
+                for (final spec in specs) {
+                  final h = spec.cabinetBox
+                      ? 30.0
+                      : spec.closureCircle
+                          ? 26.0
+                          : 22.0;
+                  final w = spec.cabinetBox
+                      ? 64.0
+                      : spec.closureCircle
+                          ? 26.0
+                          : 50.0;
                   out.add(Marker(
                     point: pt,
-                    width: closureCircle ? 28 : 50,
-                    height: closureCircle ? 28 : 22,
+                    width: w,
+                    height: h,
                     alignment: Alignment.bottomCenter,
                     child: Transform.translate(
-                      offset: Offset(0, closureCircle ? -28 : -22),
+                      offset: Offset(0, -(stack + h)),
                       child: QFieldMapPointLabel(
-                        text: text,
-                        closureCircle: closureCircle,
+                        text: spec.text,
+                        closureCircle: spec.closureCircle,
+                        cabinetBox: spec.cabinetBox,
                       ),
                     ),
                   ));
+                  stack += h + 2;
                 }
               }
             }

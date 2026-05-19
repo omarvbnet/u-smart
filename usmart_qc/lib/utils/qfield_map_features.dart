@@ -279,8 +279,12 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
     return holeIdFromProperties(props) ??
         _propValue(props, ['id', 'name', 'label', 'code']);
   }
+  if (isPassiveCabinetLayerName(layerName)) {
+    return cabIdFromProperties(props);
+  }
   if ((n.contains('fat') || n.contains('fdt')) && !n.contains('region')) {
-    return cabIdFromProperties(props) ??
+    return fatIdFromProperties(props) ??
+        cabIdFromProperties(props) ??
         _propValue(props, [
           'fat_no',
           'fatno',
@@ -296,7 +300,7 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
           'code',
         ]);
   }
-  if (n.contains('closure') || n.contains('cabinet') || n.contains('odf')) {
+  if (n.contains('closure') || n.contains('odf')) {
     return closureOrOdfIdFromProperties(props);
   }
   if (isFdtFatClosureLayerName(layerName)) {
@@ -318,10 +322,18 @@ bool isPoleLayerName(String? layerName) {
   return n.contains('pole') || n.contains('utilitypole') || n.contains('supportstructure');
 }
 
+bool isPassiveCabinetLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'[\s_]+'), '');
+  return n.contains('passivecabinet') ||
+      n == 'passive_cabinet' ||
+      (n.contains('passive') && n.contains('cabinet'));
+}
+
 bool isClosureLayerName(String? layerName) {
+  if (isPassiveCabinetLayerName(layerName)) return false;
   final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   if (n.contains('handhole') || n == 'hh') return false;
-  return n.contains('closure') || n.contains('cabinet') || n.contains('odf');
+  return n.contains('closure') || n.contains('odf');
 }
 
 bool isFdtFatLayerName(String? layerName) {
@@ -374,12 +386,16 @@ String holeIdDisplayLabel(String? rawPropertyKey, {String fallback = 'Hole ID'})
 
 bool shouldShowMapLabel(String? layerName) {
   if (isPoleLayerName(layerName)) return false;
+  if (isPassiveCabinetLayerName(layerName)) return true;
   if (isFdtFatLayerName(layerName)) return true;
   if (isClosureLayerName(layerName)) return true;
   if (isHandholeLayerName(layerName)) return true;
   if (isHoleLayerName(layerName)) return true;
   return false;
 }
+
+/// CAB_ID inside a slightly larger on-map box (passive cabinet layers).
+bool useCabinetBoxMapLabel(String? layerName) => isPassiveCabinetLayerName(layerName);
 
 /// Text-only on-map label (FAT / handhole / pole→FAT ref).
 bool useCompactMapLabel(String? layerName) {
@@ -400,6 +416,7 @@ bool useClosureBoxMapLabel(String? layerName) => useClosureCircleMapLabel(layerN
 String? cabIdFromProperties(Map<String, dynamic> props) {
   return _propValue(props, [
     'cab_id',
+    'CAB_ID',
     'cabid',
     'cab_no',
     'cabno',
@@ -412,9 +429,10 @@ String? cabIdFromProperties(Map<String, dynamic> props) {
 
 String? fatIdFromProperties(Map<String, dynamic> props) {
   return _propValue(props, [
+    'fat_id',
+    'FAT_ID',
     'fat_no',
     'fatno',
-    'fat_id',
     'fatid',
     'fat_number',
     'fat_num',
@@ -709,6 +727,14 @@ String featureTapListTitle(QFieldMapFeature f) {
   if (isHoleLayerName(layer)) {
     final holeId = holeIdFromProperties(f.properties);
     if (holeId != null && holeId.isNotEmpty) return holeId;
+  }
+  if (isPassiveCabinetLayerName(layer)) {
+    final cab = cabIdFromProperties(f.properties);
+    if (cab != null && cab.isNotEmpty) return cab;
+  }
+  if (isFdtFatLayerName(layer) && !isFdtFatClosureLayerName(layer)) {
+    final fatId = fatIdFromProperties(f.properties);
+    if (fatId != null && fatId.isNotEmpty) return fatId;
   }
   final id = mapLabelForFeature(f.properties, layer);
   if (id != null && id.isNotEmpty) {

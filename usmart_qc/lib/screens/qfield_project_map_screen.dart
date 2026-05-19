@@ -68,7 +68,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   final TextEditingController _noteCtrl = TextEditingController();
 
   List<QFieldMapNote> _mapNotes = const [];
-  bool _addCommentMode = false;
   bool _postingComment = false;
 
   List<QFieldLayerChip> _layers = const [];
@@ -673,6 +672,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     _selectFeature(null);
   }
 
+  void _onMapLongPress(TapPosition _, LatLng point) {
+    if (!widget.canWrite || widget.ticketId == null) return;
+    _promptAddMapComment(point);
+  }
+
   void _onMapTap(TapPosition _, LatLng point) {
     final hits = findFeaturesNearTap(_features, point, maxMeters: 80);
     if (hits.isNotEmpty) {
@@ -705,19 +709,9 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       return;
     }
     _clearTapSelection();
-    if (widget.canWrite && _addCommentMode) {
-      _promptAddMapComment(point);
-      return;
-    }
     if (widget.canWrite) {
       setState(() => _draftPin = point);
     }
-  }
-
-  String _notePreview(String text) {
-    final t = text.trim();
-    if (t.length <= 72) return t;
-    return '${t.substring(0, 72)}…';
   }
 
   String _formatNoteTime(String iso) {
@@ -876,10 +870,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       'note': text,
     });
     if (!mounted) return;
-    setState(() {
-      _postingComment = false;
-      _addCommentMode = false;
-    });
+    setState(() => _postingComment = false);
     if (res.ok && res.projects != null) {
       final proj = res.projects!.firstWhere(
         (p) => p.id == widget.project.id,
@@ -898,22 +889,10 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
   }
 
-  List<Marker> _buildMapNoteMarkers() {
-    return [
-      for (final note in _mapNotes)
-        Marker(
-          point: LatLng(note.latitude, note.longitude),
-          width: 140,
-          height: 72,
-          alignment: Alignment.bottomCenter,
-          child: QFieldMapNoteBubble(
-            authorName: note.authorLabel,
-            previewText: _notePreview(note.note),
-            onTap: () => _showMapNoteDetails(note),
-          ),
-        ),
-    ];
-  }
+  List<Marker> _buildMapNoteMarkers() => buildQFieldMapNoteMarkers(
+        notes: _mapNotes,
+        onNoteTap: _showMapNoteDetails,
+      );
 
   String _layerNameFor(QFieldMapFeature f) =>
       f.properties['layer']?.toString() ??
@@ -1115,6 +1094,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                       ),
                   initialZoom: 13,
                   onTap: _onMapTap,
+                  onLongPress: _onMapLongPress,
                   interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
                 ),
                 children: [
@@ -1220,17 +1200,14 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                       onTap: _postingComment
                           ? null
                           : () {
-                              setState(() => _addCommentMode = !_addCommentMode);
-                              if (_addCommentMode) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(l10n.t('qfield_map_add_comment_hint')),
-                                    duration: const Duration(seconds: 3),
-                                  ),
-                                );
-                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.t('qfield_map_long_press_comment_hint')),
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
                             },
-                      accent: _addCommentMode,
+                      accent: false,
                     ),
                     const SizedBox(width: 6),
                     _GlassIconButton(
