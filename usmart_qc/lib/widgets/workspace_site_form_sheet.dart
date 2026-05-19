@@ -157,7 +157,14 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
       if (ok) {
         final pc = context.read<PrivateCompanyProvider>();
         if (pc.canOpenPrivateWorkspace) {
-          await context.read<SitesProvider>().fetchSites(includeWorkspace: true);
+          final sitesProv = context.read<SitesProvider>();
+          final match = ws.sites
+              .where((s) => s.siteCode.toLowerCase() == code.toLowerCase())
+              .toList();
+          if (match.isNotEmpty) {
+            sitesProv.mergeWorkspaceSiteFromJson(match.first.toJson());
+          }
+          await sitesProv.fetchSites(includeWorkspace: true);
         }
         if (context.mounted) Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  canManageWorkspaceSiteRow,
   coordsFromQfieldProjects,
   getWorkspaceSiteGuard,
   listTicketsForSite,
@@ -53,7 +54,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const tickets = await listTicketsForSite(guard.companyId, row.siteCode, filter);
     return NextResponse.json({
       success: true,
-      site: serializeWorkspaceSite(row, { canManage: guard.canManageSites, ticketMeta: counts }),
+      site: serializeWorkspaceSite(row, {
+        canManage: canManageWorkspaceSiteRow(guard, row),
+        ticketMeta: counts,
+      }),
       tickets,
       filter,
     });
@@ -88,7 +92,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   });
   const actorName = me?.name ?? me?.username ?? 'Staff';
 
-  if (!guard.canManageSites) {
+  const canDirectEdit = canManageWorkspaceSiteRow(guard, row);
+
+  if (!canDirectEdit) {
     if (!guard.canProposeChanges) {
       return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
     }
@@ -125,7 +131,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({
       success: true,
       pendingApproval: true,
-      site: serializeWorkspaceSite(updated, { canManage: false, ticketMeta: counts }),
+      site: serializeWorkspaceSite(updated, {
+        canManage: canManageWorkspaceSiteRow(guard, updated),
+        ticketMeta: counts,
+      }),
     });
   }
 
@@ -178,7 +187,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const counts = await ticketCountsForSite(guard.companyId, updated.siteCode);
     return NextResponse.json({
       success: true,
-      site: serializeWorkspaceSite(updated, { canManage: true, ticketMeta: counts }),
+      site: serializeWorkspaceSite(updated, {
+        canManage: canManageWorkspaceSiteRow(guard, updated),
+        ticketMeta: counts,
+      }),
     });
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
@@ -190,18 +202,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-/** DELETE — owner / manager / coordinator only. */
+/** DELETE — site leads or the member who created the site. */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const g = await getWorkspaceSiteGuard(req);
   if (!g.ok) return g.response;
   const { guard } = g;
-  if (!guard.canManageSites) {
-    return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
-  }
   const { id } = await params;
   const row = await loadSite(guard.companyId, id);
   if (!row) {
     return NextResponse.json({ success: false, message: 'Site not found.' }, { status: 404 });
+  }
+  if (!canManageWorkspaceSiteRow(guard, row)) {
+    return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 });
   }
   await prisma.privateCompanySite.delete({ where: { id } });
   return NextResponse.json({ success: true });

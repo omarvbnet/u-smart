@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/private_company_provider.dart';
+import '../providers/sites_provider.dart';
 import '../providers/workspace_sites_provider.dart';
 import '../utils/site_qfield_map.dart';
 import '../screens/ticket_detail_screen.dart';
@@ -225,7 +226,90 @@ Future<void> showWorkspaceSiteDetailSheet(
                         },
                       ),
                     ),
-                  if (pc.canProposeSiteChanges && !pc.canManageSites) ...[
+                  if (s.canManage) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              showWorkspaceSiteFormSheet(
+                                context,
+                                site: s,
+                                directEdit: true,
+                                proposeOnly: false,
+                              );
+                            },
+                            icon: const Icon(Icons.edit_rounded),
+                            label: Text(l10n.t('site_edit')),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (dCtx) => AlertDialog(
+                                  backgroundColor: const Color(0xFF12122A),
+                                  title: Text(
+                                    l10n.t('site_delete_confirm_title'),
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                  content: Text(
+                                    l10n.t('site_delete_confirm',
+                                        {'name': s.siteCode}),
+                                    style: TextStyle(color: Colors.white.withAlpha(180)),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dCtx, false),
+                                      child: Text(l10n.t('cancel')),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dCtx, true),
+                                      child: Text(
+                                        l10n.t('site_delete'),
+                                        style: const TextStyle(color: Color(0xFFFF4757)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm != true) return;
+                              final ok = await provider.deleteSite(s.id);
+                              if (context.mounted) {
+                                Navigator.pop(ctx);
+                                if (ok) {
+                                  final pc = context.read<PrivateCompanyProvider>();
+                                  if (pc.canOpenPrivateWorkspace) {
+                                    await context
+                                        .read<SitesProvider>()
+                                        .fetchSites(includeWorkspace: true);
+                                  }
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(l10n.t('site_deleted')),
+                                        backgroundColor: const Color(0xFF00D4AA),
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            label: Text(l10n.t('site_delete')),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFFF4757),
+                              side: const BorderSide(color: Color(0xFFFF4757)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else if (pc.canProposeSiteChanges) ...[
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () {

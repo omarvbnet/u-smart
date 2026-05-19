@@ -22,6 +22,18 @@ class WorkspaceSitesProvider extends ChangeNotifier {
   bool get canManageSites => _canManageSites;
   String? get error => _error;
 
+  void _upsertSite(WorkspaceSite site) {
+    final idx = _sites.indexWhere((s) => s.id == site.id);
+    if (idx >= 0) {
+      final next = List<WorkspaceSite>.from(_sites);
+      next[idx] = site;
+      _sites = next;
+    } else {
+      _sites = [..._sites, site]..sort((a, b) => a.siteCode.compareTo(b.siteCode));
+    }
+    notifyListeners();
+  }
+
   Future<void> fetchSites() async {
     _loading = true;
     _error = null;
@@ -64,6 +76,10 @@ class WorkspaceSitesProvider extends ChangeNotifier {
       }
       final data = await _api.post(ApiConfig.privateCompanySites, body: body);
       if (data['success'] == true) {
+        final siteJson = data['site'];
+        if (siteJson is Map<String, dynamic>) {
+          _upsertSite(WorkspaceSite.fromJson(siteJson));
+        }
         await fetchSites();
         return true;
       }
@@ -90,6 +106,10 @@ class WorkspaceSitesProvider extends ChangeNotifier {
       if (removeQfield) body['removeQfield'] = true;
       final data = await _api.patch(ApiConfig.privateCompanySiteDetail(id), body: body);
       if (data['success'] == true) {
+        final siteJson = data['site'];
+        if (siteJson is Map<String, dynamic>) {
+          _upsertSite(WorkspaceSite.fromJson(siteJson));
+        }
         await fetchSites();
         return true;
       }

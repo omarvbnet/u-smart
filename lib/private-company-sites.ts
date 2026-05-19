@@ -185,6 +185,14 @@ type SiteRow = {
   confirmedBy?: { name: string | null; username: string | null } | null;
 };
 
+/** Owner/manager/coordinator, or the staff member who created the site. */
+export function canManageWorkspaceSiteRow(
+  guard: { canManageSites: boolean; requesterId: string },
+  row: { createdByRequesterId: string }
+): boolean {
+  return guard.canManageSites || row.createdByRequesterId === guard.requesterId;
+}
+
 export function serializeWorkspaceSite(
   row: SiteRow,
   opts?: { ticketMeta?: Record<string, number>; canManage?: boolean }

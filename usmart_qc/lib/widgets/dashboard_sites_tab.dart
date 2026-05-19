@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/site.dart';
 import '../providers/private_company_provider.dart';
+import '../models/workspace_site.dart';
 import '../providers/sites_provider.dart';
+import '../providers/workspace_sites_provider.dart';
+import 'workspace_site_form_sheet.dart';
 import '../screens/create_ticket_screen.dart';
 import '../screens/site_form_screen.dart';
 import '../utils/site_qfield_map.dart';
@@ -34,6 +37,7 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
     with SingleTickerProviderStateMixin {
   final TextEditingController _siteSearchCtrl = TextEditingController();
   TabController? _subTabs;
+  bool? _prevCanOpenWorkspace;
 
   @override
   void initState() {
@@ -45,20 +49,42 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
     if (!mounted) return;
     final pc = context.read<PrivateCompanyProvider>();
     final sp = context.read<SitesProvider>();
+    _prevCanOpenWorkspace = pc.canOpenPrivateWorkspace;
     sp.seedWorkspaceFromMembership(
       isMember: pc.canOpenPrivateWorkspace,
       canManageWorkspace: pc.canManageSites,
     );
     sp.fetchSites(includeWorkspace: pc.canOpenPrivateWorkspace);
+    if (pc.canOpenPrivateWorkspace) {
+      context.read<WorkspaceSitesProvider>().fetchSites();
+    }
     _syncSubTabs(pc);
+  }
+
+  void _onSubTabChanged() {
+    if (_subTabs == null || _subTabs!.indexIsChanging) return;
+    if (_subTabs!.index == 0 && mounted) {
+      final pc = context.read<PrivateCompanyProvider>();
+      if (pc.canOpenPrivateWorkspace) {
+        _reloadSites(context.read<SitesProvider>());
+        context.read<WorkspaceSitesProvider>().fetchSites();
+      }
+    }
   }
 
   void _syncSubTabs(PrivateCompanyProvider pc) {
     final dual = pc.canOpenPrivateWorkspace;
     if (dual && _subTabs == null) {
       _subTabs = TabController(length: 2, vsync: this);
+      _subTabs!.addListener(_onSubTabChanged);
       setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _reloadSites(context.read<SitesProvider>());
+        context.read<WorkspaceSitesProvider>().fetchSites();
+      });
     } else if (!dual && _subTabs != null) {
+      _subTabs!.removeListener(_onSubTabChanged);
       _subTabs?.dispose();
       _subTabs = null;
       setState(() {});
@@ -68,8 +94,25 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
   @override
   void dispose() {
     _siteSearchCtrl.dispose();
+    _subTabs?.removeListener(_onSubTabChanged);
     _subTabs?.dispose();
     super.dispose();
+  }
+
+  void _onWorkspaceMembershipChanged(PrivateCompanyProvider pc) {
+    final canOpen = pc.canOpenPrivateWorkspace;
+    if (_prevCanOpenWorkspace == canOpen) return;
+    _prevCanOpenWorkspace = canOpen;
+    final sp = context.read<SitesProvider>();
+    sp.seedWorkspaceFromMembership(
+      isMember: canOpen,
+      canManageWorkspace: pc.canManageSites,
+    );
+    sp.fetchSites(includeWorkspace: canOpen);
+    if (canOpen) {
+      context.read<WorkspaceSitesProvider>().fetchSites();
+    }
+    _syncSubTabs(pc);
   }
 
   Future<void> _reloadSites(SitesProvider provider) {
@@ -85,7 +128,100 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
 
   Future<void> _openAddWorkspaceSite(SitesProvider provider) async {
     await showWorkspaceSiteCreateSheet(context);
-    if (mounted) await _reloadSites(provider);
+    if (!mounted) return;
+    await context.read<WorkspaceSitesProvider>().fetchSites();
+    await _reloadSites(provider);
+  }
+
+  WorkspaceSite? _workspaceSiteFor(Site site) {
+    final id = site.workspaceSiteId;
+    if (id == null) return null;
+    for (final s in context.read<WorkspaceSitesProvider>().sites) {
+      if (s.id == id) return s;
+    }
+    return WorkspaceSite(
+      id: id,
+      siteCode: site.siteId,
+      location: site.location,
+      province: site.province,
+      latitude: site.latitude,
+      longitude: site.longitude,
+      hasQfield: site.hasQfield,
+      qfieldProjects: site.qfieldProjects,
+      designDocuments: site.designDocuments,
+      canManage: site.canEdit,
+      createdByRequesterId: site.createdByRequesterId,
+    );
+  }
+
+  Future<void> _editWorkspaceSite(SitesProvider provider, Site site) async {
+    final ws = _workspaceSiteFor(site);
+    if (ws == null) return;
+    await showWorkspaceSiteFormSheet(
+      context,
+      site: ws,
+      directEdit: true,
+      proposeOnly: false,
+    );
+    if (!mounted) return;
+    await context.read<WorkspaceSitesProvider>().fetchSites();
+    await _reloadSites(provider);
+  }
+
+  Future<void> _deleteWorkspaceSite(
+    BuildContext context,
+    SitesProvider provider,
+    Site site,
+    AppLocalizations l10n,
+  ) async {
+    final id = site.workspaceSiteId;
+    if (id == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          l10n.t('site_delete_confirm_title'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          l10n.t('site_delete_confirm', {'name': site.siteId}),
+          style: TextStyle(color: Colors.white.withAlpha(180)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.t('site_delete'),
+              style: const TextStyle(color: Color(0xFFFF4757)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final deleted = await context.read<WorkspaceSitesProvider>().deleteSite(id);
+    if (!mounted) return;
+    if (deleted) {
+      await _reloadSites(provider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('site_deleted')),
+          backgroundColor: const Color(0xFF00D4AA),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('site_delete_failed')),
+          backgroundColor: const Color(0xFFFF4757),
+        ),
+      );
+    }
   }
 
   Future<void> _openAddOwnSite(SitesProvider provider) async {
@@ -279,15 +415,27 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
                     onSaved: () => _reloadSites(provider),
                   )
               : null,
-          onEdit: site.canEdit && !site.isWorkspace
-              ? () => Navigator.of(context)
-                  .push(MaterialPageRoute(
-                    builder: (_) => SiteFormScreen(site: site),
-                  ))
-                  .then((_) => _reloadSites(provider))
+          onEdit: site.canEdit
+              ? () {
+                  if (site.isWorkspace) {
+                    _editWorkspaceSite(provider, site);
+                  } else {
+                    Navigator.of(context)
+                        .push(MaterialPageRoute(
+                          builder: (_) => SiteFormScreen(site: site),
+                        ))
+                        .then((_) => _reloadSites(provider));
+                  }
+                }
               : null,
-          onDelete: site.canEdit && !site.isWorkspace
-              ? () => _confirmDelete(context, provider, site, l10n)
+          onDelete: site.canEdit
+              ? () {
+                  if (site.isWorkspace) {
+                    _deleteWorkspaceSite(context, provider, site, l10n);
+                  } else {
+                    _confirmDelete(context, provider, site, l10n);
+                  }
+                }
               : null,
           onShare: site.canEdit && !site.isWorkspace
               ? () => promptShareSite(
@@ -390,6 +538,9 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final pc = context.watch<PrivateCompanyProvider>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onWorkspaceMembershipChanged(pc);
+    });
     _syncSubTabs(pc);
 
     return Consumer<SitesProvider>(

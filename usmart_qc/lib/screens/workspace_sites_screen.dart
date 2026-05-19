@@ -51,6 +51,9 @@ class _WorkspaceSitesTabState extends State<WorkspaceSitesTab> {
       directEdit: canDirect,
       proposeOnly: canPropose,
     );
+    if (mounted) {
+      await context.read<WorkspaceSitesProvider>().fetchSites();
+    }
   }
 
   Future<void> _openDetail(WorkspaceSite site) async {

@@ -34,6 +34,7 @@ class Site {
   final List<SiteDesignDocument> designDocuments;
   final bool isWorkspacePending;
   final String? createdByName;
+  final String? createdByRequesterId;
 
   Site({
     required this.id,
@@ -63,6 +64,7 @@ class Site {
     this.designDocuments = const [],
     this.isWorkspacePending = false,
     this.createdByName,
+    this.createdByRequesterId,
   });
 
   bool get hasCoordinates => latitude != null && longitude != null;
@@ -167,6 +169,7 @@ class Site {
           : const [],
       isWorkspacePending: status == 'PENDING',
       createdByName: json['createdByName'] as String?,
+      createdByRequesterId: json['createdByRequesterId'] as String?,
     );
   }
 }

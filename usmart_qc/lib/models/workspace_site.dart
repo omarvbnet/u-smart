@@ -24,6 +24,7 @@ class WorkspaceSite {
     this.supervisionTicketCount = 0,
     this.ticketCount = 0,
     this.canManage = false,
+    this.createdByRequesterId,
   });
 
   final String id;
@@ -47,6 +48,7 @@ class WorkspaceSite {
   final int supervisionTicketCount;
   final int ticketCount;
   final bool canManage;
+  final String? createdByRequesterId;
 
   bool get isPending => confirmationStatus == 'PENDING';
   bool get hasCoordinates => latitude != null && longitude != null;
@@ -86,8 +88,39 @@ class WorkspaceSite {
       supervisionTicketCount: json['supervisionTicketCount'] as int? ?? 0,
       ticketCount: json['ticketCount'] as int? ?? 0,
       canManage: json['canManage'] == true,
+      createdByRequesterId: json['createdByRequesterId'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'siteCode': siteCode,
+        'location': location,
+        'province': province,
+        'latitude': latitude,
+        'longitude': longitude,
+        'hasQfield': hasQfield,
+        'hasMapCoordinates': hasMapCoordinates,
+        'qfieldProjects': qfieldProjects
+            .map((p) => {
+                  'id': p.id,
+                  'title': p.title,
+                  'currentUrl': p.currentUrl,
+                  'fileName': p.fileName,
+                  'createdAt': p.createdAt,
+                  'updatedAt': p.updatedAt,
+                })
+            .toList(),
+        'designDocuments': designDocuments.map((d) => d.toPayload()).toList(),
+        'confirmationStatus': confirmationStatus,
+        'isConfirmed': isConfirmed,
+        'createdByName': createdByName,
+        'createdByRequesterId': createdByRequesterId,
+        'inspectionQcCount': inspectionQcCount,
+        'maintenanceQcCount': maintenanceQcCount,
+        'ticketCount': ticketCount,
+        'canManage': canManage,
+      };
 }
 
 class WorkspaceSiteTicket {

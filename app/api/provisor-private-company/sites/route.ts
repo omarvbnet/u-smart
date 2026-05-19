@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  canManageWorkspaceSiteRow,
   coordsFromQfieldProjects,
   getWorkspaceSiteGuard,
   normalizeQfieldProjectsInput,
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
       (rows as Parameters<typeof serializeWorkspaceSite>[0][]).map(async (row) => {
         const counts = mapOnly ? undefined : await ticketCountsForSite(guard.companyId, row.siteCode);
         return serializeWorkspaceSite(row, {
-          canManage: guard.canManageSites,
+          canManage: canManageWorkspaceSiteRow(guard, row),
           ticketMeta: counts,
         });
       })
@@ -132,7 +133,10 @@ export async function POST(req: NextRequest) {
     const counts = await ticketCountsForSite(guard.companyId, siteCode);
     return NextResponse.json({
       success: true,
-      site: serializeWorkspaceSite(created, { canManage: true, ticketMeta: counts }),
+      site: serializeWorkspaceSite(created, {
+        canManage: canManageWorkspaceSiteRow(guard, created),
+        ticketMeta: counts,
+      }),
     });
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;

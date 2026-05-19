@@ -57,6 +57,14 @@ class SitesProvider extends ChangeNotifier {
     return (ok: false, message: null, projects: null);
   }
 
+  void mergeWorkspaceSiteFromJson(Map<String, dynamic> json) {
+    final ws = Site.fromWorkspaceJson(json);
+    final without = _sites.where((s) => s.workspaceSiteId != ws.workspaceSiteId).toList();
+    _sites = [...without, ws]..sort((a, b) => a.siteId.compareTo(b.siteId));
+    _isWorkspaceMember = true;
+    notifyListeners();
+  }
+
   Future<void> fetchSites({bool includeWorkspace = false}) async {
     _loading = true;
     notifyListeners();
