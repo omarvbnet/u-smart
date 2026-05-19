@@ -21,6 +21,17 @@ export type QFieldMapAnnotationStored = {
   byName?: string | null;
 };
 
+/** Shared map comment visible to all staff on the project map. */
+export type QFieldMapNoteStored = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  note: string;
+  createdAt: string;
+  byRequesterId?: string | null;
+  byName?: string | null;
+};
+
 export type QFieldProjectStored = {
   id: string;
   title: string;
@@ -33,9 +44,45 @@ export type QFieldProjectStored = {
   revisions: QFieldRevisionStored[];
   /** Optional field pin / note placed on the in-app map (WGS84). */
   mapAnnotation?: QFieldMapAnnotationStored | null;
+  /** Engineer comments pinned on the map (shared with all staff). */
+  mapNotes?: QFieldMapNoteStored[];
   /** In-app edits to layer feature attributes (featureId → column → value). */
   fieldEdits?: Record<string, Record<string, string | number | boolean | null>> | null;
 };
+
+function parseMapNotes(raw: unknown): QFieldMapNoteStored[] {
+  if (!Array.isArray(raw)) return [];
+  const out: QFieldMapNoteStored[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : '';
+    const lat =
+      typeof item.latitude === 'number'
+        ? item.latitude
+        : typeof item.latitude === 'string'
+          ? parseFloat(item.latitude)
+          : NaN;
+    const lng =
+      typeof item.longitude === 'number'
+        ? item.longitude
+        : typeof item.longitude === 'string'
+          ? parseFloat(item.longitude)
+          : NaN;
+    const note = typeof item.note === 'string' ? item.note.trim() : '';
+    const createdAt = typeof item.createdAt === 'string' ? item.createdAt : '';
+    if (!id || !Number.isFinite(lat) || !Number.isFinite(lng) || !note || !createdAt) continue;
+    out.push({
+      id,
+      latitude: lat,
+      longitude: lng,
+      note,
+      createdAt,
+      byRequesterId: typeof item.byRequesterId === 'string' ? item.byRequesterId : null,
+      byName: typeof item.byName === 'string' ? item.byName : null,
+    });
+  }
+  return out;
+}
 
 export function newQfieldEntityId(): string {
   return `qfp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -103,6 +150,7 @@ export function parseQFieldProjectsFromCompanyJson(parsed: Record<string, unknow
     if (fe && typeof fe === 'object' && !Array.isArray(fe)) {
       fieldEdits = fe as Record<string, Record<string, string | number | boolean | null>>;
     }
+    const mapNotes = parseMapNotes(item.mapNotes);
     out.push({
       id,
       title: title || fileName,
@@ -113,6 +161,7 @@ export function parseQFieldProjectsFromCompanyJson(parsed: Record<string, unknow
       updatedAt,
       revisions,
       mapAnnotation,
+      mapNotes,
       fieldEdits,
     });
   }
@@ -129,6 +178,7 @@ export function qfieldProjectsToJsonValue(projects: QFieldProjectStored[]): unkn
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     mapAnnotation: p.mapAnnotation ?? null,
+    mapNotes: p.mapNotes ?? [],
     fieldEdits: p.fieldEdits ?? null,
     revisions: p.revisions.map((r) => ({
       id: r.id,
@@ -166,6 +216,7 @@ export function normalizeQFieldProjectsFromCreateBody(raw: unknown): QFieldProje
       createdAt: now,
       updatedAt: now,
       mapAnnotation: null,
+      mapNotes: [],
       revisions: [
         {
           id: revId,

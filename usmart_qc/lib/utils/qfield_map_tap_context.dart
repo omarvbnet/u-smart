@@ -43,16 +43,18 @@ String? fatIdFromProperties(Map<String, dynamic> props) {
   ]);
 }
 
-String? handholeIdFromProperties(Map<String, dynamic> props) {
-  return _propValue(props, [
-    'hh_id',
-    'hh_no',
-    'hhid',
-    'handhole_id',
-    'handhole_no',
-    'handholeid',
-    'hh_number',
-  ]);
+String? _handholeIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in ['hh_id', 'hh_no', 'handhole_id', 'handhole_no', 'hhid']) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return e.key;
+    }
+  }
+  return null;
 }
 
 String? _propValue(Map<String, dynamic> props, Iterable<String> keys) {
@@ -135,17 +137,17 @@ Map<String, String> siteInfoFieldsFromProperties(Map<String, dynamic> props) {
 
 Map<String, String> fatSummaryFields(Map<String, dynamic> props) {
   final out = <String, String>{};
-  final fatClosures = fatClosuresIdFromProperties(props);
-  final fatClosuresKey = fatClosuresIdPropertyKey(props);
-  if (fatClosures != null && fatClosuresKey != null) {
-    out[fatClosuresKey] = fatClosures;
+  final closureId = closureOrOdfIdFromProperties(props);
+  final closureKey = closureOrOdfIdPropertyKey(props);
+  if (closureId != null && closureKey != null) {
+    out[closureKey] = closureId;
   }
   for (final e in props.entries) {
     if (e.value == null) continue;
     final lk = e.key.toLowerCase();
     final v = e.value.toString().trim();
     if (v.isEmpty || v == '[binary]') continue;
-    if (fatClosuresKey != null && e.key == fatClosuresKey) continue;
+    if (closureKey != null && e.key == closureKey) continue;
     final isDuct = _ductKeys.any((k) => lk.contains(k.replaceAll('_', '')) || lk == k);
     final isContractor =
         _contractorKeys.any((k) => lk.contains('contractor') || lk == k);
@@ -198,7 +200,51 @@ Map<String, dynamic> displayPropsForFeature(
   }
 
   final layer = f.properties['layer']?.toString();
-  if (isHandholeLayerName(layer) && handholeContainsClosure(f.properties)) {
+  if (isHoleLayerName(layer)) {
+    final holeKey = holeIdPropertyKey(f.properties);
+    final holeId = holeIdFromProperties(f.properties);
+    final ordered = <String, dynamic>{};
+    if (holeId != null && holeId.isNotEmpty) {
+      ordered['Hole_ID'] = holeId;
+    }
+    for (final e in m.entries) {
+      if (holeKey != null && e.key == holeKey) continue;
+      if (isHoleIdPropertyKey(e.key) && holeId != null) continue;
+      ordered[e.key] = e.value;
+    }
+    return ordered;
+  }
+
+  if (isHandholeLayerName(layer)) {
+    final ordered = <String, dynamic>{};
+    final holeKey = holeIdPropertyKey(f.properties);
+    final holeId = holeIdFromProperties(f.properties);
+    if (holeId != null && holeId.isNotEmpty) {
+      ordered['Hole_ID'] = holeId;
+    }
+    if (handholeContainsClosure(f.properties)) {
+      final closureKey = closureOrOdfIdPropertyKey(f.properties);
+      final closureId = closureOrOdfIdFromProperties(f.properties);
+      if (closureKey != null && closureId != null) {
+        ordered[closureKey] = closureId;
+      }
+    }
+    final hhKey = _handholeIdPropertyKey(f.properties);
+    final hhId = handholeIdFromProperties(f.properties);
+    if (hhKey != null && hhId != null && !ordered.containsKey(hhKey)) {
+      ordered[hhKey] = hhId;
+    }
+    if (ordered.isNotEmpty) {
+      for (final e in m.entries) {
+        if (holeKey != null && e.key == holeKey) continue;
+        if (isHoleIdPropertyKey(e.key) && holeId != null) continue;
+        if (!ordered.containsKey(e.key)) ordered[e.key] = e.value;
+      }
+      return ordered;
+    }
+  }
+
+  if (isFatLayerName(layer) || isFdtFatLayerName(layer)) {
     final closureKey = closureOrOdfIdPropertyKey(f.properties);
     final closureId = closureOrOdfIdFromProperties(f.properties);
     if (closureKey != null && closureId != null) {
@@ -209,14 +255,13 @@ Map<String, dynamic> displayPropsForFeature(
       return ordered;
     }
   }
-
-  if (isFatLayerName(layer)) {
-    final closuresKey = fatClosuresIdPropertyKey(f.properties);
-    final closuresId = fatClosuresIdFromProperties(f.properties);
-    if (closuresKey != null && closuresId != null) {
-      final ordered = <String, dynamic>{closuresKey: closuresId};
+  if (isClosureLayerName(layer) || isFdtFatClosureLayerName(layer)) {
+    final closureKey = closureOrOdfIdPropertyKey(f.properties);
+    final closureId = closureOrOdfIdFromProperties(f.properties);
+    if (closureKey != null && closureId != null) {
+      final ordered = <String, dynamic>{closureKey: closureId};
       for (final e in m.entries) {
-        if (e.key != closuresKey) ordered[e.key] = e.value;
+        if (e.key != closureKey) ordered[e.key] = e.value;
       }
       return ordered;
     }
@@ -232,12 +277,16 @@ class HandholeTapBundle {
   const HandholeTapBundle({
     required this.handhole,
     required this.cablesByType,
+    this.holeId,
+    this.holePropertyKey,
     this.closureOrOdfId,
     this.closurePropertyKey,
   });
 
   final FeatureTapHit handhole;
   final Map<String, List<FeatureTapHit>> cablesByType;
+  final String? holeId;
+  final String? holePropertyKey;
   final String? closureOrOdfId;
   final String? closurePropertyKey;
 }
@@ -253,6 +302,10 @@ class QFieldTapContext {
     this.fatId,
     this.fatClosuresId,
     this.fatClosuresPropertyKey,
+    this.selectedHoleId,
+    this.selectedHolePropertyKey,
+    this.selectedClosureOrOdfId,
+    this.selectedClosurePropertyKey,
     this.primaryProps = const {},
     this.fatSummary = const {},
     this.handholes = const [],
@@ -269,6 +322,10 @@ class QFieldTapContext {
   final String? fatId;
   final String? fatClosuresId;
   final String? fatClosuresPropertyKey;
+  final String? selectedHoleId;
+  final String? selectedHolePropertyKey;
+  final String? selectedClosureOrOdfId;
+  final String? selectedClosurePropertyKey;
   final Map<String, dynamic> primaryProps;
   final Map<String, String> fatSummary;
   final List<HandholeTapBundle> handholes;
@@ -470,6 +527,8 @@ QFieldTapContext buildTapContext({
       HandholeTapBundle(
         handhole: hh,
         cablesByType: groupCableHitsByDisplayType(cables),
+        holeId: holeIdFromProperties(hh.feature.properties),
+        holePropertyKey: holeIdPropertyKey(hh.feature.properties),
         closureOrOdfId: closureId,
         closurePropertyKey: closureKey,
       ),
@@ -508,26 +567,43 @@ QFieldTapContext buildTapContext({
   }).toList();
   otherGroups.addAll(groupHitsByLayer(otherHits));
 
-  String? fatClosuresId;
-  String? fatClosuresKey;
-  if (isFatLayer(selected.properties['layer']?.toString())) {
-    fatClosuresId = fatClosuresIdFromProperties(selected.properties);
-    fatClosuresKey = fatClosuresIdPropertyKey(selected.properties);
-  } else if (fatId != null) {
+  final selLayer = selected.properties['layer']?.toString();
+  String? closureId = closureOrOdfIdFromProperties(selected.properties);
+  String? closureKey = closureOrOdfIdPropertyKey(selected.properties);
+  if (closureId == null && fatId != null) {
     for (final f in allFeatures) {
-      if (!isFatLayer(f.properties['layer']?.toString())) continue;
+      if (!isFatLayer(f.properties['layer']?.toString()) &&
+          !isFdtFatLayerName(f.properties['layer']?.toString())) {
+        continue;
+      }
       if (!featureBelongsToFat(f, fatId)) continue;
-      fatClosuresId = fatClosuresIdFromProperties(f.properties);
-      fatClosuresKey = fatClosuresIdPropertyKey(f.properties);
-      if (fatClosuresId != null) break;
+      closureId = closureOrOdfIdFromProperties(f.properties);
+      closureKey = closureOrOdfIdPropertyKey(f.properties);
+      if (closureId != null) break;
     }
+  }
+
+  String? selHoleId;
+  String? selHoleKey;
+  if (isHandholeLayerName(selLayer) || isHoleLayerName(selLayer)) {
+    selHoleId = holeIdFromProperties(selected.properties);
+    selHoleKey = holeIdPropertyKey(selected.properties);
+  }
+  if (isClosureLayerName(selLayer) ||
+      isFdtFatClosureLayerName(selLayer) ||
+      isHandholeLayerName(selLayer)) {
+    // closureId / closureKey already from selected feature
   }
 
   return QFieldTapContext(
     selected: selected,
     fatId: fatId,
-    fatClosuresId: fatClosuresId,
-    fatClosuresPropertyKey: fatClosuresKey,
+    fatClosuresId: closureId,
+    fatClosuresPropertyKey: closureKey,
+    selectedHoleId: selHoleId,
+    selectedHolePropertyKey: selHoleKey,
+    selectedClosureOrOdfId: closureId,
+    selectedClosurePropertyKey: closureKey,
     primaryProps: primaryProps,
     fatSummary: summary,
     handholes: bundles,

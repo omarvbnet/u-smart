@@ -3,17 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/qfield_map_note.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/workspace_sites_provider.dart';
 import '../utils/qfield_map_features.dart';
+import '../utils/qfield_map_point_labels.dart';
 import '../utils/qfield_map_tap_context.dart';
 import '../utils/responsive_layout.dart';
 import '../widgets/qfield_map_bottom_panel.dart';
+import '../widgets/qfield_map_note_bubble.dart';
 import '../widgets/qfield_map_symbols.dart';
 import '../widgets/qfield_project_map_sheet.dart';
 
@@ -63,6 +67,10 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   QFieldMapAnnotation? _annotation;
   final TextEditingController _noteCtrl = TextEditingController();
 
+  List<QFieldMapNote> _mapNotes = const [];
+  bool _addCommentMode = false;
+  bool _postingComment = false;
+
   List<QFieldLayerChip> _layers = const [];
   List<QFieldSqlTableData> _sqlTables = const [];
   Map<String, dynamic>? _previewStats;
@@ -83,9 +91,17 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   final Map<String, TextEditingController> _fieldCtrls = {};
   bool _saving = false;
 
+  List<Marker> _cachedFeatureMarkers = const [];
+  List<Marker> _cachedLabelMarkers = const [];
+  List<Polyline> _cachedPolylines = const [];
+  List<Polygon> _cachedPolygons = const [];
+  int _mapGeomVersion = 0;
+  int _builtGeomVersion = -1;
+
   @override
   void initState() {
     super.initState();
+    _mapNotes = List<QFieldMapNote>.from(widget.project.mapNotes);
     _annotation = widget.project.mapAnnotation;
     if (_annotation != null) {
       _draftPin = LatLng(_annotation!.latitude, _annotation!.longitude);
@@ -134,6 +150,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     String? hint;
     var layers = <QFieldLayerChip>[];
     var sqlTables = <QFieldSqlTableData>[];
+    var mapNotes = List<QFieldMapNote>.from(_mapNotes);
     Map<String, dynamic>? previewStats;
     int? defaultCrs;
     final layerCrs = <String, int>{};
@@ -156,6 +173,11 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       if (m is String && m.trim().isNotEmpty) hint = m.trim();
       final rawStats = data['stats'];
       if (rawStats is Map) previewStats = Map<String, dynamic>.from(rawStats);
+
+      final previewNotes = parseQFieldMapNotes(data['mapNotes']);
+      if (previewNotes.isNotEmpty) {
+        mapNotes = previewNotes;
+      }
 
       final rawLayers = data['layers'];
       if (rawLayers is List) {
@@ -230,6 +252,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       _layers = layers;
       _sqlTables = sqlTables;
       _previewStats = previewStats;
+      _mapNotes = mapNotes;
       _defaultCrsEpsg = defaultCrs;
       _layerEpsgByKey = layerCrs;
       _loading = false;
@@ -419,7 +442,25 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           ),
         )
         .toList();
+    _invalidateMapGeometry();
+  }
+
+  void _invalidateMapGeometry() {
+    _mapGeomVersion++;
     if (mounted) setState(() {});
+  }
+
+  void _ensureMapGeometryCache() {
+    if (_builtGeomVersion == _mapGeomVersion) return;
+    _builtGeomVersion = _mapGeomVersion;
+    _cachedFeatureMarkers = _buildFeaturePointMarkers();
+    _cachedLabelMarkers = buildQFieldPointLabelMarkers(
+      features: _features,
+      isHighlighted: _isFeatureHighlighted,
+      layerNameFor: _layerNameFor,
+    );
+    _cachedPolylines = _buildPolylines();
+    _cachedPolygons = _buildPolygons();
   }
 
   void _fitMap() {
@@ -499,8 +540,13 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       ),
     ).listen((pos) {
       if (!mounted) return;
+      final next = LatLng(pos.latitude, pos.longitude);
+      if (_userLocation != null) {
+        const dist = Distance();
+        if (dist(_userLocation!, next) < 3) return;
+      }
       setState(() {
-        _userLocation = LatLng(pos.latitude, pos.longitude);
+        _userLocation = next;
         _userAccuracyM = pos.accuracy;
       });
     });
@@ -591,6 +637,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               anchor: featureAnchorPoint(f),
             ),
           );
+    _invalidateMapGeometry();
     setState(() {
       _selectedFeatureId = f?.id;
       _locationHits = hits;
@@ -637,6 +684,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           tapHits: hits,
         );
       } else {
+        _invalidateMapGeometry();
         setState(() {
           _selectedFeatureId = null;
           _relatedCableIds = const {};
@@ -657,9 +705,214 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
       return;
     }
     _clearTapSelection();
+    if (widget.canWrite && _addCommentMode) {
+      _promptAddMapComment(point);
+      return;
+    }
     if (widget.canWrite) {
       setState(() => _draftPin = point);
     }
+  }
+
+  String _notePreview(String text) {
+    final t = text.trim();
+    if (t.length <= 72) return t;
+    return '${t.substring(0, 72)}…';
+  }
+
+  String _formatNoteTime(String iso) {
+    try {
+      return DateFormat.yMMMd().add_Hm().format(DateTime.parse(iso).toLocal());
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  void _showMapNoteDetails(QFieldMapNote note) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.paddingOf(ctx).bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.t('qfield_map_comment_detail'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFF6C63FF).withAlpha(80),
+                    child: Text(
+                      note.authorLabel.isNotEmpty ? note.authorLabel[0].toUpperCase() : '?',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          note.authorLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        Text(
+                          _formatNoteTime(note.createdAt),
+                          style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(200),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withAlpha(30)),
+                ),
+                child: Text(
+                  note.note,
+                  style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.45),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _promptAddMapComment(LatLng point) async {
+    if (!widget.canWrite || widget.ticketId == null) return;
+    final l10n = AppLocalizations.of(context);
+    final ctrl = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12122A),
+        title: Text(
+          l10n.t('qfield_map_comment_dialog_title'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLines: 4,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: l10n.t('qfield_map_comment_dialog_hint'),
+            hintStyle: TextStyle(color: Colors.white.withAlpha(100)),
+            filled: true,
+            fillColor: const Color(0xFF0A0A18),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = ctrl.text.trim();
+              if (v.isEmpty) return;
+              Navigator.pop(ctx, v);
+            },
+            child: Text(l10n.t('qfield_map_comment_post')),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (text == null || text.isEmpty || !mounted) return;
+    await _postMapComment(point, text);
+  }
+
+  Future<void> _postMapComment(LatLng point, String text) async {
+    final ticketId = widget.ticketId;
+    if (ticketId == null) return;
+    setState(() => _postingComment = true);
+    final prov = context.read<TicketsProvider>();
+    final l10n = AppLocalizations.of(context);
+    final res = await prov.postTicketQFieldAction(ticketId, {
+      'action': 'add_map_note',
+      'projectId': widget.project.id,
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+      'note': text,
+    });
+    if (!mounted) return;
+    setState(() {
+      _postingComment = false;
+      _addCommentMode = false;
+    });
+    if (res.ok && res.projects != null) {
+      final proj = res.projects!.firstWhere(
+        (p) => p.id == widget.project.id,
+        orElse: () => res.projects!.first,
+      );
+      setState(() => _mapNotes = List<QFieldMapNote>.from(proj.mapNotes));
+      _invalidateMapGeometry();
+      widget.onSaved?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('qfield_map_comment_posted'))),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.message ?? l10n.t('ticket_failed'))),
+      );
+    }
+  }
+
+  List<Marker> _buildMapNoteMarkers() {
+    return [
+      for (final note in _mapNotes)
+        Marker(
+          point: LatLng(note.latitude, note.longitude),
+          width: 140,
+          height: 72,
+          alignment: Alignment.bottomCenter,
+          child: QFieldMapNoteBubble(
+            authorName: note.authorLabel,
+            previewText: _notePreview(note.note),
+            onTap: () => _showMapNoteDetails(note),
+          ),
+        ),
+    ];
   }
 
   String _layerNameFor(QFieldMapFeature f) =>
@@ -760,71 +1013,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     return out;
   }
 
-  List<Marker> _buildPointLabelMarkers() {
-    final out = <Marker>[];
-    for (final f in _features) {
-      if (f.points.isEmpty) continue;
-      final layerName = _layerNameFor(f);
-      final hi = _isFeatureHighlighted(f);
-
-      String? text;
-      var showMain = false;
-      if (isPoleLayerName(layerName)) {
-        text = poleFatLabel(f.properties);
-        showMain = text != null && text.isNotEmpty;
-      } else if (shouldShowMapLabel(layerName)) {
-        text = mapLabelForFeature(f.properties, layerName) ?? f.label;
-        showMain = text != null && text.isNotEmpty;
-      }
-
-      final closureBox = useClosureBoxMapLabel(layerName);
-
-      for (final pt in f.points) {
-        if (showMain && text != null) {
-          out.add(
-            Marker(
-              point: pt,
-              width: closureBox ? 46 : 50,
-              height: closureBox ? 24 : 22,
-              alignment: Alignment.bottomCenter,
-              child: Transform.translate(
-                offset: Offset(0, closureBox ? -24 : -22),
-                child: QFieldMapPointLabel(
-                  text: text,
-                  highlighted: hi,
-                  closureBox: closureBox,
-                ),
-              ),
-            ),
-          );
-        }
-        if (isHandholeLayerName(layerName) &&
-            handholeContainsClosure(f.properties)) {
-          final closureId = closureOrOdfIdFromProperties(f.properties);
-          if (closureId != null && closureId.isNotEmpty) {
-            out.add(
-              Marker(
-                point: pt,
-                width: 46,
-                height: 24,
-                alignment: Alignment.bottomCenter,
-                child: Transform.translate(
-                  offset: Offset(0, showMain ? -46 : -24),
-                  child: QFieldMapPointLabel(
-                    text: closureId,
-                    highlighted: hi,
-                    closureBox: true,
-                  ),
-                ),
-              ),
-            );
-          }
-        }
-      }
-    }
-    return out;
-  }
-
   List<Marker> _buildOverlayMarkers(AppLocalizations l10n) {
     final out = <Marker>[];
     final siteLat = widget.ticket?.siteLatitude;
@@ -845,6 +1033,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
         child: const Icon(Icons.location_on, color: Color(0xFFFF4757), size: 46),
       ));
     }
+    out.addAll(_buildMapNoteMarkers());
     return out;
   }
 
@@ -905,6 +1094,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final l10n = AppLocalizations.of(context);
     final top = MediaQuery.paddingOf(context).top;
     final onMapCount = _drawableOnMapCount();
+    if (!_loading) _ensureMapGeometryCache();
 
     return Scaffold(
       backgroundColor: const Color(0xFF05051A),
@@ -914,36 +1104,40 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           if (_loading)
             const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
           else
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _draftPin ??
-                    LatLng(
-                      widget.ticket?.siteLatitude ?? 33.3152,
-                      widget.ticket?.siteLongitude ?? 44.3661,
-                    ),
-                initialZoom: 13,
-                onTap: _onMapTap,
-                interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: QFieldProjectMapSheet.tileUrlTemplate,
-                  subdomains: QFieldProjectMapSheet.tileSubdomains,
-                  userAgentPackageName: 'usmart_qc',
-                  maxNativeZoom: 19,
+            RepaintBoundary(
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _draftPin ??
+                      LatLng(
+                        widget.ticket?.siteLatitude ?? 33.3152,
+                        widget.ticket?.siteLongitude ?? 44.3661,
+                      ),
+                  initialZoom: 13,
+                  onTap: _onMapTap,
+                  interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
                 ),
-                if (_buildPolygons().isNotEmpty) PolygonLayer(polygons: _buildPolygons()),
-                if (_buildPolylines().isNotEmpty) PolylineLayer(polylines: _buildPolylines()),
-                if (_buildUserLocationCircles().isNotEmpty)
-                  CircleLayer(circles: _buildUserLocationCircles()),
-                MarkerLayer(
-                  markers: [
-                    ..._buildFeaturePointMarkers(),
-                    ..._buildPointLabelMarkers(),
-                    ..._buildOverlayMarkers(l10n),
-                  ],
-                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: QFieldProjectMapSheet.tileUrlTemplate,
+                    subdomains: QFieldProjectMapSheet.tileSubdomains,
+                    userAgentPackageName: 'usmart_qc',
+                    maxNativeZoom: 19,
+                    retinaMode: false,
+                  ),
+                  if (_cachedPolygons.isNotEmpty)
+                    PolygonLayer(polygons: _cachedPolygons),
+                  if (_cachedPolylines.isNotEmpty)
+                    PolylineLayer(polylines: _cachedPolylines),
+                  if (_buildUserLocationCircles().isNotEmpty)
+                    CircleLayer(circles: _buildUserLocationCircles()),
+                  MarkerLayer(
+                    markers: [
+                      ..._cachedFeatureMarkers,
+                      ..._cachedLabelMarkers,
+                      ..._buildOverlayMarkers(l10n),
+                    ],
+                  ),
                 SimpleAttributionWidget(
                   alignment: Alignment.bottomLeft,
                   backgroundColor: const Color(0x8805051A),
@@ -952,7 +1146,8 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                     style: const TextStyle(color: Colors.white70, fontSize: 9),
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
 
           // Top gradient + toolbar
@@ -998,6 +1193,13 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                           l10n.t('qfield_map_on_map_count', {'count': '$onMapCount'}),
                           style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 11),
                         ),
+                        if (_mapNotes.isNotEmpty)
+                          Text(
+                            l10n.t('qfield_map_comments_count', {
+                              'count': '${_mapNotes.length}',
+                            }),
+                            style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 10),
+                          ),
                       ],
                     ),
                   ),
@@ -1011,7 +1213,25 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                       );
                     },
                   ),
-                  if (widget.canWrite) ...[
+                  if (widget.canWrite && widget.ticketId != null) ...[
+                    const SizedBox(width: 6),
+                    _GlassIconButton(
+                      icon: Icons.chat_bubble_rounded,
+                      onTap: _postingComment
+                          ? null
+                          : () {
+                              setState(() => _addCommentMode = !_addCommentMode);
+                              if (_addCommentMode) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(l10n.t('qfield_map_add_comment_hint')),
+                                    duration: const Duration(seconds: 3),
+                                  ),
+                                );
+                              }
+                            },
+                      accent: _addCommentMode,
+                    ),
                     const SizedBox(width: 6),
                     _GlassIconButton(
                       icon: Icons.save_rounded,

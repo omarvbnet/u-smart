@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
@@ -97,7 +95,6 @@ class QFieldMapBottomPanel extends StatelessWidget {
   final Set<String> hiddenCableIdKeys;
   final void Function(CableMapToggle toggle) onToggleCable;
 
-  static const _panelBg = Color(0xF00D0D24);
   static const _accent = Color(0xFF6C63FF);
   static const _mint = Color(0xFF00D4AA);
 
@@ -107,207 +104,183 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF1A1A38).withAlpha(248),
-                _panelBg,
-              ],
-            ),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: Colors.white.withAlpha(45)),
-              left: BorderSide(color: Colors.white.withAlpha(20)),
-              right: BorderSide(color: Colors.white.withAlpha(20)),
-            ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF12122A),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(
+            top: BorderSide(color: Colors.white.withAlpha(45)),
+            left: BorderSide(color: Colors.white.withAlpha(20)),
+            right: BorderSide(color: Colors.white.withAlpha(20)),
           ),
-          child: Scrollbar(
+        ),
+        child: Scrollbar(
+          controller: scrollController,
+          thumbVisibility: true,
+          radius: const Radius.circular(8),
+          interactive: true,
+          child: CustomScrollView(
             controller: scrollController,
-            thumbVisibility: true,
-            radius: const Radius.circular(8),
-            child: CustomScrollView(
-              controller: scrollController,
-              physics: const ClampingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              slivers: [
-                const SliverToBoxAdapter(child: _PanelDragHandle()),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _panelToolbar(l10n),
-                      const SizedBox(height: 12),
-                      _MapControlsCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (previewStats != null) ...[
-                              _PreviewStatsBanner(l10n: l10n, stats: previewStats!),
-                              const SizedBox(height: 12),
+            primary: false,
+            physics: const AlwaysScrollableScrollPhysics(),
+            cacheExtent: 1200,
+            slivers: [
+              const SliverToBoxAdapter(child: _PanelDragHandle()),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _panelToolbar(l10n),
+                    const SizedBox(height: 12),
+                    _MapControlsCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (previewStats != null) ...[
+                            _PreviewStatsBanner(l10n: l10n, stats: previewStats!),
+                            const SizedBox(height: 12),
+                          ],
+                          if (hint != null && hint!.isNotEmpty) ...[
+                            _ArchiveHintText(hint: hint!),
+                            const SizedBox(height: 12),
+                          ],
+                          _SectionLabel(
+                            icon: Icons.layers_rounded,
+                            title: l10n.t('qfield_map_layers'),
+                            color: _accent,
+                          ),
+                          const SizedBox(height: 8),
+                          _HorizontalChipRow(
+                            height: 42,
+                            children: [
+                              for (final l in layers)
+                                _MapFilterChip(
+                                  label: '${l.label} (${l.count})',
+                                  color: l.color,
+                                  selected: !hiddenKeys.contains(l.key),
+                                  onTap: () => onToggleLayer(l.key),
+                                ),
                             ],
-                            if (hint != null && hint!.isNotEmpty) ...[
-                              _ArchiveHintText(hint: hint!),
-                              const SizedBox(height: 12),
-                            ],
+                          ),
+                          if (cableToggles.isNotEmpty) ...[
+                            const SizedBox(height: 14),
                             _SectionLabel(
-                              icon: Icons.layers_rounded,
-                              title: l10n.t('qfield_map_layers'),
-                              color: _accent,
+                              icon: Icons.cable_rounded,
+                              title: l10n.t('qfield_map_cable_types'),
+                              color: _mint,
                             ),
                             const SizedBox(height: 8),
                             _HorizontalChipRow(
-                              height: 42,
+                              height: 38,
                               children: [
-                                for (final l in layers)
+                                for (final t in cableToggles.where((x) => x.isTypeGroup))
                                   _MapFilterChip(
-                                    label: '${l.label} (${l.count})',
-                                    color: l.color,
-                                    selected: !hiddenKeys.contains(l.key),
-                                    onTap: () => onToggleLayer(l.key),
+                                    label: '${t.label} (${t.count})',
+                                    color: t.color,
+                                    selected: !hiddenCableTypeKeys.contains(t.key),
+                                    onTap: () => onToggleCable(t),
+                                    compact: true,
                                   ),
                               ],
                             ),
-                            if (cableToggles.isNotEmpty) ...[
-                              const SizedBox(height: 14),
-                              _SectionLabel(
-                                icon: Icons.cable_rounded,
-                                title: l10n.t('qfield_map_cable_types'),
-                                color: _mint,
-                              ),
-                              const SizedBox(height: 8),
-                              _HorizontalChipRow(
-                                height: 38,
-                                children: [
-                                  for (final t in cableToggles.where((x) => x.isTypeGroup))
-                                    _MapFilterChip(
-                                      label: '${t.label} (${t.count})',
-                                      color: t.color,
-                                      selected: !hiddenCableTypeKeys.contains(t.key),
-                                      onTap: () => onToggleCable(t),
-                                      compact: true,
+                            const SizedBox(height: 12),
+                            _SectionLabel(
+                              icon: Icons.tag_rounded,
+                              title: l10n.t('qfield_map_cable_ids'),
+                              color: _mint,
+                            ),
+                            const SizedBox(height: 8),
+                            _HorizontalChipRow(
+                              height: 38,
+                              children: [
+                                for (final t in cableToggles.where((x) => !x.isTypeGroup))
+                                  _MapFilterChip(
+                                    label: t.label,
+                                    color: t.color,
+                                    selected: !hiddenCableIdKeys.contains(
+                                      t.key.startsWith('cid:')
+                                          ? t.key.substring(4)
+                                          : t.key,
                                     ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              _SectionLabel(
-                                icon: Icons.tag_rounded,
-                                title: l10n.t('qfield_map_cable_ids'),
-                                color: _mint,
-                              ),
-                              const SizedBox(height: 8),
-                              _HorizontalChipRow(
-                                height: 38,
-                                children: [
-                                  for (final t in cableToggles.where((x) => !x.isTypeGroup))
-                                    _MapFilterChip(
-                                      label: t.label,
-                                      color: t.color,
-                                      selected: !hiddenCableIdKeys.contains(
-                                        t.key.startsWith('cid:')
-                                            ? t.key.substring(4)
-                                            : t.key,
-                                      ),
-                                      onTap: () => onToggleCable(t),
-                                      compact: true,
-                                    ),
-                                ],
-                              ),
-                            ],
-                            if (sqlTables.isNotEmpty) ...[
-                              const SizedBox(height: 14),
-                              _SectionLabel(
-                                icon: Icons.table_chart_rounded,
-                                title: l10n.t('qfield_map_sql_tables', {
-                                  'count': '${sqlTables.length}',
-                                }),
-                                color: const Color(0xFF38BDF8),
-                              ),
-                              const SizedBox(height: 8),
-                              ...sqlTables.map(
-                                (t) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _SqlTableTile(
-                                    table: t,
-                                    l10n: l10n,
-                                    onTap: () => onOpenSqlTable(t),
+                                    onTap: () => onToggleCable(t),
+                                    compact: true,
                                   ),
+                              ],
+                            ),
+                          ],
+                          if (sqlTables.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            _SectionLabel(
+                              icon: Icons.table_chart_rounded,
+                              title: l10n.t('qfield_map_sql_tables', {
+                                'count': '${sqlTables.length}',
+                              }),
+                              color: const Color(0xFF38BDF8),
+                            ),
+                            const SizedBox(height: 8),
+                            ...sqlTables.map(
+                              (t) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _SqlTableTile(
+                                  table: t,
+                                  l10n: l10n,
+                                  onTap: () => onOpenSqlTable(t),
                                 ),
                               ),
-                            ],
-                            if (userLocationLabel != null) ...[
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(Icons.my_location, color: Color(0xFF2196F3), size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
+                            ),
+                          ],
+                          if (userLocationLabel != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.my_location, color: Color(0xFF2196F3), size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
                                     userLocationLabel!,
                                     style: TextStyle(
                                       color: Colors.white.withAlpha(180),
                                       fontSize: 12,
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
                           ],
-                        ),
-                      ),
-                    ]),
-                  ),
-                ),
-                if (hasInfo) ...[
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              height: 1,
-                              color: Colors.white.withAlpha(30),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              l10n.t('qfield_map_feature_data'),
-                              style: TextStyle(
-                                color: Colors.white.withAlpha(140),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.6,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Container(
-                              height: 1,
-                              color: Colors.white.withAlpha(30),
-                            ),
-                          ),
                         ],
                       ),
                     ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate(
-                        _buildInfoContent(context),
-                      ),
+                  ]),
+                ),
+              ),
+              if (hasInfo) ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Row(
+                      children: [
+                        Expanded(child: Container(height: 1, color: Colors.white.withAlpha(30))),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            l10n.t('qfield_map_feature_data'),
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(140),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                        Expanded(child: Container(height: 1, color: Colors.white.withAlpha(30))),
+                      ],
                     ),
                   ),
-                ] else
-                  const SliverPadding(padding: EdgeInsets.only(bottom: 28)),
+                ),
+                ..._infoSectionSlivers(context),
               ],
-            ),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
+            ],
           ),
         ),
       ),
@@ -355,23 +328,46 @@ class QFieldMapBottomPanel extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildInfoContent(BuildContext context) {
+  static const _infoPad = EdgeInsets.fromLTRB(16, 12, 16, 0);
+
+  String _attributeLabel(String propertyKey) => holeIdDisplayLabel(
+        propertyKey,
+        fallback: l10n.t('qfield_map_hole_id'),
+      );
+
+  List<Widget> _infoSectionSlivers(BuildContext context) {
+    final sections = _infoSections(context);
+    return [
+      for (var i = 0; i < sections.length; i++)
+        SliverPadding(
+          padding: i == 0 ? _infoPad : const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          sliver: SliverToBoxAdapter(child: sections[i]),
+        ),
+    ];
+  }
+
+  List<Widget> _infoSections(BuildContext context) {
     if (selected == null && layerGroups.isNotEmpty) {
       return [
-        Text(
-          l10n.t('qfield_map_tap_pick_element'),
-          style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13),
-        ),
-        const SizedBox(height: 10),
-        for (final group in layerGroups) ...[
-          _LayerGroupHeader(group: group),
-          for (final h in group.hits)
-            _TapElementTile(
-              hit: h,
-              selected: selected,
-              onPick: onPickTapFeature,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.t('qfield_map_tap_pick_element'),
+              style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 13),
             ),
-        ],
+            const SizedBox(height: 10),
+            for (final group in layerGroups) ...[
+              _LayerGroupHeader(group: group),
+              for (final h in group.hits)
+                _TapElementTile(
+                  hit: h,
+                  selected: selected,
+                  onPick: onPickTapFeature,
+                ),
+            ],
+          ],
+        ),
       ];
     }
 
@@ -385,32 +381,34 @@ class QFieldMapBottomPanel extends StatelessWidget {
     }
 
     if (tapContext!.isRouteSelection) {
-      return _routeInfoWidgets();
+      return _routeInfoSections();
     }
 
-    return _fatInfoWidgets();
+    return _fatInfoSections();
   }
 
-  List<Widget> _routeInfoWidgets() {
+  List<Widget> _routeInfoSections() {
     final ctx = tapContext!;
-    return [
+    final sections = <Widget>[
       _SelectedElementHeader(
         title: ctx.routeId ?? featureTapListTitle(ctx.selected),
         subtitle: _tapHeaderSubtitle(l10n, ctx),
         icon: Icons.route_rounded,
       ),
-      if (ctx.routeSiteInfo.isNotEmpty) ...[
-        const SizedBox(height: 12),
+    ];
+    if (ctx.routeSiteInfo.isNotEmpty) {
+      sections.add(
         _InfoSectionCard(
           title: l10n.t('qfield_map_route_site_info'),
           icon: Icons.construction_rounded,
           accent: _mint,
           children: ctx.routeSiteInfo.entries
-              .map((e) => _FeatureDataRow(label: e.key, value: e.value, accent: true))
+              .map((e) => _FeatureDataRow(label: _attributeLabel(e.key), value: e.value, accent: true))
               .toList(),
         ),
-      ],
-      const SizedBox(height: 12),
+      );
+    }
+    sections.add(
       _InfoSectionCard(
         title: l10n.t('qfield_map_cables_in_route'),
         icon: Icons.cable_rounded,
@@ -435,47 +433,127 @@ class QFieldMapBottomPanel extends StatelessWidget {
             ],
         ],
       ),
-      const SizedBox(height: 12),
+    );
+    sections.add(
       _InfoSectionCard(
         title: l10n.t('qfield_map_feature_data'),
         icon: Icons.info_outline_rounded,
         children: displayPropsForFeature(ctx.selected)
             .entries
-            .map((e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}'))
+            .map((e) => _FeatureDataRow(label: _attributeLabel(e.key), value: '${e.value ?? ''}'))
             .toList(),
       ),
-    ];
+    );
+    return sections;
   }
 
-  List<Widget> _fatInfoWidgets() {
-    final ctx = tapContext!;
-    final widgets = <Widget>[
+  Widget _fatHeaderSection(QFieldTapContext ctx) {
+    final headerChildren = <Widget>[
       _SelectedElementHeader(
         title: featureTapListTitle(ctx.selected),
         subtitle: _tapHeaderSubtitle(l10n, ctx),
         icon: Icons.place_rounded,
       ),
     ];
-
-    if (ctx.fatClosuresId != null) {
-      widgets.addAll([
+    final closureId = ctx.selectedClosureOrOdfId ?? ctx.fatClosuresId;
+    final closureKey = ctx.selectedClosurePropertyKey ?? ctx.fatClosuresPropertyKey;
+    if (closureId != null && closureId.isNotEmpty) {
+      headerChildren.addAll([
         const SizedBox(height: 10),
         _FeatureDataRow(
-          label: ctx.fatClosuresPropertyKey ?? l10n.t('qfield_map_fat_closures_id'),
-          value: ctx.fatClosuresId!,
+          label: closureKey ?? l10n.t('qfield_map_closure_odf_id'),
+          value: closureId,
           accent: true,
         ),
       ]);
     }
+    if (ctx.selectedHoleId != null && ctx.selectedHoleId!.isNotEmpty) {
+      headerChildren.addAll([
+        const SizedBox(height: 10),
+        _FeatureDataRow(
+          label: holeIdDisplayLabel(
+            ctx.selectedHolePropertyKey,
+            fallback: l10n.t('qfield_map_hole_id'),
+          ),
+          value: ctx.selectedHoleId!,
+          accent: true,
+        ),
+      ]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: headerChildren,
+    );
+  }
 
-    widgets.addAll([
-      const SizedBox(height: 12),
+  Widget _handholeBundleCard(HandholeTapBundle bundle) {
+    return _InfoSectionCard(
+      title: handholeIdFromProperties(bundle.handhole.feature.properties) ??
+          featureTapListTitle(bundle.handhole.feature),
+      icon: Icons.grid_on_rounded,
+      accent: const Color(0xFFE53935),
+      children: [
+        _TapElementTile(
+          hit: bundle.handhole,
+          selected: selected,
+          onPick: onPickTapFeature,
+        ),
+        if (bundle.holeId != null && bundle.holeId!.isNotEmpty)
+          _FeatureDataRow(
+            label: holeIdDisplayLabel(
+              bundle.holePropertyKey,
+              fallback: l10n.t('qfield_map_hole_id'),
+            ),
+            value: bundle.holeId!,
+            accent: true,
+          ),
+        if (bundle.closureOrOdfId != null && bundle.closureOrOdfId!.isNotEmpty)
+          _FeatureDataRow(
+            label: bundle.closurePropertyKey ?? l10n.t('qfield_map_closure_odf_id'),
+            value: bundle.closureOrOdfId!,
+            accent: true,
+          ),
+        ...displayPropsForFeature(bundle.handhole.feature)
+            .entries
+            .where(
+              (e) =>
+                  (bundle.closurePropertyKey == null ||
+                      e.key != bundle.closurePropertyKey) &&
+                  !isHoleIdPropertyKey(e.key),
+            )
+            .map((e) => _FeatureDataRow(label: _attributeLabel(e.key), value: '${e.value ?? ''}')),
+        for (final entry in bundle.cablesByType.entries) ...[
+          _CableTypeHeader(label: entry.key),
+          for (final h in entry.value)
+            _TapElementTile(
+              hit: h,
+              selected: selected,
+              onPick: onPickTapFeature,
+              isCable: true,
+            ),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _fatInfoSections() {
+    final ctx = tapContext!;
+    final sections = <Widget>[_fatHeaderSection(ctx)];
+
+    sections.add(
       _InfoSectionCard(
         title: l10n.t('qfield_map_feature_data'),
         icon: Icons.info_outline_rounded,
         children: [
-          ...displayPropsForFeature(ctx.selected).entries.map(
-                (e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}'),
+          ...displayPropsForFeature(ctx.selected)
+              .entries
+              .where(
+                (e) =>
+                    ctx.selectedHoleId == null ||
+                    !isHoleIdPropertyKey(e.key),
+              )
+              .map(
+                (e) => _FeatureDataRow(label: _attributeLabel(e.key), value: '${e.value ?? ''}'),
               ),
           if (ctx.primaryProps.isEmpty)
             Text(
@@ -484,66 +562,36 @@ class QFieldMapBottomPanel extends StatelessWidget {
             ),
         ],
       ),
-    ]);
+    );
 
     if (ctx.fatSummary.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 12),
+      sections.add(
         _InfoSectionCard(
           title: l10n.t('qfield_map_fat_site_info'),
           icon: Icons.business_rounded,
           accent: _mint,
           children: ctx.fatSummary.entries
-              .map((e) => _FeatureDataRow(label: e.key, value: e.value, accent: true))
+              .map((e) => _FeatureDataRow(label: _attributeLabel(e.key), value: e.value, accent: true))
               .toList(),
-        ),
-      ]);
-    }
-
-    if (ctx.handholes.isNotEmpty) {
-      widgets.add(const SizedBox(height: 12));
-      widgets.add(
-        _InfoSectionCard(
-          title: l10n.t('qfield_map_handholes_for_fat'),
-          icon: Icons.grid_on_rounded,
-          accent: const Color(0xFFE53935),
-          children: [
-            for (final bundle in ctx.handholes) ...[
-              _TapElementTile(
-                hit: bundle.handhole,
-                selected: selected,
-                onPick: onPickTapFeature,
-              ),
-              if (bundle.closureOrOdfId != null)
-                _FeatureDataRow(
-                  label: bundle.closurePropertyKey ?? l10n.t('qfield_map_closure_odf_id'),
-                  value: bundle.closureOrOdfId!,
-                  accent: true,
-                ),
-              ...displayPropsForFeature(bundle.handhole.feature)
-                  .entries
-                  .where((e) => bundle.closurePropertyKey == null || e.key != bundle.closurePropertyKey)
-                  .map((e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}')),
-              for (final entry in bundle.cablesByType.entries) ...[
-                _CableTypeHeader(label: entry.key),
-                for (final h in entry.value)
-                  _TapElementTile(
-                    hit: h,
-                    selected: selected,
-                    onPick: onPickTapFeature,
-                    isCable: true,
-                  ),
-              ],
-              const SizedBox(height: 8),
-            ],
-          ],
         ),
       );
     }
 
+    if (ctx.handholes.isNotEmpty) {
+      sections.add(
+        _SectionLabel(
+          icon: Icons.grid_on_rounded,
+          title: l10n.t('qfield_map_handholes_for_fat'),
+          color: const Color(0xFFE53935),
+        ),
+      );
+      for (final bundle in ctx.handholes) {
+        sections.add(_handholeBundleCard(bundle));
+      }
+    }
+
     if (ctx.excavations.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 12),
+      sections.add(
         _InfoSectionCard(
           title: l10n.t('qfield_map_excavation_for_fat'),
           icon: Icons.landscape_rounded,
@@ -551,17 +599,16 @@ class QFieldMapBottomPanel extends StatelessWidget {
             for (final h in ctx.excavations) ...[
               _TapElementTile(hit: h, selected: selected, onPick: onPickTapFeature),
               ...displayPropsForFeature(h.feature).entries.map(
-                    (e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}'),
+                    (e) => _FeatureDataRow(label: _attributeLabel(e.key), value: '${e.value ?? ''}'),
                   ),
             ],
           ],
         ),
-      ]);
+      );
     }
 
     if (ctx.fatCablesByType.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 12),
+      sections.add(
         _InfoSectionCard(
           title: l10n.t('qfield_map_cables_at_location'),
           icon: Icons.cable_rounded,
@@ -578,12 +625,11 @@ class QFieldMapBottomPanel extends StatelessWidget {
             ],
           ],
         ),
-      ]);
+      );
     }
 
     if (ctx.otherLayerGroups.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 12),
+      sections.add(
         _InfoSectionCard(
           title: l10n.t('qfield_map_other_layers_at_location'),
           icon: Icons.more_horiz_rounded,
@@ -595,12 +641,11 @@ class QFieldMapBottomPanel extends StatelessWidget {
             ],
           ],
         ),
-      ]);
+      );
     }
 
     if (canWrite && fieldCtrls.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 14),
+      sections.add(
         _InfoSectionCard(
           title: l10n.t('qfield_map_edit_fields'),
           icon: Icons.edit_rounded,
@@ -635,33 +680,37 @@ class QFieldMapBottomPanel extends StatelessWidget {
               )
               .toList(),
         ),
-      ]);
+      );
     }
 
     if (canWrite) {
-      widgets.addAll([
-        const SizedBox(height: 16),
-        Text(
-          l10n.t('qfield_map_tap_place_pin'),
-          style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
+      sections.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.t('qfield_map_tap_place_pin'),
+              style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: noteCtrl,
+              style: const TextStyle(color: Colors.white),
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: l10n.t('qfield_map_note_hint'),
+                hintStyle: TextStyle(color: Colors.white.withAlpha(90)),
+                filled: true,
+                fillColor: const Color(0xFF0A0A18),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: noteCtrl,
-          style: const TextStyle(color: Colors.white),
-          maxLines: 2,
-          decoration: InputDecoration(
-            hintText: l10n.t('qfield_map_note_hint'),
-            hintStyle: TextStyle(color: Colors.white.withAlpha(90)),
-            filled: true,
-            fillColor: const Color(0xFF0A0A18),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
-      ]);
+      );
     }
 
-    return widgets;
+    return sections;
   }
 }
 
@@ -675,10 +724,16 @@ String _tapHeaderSubtitle(AppLocalizations l10n, QFieldTapContext ctx) {
   if (ctx.fatId != null) {
     parts.add('${l10n.t('qfield_map_fat_label')} ${ctx.fatId}');
   }
-  if (isHandholeLayerName(layer) && handholeContainsClosure(sel.properties)) {
-    final closureId = closureOrOdfIdFromProperties(sel.properties);
-    if (closureId != null && closureId.isNotEmpty) {
-      parts.add('${l10n.t('qfield_map_closure_odf_id')}: $closureId');
+  if (isHandholeLayerName(layer)) {
+    final holeId = holeIdFromProperties(sel.properties);
+    if (holeId != null && holeId.isNotEmpty) {
+      parts.add('${l10n.t('qfield_map_hole_id')}: $holeId');
+    }
+    if (handholeContainsClosure(sel.properties)) {
+      final closureId = closureOrOdfIdFromProperties(sel.properties);
+      if (closureId != null && closureId.isNotEmpty) {
+        parts.add('${l10n.t('qfield_map_closure_odf_id')}: $closureId');
+      }
     }
   }
   if (parts.isNotEmpty) return parts.join(' · ');
@@ -698,10 +753,15 @@ class _HorizontalChipRow extends StatelessWidget {
     if (children.isEmpty) return SizedBox(height: height);
     return SizedBox(
       height: height,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification n) {
+          if (n.metrics.axis == Axis.horizontal) return true;
+          return false;
+        },
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
+          child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             for (var i = 0; i < children.length; i++) ...[
@@ -709,6 +769,7 @@ class _HorizontalChipRow extends StatelessWidget {
               children[i],
             ],
           ],
+        ),
         ),
       ),
     );

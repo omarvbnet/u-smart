@@ -185,38 +185,45 @@ class QFieldMapPointLabel extends StatelessWidget {
     super.key,
     required this.text,
     this.highlighted = false,
-    this.closureBox = false,
+    this.closureCircle = false,
   });
 
   final String text;
   final bool highlighted;
-  /// Small red box + white text (closures / ODF).
-  final bool closureBox;
+  /// Small red circle + white text (closures / ODF).
+  final bool closureCircle;
 
   @override
   Widget build(BuildContext context) {
-    if (closureBox) {
+    if (closureCircle) {
       return Container(
-        constraints: const BoxConstraints(maxWidth: 42),
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
+          shape: BoxShape.circle,
           color: highlighted ? const Color(0xFF6C63FF) : const Color(0xFFE53935),
-          borderRadius: BorderRadius.circular(3),
           border: Border.all(
-            color: Colors.white.withAlpha(highlighted ? 255 : 200),
-            width: 0.8,
+            color: Colors.white.withAlpha(highlighted ? 255 : 220),
+            width: 1.2,
           ),
+          boxShadow: const [
+            BoxShadow(color: Color(0x66000000), blurRadius: 2, offset: Offset(0, 1)),
+          ],
         ),
-        child: Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 6.5,
-            fontWeight: FontWeight.w700,
-            height: 1.0,
+        alignment: Alignment.center,
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 5.5,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
+            ),
           ),
         ),
       );
@@ -281,7 +288,7 @@ class QFieldMapPointIcon extends StatelessWidget {
         );
       case QFieldPointSymbolKind.closure:
       case QFieldPointSymbolKind.cabinet:
-        body = _SquareMarker(
+        body = _CircleMarker(
           fill: const Color(0xFFE53935),
           stroke: Colors.white,
           strokeWidth: selected ? 2.2 : 1.4,
@@ -336,6 +343,30 @@ class _PoleTriangleMarker extends StatelessWidget {
             child: Icon(Icons.flag_rounded, size: 11, color: QFieldMapSymbols.flagPurple),
           ),
       ],
+    );
+  }
+}
+
+class _CircleMarker extends StatelessWidget {
+  const _CircleMarker({
+    required this.fill,
+    required this.stroke,
+    required this.strokeWidth,
+  });
+
+  final Color fill;
+  final Color stroke;
+  final double strokeWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(14, 14),
+      painter: _CirclePainter(
+        fill: fill,
+        stroke: stroke,
+        strokeWidth: strokeWidth,
+      ),
     );
   }
 }
@@ -431,6 +462,36 @@ class _SquarePainter extends CustomPainter {
     canvas.drawRect(rect, Paint()..color = fill);
     canvas.drawRect(
       rect,
+      Paint()
+        ..color = stroke
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CirclePainter extends CustomPainter {
+  _CirclePainter({
+    required this.fill,
+    required this.stroke,
+    required this.strokeWidth,
+  });
+
+  final Color fill;
+  final Color stroke;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide / 2) - 1;
+    canvas.drawCircle(center, radius, Paint()..color = fill);
+    canvas.drawCircle(
+      center,
+      radius,
       Paint()
         ..color = stroke
         ..style = PaintingStyle.stroke

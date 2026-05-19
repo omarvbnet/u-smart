@@ -6,6 +6,8 @@ import {
   parseQFieldProjectsFromCompanyJson,
   qfieldProjectsToJsonValue,
 } from '@/lib/qfield-projects';
+import { notifyQFieldMapCommentAdded } from '@/lib/qfield-map-note-notify';
+import { parseTicketCompanyJson } from '@/lib/private-company-kpi';
 import { canManageTicketQFieldProjects } from '@/lib/qfield-ticket-write';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
-  if (!['add_revision', 'update_meta', 'set_map_annotation'].includes(action)) {
+  if (!['add_revision', 'update_meta', 'set_map_annotation', 'add_map_note'].includes(action)) {
     return NextResponse.json({ success: false, message: 'Invalid action' }, { status: 400 });
   }
 
@@ -41,7 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const row = await prisma.visitorRequest.findFirst({
     where: { id: ticketId },
-    select: { company: true },
+    select: {
+      company: true,
+      siteName: true,
+      privateCompanyId: true,
+    },
   });
   if (!row) {
     return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
@@ -56,6 +62,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!parsed._ticket) {
     return NextResponse.json({ success: false, message: 'Invalid ticket payload' }, { status: 400 });
   }
+
+  const ticketParsed = parseTicketCompanyJson(row.company);
+  const siteId =
+    (row.siteName as string | null)?.trim() ||
+    (typeof ticketParsed.siteName === 'string' ? ticketParsed.siteName.trim() : '') ||
+    'Site';
 
   const projects = parseQFieldProjectsFromCompanyJson(parsed);
   const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : '';
@@ -113,6 +125,62 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     projects[idx].currentUrl = url;
     projects[idx].fileName = fileName;
     projects[idx].updatedAt = at;
+  } else if (action === 'add_map_note') {
+    const latRaw = body.latitude;
+    const lngRaw = body.longitude;
+    const lat =
+      typeof latRaw === 'number' ? latRaw : typeof latRaw === 'string' ? parseFloat(latRaw) : NaN;
+    const lng =
+      typeof lngRaw === 'number' ? lngRaw : typeof lngRaw === 'string' ? parseFloat(lngRaw) : NaN;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return NextResponse.json(
+        { success: false, message: 'latitude and longitude must be numbers' },
+        { status: 400 }
+      );
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return NextResponse.json(
+        { success: false, message: 'Coordinates out of valid WGS84 range' },
+        { status: 400 }
+      );
+    }
+    const noteText = typeof body.note === 'string' ? body.note.trim() : '';
+    if (!noteText) {
+      return NextResponse.json({ success: false, message: 'note is required' }, { status: 400 });
+    }
+    if (noteText.length > 4000) {
+      return NextResponse.json({ success: false, message: 'note is too long' }, { status: 400 });
+    }
+    const me = await prisma.ticketRequester.findUnique({
+      where: { id: auth.payload.requesterId },
+      select: { name: true, username: true, role: true },
+    });
+    const byName = ((me?.name as string) || (me?.username as string) || '').trim() || null;
+    const at = new Date().toISOString();
+    const list = projects[idx].mapNotes ?? [];
+    list.push({
+      id: newQfieldEntityId(),
+      latitude: lat,
+      longitude: lng,
+      note: noteText,
+      createdAt: at,
+      byRequesterId: auth.payload.requesterId,
+      byName,
+    });
+    projects[idx].mapNotes = list;
+    projects[idx].updatedAt = at;
+
+    notifyQFieldMapCommentAdded({
+      ticketId,
+      authorRequesterId: auth.payload.requesterId,
+      authorName: byName ?? 'Staff',
+      authorRole: String(me?.role ?? ''),
+      siteId,
+      comment: noteText,
+      privateCompanyId: (row.privateCompanyId as string | null) ?? null,
+      companyJson: row.company,
+      projectId,
+    }).catch((e) => console.error('add_map_note notify:', e));
   } else {
     const clear = body.clear === true;
     if (clear) {

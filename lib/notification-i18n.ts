@@ -22,6 +22,7 @@ export type NotificationCopyKey =
   | 'workspace_conflict_reported'
   | 'workspace_checklist_updated'
   | 'workspace_announcement'
+  | 'qfield_map_comment'
   | 'material_assigned'
   | 'material_used'
   | 'material_request_created'
@@ -876,6 +877,24 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: v.title?.trim() || 'ڕاگەیەنراوی ئۆفیس',
       body: v.body?.trim() || 'خاوەنی شوێنی کار پەیامێکی بۆ ناردووی.',
+    }),
+  },
+  qfield_map_comment: {
+    en: (v) => ({
+      title: 'New map comment',
+      body: `${v.authorName} on site ${v.siteId}: ${v.comment}`,
+    }),
+    ar: (v) => ({
+      title: 'تعليق جديد على الخريطة',
+      body: `${v.authorName} على الموقع ${v.siteId}: ${v.comment}`,
+    }),
+    tr: (v) => ({
+      title: 'Yeni harita yorumu',
+      body: `${v.authorName}, site ${v.siteId}: ${v.comment}`,
+    }),
+    ku: (v) => ({
+      title: 'لێدوانی نوێی نەخشە',
+      body: `${v.authorName} لە شوێنی ${v.siteId}: ${v.comment}`,
     }),
   },
 };

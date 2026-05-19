@@ -77,6 +77,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       message: preview.message ?? null,
       stats: preview.stats ?? null,
       mapAnnotation: proj.mapAnnotation ?? null,
+      mapNotes: proj.mapNotes ?? [],
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Preview failed';

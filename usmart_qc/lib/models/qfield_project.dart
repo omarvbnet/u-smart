@@ -1,3 +1,5 @@
+import 'qfield_map_note.dart';
+
 class QFieldMapAnnotation {
   final double latitude;
   final double longitude;
@@ -69,6 +71,7 @@ class QFieldProject {
   final String updatedAt;
   final List<QFieldRevision> revisions;
   final QFieldMapAnnotation? mapAnnotation;
+  final List<QFieldMapNote> mapNotes;
 
   QFieldProject({
     required this.id,
@@ -80,6 +83,7 @@ class QFieldProject {
     required this.updatedAt,
     this.revisions = const [],
     this.mapAnnotation,
+    this.mapNotes = const [],
   });
 
   factory QFieldProject.fromJson(Map<String, dynamic> json) {
@@ -100,6 +104,7 @@ class QFieldProject {
       mapAnnotation: json['mapAnnotation'] is Map<String, dynamic>
           ? QFieldMapAnnotation.fromJson(json['mapAnnotation'] as Map<String, dynamic>)
           : null,
+      mapNotes: parseQFieldMapNotes(json['mapNotes']),
     );
   }
 }

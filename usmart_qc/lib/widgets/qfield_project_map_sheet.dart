@@ -4,7 +4,9 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/qfield_map_note.dart';
 import '../models/qfield_project.dart';
+import 'qfield_map_note_bubble.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
 import '../utils/coordinate_transform.dart';
@@ -146,6 +148,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   Map<String, double>? _boundsApi;
   LatLng? _draftPin;
   QFieldMapAnnotation? _annotation;
+  List<QFieldMapNote> _mapNotes = const [];
   List<_QFieldLayerMeta> _layers = const [];
   List<_QFieldDataTable> _dataTables = const [];
   final Set<String> _hiddenLayerKeys = {};
@@ -154,6 +157,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
   @override
   void initState() {
     super.initState();
+    _mapNotes = List<QFieldMapNote>.from(widget.project.mapNotes);
     _annotation = widget.project.mapAnnotation;
     if (_annotation != null) {
       _draftPin = LatLng(_annotation!.latitude, _annotation!.longitude);
@@ -268,6 +272,8 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
           _draftPin ??= LatLng(lat, lng);
         }
       }
+      final notes = parseQFieldMapNotes(data['mapNotes']);
+      if (notes.isNotEmpty) _mapNotes = notes;
     }
     if (metas.isEmpty && gj != null) {
       metas = _layersFromGeoJson(gj);
@@ -782,6 +788,67 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
     return out;
   }
 
+  String _notePreview(String text) {
+    final t = text.trim();
+    if (t.length <= 72) return t;
+    return '${t.substring(0, 72)}…';
+  }
+
+  void _showMapNoteDetails(QFieldMapNote note) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF12122A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.paddingOf(ctx).bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.t('qfield_map_comment_detail'),
+              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              note.authorLabel,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(200),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(note.note, style: const TextStyle(color: Colors.white, height: 1.4)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _mapNoteMarkers() {
+    return [
+      for (final note in _mapNotes)
+        Marker(
+          point: LatLng(note.latitude, note.longitude),
+          width: 140,
+          height: 72,
+          alignment: Alignment.bottomCenter,
+          child: QFieldMapNoteBubble(
+            authorName: note.authorLabel,
+            previewText: _notePreview(note.note),
+            onTap: () => _showMapNoteDetails(note),
+          ),
+        ),
+    ];
+  }
+
   List<Marker> _pointMarkers() {
     final out = <Marker>[];
     final fc = _geojson;
@@ -815,17 +882,17 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               if (shouldShowMapLabel(layerName)) {
                 final text = mapLabelForFeature(props, layerName);
                 if (text != null && text.isNotEmpty) {
-                  final closureBox = useClosureBoxMapLabel(layerName);
+                  final closureCircle = useClosureCircleMapLabel(layerName);
                   out.add(Marker(
                     point: pt,
-                    width: closureBox ? 46 : 50,
-                    height: closureBox ? 24 : 22,
+                    width: closureCircle ? 28 : 50,
+                    height: closureCircle ? 28 : 22,
                     alignment: Alignment.bottomCenter,
                     child: Transform.translate(
-                      offset: Offset(0, closureBox ? -24 : -22),
+                      offset: Offset(0, closureCircle ? -28 : -22),
                       child: QFieldMapPointLabel(
                         text: text,
-                        closureBox: closureBox,
+                        closureCircle: closureCircle,
                       ),
                     ),
                   ));
@@ -1345,6 +1412,7 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                                           size: 46,
                                         ),
                                       ),
+                                    ..._mapNoteMarkers(),
                                   ],
                                 ),
                                 SimpleAttributionWidget(

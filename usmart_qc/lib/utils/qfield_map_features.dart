@@ -275,6 +275,10 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
   if (n.contains('pole')) {
     return poleFatLabel(props);
   }
+  if (isHoleLayerName(layerName)) {
+    return holeIdFromProperties(props) ??
+        _propValue(props, ['id', 'name', 'label', 'code']);
+  }
   if ((n.contains('fat') || n.contains('fdt')) && !n.contains('region')) {
     return cabIdFromProperties(props) ??
         _propValue(props, [
@@ -293,33 +297,15 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
         ]);
   }
   if (n.contains('closure') || n.contains('cabinet') || n.contains('odf')) {
-    return closureOrOdfIdFromProperties(props) ??
-        _propValue(props, [
-          'closure_id',
-          'closureid',
-          'closure_no',
-          'closure_num',
-          'cabinet_id',
-          'cabinet_no',
-          'id',
-          'name',
-          'label',
-          'code',
-        ]);
+    return closureOrOdfIdFromProperties(props);
+  }
+  if (isFdtFatClosureLayerName(layerName)) {
+    return closureOrOdfIdFromProperties(props);
   }
   if (n.contains('handhole') || n == 'hh') {
-    return _propValue(props, [
-      'hh_id',
-      'hh_no',
-      'handhole_id',
-      'handhole_no',
-      'id',
-      'name',
-      'label',
-    ]);
-  }
-  if (n.contains('hole')) {
-    return _propValue(props, ['hole_id', 'hole_no', 'id', 'name', 'label']);
+    return handholeIdFromProperties(props) ??
+        holeIdFromProperties(props) ??
+        _propValue(props, ['id', 'name', 'label']);
   }
   if (isCableLayer(layerName) || n.contains('ftth') || (n.contains('fiber') && !n.contains('region'))) {
     return cableIdFromProperties(props);
@@ -339,17 +325,59 @@ bool isClosureLayerName(String? layerName) {
 }
 
 bool isFdtFatLayerName(String? layerName) {
+  if (isHoleLayerName(layerName)) return false;
   final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   return (n.contains('fat') || n.contains('fdt')) && !n.contains('region');
 }
 
+bool isHoleLayerName(String? layerName) {
+  if (isHandholeLayerName(layerName)) return false;
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'[\s_]+'), '');
+  if (n.contains('fdthole') || n == 'fdtholes') return true;
+  if (n.contains('hole') && !n.contains('handhole')) return true;
+  return false;
+}
+
+/// GIS keys / layer names that store hole numbers (shown as "Hole ID" in UI).
+const _holeIdValueKeys = [
+  'hole_id',
+  'Hole_ID',
+  'hole_no',
+  'holeid',
+  'hole_number',
+  'hole_num',
+  'fdt_holes',
+  'FDT_Holes',
+  'fdt_hole_id',
+  'fdt_hole_no',
+];
+
+/// Whether [propertyKey] is a hole-ID attribute (not the layer name shown raw).
+bool isHoleIdPropertyKey(String? propertyKey) {
+  if (propertyKey == null || propertyKey.trim().isEmpty) return true;
+  final k = propertyKey.trim().toLowerCase().replaceAll(RegExp(r'[\s_]+'), '');
+  if (k == 'layer' || k == 'package') return false;
+  for (final want in _holeIdValueKeys) {
+    if (k == want.toLowerCase().replaceAll(RegExp(r'[\s_]+'), '')) return true;
+  }
+  if (k.contains('hole') && !k.contains('handhole')) return true;
+  return false;
+}
+
+/// User-facing label for hole-ID rows (never "FDT_Holes").
+String holeIdDisplayLabel(String? rawPropertyKey, {String fallback = 'Hole ID'}) {
+  if (rawPropertyKey == null || isHoleIdPropertyKey(rawPropertyKey)) {
+    return fallback;
+  }
+  return rawPropertyKey;
+}
+
 bool shouldShowMapLabel(String? layerName) {
-  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   if (isPoleLayerName(layerName)) return false;
   if (isFdtFatLayerName(layerName)) return true;
   if (isClosureLayerName(layerName)) return true;
   if (isHandholeLayerName(layerName)) return true;
-  if (n.contains('fdthole') || (n.contains('hole') && n.contains('fdt'))) return true;
+  if (isHoleLayerName(layerName)) return true;
   return false;
 }
 
@@ -361,10 +389,13 @@ bool useCompactMapLabel(String? layerName) {
   return false;
 }
 
-/// Small red box + white ID (closures / ODF).
-bool useClosureBoxMapLabel(String? layerName) {
-  return isClosureLayerName(layerName);
+/// Small red circle badge + white ID (closures / ODF / FDT closure layers).
+bool useClosureCircleMapLabel(String? layerName) {
+  return isClosureLayerName(layerName) || isFdtFatClosureLayerName(layerName);
 }
+
+@Deprecated('Use useClosureCircleMapLabel')
+bool useClosureBoxMapLabel(String? layerName) => useClosureCircleMapLabel(layerName);
 
 String? cabIdFromProperties(Map<String, dynamic> props) {
   return _propValue(props, [
@@ -529,6 +560,36 @@ bool isHandholeLayerName(String? layerName) {
   return n.contains('handhole') || n == 'hh';
 }
 
+String? handholeIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, [
+    'hh_id',
+    'hh_no',
+    'hhid',
+    'handhole_id',
+    'handhole_no',
+    'handholeid',
+    'hh_number',
+  ]);
+}
+
+String? holeIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, _holeIdValueKeys);
+}
+
+String? holeIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in _holeIdValueKeys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return e.key;
+    }
+  }
+  return null;
+}
+
 const _closureOrOdfIdKeys = [
   'closure_or_odf_id',
   'clouser_or_odf_id',
@@ -552,12 +613,14 @@ const _fatClosuresIdKeys = [
   'closures_id',
 ];
 
+/// Closure / ODF identifier — prefers `Closure_OR_ODF_ID`, falls back to FAT closure fields.
 String? closureOrOdfIdFromProperties(Map<String, dynamic> props) {
-  return _propValue(props, _closureOrOdfIdKeys);
+  return _propValue(props, _closureOrOdfIdKeys) ??
+      _propValue(props, _fatClosuresIdKeys);
 }
 
 String? closureOrOdfIdPropertyKey(Map<String, dynamic> props) {
-  for (final want in _closureOrOdfIdKeys) {
+  for (final want in [..._closureOrOdfIdKeys, ..._fatClosuresIdKeys]) {
     for (final e in props.entries) {
       if (e.key.toLowerCase() != want.toLowerCase()) continue;
       final v = e.value;
@@ -568,6 +631,15 @@ String? closureOrOdfIdPropertyKey(Map<String, dynamic> props) {
     }
   }
   return null;
+}
+
+/// Layer names like "FDT Closure", "FAT_Closure" (not generic handholes).
+bool isFdtFatClosureLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (isHandholeLayerName(layerName)) return false;
+  final hasClosure = n.contains('closure') || n.contains('clos') || n.contains('odf');
+  final hasFdtFat = n.contains('fdt') || n.contains('fat');
+  return hasClosure && (hasFdtFat || isClosureLayerName(layerName));
 }
 
 String? fatClosuresIdFromProperties(Map<String, dynamic> props) {
@@ -628,7 +700,17 @@ String featureTapListTitle(QFieldMapFeature f) {
     final cableId = cableIdFromProperties(f.properties);
     if (cableId != null && cableId.isNotEmpty) return cableId;
   }
-  final id = mapLabelForFeature(f.properties, layer) ?? f.label;
+  if (isClosureLayerName(layer) ||
+      isFdtFatClosureLayerName(layer) ||
+      (layer != null && handholeContainsClosure(f.properties))) {
+    final closureId = closureOrOdfIdFromProperties(f.properties);
+    if (closureId != null && closureId.isNotEmpty) return closureId;
+  }
+  if (isHoleLayerName(layer)) {
+    final holeId = holeIdFromProperties(f.properties);
+    if (holeId != null && holeId.isNotEmpty) return holeId;
+  }
+  final id = mapLabelForFeature(f.properties, layer);
   if (id != null && id.isNotEmpty) {
     final lk = id.toLowerCase();
     if (lk != 'fid' && !lk.startsWith('gj_')) return id;
@@ -645,25 +727,54 @@ String featureTapListSubtitle(QFieldMapFeature f) {
   final props = f.properties;
   final parts = <String>[];
 
-  if (isHandholeLayerName(layer) && handholeContainsClosure(props)) {
-    final closureId = closureOrOdfIdFromProperties(props);
-    if (closureId != null && closureId.isNotEmpty) {
-      parts.add('Closure/ODF $closureId');
-    } else {
-      parts.add('Closure/ODF');
+  if (isHandholeLayerName(layer)) {
+    final holeId = holeIdFromProperties(props);
+    if (holeId != null && holeId.isNotEmpty) {
+      parts.add('Hole ID $holeId');
+    }
+    if (handholeContainsClosure(props)) {
+      final closureId = closureOrOdfIdFromProperties(props);
+      if (closureId != null && closureId.isNotEmpty) {
+        parts.add('Closure/ODF $closureId');
+      } else {
+        parts.add('Closure/ODF');
+      }
     }
   }
 
-  if (isFatLayerName(layer)) {
-    final fatClosures = fatClosuresIdFromProperties(props);
-    if (fatClosures != null && fatClosures.isNotEmpty) {
-      parts.add('FAT closures $fatClosures');
+  if (isHoleLayerName(layer)) {
+    final holeId = holeIdFromProperties(props);
+    if (holeId != null && holeId.isNotEmpty) {
+      parts.add('Hole ID $holeId');
+    }
+    final gt = f.geometryType;
+    if (gt != null && gt.isNotEmpty) parts.add(gt);
+    final pkg = props['package']?.toString().trim() ?? '';
+    if (pkg.isNotEmpty) parts.add(pkg);
+    return parts.isEmpty ? f.source : parts.join(' · ');
+  }
+
+  if (isFatLayerName(layer) || isFdtFatLayerName(layer)) {
+    final closureId = closureOrOdfIdFromProperties(props);
+    if (closureId != null && closureId.isNotEmpty) {
+      parts.add('Closure/ODF $closureId');
     }
   }
 
   final pkg = props['package']?.toString().trim() ?? '';
+  if (isClosureLayerName(layer) || isFdtFatClosureLayerName(layer)) {
+    if (parts.isNotEmpty) return parts.join(' · ');
+    final gt = f.geometryType;
+    if (gt != null && gt.isNotEmpty) return gt;
+    return f.source;
+  }
+
   final gt = f.geometryType;
-  if (layer.isNotEmpty) parts.add(layer);
+  if (layer.isNotEmpty &&
+      !isClosureLayerName(layer) &&
+      !isFdtFatClosureLayerName(layer)) {
+    parts.add(layer);
+  }
   if (pkg.isNotEmpty && pkg != layer) parts.add(pkg);
   if (gt != null && gt.isNotEmpty) parts.add(gt);
   return parts.isEmpty ? f.source : parts.join(' · ');
