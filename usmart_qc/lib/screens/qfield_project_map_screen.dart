@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,9 +9,11 @@ import '../l10n/app_localizations.dart';
 import '../models/qfield_project.dart';
 import '../models/ticket.dart';
 import '../providers/tickets_provider.dart';
+import '../providers/workspace_sites_provider.dart';
 import '../utils/qfield_map_features.dart';
 import '../utils/qfield_map_tap_context.dart';
 import '../utils/responsive_layout.dart';
+import '../widgets/qfield_map_bottom_panel.dart';
 import '../widgets/qfield_map_symbols.dart';
 import '../widgets/qfield_project_map_sheet.dart';
 
@@ -21,14 +21,16 @@ import '../widgets/qfield_project_map_sheet.dart';
 class QFieldProjectMapScreen extends StatefulWidget {
   const QFieldProjectMapScreen({
     super.key,
-    required this.ticketId,
+    this.ticketId,
+    this.workspaceSiteId,
     required this.project,
     this.ticket,
     required this.canWrite,
     this.onSaved,
-  });
+  }) : assert(ticketId != null || workspaceSiteId != null);
 
-  final String ticketId;
+  final String? ticketId;
+  final String? workspaceSiteId;
   final QFieldProject project;
   final Ticket? ticket;
   final bool canWrite;
@@ -61,13 +63,16 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   QFieldMapAnnotation? _annotation;
   final TextEditingController _noteCtrl = TextEditingController();
 
-  List<_LayerChip> _layers = const [];
-  List<_SqlTableData> _sqlTables = const [];
+  List<QFieldLayerChip> _layers = const [];
+  List<QFieldSqlTableData> _sqlTables = const [];
   Map<String, dynamic>? _previewStats;
   List<QFieldMapFeature> _features = const [];
   int? _defaultCrsEpsg;
   Map<String, int> _layerEpsgByKey = const {};
   final Set<String> _hiddenLayerKeys = {};
+  final Set<String> _hiddenCableTypeKeys = {};
+  final Set<String> _hiddenCableIdKeys = {};
+  List<CableMapToggle> _cableToggles = const [];
   String? _selectedFeatureId;
   List<FeatureTapHit> _locationHits = const [];
   Set<String> _relatedCableIds = const {};
@@ -110,17 +115,25 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
 
   Future<void> _loadPreview() async {
     setState(() => _loading = true);
-    final data = await context.read<TicketsProvider>().fetchQFieldMapPreview(
-          widget.ticketId,
-          widget.project.id,
-        );
+    final Map<String, dynamic>? data;
+    if (widget.workspaceSiteId != null) {
+      data = await context.read<WorkspaceSitesProvider>().fetchQFieldMapPreview(
+            widget.workspaceSiteId!,
+            widget.project.id,
+          );
+    } else {
+      data = await context.read<TicketsProvider>().fetchQFieldMapPreview(
+            widget.ticketId!,
+            widget.project.id,
+          );
+    }
     if (!mounted) return;
 
     Map<String, dynamic>? gj;
     Map<String, double>? b;
     String? hint;
-    var layers = <_LayerChip>[];
-    var sqlTables = <_SqlTableData>[];
+    var layers = <QFieldLayerChip>[];
+    var sqlTables = <QFieldSqlTableData>[];
     Map<String, dynamic>? previewStats;
     int? defaultCrs;
     final layerCrs = <String, int>{};
@@ -155,7 +168,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           final key = normalizeLayerKey(pkg, layer);
           final crs = row['crsEpsg'];
           if (crs is num) layerCrs[key] = crs.toInt();
-          layers.add(_LayerChip(
+          layers.add(QFieldLayerChip(
             key: key,
             label: pkg.isNotEmpty ? '$pkg › $layer' : layer,
             color: _layerPalette[i % _layerPalette.length],
@@ -188,7 +201,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           }
           final pkgNorm = pkg.isNotEmpty ? pkg : name;
           final layerKey = normalizeLayerKey(pkgNorm, name);
-          sqlTables.add(_SqlTableData(
+          sqlTables.add(QFieldSqlTableData(
             name: name,
             package: pkgNorm,
             layerKey: layerKey,
@@ -199,7 +212,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           ));
           final key = normalizeLayerKey(pkgNorm, name);
           if (!layers.any((l) => l.key == key)) {
-            layers.add(_LayerChip(
+            layers.add(QFieldLayerChip(
               key: key,
               label: pkg.isNotEmpty ? '$pkg › $name' : name,
               color: _layerPalette[layers.length % _layerPalette.length],
@@ -227,7 +240,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
 
   int _drawableOnMapCount() => countDrawables(_features);
 
-  void _showSqlTableDetails(_SqlTableData table) {
+  void _showSqlTableDetails(QFieldSqlTableData table) {
     final l10n = AppLocalizations.of(context);
     showModalBottomSheet<void>(
       context: context,
@@ -331,10 +344,28 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
                                   const SizedBox(height: 6),
                                   ...row.entries.map(
                                     (e) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 4),
-                                      child: _FeatureDataRow(
-                                        label: e.key,
-                                        value: '${e.value ?? ''}',
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            e.key,
+                                            style: TextStyle(
+                                              color: Colors.white.withAlpha(140),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          SelectableText(
+                                            '${e.value ?? ''}'.isEmpty ? '—' : '${e.value}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13,
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -353,12 +384,23 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
   }
 
   void _syncMapFeatures() {
-    _features = buildMapFeatures(
+    final all = buildMapFeatures(
       geojson: _geojson,
-      hiddenLayerKeys: _hiddenLayerKeys,
+      hiddenLayerKeys: const {},
       defaultCrsEpsg: _defaultCrsEpsg,
       layerEpsgByKey: _layerEpsgByKey,
     );
+    _cableToggles = buildCableMapToggles(all);
+    _features = all
+        .where(
+          (f) => isCableFeatureVisible(
+            f,
+            hiddenLayerKeys: _hiddenLayerKeys,
+            hiddenCableTypeKeys: _hiddenCableTypeKeys,
+            hiddenCableIdKeys: _hiddenCableIdKeys,
+          ),
+        )
+        .toList();
     final onMap = <String, int>{};
     for (final f in _features) {
       var n = 0;
@@ -369,7 +411,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
     _layers = _layers
         .map(
-          (l) => _LayerChip(
+          (l) => QFieldLayerChip(
             key: l.key,
             label: l.label,
             color: l.color,
@@ -437,21 +479,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final edits = _propertyEdits[f.id];
     if (edits != null) base.addAll(edits);
     return base;
-  }
-
-  /// All fields for the info panel (metadata + attributes + geometry type).
-  Map<String, dynamic> _allDisplayProps(QFieldMapFeature f) {
-    final m = Map<String, dynamic>.from(_propsFor(f));
-    if (f.geometryType != null && f.geometryType!.isNotEmpty) {
-      m['geometryType'] = f.geometryType;
-    }
-    if (f.label != null && f.label!.isNotEmpty) {
-      m['displayLabel'] = f.label;
-    }
-    final sorted = Map.fromEntries(
-      m.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
-    );
-    return sorted;
   }
 
   Future<void> _startLiveLocation() async {
@@ -738,28 +765,39 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     for (final f in _features) {
       if (f.points.isEmpty) continue;
       final layerName = _layerNameFor(f);
-      if (!shouldShowMapLabel(layerName)) continue;
-      final text = mapLabelForFeature(f.properties, layerName) ?? f.label;
-      if (text == null || text.isEmpty) continue;
       final hi = _isFeatureHighlighted(f);
-      final compact = useCompactMapLabel(layerName);
+
+      String? text;
+      var showMain = false;
+      if (isPoleLayerName(layerName)) {
+        text = poleFatLabel(f.properties);
+        showMain = text != null && text.isNotEmpty;
+      } else if (shouldShowMapLabel(layerName)) {
+        text = mapLabelForFeature(f.properties, layerName) ?? f.label;
+        showMain = text != null && text.isNotEmpty;
+      }
+
+      final closureBox = useClosureBoxMapLabel(layerName);
+
       for (final pt in f.points) {
-        out.add(
-          Marker(
-            point: pt,
-            width: compact ? 50 : 92,
-            height: compact ? 22 : 40,
-            alignment: Alignment.bottomCenter,
-            child: Transform.translate(
-              offset: Offset(0, compact ? -22 : -30),
-              child: QFieldMapPointLabel(
-                text: text,
-                highlighted: hi,
-                compact: compact,
+        if (showMain && text != null) {
+          out.add(
+            Marker(
+              point: pt,
+              width: closureBox ? 46 : 50,
+              height: closureBox ? 24 : 22,
+              alignment: Alignment.bottomCenter,
+              child: Transform.translate(
+                offset: Offset(0, closureBox ? -24 : -22),
+                child: QFieldMapPointLabel(
+                  text: text,
+                  highlighted: hi,
+                  closureBox: closureBox,
+                ),
               ),
             ),
-          ),
-        );
+          );
+        }
         if (isHandholeLayerName(layerName) &&
             handholeContainsClosure(f.properties)) {
           final closureId = closureOrOdfIdFromProperties(f.properties);
@@ -767,15 +805,15 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
             out.add(
               Marker(
                 point: pt,
-                width: 50,
-                height: 36,
+                width: 46,
+                height: 24,
                 alignment: Alignment.bottomCenter,
                 child: Transform.translate(
-                  offset: const Offset(0, -38),
+                  offset: Offset(0, showMain ? -46 : -24),
                   child: QFieldMapPointLabel(
                     text: closureId,
                     highlighted: hi,
-                    compact: true,
+                    closureBox: true,
                   ),
                 ),
               ),
@@ -822,8 +860,14 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
 
     var ok = true;
+    final ticketId = widget.ticketId;
+    if (ticketId == null || ticketId.isEmpty) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      return;
+    }
     if (editsPayload.isNotEmpty) {
-      final meta = await prov.postTicketQFieldAction(widget.ticketId, {
+      final meta = await prov.postTicketQFieldAction(ticketId, {
         'action': 'update_meta',
         'projectId': widget.project.id,
         'fieldEdits': editsPayload,
@@ -832,7 +876,7 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     }
 
     if (_draftPin != null) {
-      final pin = await prov.postTicketQFieldAction(widget.ticketId, {
+      final pin = await prov.postTicketQFieldAction(ticketId, {
         'action': 'set_map_annotation',
         'projectId': widget.project.id,
         'latitude': _draftPin!.latitude,
@@ -999,12 +1043,12 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
           // Bottom panel — layers + SQL editor
           DraggableScrollableSheet(
             controller: _panelCtrl,
-            initialChildSize: 0.22,
-            minChildSize: 0.14,
-            maxChildSize: 0.72,
+            initialChildSize: 0.24,
+            minChildSize: 0.12,
+            maxChildSize: 0.88,
             snap: true,
-            snapSizes: const [0.14, 0.22, 0.45, 0.72],
-            builder: (ctx, scroll) => _BottomPanel(
+            snapSizes: const [0.12, 0.24, 0.5, 0.88],
+            builder: (ctx, scroll) => QFieldMapBottomPanel(
               scrollController: scroll,
               l10n: l10n,
               layers: _layers,
@@ -1014,7 +1058,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               selected: _selected,
               layerGroups: _layerGroups,
               tapContext: _tapContext,
-              allDisplayProps: _selected != null ? _allDisplayProps(_selected!) : null,
               userLocationLabel: _userLocation != null
                   ? l10n.t('qfield_map_my_location')
                   : null,
@@ -1042,6 +1085,30 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
               },
               onShowAllOnMap: _fitMap,
               onOpenSqlTable: _showSqlTableDetails,
+              cableToggles: _cableToggles,
+              hiddenCableTypeKeys: _hiddenCableTypeKeys,
+              hiddenCableIdKeys: _hiddenCableIdKeys,
+              onToggleCable: (toggle) {
+                setState(() {
+                  if (toggle.isTypeGroup) {
+                    if (_hiddenCableTypeKeys.contains(toggle.key)) {
+                      _hiddenCableTypeKeys.remove(toggle.key);
+                    } else {
+                      _hiddenCableTypeKeys.add(toggle.key);
+                    }
+                  } else {
+                    final id = toggle.key.startsWith('cid:')
+                        ? toggle.key.substring(4)
+                        : toggle.key;
+                    if (_hiddenCableIdKeys.contains(id)) {
+                      _hiddenCableIdKeys.remove(id);
+                    } else {
+                      _hiddenCableIdKeys.add(id);
+                    }
+                  }
+                  _syncMapFeatures();
+                });
+              },
             ),
           ),
         ],
@@ -1053,39 +1120,6 @@ class _QFieldProjectMapScreenState extends State<QFieldProjectMapScreen> {
     final cam = _mapController.camera;
     _mapController.move(cam.center, (cam.zoom + delta).clamp(3, 19));
   }
-}
-
-class _SqlTableData {
-  const _SqlTableData({
-    required this.name,
-    required this.package,
-    required this.layerKey,
-    required this.columns,
-    required this.rows,
-    required this.rowCount,
-    required this.hasGeometry,
-  });
-
-  final String name;
-  final String package;
-  final String layerKey;
-  final List<String> columns;
-  final List<Map<String, dynamic>> rows;
-  final int rowCount;
-  final bool hasGeometry;
-}
-
-class _LayerChip {
-  _LayerChip({
-    required this.key,
-    required this.label,
-    required this.color,
-    required this.count,
-  });
-  final String key;
-  final String label;
-  final Color color;
-  final int count;
 }
 
 class _GlassIconButton extends StatelessWidget {
@@ -1119,983 +1153,6 @@ class _GlassIconButton extends StatelessWidget {
                 )
               : Icon(icon, color: Colors.white, size: 22),
         ),
-      ),
-    );
-  }
-}
-
-class _PreviewStatsBanner extends StatelessWidget {
-  const _PreviewStatsBanner({required this.l10n, required this.stats});
-
-  final AppLocalizations l10n;
-  final Map<String, dynamic> stats;
-
-  @override
-  Widget build(BuildContext context) {
-    final count = (stats['featureCount'] as num?)?.toInt() ?? 0;
-    final cap = (stats['featureCap'] as num?)?.toInt() ?? 800;
-    final truncated = stats['featuresTruncated'] == true;
-    final tables = (stats['dataTableCount'] as num?)?.toInt() ?? 0;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00D4AA).withAlpha(28),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF00D4AA).withAlpha(80)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            truncated ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
-            color: truncated ? const Color(0xFFFBBF24) : const Color(0xFF00D4AA),
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              truncated
-                  ? l10n.t('qfield_map_preview_truncated', {'count': '$count', 'cap': '$cap'})
-                  : l10n.t('qfield_map_preview_features', {'count': '$count'}),
-              style: TextStyle(
-                color: Colors.white.withAlpha(220),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (tables > 0)
-            Text(
-              '$tables SQL',
-              style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ArchiveHintText extends StatelessWidget {
-  const _ArchiveHintText({required this.hint});
-
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final lines = hint
-        .split(RegExp(r'\.\s+(?=[\d"A-Z•])'))
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    if (lines.length <= 1) {
-      return Text(
-        hint,
-        style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11, height: 1.35),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines
-          .map(
-            (line) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('• ', style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11)),
-                  Expanded(
-                    child: Text(
-                      line.endsWith('.') ? line : '$line.',
-                      style: TextStyle(
-                        color: Colors.white.withAlpha(140),
-                        fontSize: 11,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-String _tapHeaderSubtitle(AppLocalizations l10n, QFieldTapContext ctx) {
-  final sel = ctx.selected;
-  final layer = sel.properties['layer']?.toString();
-  final parts = <String>[];
-
-  if (ctx.isRouteSelection) {
-    return layer?.trim().isNotEmpty == true ? layer! : l10n.t('qfield_map_route_label');
-  }
-
-  if (ctx.fatId != null) {
-    parts.add('${l10n.t('qfield_map_fat_label')} ${ctx.fatId}');
-  }
-  if (isHandholeLayerName(layer) && handholeContainsClosure(sel.properties)) {
-    final closureId = closureOrOdfIdFromProperties(sel.properties);
-    if (closureId != null && closureId.isNotEmpty) {
-      parts.add('${l10n.t('qfield_map_closure_odf_id')}: $closureId');
-    }
-  }
-  if (parts.isNotEmpty) return parts.join(' · ');
-  return featureTapListSubtitle(sel);
-}
-
-class _BottomPanel extends StatelessWidget {
-  const _BottomPanel({
-    required this.scrollController,
-    required this.l10n,
-    required this.layers,
-    required this.sqlTables,
-    this.previewStats,
-    required this.hiddenKeys,
-    required this.selected,
-    required this.layerGroups,
-    this.tapContext,
-    required this.allDisplayProps,
-    this.userLocationLabel,
-    required this.canWrite,
-    required this.hint,
-    required this.noteCtrl,
-    required this.fieldCtrls,
-    required this.onToggleLayer,
-    required this.onFieldChanged,
-    required this.onClearSelection,
-    required this.onPickTapFeature,
-    required this.onShowAllOnMap,
-    required this.onOpenSqlTable,
-  });
-
-  final ScrollController scrollController;
-  final AppLocalizations l10n;
-  final List<_LayerChip> layers;
-  final List<_SqlTableData> sqlTables;
-  final Map<String, dynamic>? previewStats;
-  final Set<String> hiddenKeys;
-  final QFieldMapFeature? selected;
-  final List<LayerHitGroup> layerGroups;
-  final QFieldTapContext? tapContext;
-  final Map<String, dynamic>? allDisplayProps;
-  final String? userLocationLabel;
-  final bool canWrite;
-  final String? hint;
-  final TextEditingController noteCtrl;
-  final Map<String, TextEditingController> fieldCtrls;
-  final void Function(String key) onToggleLayer;
-  final void Function(String featureId, String key, String value) onFieldChanged;
-  final VoidCallback onClearSelection;
-  final void Function(QFieldMapFeature feature) onPickTapFeature;
-  final VoidCallback onShowAllOnMap;
-  final void Function(_SqlTableData table) onOpenSqlTable;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xF012122A),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: Colors.white.withAlpha(30)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Text(
-                    l10n.t('qfield_map_layers'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: onShowAllOnMap,
-                    icon: const Icon(Icons.map_rounded, size: 18, color: Color(0xFF00D4AA)),
-                    label: Text(
-                      l10n.t('qfield_map_fit_all'),
-                      style: const TextStyle(color: Color(0xFF00D4AA), fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 44,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: layers.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final l = layers[i];
-                    final hidden = hiddenKeys.contains(l.key);
-                    return FilterChip(
-                      label: Text('${l.label} (${l.count})', style: const TextStyle(fontSize: 11)),
-                      selected: !hidden,
-                      onSelected: (_) => onToggleLayer(l.key),
-                      selectedColor: l.color.withAlpha(80),
-                      backgroundColor: Colors.white.withAlpha(20),
-                      checkmarkColor: l.color,
-                      side: BorderSide(color: l.color.withAlpha(160)),
-                    );
-                  },
-                ),
-              ),
-              if (previewStats != null) ...[
-                const SizedBox(height: 8),
-                _PreviewStatsBanner(l10n: l10n, stats: previewStats!),
-              ],
-              if (hint != null && hint!.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                _ArchiveHintText(hint: hint!),
-              ],
-              if (sqlTables.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  l10n.t('qfield_map_sql_tables', {'count': '${sqlTables.length}'}),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                ...sqlTables.map(
-                  (t) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Material(
-                      color: const Color(0xFF1A1A35),
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        onTap: () => onOpenSqlTable(t),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Row(
-                            children: [
-                              Icon(
-                                t.hasGeometry ? Icons.polyline_rounded : Icons.table_rows_rounded,
-                                color: const Color(0xFF00D4AA),
-                                size: 20,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      t.package.isNotEmpty
-                                          ? '${t.package} › ${t.name}'
-                                          : t.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    Text(
-                                      t.rows.length < t.rowCount
-                                          ? l10n.t('qfield_sql_rows_shown', {
-                                              'shown': '${t.rows.length}',
-                                              'total': '${t.rowCount}',
-                                            })
-                                          : '${t.rowCount} ${l10n.t('qfield_layer_feature_count')}'
-                                              '${t.hasGeometry ? '' : ' · ${l10n.t('qfield_sql_attributes_only')}'}',
-                                      style: TextStyle(
-                                        color: Colors.white.withAlpha(130),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              if (userLocationLabel != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.my_location, color: Color(0xFF2196F3), size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      userLocationLabel!,
-                      style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              if (layerGroups.isEmpty)
-                Text(
-                  l10n.t('qfield_map_tap_feature'),
-                  style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
-                )
-              else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.t('qfield_map_layers_at_location'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: onClearSelection,
-                      icon: const Icon(Icons.close_rounded, color: Colors.white54),
-                    ),
-                  ],
-                ),
-                if (selected == null) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      l10n.t('qfield_map_tap_pick_element'),
-                      style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12),
-                    ),
-                  ),
-                  for (final group in layerGroups) ...[
-                    _LayerGroupHeader(group: group),
-                    for (final h in group.hits)
-                      _TapElementTile(
-                        hit: h,
-                        selected: selected,
-                        onPick: onPickTapFeature,
-                      ),
-                  ],
-                ] else if (tapContext != null && tapContext!.isRouteSelection) ...[
-                  _SelectedElementHeader(
-                    title: tapContext!.routeId ?? featureTapListTitle(tapContext!.selected),
-                    subtitle: _tapHeaderSubtitle(l10n, tapContext!),
-                  ),
-                  if (tapContext!.routeSiteInfo.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      l10n.t('qfield_map_route_site_info'),
-                      style: const TextStyle(
-                        color: Color(0xFF00D4AA),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...tapContext!.routeSiteInfo.entries.map(
-                      (e) => _FeatureDataRow(
-                        label: e.key,
-                        value: e.value,
-                        accent: true,
-                      ),
-                    ),
-                  ],
-                  if (tapContext!.routeCablesByType.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.t('qfield_map_cables_in_route'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    for (final entry in tapContext!.routeCablesByType.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: cableTypeColorForLabel(entry.key),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              entry.key,
-                              style: TextStyle(
-                                color: Colors.white.withAlpha(210),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      for (final h in entry.value) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, bottom: 4),
-                          child: _FeatureDataRow(
-                            label: cableIdPropertyKey(h.feature.properties) ??
-                                l10n.t('qfield_map_cable_id'),
-                            value: cableIdFromProperties(h.feature.properties) ??
-                                featureTapListTitle(h.feature),
-                            accent: true,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ] else
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        l10n.t('qfield_map_no_cables_on_route'),
-                        style: TextStyle(
-                          color: Colors.white.withAlpha(140),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.t('qfield_map_feature_data'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...displayPropsForFeature(tapContext!.selected).entries.map(
-                        (e) => _FeatureDataRow(
-                          label: e.key,
-                          value: '${e.value ?? ''}',
-                        ),
-                      ),
-                ] else if (tapContext != null) ...[
-                  _SelectedElementHeader(
-                    title: featureTapListTitle(tapContext!.selected),
-                    subtitle: _tapHeaderSubtitle(l10n, tapContext!),
-                  ),
-                  if (tapContext!.fatClosuresId != null) ...[
-                    const SizedBox(height: 8),
-                    _FeatureDataRow(
-                      label: tapContext!.fatClosuresPropertyKey ??
-                          l10n.t('qfield_map_fat_closures_id'),
-                      value: tapContext!.fatClosuresId!,
-                      accent: true,
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    l10n.t('qfield_map_feature_data'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (isHandholeLayerName(
-                          tapContext!.selected.properties['layer']?.toString()) &&
-                      handholeContainsClosure(tapContext!.selected.properties) &&
-                      closureOrOdfIdFromProperties(tapContext!.selected.properties) !=
-                          null &&
-                      tapContext!.handholes.every((b) =>
-                          b.handhole.feature.id != tapContext!.selected.id)) ...[
-                    _FeatureDataRow(
-                      label: closureOrOdfIdPropertyKey(tapContext!.selected.properties) ??
-                          l10n.t('qfield_map_closure_odf_id'),
-                      value: closureOrOdfIdFromProperties(tapContext!.selected.properties)!,
-                      accent: true,
-                    ),
-                  ],
-                  ...displayPropsForFeature(tapContext!.selected).entries.map(
-                    (e) => _FeatureDataRow(label: e.key, value: '${e.value ?? ''}'),
-                  ),
-                  if (tapContext!.primaryProps.isEmpty)
-                    Text(
-                      l10n.t('qfield_layer_no_attributes'),
-                      style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
-                    ),
-                  if (tapContext!.fatSummary.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.t('qfield_map_fat_site_info'),
-                      style: const TextStyle(
-                        color: Color(0xFF00D4AA),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...tapContext!.fatSummary.entries.map(
-                      (e) => _FeatureDataRow(label: e.key, value: e.value),
-                    ),
-                  ],
-                  if (tapContext!.handholes.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.t('qfield_map_handholes_for_fat'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    for (final bundle in tapContext!.handholes) ...[
-                      const SizedBox(height: 8),
-                      _TapElementTile(
-                        hit: bundle.handhole,
-                        selected: selected,
-                        onPick: onPickTapFeature,
-                      ),
-                      if (bundle.closureOrOdfId != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 12, bottom: 4),
-                          child: _FeatureDataRow(
-                            label: bundle.closurePropertyKey ??
-                                l10n.t('qfield_map_closure_odf_id'),
-                            value: bundle.closureOrOdfId!,
-                            accent: true,
-                          ),
-                        ),
-                      ...displayPropsForFeature(bundle.handhole.feature)
-                          .entries
-                          .where((e) =>
-                              bundle.closurePropertyKey == null ||
-                              e.key != bundle.closurePropertyKey)
-                          .map(
-                            (e) => Padding(
-                              padding: const EdgeInsets.only(left: 12, bottom: 2),
-                              child: _FeatureDataRow(
-                                label: e.key,
-                                value: '${e.value ?? ''}',
-                              ),
-                            ),
-                          ),
-                      for (final entry in bundle.cablesByType.entries) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, top: 6, bottom: 2),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 24,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: cableTypeColorForLabel(entry.key),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                entry.key,
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(210),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '(${entry.value.length})',
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(120),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        for (final h in entry.value)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12),
-                            child: _TapElementTile(
-                              hit: h,
-                              selected: selected,
-                              onPick: onPickTapFeature,
-                              isCable: true,
-                            ),
-                          ),
-                      ],
-                    ],
-                  ],
-                  if (tapContext!.excavations.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.t('qfield_map_excavation_for_fat'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    for (final h in tapContext!.excavations) ...[
-                      const SizedBox(height: 6),
-                      _TapElementTile(
-                        hit: h,
-                        selected: selected,
-                        onPick: onPickTapFeature,
-                      ),
-                      ...displayPropsForFeature(h.feature).entries.map(
-                            (e) => Padding(
-                              padding: const EdgeInsets.only(left: 12, bottom: 2),
-                              child: _FeatureDataRow(
-                                label: e.key,
-                                value: '${e.value ?? ''}',
-                              ),
-                            ),
-                          ),
-                    ],
-                  ],
-                  if (tapContext!.fatCablesByType.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.t('qfield_map_cables_at_location'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    for (final entry in tapContext!.fatCablesByType.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6, bottom: 2),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: cableTypeColorForLabel(entry.key),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              entry.key,
-                              style: TextStyle(
-                                color: Colors.white.withAlpha(210),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      for (final h in entry.value)
-                        _TapElementTile(
-                          hit: h,
-                          selected: selected,
-                          onPick: onPickTapFeature,
-                          isCable: true,
-                        ),
-                    ],
-                  ],
-                  if (tapContext!.otherLayerGroups.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.t('qfield_map_other_layers_at_location'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    for (final group in tapContext!.otherLayerGroups) ...[
-                      _LayerGroupHeader(group: group),
-                      for (final h in group.hits)
-                        _TapElementTile(
-                          hit: h,
-                          selected: selected,
-                          onPick: onPickTapFeature,
-                        ),
-                    ],
-                  ],
-                  if (canWrite && fieldCtrls.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.t('qfield_map_edit_fields'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...fieldCtrls.entries.map((e) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: TextField(
-                          controller: e.value,
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                          onChanged: (v) => onFieldChanged(selected!.id, e.key, v),
-                          decoration: InputDecoration(
-                            labelText: e.key,
-                            labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
-                            filled: true,
-                            fillColor: const Color(0xFF1A1A35),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ],
-              if (canWrite) ...[
-                const SizedBox(height: 16),
-                Text(
-                  l10n.t('qfield_map_tap_place_pin'),
-                  style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: noteCtrl,
-                  style: const TextStyle(color: Colors.white),
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    hintText: l10n.t('qfield_map_note_hint'),
-                    hintStyle: TextStyle(color: Colors.white.withAlpha(90)),
-                    filled: true,
-                    fillColor: const Color(0xFF05051A),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SelectedElementHeader extends StatelessWidget {
-  const _SelectedElementHeader({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF6C63FF).withAlpha(70),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF6C63FF).withAlpha(140)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 17,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LayerGroupHeader extends StatelessWidget {
-  const _LayerGroupHeader({required this.group});
-
-  final LayerHitGroup group;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: isCableLayer(group.layerName)
-                  ? cableTypeColor(group.layerName)
-                  : const Color(0xFF00D4AA),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            group.layerName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '(${group.hits.length})',
-            style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TapElementTile extends StatelessWidget {
-  const _TapElementTile({
-    required this.hit,
-    required this.selected,
-    required this.onPick,
-    this.isCable = false,
-  });
-
-  final FeatureTapHit hit;
-  final QFieldMapFeature? selected;
-  final void Function(QFieldMapFeature f) onPick;
-  final bool isCable;
-
-  @override
-  Widget build(BuildContext context) {
-    final f = hit.feature;
-    final isSel = selected?.id == f.id;
-    final layerName = f.properties['layer']?.toString();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: isSel ? const Color(0xFF6C63FF).withAlpha(90) : const Color(0xFF1A1A35),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () => onPick(f),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                if (isCable)
-                  Container(
-                    width: 28,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: cableDisplayColor(f),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  )
-                else
-                  QFieldMapPointIcon(
-                    layerName: layerName,
-                    selected: isSel,
-                    small: true,
-                  ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        featureTapListTitle(f),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: isSel ? FontWeight.w700 : FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        featureTapListSubtitle(f),
-                        style: TextStyle(
-                          color: Colors.white.withAlpha(140),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isSel)
-                  const Icon(Icons.check_circle_rounded,
-                      color: Color(0xFF00D4AA), size: 20),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FeatureDataRow extends StatelessWidget {
-  const _FeatureDataRow({
-    required this.label,
-    required this.value,
-    this.accent = false,
-  });
-
-  final String label;
-  final String value;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: accent ? const Color(0xFF6C63FF).withAlpha(45) : const Color(0xFF1A1A35),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: accent
-              ? const Color(0xFF6C63FF).withAlpha(120)
-              : Colors.white.withAlpha(20),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: accent ? const Color(0xFF00D4AA) : Colors.white.withAlpha(150),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          SelectableText(
-            value.isEmpty ? '—' : value,
-            style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.3),
-          ),
-        ],
       ),
     );
   }

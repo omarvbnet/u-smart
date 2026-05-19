@@ -273,49 +273,39 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
       .replaceAll(RegExp(r'\s+'), '');
 
   if (n.contains('pole')) {
-    return _propValue(props, [
-      'pole_no',
-      'poleno',
-      'pole_id',
-      'poleid',
-      'pole_number',
-      'pole_num',
-      'support_no',
-      'id',
-      'name',
-      'label',
-      'code',
-    ]);
+    return poleFatLabel(props);
   }
-  if (n.contains('fat') && !n.contains('region')) {
-    return _propValue(props, [
-      'fat_no',
-      'fatno',
-      'fat_id',
-      'fatid',
-      'fat_number',
-      'fat_num',
-      'fat_name',
-      'fdt_no',
-      'name',
-      'label',
-      'id',
-      'code',
-    ]);
+  if ((n.contains('fat') || n.contains('fdt')) && !n.contains('region')) {
+    return cabIdFromProperties(props) ??
+        _propValue(props, [
+          'fat_no',
+          'fatno',
+          'fat_id',
+          'fatid',
+          'fat_number',
+          'fat_num',
+          'fat_name',
+          'fdt_no',
+          'fdt_id',
+          'name',
+          'label',
+          'code',
+        ]);
   }
-  if (n.contains('closure') || n.contains('cabinet')) {
-    return _propValue(props, [
-      'closure_id',
-      'closureid',
-      'closure_no',
-      'closure_num',
-      'cabinet_id',
-      'cabinet_no',
-      'id',
-      'name',
-      'label',
-      'code',
-    ]);
+  if (n.contains('closure') || n.contains('cabinet') || n.contains('odf')) {
+    return closureOrOdfIdFromProperties(props) ??
+        _propValue(props, [
+          'closure_id',
+          'closureid',
+          'closure_no',
+          'closure_num',
+          'cabinet_id',
+          'cabinet_no',
+          'id',
+          'name',
+          'label',
+          'code',
+        ]);
   }
   if (n.contains('handhole') || n == 'hh') {
     return _propValue(props, [
@@ -328,9 +318,6 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
       'label',
     ]);
   }
-  if (n.contains('closure') || n.contains('odf')) {
-    return closureOrOdfIdFromProperties(props);
-  }
   if (n.contains('hole')) {
     return _propValue(props, ['hole_id', 'hole_no', 'id', 'name', 'label']);
   }
@@ -340,22 +327,201 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
   return null;
 }
 
+bool isPoleLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  return n.contains('pole') || n.contains('utilitypole') || n.contains('supportstructure');
+}
+
+bool isClosureLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('handhole') || n == 'hh') return false;
+  return n.contains('closure') || n.contains('cabinet') || n.contains('odf');
+}
+
+bool isFdtFatLayerName(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  return (n.contains('fat') || n.contains('fdt')) && !n.contains('region');
+}
+
 bool shouldShowMapLabel(String? layerName) {
   final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
-  if (n.contains('pole')) return true;
-  if (n.contains('fat') && !n.contains('region')) return true;
-  if (n.contains('closure') || n.contains('cabinet')) return true;
-  if (n.contains('handhole') || n == 'hh') return true;
+  if (isPoleLayerName(layerName)) return false;
+  if (isFdtFatLayerName(layerName)) return true;
+  if (isClosureLayerName(layerName)) return true;
+  if (isHandholeLayerName(layerName)) return true;
   if (n.contains('fdthole') || (n.contains('hole') && n.contains('fdt'))) return true;
   return false;
 }
 
-/// Smaller on-map labels: white outline, transparent fill (FAT / handholes).
+/// Text-only on-map label (FAT / handhole / pole→FAT ref).
 bool useCompactMapLabel(String? layerName) {
-  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
-  if (n.contains('fat') && !n.contains('region')) return true;
-  if (n.contains('handhole') || n == 'hh') return true;
+  if (isClosureLayerName(layerName)) return false;
+  if (isFdtFatLayerName(layerName)) return true;
+  if (isHandholeLayerName(layerName)) return true;
   return false;
+}
+
+/// Small red box + white ID (closures / ODF).
+bool useClosureBoxMapLabel(String? layerName) {
+  return isClosureLayerName(layerName);
+}
+
+String? cabIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, [
+    'cab_id',
+    'cabid',
+    'cab_no',
+    'cabno',
+    'cab_number',
+    'cab_num',
+    'cabinet_id',
+    'cabinet_no',
+  ]);
+}
+
+String? fatIdFromProperties(Map<String, dynamic> props) {
+  return _propValue(props, [
+    'fat_no',
+    'fatno',
+    'fat_id',
+    'fatid',
+    'fat_number',
+    'fat_num',
+    'fat_name',
+    'fdt_no',
+    'fdt_id',
+    'fdtno',
+  ]);
+}
+
+/// Pole points: show linked FAT id when present (never pole_no on map).
+String? poleFatLabel(Map<String, dynamic> props) {
+  return fatIdFromProperties(props);
+}
+
+bool isCableFeature(QFieldMapFeature f) {
+  final layer = f.properties['layer']?.toString();
+  if (isCableLayer(layer)) return true;
+  final n = (layer ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('ftth')) return true;
+  return _propValue(f.properties, ['cable_type', 'cabletype', 'fiber_count']) != null;
+}
+
+String cableDisplayType(QFieldMapFeature f) {
+  final layer = f.properties['layer']?.toString();
+  final fromProps = _propValue(f.properties, [
+    'cable_type',
+    'cabletype',
+    'cable_size',
+    'fiber_count',
+    'type',
+    'ftth_type',
+    'name',
+  ]);
+  if (fromProps != null && fromProps.isNotEmpty) {
+    final p = fromProps.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    if (p.contains('12f') || p == '12') return '12F';
+    if (p.contains('24f') || p == '24') return '24F';
+    if (p.contains('36f') || p == '36') return '36F';
+    if (p.contains('48f') || p == '48') return '48F';
+    if (p.contains('pulling')) return 'Pulling FOC';
+    if (p.contains('foc')) return 'FOC';
+    return fromProps;
+  }
+  return cableTypeLabel(layer);
+}
+
+Color cableTypeColorForLabel(String label) {
+  final n = label.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('12f') || n == '12') return const Color(0xFFE53935);
+  if (n.contains('24f') || n == '24') return const Color(0xFF1E88E5);
+  if (n.contains('36f') || n == '36') return const Color(0xFF8E24AA);
+  if (n.contains('48f') || n == '48') return const Color(0xFFFF8F00);
+  if (n.contains('pulling')) return const Color(0xFFD32F2F);
+  if (n.contains('foc')) return const Color(0xFFC62828);
+  return const Color(0xFFE53935);
+}
+
+Color cableDisplayColor(QFieldMapFeature f) {
+  return cableTypeColorForLabel(cableDisplayType(f));
+}
+
+/// Toggle chips for cable types and individual cable IDs on the map.
+class CableMapToggle {
+  const CableMapToggle({
+    required this.key,
+    required this.label,
+    required this.color,
+    required this.isTypeGroup,
+    this.count = 1,
+  });
+
+  final String key;
+  final String label;
+  final Color color;
+  final bool isTypeGroup;
+  final int count;
+}
+
+List<CableMapToggle> buildCableMapToggles(List<QFieldMapFeature> features) {
+  final types = <String, ({String label, Color color, int count})>{};
+  final ids = <String, CableMapToggle>{};
+
+  for (final f in features) {
+    final layer = f.properties['layer']?.toString();
+    if (!isCableFeature(f) && !isCableLayer(layer)) continue;
+
+    final typeLabel = cableDisplayType(f);
+    final typeKey = 'ctype:$typeLabel';
+    final existing = types[typeKey];
+    types[typeKey] = (
+      label: typeLabel,
+      color: cableTypeColorForLabel(typeLabel),
+      count: (existing?.count ?? 0) + 1,
+    );
+
+    final cid = cableIdFromProperties(f.properties);
+    if (cid != null && cid.isNotEmpty) {
+      ids[f.id] = CableMapToggle(
+        key: 'cid:${f.id}',
+        label: cid,
+        color: cableDisplayColor(f),
+        isTypeGroup: false,
+      );
+    }
+  }
+
+  final out = <CableMapToggle>[
+    for (final e in types.entries)
+      CableMapToggle(
+        key: e.key,
+        label: e.value.label,
+        color: e.value.color,
+        isTypeGroup: true,
+        count: e.value.count,
+      ),
+    ...ids.values,
+  ];
+  out.sort((a, b) {
+    if (a.isTypeGroup != b.isTypeGroup) return a.isTypeGroup ? -1 : 1;
+    return a.label.compareTo(b.label);
+  });
+  return out;
+}
+
+bool isCableFeatureVisible(
+  QFieldMapFeature f, {
+  required Set<String> hiddenLayerKeys,
+  required Set<String> hiddenCableTypeKeys,
+  required Set<String> hiddenCableIdKeys,
+}) {
+  if (hiddenLayerKeys.contains(f.layerKey)) return false;
+  final layer = f.properties['layer']?.toString();
+  if (!isCableFeature(f) && !isCableLayer(layer)) return true;
+  final typeKey = 'ctype:${cableDisplayType(f)}';
+  if (hiddenCableTypeKeys.contains(typeKey)) return false;
+  if (hiddenCableIdKeys.contains(f.id)) return false;
+  return true;
 }
 
 bool isHandholeLayerName(String? layerName) {

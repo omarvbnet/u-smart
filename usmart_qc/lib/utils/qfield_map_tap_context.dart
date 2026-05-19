@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'qfield_map_features.dart';
@@ -88,65 +87,6 @@ bool featureBelongsToFat(QFieldMapFeature f, String fatId) {
   final ref = fatIdFromProperties(f.properties);
   if (ref != null && idsEqual(ref, fatId)) return true;
   return false;
-}
-
-/// Cable type from layer name and/or attribute columns (for combined FTTH layers).
-String cableDisplayType(QFieldMapFeature f) {
-  final layer = f.properties['layer']?.toString();
-  final fromProps = _propValue(f.properties, [
-    'cable_type',
-    'cabletype',
-    'cable_size',
-    'cablesize',
-    'fiber',
-    'fibers',
-    'fiber_count',
-    'fiber_count_',
-    'fibre',
-    'fibre_type',
-    'type',
-    'ftth_type',
-    'cable',
-    'strand',
-    'size',
-    'description',
-    'name',
-  ]);
-  if (fromProps != null && fromProps.isNotEmpty) {
-    final p = fromProps.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (p.contains('12f') || p == '12' || p.contains('cable12')) return '12F';
-    if (p.contains('24f') || p == '24' || p.contains('cable24')) return '24F';
-    if (p.contains('36f') || p == '36' || p.contains('cable36')) return '36F';
-    if (p.contains('48f') || p == '48' || p.contains('cable48')) return '48F';
-    if (p.contains('pulling')) return 'Pulling FOC';
-    if (p.contains('foc')) return 'FOC';
-    if (RegExp(r'^\d+f$').hasMatch(p)) return fromProps.toUpperCase();
-    return fromProps;
-  }
-  return cableTypeLabel(layer);
-}
-
-Color cableDisplayColor(QFieldMapFeature f) {
-  return cableTypeColorForLabel(cableDisplayType(f));
-}
-
-Color cableTypeColorForLabel(String label) {
-  final n = label.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
-  if (n.contains('12f') || n == '12') return const Color(0xFFE53935);
-  if (n.contains('24f') || n == '24') return const Color(0xFF1E88E5);
-  if (n.contains('36f') || n == '36') return const Color(0xFF8E24AA);
-  if (n.contains('48f') || n == '48') return const Color(0xFFFF8F00);
-  if (n.contains('pulling')) return const Color(0xFFD32F2F);
-  if (n.contains('foc')) return const Color(0xFFC62828);
-  return const Color(0xFFE53935);
-}
-
-bool isCableFeature(QFieldMapFeature f) {
-  final layer = f.properties['layer']?.toString();
-  if (isCableLayer(layer)) return true;
-  final n = (layer ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
-  if (n.contains('ftth')) return true;
-  return _propValue(f.properties, ['cable_type', 'cabletype', 'fiber_count']) != null;
 }
 
 Map<String, List<FeatureTapHit>> groupCableHitsByDisplayType(

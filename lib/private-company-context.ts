@@ -49,6 +49,17 @@ export const CAN_CREATE_CHECKLIST_ROLES = new Set([
 /** Roles that can manage workspace staff (add / edit / reset password / soft remove). */
 export const CAN_MANAGE_STAFF_ROLES = new Set(['MANAGER', 'COORDINATOR', 'COMPANY']);
 
+/** Roles that can add workspace sites and attach QField without approval. */
+export const CAN_MANAGE_SITES_ROLES = new Set(['MANAGER', 'COORDINATOR', 'COMPANY']);
+
+/** Field roles that may propose site / QField updates (requires lead confirmation). */
+export const CAN_PROPOSE_SITE_CHANGES_ROLES = new Set([
+  'ENGINEER',
+  'TECHNICIAN',
+  'QUALITY_ENGINEER',
+  'SUPERVISION_ENGINEER',
+]);
+
 /**
  * Roles that can create / edit / delete departments. Department structure is
  * a workspace-wide concern, so it is intentionally restricted to the COMPANY

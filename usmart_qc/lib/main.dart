@@ -18,6 +18,7 @@ import 'providers/registration_request_provider.dart';
 import 'providers/provisor_techniques_provider.dart';
 import 'providers/private_company_provider.dart';
 import 'providers/private_company_warehouse_provider.dart';
+import 'providers/workspace_sites_provider.dart';
 import 'config/api_config.dart';
 
 void main() async {
@@ -98,6 +99,7 @@ void main() async {
   final privateCompanyProvider = PrivateCompanyProvider(apiService);
   final privateCompanyWarehouseProvider =
       PrivateCompanyWarehouseProvider(apiService);
+  final workspaceSitesProvider = WorkspaceSitesProvider(apiService);
 
   authProvider.addListener(() {
     privateCompanyProvider.setCurrentRequesterId(authProvider.user?.id);
@@ -106,6 +108,7 @@ void main() async {
     } else {
       privateCompanyProvider.reset();
       privateCompanyWarehouseProvider.reset();
+      workspaceSitesProvider.reset();
     }
   });
 
@@ -133,6 +136,7 @@ void main() async {
         ChangeNotifierProvider.value(value: techniquesProvider),
         ChangeNotifierProvider.value(value: privateCompanyProvider),
         ChangeNotifierProvider.value(value: privateCompanyWarehouseProvider),
+        ChangeNotifierProvider.value(value: workspaceSitesProvider),
       ],
       child: const ProvisrApp(),
     ),

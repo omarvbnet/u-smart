@@ -111,6 +111,17 @@ class PrivateCompanyProvider extends ChangeNotifier {
         role == 'SUPERVISION_ENGINEER';
   }
 
+  /// Owner, manager, or coordinator — add workspace sites and attach QField directly.
+  bool get canManageSites {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole;
+    return role == 'MANAGER' || role == 'COORDINATOR';
+  }
+
+  /// Field staff may propose site / QField updates (requires lead confirmation).
+  bool get canProposeSiteChanges => isPrivateWorkspaceFieldStaff;
+
   /// Roles that can add / edit / suspend / reset-password staff members.
   /// Owner + MANAGER + COORDINATOR. Hard-delete remains owner-only.
   bool get canManageStaff {

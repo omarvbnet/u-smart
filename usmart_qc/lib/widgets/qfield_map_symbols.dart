@@ -179,68 +179,65 @@ abstract final class QFieldMapSymbols {
   }
 }
 
-/// On-map ID label (pole / FAT / closure / handhole number).
+/// On-map ID label (FAT / handhole / closure / CAB_ID).
 class QFieldMapPointLabel extends StatelessWidget {
   const QFieldMapPointLabel({
     super.key,
     required this.text,
     this.highlighted = false,
-    this.compact = false,
+    this.closureBox = false,
   });
 
   final String text;
   final bool highlighted;
-  /// FAT / handhole: smaller text, white outline box, transparent fill.
-  final bool compact;
+  /// Small red box + white text (closures / ODF).
+  final bool closureBox;
 
   @override
   Widget build(BuildContext context) {
-    if (compact) {
-      return ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 44),
+    if (closureBox) {
+      return Container(
+        constraints: const BoxConstraints(maxWidth: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        decoration: BoxDecoration(
+          color: highlighted ? const Color(0xFF6C63FF) : const Color(0xFFE53935),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(
+            color: Colors.white.withAlpha(highlighted ? 255 : 200),
+            width: 0.8,
+          ),
+        ),
         child: Text(
           text,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: highlighted ? const Color(0xFF00D4AA) : Colors.white,
-            fontSize: 7,
-            fontWeight: FontWeight.w600,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 6.5,
+            fontWeight: FontWeight.w700,
             height: 1.0,
-            shadows: const [
-              Shadow(color: Color(0xDD000000), blurRadius: 2, offset: Offset(0, 0.5)),
-              Shadow(color: Color(0x88000000), blurRadius: 0.5, offset: Offset(0.5, 0)),
-            ],
           ),
         ),
       );
     }
 
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 88),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      decoration: BoxDecoration(
-        color: highlighted ? const Color(0xFF6C63FF) : const Color(0xF5FFFFFF),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: highlighted ? Colors.white : Colors.black87,
-          width: highlighted ? 1.2 : 0.8,
-        ),
-        boxShadow: const [
-          BoxShadow(color: Color(0x44000000), blurRadius: 2, offset: Offset(0, 1)),
-        ],
-      ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 48),
       child: Text(
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: highlighted ? Colors.white : Colors.black87,
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          height: 1.1,
+          color: highlighted ? const Color(0xFF00D4AA) : Colors.white,
+          fontSize: 7,
+          fontWeight: FontWeight.w600,
+          height: 1.0,
+          shadows: const [
+            Shadow(color: Color(0xDD000000), blurRadius: 2, offset: Offset(0, 0.5)),
+            Shadow(color: Color(0x88000000), blurRadius: 0.5, offset: Offset(0.5, 0)),
+          ],
         ),
       ),
     );
@@ -284,10 +281,10 @@ class QFieldMapPointIcon extends StatelessWidget {
         );
       case QFieldPointSymbolKind.closure:
       case QFieldPointSymbolKind.cabinet:
-        body = _RectMarker(
-          fill: QFieldMapSymbols.poleGreen,
-          stroke: Colors.black87,
-          strokeWidth: 1.2,
+        body = _SquareMarker(
+          fill: const Color(0xFFE53935),
+          stroke: Colors.white,
+          strokeWidth: selected ? 2.2 : 1.4,
         );
     }
 

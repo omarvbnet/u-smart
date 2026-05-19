@@ -22,6 +22,7 @@ import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
 import '../widgets/workspace_expenses_analytics_panel.dart';
+import 'workspace_sites_screen.dart';
 
 /// Drag handle + title with an explicit close control for modal bottom sheets.
 Widget _modalSheetTitleRow(BuildContext context, String title) {
@@ -526,9 +527,9 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
 
   int _hubTabCount(PrivateCompanyProvider pc) {
     if (_pcUsesFieldStaffHub(pc)) {
-      return _pcHubShowsExpensesTab(pc) ? 4 : 3;
+      return _pcHubShowsExpensesTab(pc) ? 5 : 4;
     }
-    var n = _pcHubShowsExpensesTab(pc) ? 7 : 6;
+    var n = _pcHubShowsExpensesTab(pc) ? 8 : 7;
     if (_pcHubShowsConflictsTab(pc)) n += 1;
     return n;
   }
@@ -563,7 +564,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 6, vsync: this);
+    _tabs = TabController(length: 7, vsync: this);
     // Eager-load warehouse data the first time the hub opens.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final wh = context.read<PrivateCompanyWarehouseProvider>();
@@ -698,6 +699,10 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                       text: l10n.t('pc_ws_tab_overview'),
                     ),
                     Tab(
+                      icon: const Icon(Icons.location_city_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_sites'),
+                    ),
+                    Tab(
                       icon: const Icon(Icons.speed_rounded, size: 18),
                       text: l10n.t('pc_ws_tab_performance'),
                     ),
@@ -715,6 +720,10 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                     Tab(
                       icon: const Icon(Icons.dashboard_rounded, size: 18),
                       text: l10n.t('pc_ws_tab_overview'),
+                    ),
+                    Tab(
+                      icon: const Icon(Icons.location_city_rounded, size: 18),
+                      text: l10n.t('pc_ws_tab_sites'),
                     ),
                     Tab(
                       icon: const Icon(Icons.account_tree_rounded, size: 18),
@@ -759,12 +768,14 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
             children: fieldHub
                 ? [
                     _OverviewTab(workspace: ws),
+                    const WorkspaceSitesTab(),
                     _KpisTab(workspace: ws),
                     if (showExpensesTab) const _ExpensesTab(),
                     _WarehouseTab(workspace: ws),
                   ]
                 : [
                     _OverviewTab(workspace: ws),
+                    const WorkspaceSitesTab(),
                     _DepartmentsTab(workspace: ws),
                     _StaffTab(workspace: ws),
                     _ChecklistsTab(workspace: ws),

@@ -131,6 +131,11 @@ class ApiConfig {
   static const String privateCompanyConflicts = '/api/provisor-private-company/conflicts';
   static const String privateCompanySiteArrivalCheck =
       '/api/provisor-private-company/site-arrival/check';
+  static const String privateCompanySites = '/api/provisor-private-company/sites';
+  static String privateCompanySiteDetail(String id) =>
+      '/api/provisor-private-company/sites/$id';
+  static String privateCompanySiteConfirm(String id) =>
+      '/api/provisor-private-company/sites/$id/confirm';
   static const String privateCompanyExpenseSettings =
       '/api/provisor-private-company/expenses/settings';
   static const String privateCompanyExpenses =

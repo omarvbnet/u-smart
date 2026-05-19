@@ -379,6 +379,8 @@ model TicketRequester {
   maintenanceProximityRadiusOverrideM Int?
   /// Created checklists inside their workspace.
   privateCompanyChecklistsCreated PrivateCompanyChecklist[] @relation("PrivateCompanyChecklistCreator")
+  privateCompanySitesCreated      PrivateCompanySite[]      @relation("PrivateCompanySiteCreator")
+  privateCompanySitesConfirmed    PrivateCompanySite[]      @relation("PrivateCompanySiteConfirmer")
 
   // ── Private company warehouse ─────────────────────────────────────────
   assignedMaterialItems          PrivateCompanyMaterialItem[]     @relation("PrivateCompanyMaterialItemAssignee")
@@ -1430,6 +1432,7 @@ model PrivateCompany {
   staff            TicketRequester[]          @relation("PrivateCompanyStaff")
   checklists       PrivateCompanyChecklist[]
   scopedTickets    VisitorRequest[]           @relation("PrivateCompanyScopedTickets")
+  sites            PrivateCompanySite[]       @relation("PrivateCompanySites")
   materials        PrivateCompanyMaterial[]         @relation("PrivateCompanyMaterials")
   materialItems    PrivateCompanyMaterialItem[]    @relation("PrivateCompanyMaterialItems")
   materialMovements PrivateCompanyMaterialMovement[] @relation("PrivateCompanyMaterialMovements")
@@ -1460,6 +1463,41 @@ model PrivateCompany {
 
   @@index([status])
   @@map("private_companies")
+}
+
+/// Workspace site registry — visible to all staff; QField coords drive map pins.
+enum PrivateCompanySiteConfirmationStatus {
+  CONFIRMED
+  PENDING
+}
+
+model PrivateCompanySite {
+  id                     String                              @id @default(cuid())
+  companyId              String
+  company                PrivateCompany                      @relation("PrivateCompanySites", fields: [companyId], references: [id], onDelete: Cascade)
+  siteCode               String
+  location               String
+  province               String
+  /// Map pin latitude — set from QField package bounds center when attached.
+  latitude               Float?
+  longitude              Float?
+  hasQfield              Boolean                             @default(false)
+  qfieldProjects         Json?
+  confirmationStatus     PrivateCompanySiteConfirmationStatus @default(CONFIRMED)
+  /// Engineer-proposed changes awaiting manager / coordinator / owner approval.
+  pendingChange          Json?
+  createdByRequesterId   String
+  createdBy              TicketRequester                     @relation("PrivateCompanySiteCreator", fields: [createdByRequesterId], references: [id], onDelete: Restrict)
+  confirmedByRequesterId String?
+  confirmedBy            TicketRequester?                    @relation("PrivateCompanySiteConfirmer", fields: [confirmedByRequesterId], references: [id], onDelete: SetNull)
+  confirmedAt            DateTime?
+  createdAt              DateTime                            @default(now())
+  updatedAt              DateTime                            @updatedAt
+
+  @@unique([companyId, siteCode])
+  @@index([companyId])
+  @@index([companyId, confirmationStatus])
+  @@map("private_company_sites")
 }
 
 /// Staff-reported cost on a workspace ticket (before ticket completion).

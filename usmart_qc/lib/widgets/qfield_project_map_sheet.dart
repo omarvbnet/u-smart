@@ -815,15 +815,18 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
               if (shouldShowMapLabel(layerName)) {
                 final text = mapLabelForFeature(props, layerName);
                 if (text != null && text.isNotEmpty) {
-                  final compact = useCompactMapLabel(layerName);
+                  final closureBox = useClosureBoxMapLabel(layerName);
                   out.add(Marker(
                     point: pt,
-                    width: compact ? 50 : 92,
-                    height: compact ? 22 : 40,
+                    width: closureBox ? 46 : 50,
+                    height: closureBox ? 24 : 22,
                     alignment: Alignment.bottomCenter,
                     child: Transform.translate(
-                      offset: Offset(0, compact ? -22 : -30),
-                      child: QFieldMapPointLabel(text: text, compact: compact),
+                      offset: Offset(0, closureBox ? -24 : -22),
+                      child: QFieldMapPointLabel(
+                        text: text,
+                        closureBox: closureBox,
+                      ),
                     ),
                   ));
                 }
