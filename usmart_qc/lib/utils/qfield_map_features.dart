@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'coordinate_transform.dart';
@@ -78,7 +79,25 @@ LatLng? _toWgs84(
       CoordinateTransform.reprojectXYGuessed(x, y);
 }
 
+String? _propValue(Map<String, dynamic> props, Iterable<String> keys) {
+  for (final want in keys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      return s;
+    }
+  }
+  return null;
+}
+
 String? labelFromProperties(Map<String, dynamic> props) {
+  final layer = props['layer']?.toString();
+  final fromLayer = mapLabelForFeature(props, layer);
+  if (fromLayer != null) return fromLayer;
+
   const prefer = ['name', 'label', 'title', 'id', 'code', 'fid', 'Name', 'LABEL'];
   for (final k in prefer) {
     final v = props[k];
@@ -93,6 +112,234 @@ String? labelFromProperties(Map<String, dynamic> props) {
     }
   }
   return null;
+}
+
+/// ID / number shown on the map for poles, FAT, closures, handholes.
+String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
+  final n = (layerName ?? props['layer']?.toString() ?? '')
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'\s+'), '');
+
+  if (n.contains('pole')) {
+    return _propValue(props, [
+      'pole_no',
+      'poleno',
+      'pole_id',
+      'poleid',
+      'pole_number',
+      'pole_num',
+      'support_no',
+      'id',
+      'name',
+      'label',
+      'code',
+    ]);
+  }
+  if (n.contains('fat') && !n.contains('region')) {
+    return _propValue(props, [
+      'fat_no',
+      'fatno',
+      'fat_id',
+      'fatid',
+      'fat_number',
+      'fat_num',
+      'fat_name',
+      'fdt_no',
+      'name',
+      'label',
+      'id',
+      'code',
+    ]);
+  }
+  if (n.contains('closure') || n.contains('cabinet')) {
+    return _propValue(props, [
+      'closure_id',
+      'closureid',
+      'closure_no',
+      'closure_num',
+      'cabinet_id',
+      'cabinet_no',
+      'id',
+      'name',
+      'label',
+      'code',
+    ]);
+  }
+  if (n.contains('handhole') || n == 'hh') {
+    return _propValue(props, [
+      'hh_id',
+      'hh_no',
+      'handhole_id',
+      'handhole_no',
+      'id',
+      'name',
+      'label',
+    ]);
+  }
+  if (n.contains('hole')) {
+    return _propValue(props, ['hole_id', 'hole_no', 'id', 'name', 'label']);
+  }
+  return null;
+}
+
+bool shouldShowMapLabel(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('pole')) return true;
+  if (n.contains('fat') && !n.contains('region')) return true;
+  if (n.contains('closure') || n.contains('cabinet')) return true;
+  if (n.contains('handhole') || n == 'hh') return true;
+  if (n.contains('fdthole') || (n.contains('hole') && n.contains('fdt'))) return true;
+  return false;
+}
+
+/// Smaller on-map labels: white outline, transparent fill (FAT / handholes).
+bool useCompactMapLabel(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('fat') && !n.contains('region')) return true;
+  if (n.contains('handhole') || n == 'hh') return true;
+  return false;
+}
+
+/// Title in the tap list (ID/number first, then layer).
+String featureTapListTitle(QFieldMapFeature f) {
+  final layer = f.properties['layer']?.toString();
+  final id = mapLabelForFeature(f.properties, layer) ?? f.label;
+  if (id != null && id.isNotEmpty) return id;
+  return layer?.trim().isNotEmpty == true ? layer! : f.id;
+}
+
+String featureTapListSubtitle(QFieldMapFeature f) {
+  final layer = f.properties['layer']?.toString().trim() ?? '';
+  final pkg = f.properties['package']?.toString().trim() ?? '';
+  final gt = f.geometryType;
+  final parts = <String>[];
+  if (layer.isNotEmpty) parts.add(layer);
+  if (pkg.isNotEmpty && pkg != layer) parts.add(pkg);
+  if (gt != null && gt.isNotEmpty) parts.add(gt);
+  return parts.isEmpty ? f.source : parts.join(' · ');
+}
+
+/// All features within [maxMeters] of [point] (same location cluster).
+List<FeatureTapHit> featuresNearPoint(
+  List<QFieldMapFeature> features,
+  LatLng point, {
+  double maxMeters = 12,
+}) {
+  final hits = <FeatureTapHit>[];
+  for (final f in features) {
+    if (!f.hasGeometry) continue;
+    final d = distanceFeatureToTap(f, point);
+    if (d <= maxMeters) hits.add(FeatureTapHit(feature: f, distanceMeters: d));
+  }
+  hits.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
+  return hits;
+}
+
+LatLng? featureAnchorPoint(QFieldMapFeature f) {
+  for (final p in f.points) {
+    return p;
+  }
+  for (final line in f.polylines) {
+    if (line.isNotEmpty) return line.first;
+  }
+  for (final ring in f.polygons) {
+    if (ring.isNotEmpty) return ring.first;
+  }
+  return null;
+}
+
+/// GIS layer table names for fiber / cable line layers.
+bool isCableLayer(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('cable')) return true;
+  if (n.contains('pullingfoc')) return true;
+  if (n.contains('ftth')) return true;
+  if (n.contains('fiber') && !n.contains('region')) return true;
+  if (n == 'foc' || n.endsWith('_foc')) return true;
+  return false;
+}
+
+/// Display name for cable type grouping (12F, 24F, Pulling FOC, …).
+String cableTypeLabel(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('cable12') || n.contains('12f')) return '12F';
+  if (n.contains('cable24') || n.contains('24f')) return '24F';
+  if (n.contains('cable36') || n.contains('36f')) return '36F';
+  if (n.contains('cable48') || n.contains('48f')) return '48F';
+  if (n.contains('pullingfoc')) return 'Pulling FOC';
+  if (n == 'foc' || n.endsWith('_foc')) return 'FOC';
+  if (n.contains('cable')) return layerName?.trim() ?? 'Cable';
+  return layerName?.trim() ?? 'Line';
+}
+
+/// Distinct map color per cable layer type.
+Color cableTypeColor(String? layerName) {
+  final n = (layerName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (n.contains('cable12') || n.contains('12f')) return const Color(0xFFE53935);
+  if (n.contains('cable24') || n.contains('24f')) return const Color(0xFF1E88E5);
+  if (n.contains('cable36') || n.contains('36f')) return const Color(0xFF8E24AA);
+  if (n.contains('cable48') || n.contains('48f')) return const Color(0xFFFF8F00);
+  if (n.contains('pullingfoc')) return const Color(0xFFD32F2F);
+  if (n == 'foc' || n.endsWith('_foc')) return const Color(0xFFC62828);
+  return const Color(0xFFE53935);
+}
+
+class LayerHitGroup {
+  const LayerHitGroup({
+    required this.layerKey,
+    required this.layerName,
+    required this.hits,
+  });
+
+  final String layerKey;
+  final String layerName;
+  final List<FeatureTapHit> hits;
+}
+
+List<LayerHitGroup> groupHitsByLayer(List<FeatureTapHit> hits) {
+  final map = <String, List<FeatureTapHit>>{};
+  for (final h in hits) {
+    map.putIfAbsent(h.feature.layerKey, () => []).add(h);
+  }
+  final groups = map.entries.map((e) {
+    final layerName =
+        e.value.first.feature.properties['layer']?.toString().trim() ??
+        e.key.split('|').last;
+    return LayerHitGroup(
+      layerKey: e.key,
+      layerName: layerName.isEmpty ? e.key : layerName,
+      hits: e.value,
+    );
+  }).toList();
+  groups.sort((a, b) {
+    final ac = isCableLayer(a.layerName);
+    final bc = isCableLayer(b.layerName);
+    if (ac != bc) return ac ? 1 : -1;
+    return a.layerName.compareTo(b.layerName);
+  });
+  return groups;
+}
+
+/// Cable line features near [anchor] for the selected element.
+List<FeatureTapHit> cableHitsNearPoint(
+  List<QFieldMapFeature> features,
+  LatLng anchor, {
+  double maxMeters = 40,
+}) {
+  return featuresNearPoint(features, anchor, maxMeters: maxMeters)
+      .where((h) => isCableLayer(h.feature.properties['layer']?.toString()))
+      .toList();
+}
+
+Map<String, List<FeatureTapHit>> groupCableHitsByType(List<FeatureTapHit> cableHits) {
+  final map = <String, List<FeatureTapHit>>{};
+  for (final h in cableHits) {
+    final label = cableTypeLabel(h.feature.properties['layer']?.toString());
+    map.putIfAbsent(label, () => []).add(h);
+  }
+  final keys = map.keys.toList()..sort();
+  return {for (final k in keys) k: map[k]!};
 }
 
 List<LatLng> ringToLatLng(
@@ -276,7 +523,8 @@ List<QFieldMapFeature> _featuresFromGeometry(
       points: points,
       polylines: polylines,
       polygons: polygons,
-      label: labelFromProperties(props),
+      label: mapLabelForFeature(props, props['layer']?.toString()) ??
+          labelFromProperties(props),
       source: props['source']?.toString() ?? 'geojson',
       geometryType: type,
     ),

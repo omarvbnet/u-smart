@@ -812,6 +812,22 @@ class _QFieldProjectMapSheetState extends State<QFieldProjectMapSheet> {
                 height: ptStyle.height,
                 child: QFieldMapPointIcon(layerName: layerName),
               ));
+              if (shouldShowMapLabel(layerName)) {
+                final text = mapLabelForFeature(props, layerName);
+                if (text != null && text.isNotEmpty) {
+                  final compact = useCompactMapLabel(layerName);
+                  out.add(Marker(
+                    point: pt,
+                    width: compact ? 50 : 92,
+                    height: compact ? 22 : 40,
+                    alignment: Alignment.bottomCenter,
+                    child: Transform.translate(
+                      offset: Offset(0, compact ? -22 : -30),
+                      child: QFieldMapPointLabel(text: text, compact: compact),
+                    ),
+                  ));
+                }
+              }
             }
           } else if (g['type'] == 'MultiPoint') {
             final c = g['coordinates'];

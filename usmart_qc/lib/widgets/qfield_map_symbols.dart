@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../utils/qfield_map_features.dart';
+
 /// QField-like symbology keyed by layer / table name from GeoPackage properties.
 enum QFieldPointSymbolKind {
   pole,
@@ -128,19 +130,12 @@ abstract final class QFieldMapSymbols {
 
   static QFieldLineSymbolStyle lineStyle(String? layer) {
     final n = normalizeLayerName(layer);
-    if (_matches(n, [
-      'pullingfoc',
-      'foc',
-      'cable12f',
-      'cable24f',
-      'cable36f',
-      'cable48f',
-    ]) ||
-        n.contains('cable')) {
+    if (isCableLayer(layer)) {
+      final c = cableTypeColor(layer);
       return QFieldLineSymbolStyle(
-        color: fiberRed,
+        color: c,
         strokeWidth: 5.5,
-        borderColor: fiberRed.withAlpha(90),
+        borderColor: c.withAlpha(90),
         borderStrokeWidth: 8,
       );
     }
@@ -181,6 +176,74 @@ abstract final class QFieldMapSymbols {
       if (n == k || n.contains(k)) return true;
     }
     return false;
+  }
+}
+
+/// On-map ID label (pole / FAT / closure / handhole number).
+class QFieldMapPointLabel extends StatelessWidget {
+  const QFieldMapPointLabel({
+    super.key,
+    required this.text,
+    this.highlighted = false,
+    this.compact = false,
+  });
+
+  final String text;
+  final bool highlighted;
+  /// FAT / handhole: smaller text, white outline box, transparent fill.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 44),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: highlighted ? const Color(0xFF00D4AA) : Colors.white,
+            fontSize: 7,
+            fontWeight: FontWeight.w600,
+            height: 1.0,
+            shadows: const [
+              Shadow(color: Color(0xDD000000), blurRadius: 2, offset: Offset(0, 0.5)),
+              Shadow(color: Color(0x88000000), blurRadius: 0.5, offset: Offset(0.5, 0)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 88),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: highlighted ? const Color(0xFF6C63FF) : const Color(0xF5FFFFFF),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: highlighted ? Colors.white : Colors.black87,
+          width: highlighted ? 1.2 : 0.8,
+        ),
+        boxShadow: const [
+          BoxShadow(color: Color(0x44000000), blurRadius: 2, offset: Offset(0, 1)),
+        ],
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: highlighted ? Colors.white : Colors.black87,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
+      ),
+    );
   }
 }
 
