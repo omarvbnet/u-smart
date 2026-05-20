@@ -36,6 +36,8 @@ import '../widgets/site_list_card.dart';
 import '../widgets/workspace_site_detail_sheet.dart';
 import '../utils/site_qfield_map.dart';
 import '../widgets/dashboard_sites_tab.dart';
+import '../utils/ticket_list_sections.dart';
+import '../utils/ticket_status_filter.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -581,14 +583,25 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
     setState(() => _dateRange = picked);
   }
 
-  List<Ticket> _applyFilters(List<Ticket> tickets, PrivateCompanyProvider pc) {
+  List<Ticket> _applyFilters(
+    List<Ticket> tickets,
+    PrivateCompanyProvider pc, {
+    String? currentUserId,
+  }) {
     final query = _searchController.text.trim().toLowerCase();
     final useDept = _useDepartmentTicketFilter(pc);
     final deptNames = {
       for (final d in (pc.workspace?.departments ?? [])) d.id: d.name,
     };
     return tickets.where((t) {
-      if (_statusFilter != 'ALL' && t.status != _statusFilter) return false;
+      if (!ticketMatchesStatusFilter(
+        t,
+        _statusFilter,
+        currentUserId: currentUserId,
+        assignedToMeOnly: true,
+      )) {
+        return false;
+      }
       if (useDept) {
         if (_departmentFilter != 'ALL' &&
             t.privateCompanyTargetDepartmentId != _departmentFilter) {
@@ -639,14 +652,15 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Consumer2<TicketsProvider, PrivateCompanyProvider>(
-      builder: (context, provider, pc, _) {
+    return Consumer3<TicketsProvider, PrivateCompanyProvider, AuthProvider>(
+      builder: (context, provider, pc, auth, _) {
         if (provider.loading && provider.tickets.isEmpty) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
           );
         }
 
+        final currentUserId = auth.user?.id;
         final useDept = _useDepartmentTicketFilter(pc);
         final sortedDepts = List.of(pc.workspace?.departments ?? [])
           ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -656,10 +670,7 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
             departmentIds.contains(_departmentFilter) ? _departmentFilter : 'ALL';
 
         final allMyTickets = provider.myFieldTickets;
-        final statuses = <String>{
-          'ALL',
-          ...allMyTickets.map((t) => t.status),
-        }.toList();
+        final statuses = ticketStatusFilterOptions(allMyTickets);
         final techniques = <String>{
           'ALL',
           ...allMyTickets.map((t) => t.technique),
@@ -690,16 +701,16 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
           });
         }
 
-        final filtered = _applyFilters(allMyTickets, pc);
-        final active = filtered.where((t) => !t.isCompleted).toList();
-        final completed = filtered.where((t) => t.isCompleted).toList();
-
-        final sections = <_Section>[
-          if (active.isNotEmpty)
-            _Section(l10n.t('section_active'), active, const Color(0xFF00D4AA)),
-          if (completed.isNotEmpty)
-            _Section(l10n.t('section_completed'), completed, const Color(0xFF4ADE80)),
-        ];
+        final filtered = _applyFilters(allMyTickets, pc, currentUserId: currentUserId);
+        final sectionData = buildTicketListSections(
+          filtered,
+          l10n,
+          currentUserId: currentUserId,
+          highlightMineInAssigned: true,
+        );
+        final sections = sectionData
+            .map((s) => _Section(s.title, s.tickets, Color(s.color)))
+            .toList();
 
         return Column(
           children: [
@@ -794,6 +805,7 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
                                   label: 'Status',
                                   value: effectiveStatus,
                                   items: statuses,
+                                  itemLabel: (id) => ticketStatusFilterLabel(l10n, id),
                                   onChanged: (v) => setState(() => _statusFilter = v),
                                 ),
                               ),

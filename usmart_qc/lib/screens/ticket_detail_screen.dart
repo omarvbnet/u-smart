@@ -719,20 +719,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       return;
     }
     setState(() => _assigning = true);
-    final ok = await ticketsProv.assignTicketToMe(widget.ticketId);
+    final res = await ticketsProv.assignTicketToMe(widget.ticketId);
     if (mounted) {
       final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? l10n.t('assign_success') : l10n.t('assign_failed')),
+          content: Text(
+            res.ok
+                ? l10n.t('assign_success')
+                : (res.message?.trim().isNotEmpty == true
+                    ? res.message!.trim()
+                    : l10n.t('assign_failed')),
+          ),
           backgroundColor:
-              ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+              res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      if (ok) await _load();
+      if (res.ok) await _load();
       setState(() => _assigning = false);
     }
   }

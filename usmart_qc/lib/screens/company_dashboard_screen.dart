@@ -42,6 +42,8 @@ import '../widgets/ticket_api_access_card.dart';
 import '../utils/account_deletion_ui.dart';
 import '../utils/requester_role_labels.dart';
 import '../config/api_config.dart';
+import '../utils/ticket_list_sections.dart';
+import '../utils/ticket_status_filter.dart';
 
 class CompanyDashboardScreen extends StatefulWidget {
   const CompanyDashboardScreen({super.key});
@@ -370,14 +372,26 @@ class _TicketsTabState extends State<_TicketsTab> {
     setState(() => _dateRange = picked);
   }
 
-  List<Ticket> _applyFilters(List<Ticket> tickets, PrivateCompanyProvider pc) {
+  List<Ticket> _applyFilters(
+    List<Ticket> tickets,
+    PrivateCompanyProvider pc, {
+    String? currentUserId,
+    bool assignedFilterToMeOnly = false,
+  }) {
     final query = _searchController.text.trim().toLowerCase();
     final useDept = _useDepartmentTicketFilter(pc);
     final deptNames = {
       for (final d in (pc.workspace?.departments ?? [])) d.id: d.name,
     };
     return tickets.where((t) {
-      if (_statusFilter != 'ALL' && t.status != _statusFilter) return false;
+      if (!ticketMatchesStatusFilter(
+        t,
+        _statusFilter,
+        currentUserId: currentUserId,
+        assignedToMeOnly: assignedFilterToMeOnly,
+      )) {
+        return false;
+      }
       if (useDept) {
         if (_departmentFilter != 'ALL' &&
             t.privateCompanyTargetDepartmentId != _departmentFilter) {
@@ -428,13 +442,16 @@ class _TicketsTabState extends State<_TicketsTab> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Consumer2<TicketsProvider, PrivateCompanyProvider>(
-      builder: (context, provider, pc, _) {
+    return Consumer3<TicketsProvider, PrivateCompanyProvider, AuthProvider>(
+      builder: (context, provider, pc, auth, _) {
         if (provider.loading && provider.tickets.isEmpty) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
           );
         }
+
+        final currentUserId = auth.user?.id;
+        final assignedFilterToMeOnly = pc.isStaff && !pc.isOwner;
 
         final useDept = _useDepartmentTicketFilter(pc);
         final sortedDepts = List.of(pc.workspace?.departments ?? [])
@@ -444,10 +461,7 @@ class _TicketsTabState extends State<_TicketsTab> {
         final effectiveDept =
             departmentIds.contains(_departmentFilter) ? _departmentFilter : 'ALL';
 
-        final statuses = <String>{
-          'ALL',
-          ...provider.tickets.map((t) => t.status),
-        }.toList();
+        final statuses = ticketStatusFilterOptions(provider.tickets);
         final techniques = <String>{
           'ALL',
           ...provider.tickets.map((t) => t.technique),
@@ -477,34 +491,22 @@ class _TicketsTabState extends State<_TicketsTab> {
             });
           });
         }
-        final filtered = _applyFilters(provider.tickets, pc);
+        final filtered = _applyFilters(
+          provider.tickets,
+          pc,
+          currentUserId: currentUserId,
+          assignedFilterToMeOnly: assignedFilterToMeOnly,
+        );
 
-        final sections = <_TicketSection>[
-          if (filtered.where((t) => t.isPending).isNotEmpty)
-            _TicketSection(
-              l10n.t('section_pending'),
-              filtered.where((t) => t.isPending).toList(),
-              const Color(0xFFFBBF24),
-            ),
-          if (filtered.where((t) => t.isOnSite).isNotEmpty)
-            _TicketSection(
-              l10n.t('section_on_site'),
-              filtered.where((t) => t.isOnSite).toList(),
-              const Color(0xFF6C63FF),
-            ),
-          if (filtered.where((t) => t.isInProgress).isNotEmpty)
-            _TicketSection(
-              l10n.t('section_in_progress'),
-              filtered.where((t) => t.isInProgress).toList(),
-              const Color(0xFF00D4AA),
-            ),
-          if (filtered.where((t) => t.isCompleted).isNotEmpty)
-            _TicketSection(
-              l10n.t('section_completed'),
-              filtered.where((t) => t.isCompleted).toList(),
-              const Color(0xFF4ADE80),
-            ),
-        ];
+        final sectionData = buildTicketListSections(
+          filtered,
+          l10n,
+          currentUserId: currentUserId,
+          highlightMineInAssigned: assignedFilterToMeOnly,
+        );
+        final sections = sectionData
+            .map((s) => _TicketSection(s.title, s.tickets, Color(s.color)))
+            .toList();
 
         return Column(
           children: [
@@ -733,6 +735,7 @@ class _TicketsTabState extends State<_TicketsTab> {
                                   label: 'Status',
                                   value: effectiveStatus,
                                   items: statuses,
+                                  itemLabel: (id) => ticketStatusFilterLabel(l10n, id),
                                   onChanged: (v) => setState(() => _statusFilter = v),
                                 ),
                               ),

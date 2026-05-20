@@ -3,6 +3,12 @@
  * (PrivateCompanyTechnique) plus optional per-staff slug allowlist.
  */
 
+/** QC pool / inspection field roles (mobile assign + list). */
+export function isQcPoolEngineerRole(role: string | null | undefined): boolean {
+  const r = (role ?? '').toUpperCase();
+  return r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
+}
+
 export type WorkspaceTechniqueRow = {
   slug: string;
   departmentId: string | null;

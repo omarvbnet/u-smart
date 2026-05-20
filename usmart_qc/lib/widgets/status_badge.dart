@@ -64,6 +64,13 @@ class StatusBadge extends StatelessWidget {
 
   static _StatusConfig _statusConfig(String status, AppLocalizations l10n) {
     switch (status.toUpperCase()) {
+      case 'ASSIGNED':
+        return _StatusConfig(
+          label: l10n.t('status_assigned'),
+          bg: const Color(0x408B83FF),
+          border: const Color(0x608B83FF),
+          text: const Color(0xFF8B83FF),
+        );
       case 'PENDING':
         return _StatusConfig(
           label: l10n.t('section_pending'),

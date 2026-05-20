@@ -341,13 +341,19 @@ class _TicketsTab extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      final ok = await provider.assignTicketToMe(ticket.id);
+      final res = await provider.assignTicketToMe(ticket.id);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? 'Ticket assigned to you' : 'Failed to assign'),
+            content: Text(
+              res.ok
+                  ? 'Ticket assigned to you'
+                  : (res.message?.trim().isNotEmpty == true
+                      ? res.message!.trim()
+                      : 'Failed to assign'),
+            ),
             backgroundColor:
-                ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+                res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),

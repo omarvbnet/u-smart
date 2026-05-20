@@ -4,7 +4,12 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
-import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
+import {
+  departmentIdFromWorkspaceTechniqueSlug,
+  fetchWorkspaceTechniqueRows,
+  isQcPoolEngineerRole,
+  staffTicketTechniqueAllowed,
+} from '@/lib/workspace-task-assignment';
 import {
   MAINTENANCE_DISPATCH_ENGINEER,
   normalizeMaintenanceDispatchMode,
@@ -210,15 +215,11 @@ export async function PATCH(
     }
 
     const role = requester.role ?? 'COMPANY';
-    const isEngineer = role === 'ENGINEER';
-    const isTechnician = role === 'TECHNICIAN';
     const roleUpper = (requester.role ?? 'COMPANY').toUpperCase();
+    const isQcEngineer = isQcPoolEngineerRole(role);
+    const isTechnician = roleUpper === 'TECHNICIAN';
     const isDispatcherRole =
-      roleUpper === 'ENGINEER' ||
-      roleUpper === 'QUALITY_ENGINEER' ||
-      roleUpper === 'SUPERVISION_ENGINEER' ||
-      roleUpper === 'MANAGER' ||
-      roleUpper === 'COORDINATOR';
+      isQcEngineer || roleUpper === 'MANAGER' || roleUpper === 'COORDINATOR';
     if (!assigneeRequesterId && !isDispatcherRole && !isTechnician) {
       return NextResponse.json(
         { success: false, message: 'Only engineers, managers, or coordinators can use this action.' },
@@ -483,13 +484,18 @@ export async function PATCH(
       });
     }
 
-    if (!isEngineer && !isTechnician) {
+    const canSelfAssignLead =
+      isTechnician ||
+      isQcEngineer ||
+      roleUpper === 'MANAGER' ||
+      roleUpper === 'COORDINATOR';
+    if (!canSelfAssignLead) {
       return NextResponse.json({ success: false, message: 'Only engineers or technicians can assign tickets' }, { status: 403 });
     }
     if (isTechnician && !isMaintenance) {
       return NextResponse.json({ success: false, message: 'Technicians can only assign maintenance tickets' }, { status: 403 });
     }
-    if (isEngineer && isMaintenance) {
+    if ((isQcEngineer || roleUpper === 'MANAGER' || roleUpper === 'COORDINATOR') && isMaintenance) {
       return NextResponse.json({ success: false, message: 'Engineers handle QC only; maintenance tickets are for technicians' }, { status: 403 });
     }
 
@@ -528,10 +534,7 @@ export async function PATCH(
       );
     }
 
-    const isQcPoolRole =
-      roleUpper === 'ENGINEER' ||
-      roleUpper === 'QUALITY_ENGINEER' ||
-      roleUpper === 'SUPERVISION_ENGINEER';
+    const isQcPoolRole = isQcEngineer;
 
     let assigneeDeptForArrival: string | null = row.privateCompanyTargetDepartmentId ?? null;
 
@@ -611,7 +614,9 @@ export async function PATCH(
         );
       }
       const targetDept = row.privateCompanyTargetDepartmentId ?? null;
-      if (targetDept && deptId && targetDept !== deptId) {
+      const deptFromTechnique = departmentIdFromWorkspaceTechniqueSlug(String(row.technique ?? ''));
+      const staffDeptForScope = deptId ?? deptFromTechnique;
+      if (targetDept && staffDeptForScope && targetDept !== staffDeptForScope) {
         return NextResponse.json(
           { success: false, message: 'This ticket is scoped to another department.' },
           { status: 403 }

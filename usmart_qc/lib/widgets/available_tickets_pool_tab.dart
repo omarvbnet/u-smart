@@ -321,14 +321,18 @@ class AvailableTicketsPoolTab extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      final ok = await provider.assignTicketToMe(ticket.id);
+      final res = await provider.assignTicketToMe(ticket.id);
       if (context.mounted) {
-        final msg = ok ? l10n.t('assign_success') : l10n.t('assign_failed');
+        final msg = res.ok
+            ? l10n.t('assign_success')
+            : (res.message?.trim().isNotEmpty == true
+                ? res.message!.trim()
+                : l10n.t('assign_failed'));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
             backgroundColor:
-                ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+                res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),

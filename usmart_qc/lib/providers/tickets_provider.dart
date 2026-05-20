@@ -639,15 +639,18 @@ class TicketsProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> assignTicketToMe(String id) async {
+  Future<({bool ok, String? message})> assignTicketToMe(String id) async {
     try {
       final data = await _api.patch(ApiConfig.ticketAssign(id));
+      final msg = data['message'] as String?;
       if (data['success'] == true) {
         await fetchTickets();
-        return true;
+        return (ok: true, message: msg);
       }
-    } catch (_) {}
-    return false;
+      return (ok: false, message: msg);
+    } catch (e) {
+      return (ok: false, message: e.toString());
+    }
   }
 
   /// Workspace maintenance: assign a technician by requester id (engineer-dispatch departments).

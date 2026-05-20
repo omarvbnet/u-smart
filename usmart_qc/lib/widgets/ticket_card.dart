@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
+import '../utils/ticket_status_filter.dart';
 import 'status_badge.dart';
 
 class TicketCard extends StatelessWidget {
@@ -131,7 +132,12 @@ class TicketCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      StatusBadge(status: ticket.status, localizations: l10n),
+                      StatusBadge(
+                        status: ticket.isAssignedAwaitingArrival
+                            ? kTicketStatusFilterAssigned
+                            : ticket.status,
+                        localizations: l10n,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
