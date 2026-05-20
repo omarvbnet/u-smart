@@ -107,6 +107,8 @@ const Map<String, String> _en = {
   'ticket_cancellation_reject': 'Reject request',
   'ticket_cancellation_reject_reason': 'Reason (optional)',
   'ticket_cancellation_rejected_banner': 'Cancellation was declined by staff',
+  'ticket_cancelled_readonly':
+      'This ticket is closed. You can assign yourself a new ticket from the available pool.',
   'section_active': 'Active',
   'total_count': '{{count}} total',
   'assign_to_me': 'Assign to Me',
@@ -1217,6 +1219,8 @@ const Map<String, String> _ar = {
   'ticket_cancellation_reject': 'رفض الطلب',
   'ticket_cancellation_reject_reason': 'السبب (اختياري)',
   'ticket_cancellation_rejected_banner': 'رفض الموظفون طلب الإلغاء',
+  'ticket_cancelled_readonly':
+      'هذه التذكرة مغلقة. يمكنك تعيين تذكرة جديدة لنفسك من قائمة المتاحة.',
   'section_active': 'نشط',
   'total_count': '{{count}} الإجمالي',
   'assign_to_me': 'تعيين لي',
@@ -2266,6 +2270,8 @@ const Map<String, String> _ku = {
   'ticket_cancellation_reject': 'ڕەتکردنەوەی داواکاری',
   'ticket_cancellation_reject_reason': 'هۆکار (ئارەزوومەندانە)',
   'ticket_cancellation_rejected_banner': 'کارمەندان داواکاری هەڵوەشاندنەوەیان ڕەتکردەوە',
+  'ticket_cancelled_readonly':
+      'ئەم تیکەتە داخراوە. دەتوانیت تیکەتێکی نوێ لە لیستی بەردەستەکان بۆ خۆت دیاری بکەیت.',
   'section_active': 'چالاک',
   'total_count': '{{count}} کۆی گشتی',
   'assign_to_me': 'دیاریکردن بۆ من',
@@ -3331,6 +3337,8 @@ const Map<String, String> _tr = {
   'ticket_cancellation_reject': 'Talebi reddet',
   'ticket_cancellation_reject_reason': 'Neden (isteğe bağlı)',
   'ticket_cancellation_rejected_banner': 'Personel iptal talebini reddetti',
+  'ticket_cancelled_readonly':
+      'Bu bilet kapatıldı. Müsait havuzdan kendinize yeni bir bilet atayabilirsiniz.',
   'section_active': 'Aktif',
   'total_count': 'Toplam {{count}}',
   'assign_to_me': 'Bana Ata',

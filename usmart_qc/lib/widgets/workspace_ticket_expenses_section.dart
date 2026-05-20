@@ -46,7 +46,7 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
 
   bool get _canAdd {
     if (!widget.ticket.workspaceTicketExpensesEnabled) return false;
-    if (widget.ticket.isCompleted) return false;
+    if (widget.ticket.isTerminal) return false;
     final auth = context.read<AuthProvider>();
     final uid = auth.user?.id;
     if (uid == null) return false;
@@ -235,7 +235,7 @@ class _WorkspaceTicketExpensesSectionState extends State<WorkspaceTicketExpenses
                           .join(' · '),
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11),
                     ),
-                    trailing: !widget.ticket.isCompleted && _isTicketLead
+                    trailing: !widget.ticket.isTerminal && _isTicketLead
                         ? IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54),
                             onPressed: () => _deleteLine(e),

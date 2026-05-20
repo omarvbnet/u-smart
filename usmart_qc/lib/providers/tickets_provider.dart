@@ -197,7 +197,7 @@ class TicketsProvider extends ChangeNotifier {
 
   /// Open field work for the current user (lead or crew), matching assign API rules.
   bool ticketIsOpenAssignmentForUser(Ticket t, String userId) {
-    if (t.isCompleted || t.isCancelled) return false;
+    if (t.isTerminal) return false;
     if (t.assignedEngineerId == userId) return true;
     if (t.maintenanceCrewIds.contains(userId)) return true;
     return false;

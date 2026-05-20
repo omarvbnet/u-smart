@@ -249,6 +249,9 @@ class Ticket {
 
   bool get isPending => status == 'PENDING';
   bool get isCancelled => status == 'CANCELLED';
+
+  /// Completed or cancelled — no field edits, staff may take a new ticket from the pool.
+  bool get isTerminal => isCompleted || isCancelled;
   bool get hasPendingCancellationRequest => cancellationRequestStatus == 'PENDING';
 
   bool get awaitsRequesterResubmit =>

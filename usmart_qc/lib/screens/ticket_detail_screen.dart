@@ -99,6 +99,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   bool _canManageQField(Ticket t) {
+    if (t.isTerminal) return false;
     final auth = context.read<AuthProvider>();
     final uid = auth.user?.id;
     if (uid == null) return false;
@@ -1064,7 +1065,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       t.allowWorkspaceCrewJoin &&
       t.assignmentScope == 'PRIVATE_COMPANY_STAFF' &&
       t.isAssigned &&
-      !t.isCompleted;
+      !t.isTerminal;
 
   Widget _ticketHeaderBody(Ticket t, {required bool compact}) {
     final l10n = AppLocalizations.of(context);
@@ -1695,6 +1696,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         !isEngineer && _maintenanceDispatchAssignEligible(t, pc);
 
     return [
+      if (t.isCancelled) ...[
+        const SizedBox(height: 12),
+        _cancelledTicketBanner(t, l10n),
+      ],
+
       // ─── Engineer/Technician action buttons ───
       if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
       if (maintDispatchAssignNonEngineer) ..._maintenanceDispatcherAssignWidgets(t, l10n),
@@ -1704,9 +1710,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if ((isEngineer || _isTechnician) &&
           isMyTicket &&
           t.workflowState != 'RESUBMITTED' &&
-          !t.isCompleted &&
-          t.status.toUpperCase() != 'COMPLETED' &&
-          !t.isCancelled) ...[
+          !t.isTerminal) ...[
         const SizedBox(height: 12),
         _resubmitForEditButton(t, l10n),
       ],
@@ -1728,7 +1732,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       // ─── NEEDS_EDIT banner: notify field staff coordinator wants edits ───
       if ((isEngineer || _isTechnician) &&
           isMyTicket &&
-          !t.isCompleted &&
+          !t.isTerminal &&
           t.workflowState == 'NEEDS_EDIT') ...[
         const SizedBox(height: 12),
         _needsEditBanner(t, l10n),
@@ -1743,7 +1747,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if (isCoordinatorUser &&
           t.assignedEngineerId != null &&
           t.workflowState != 'NEEDS_EDIT' &&
-          !t.isCompleted) ...[
+          !t.isTerminal) ...[
         const SizedBox(height: 12),
         _requestEditButton(t, l10n),
       ],
@@ -1779,6 +1783,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         _row(l10n.t('sla'), t.slaHours != null ? '${t.slaHours} ${l10n.t('hours')}' : '-'),
         _row(l10n.t('created'), fmt.format(t.createdAt)),
+        if (t.isCancelled &&
+            t.cancellationReason != null &&
+            t.cancellationReason!.trim().isNotEmpty)
+          _row(l10n.t('ticket_cancellation_reason'), t.cancellationReason!.trim()),
         if (t.completedAt != null) _row(l10n.t('section_completed'), t.completedAt!),
         if (t.inspectionHours != null)
           _row(l10n.t('inspection_time'), _formatInspectionHoursDisplay(t.inspectionHours!, l10n)),
@@ -2201,7 +2209,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         CommentsWidget(
           comments: _comments,
           loading: _loadingComments,
-          allowAdd: !t.isCompleted && !fieldStaffAwaitingRequesterOnQc,
+          allowAdd: !t.isTerminal && !fieldStaffAwaitingRequesterOnQc,
           onAdd: _addComment,
         ),
       ),
@@ -2213,7 +2221,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           uploading: _uploading,
           onPickImage: _pickAndUploadImage,
           onPickFile: _pickAndUploadFile,
-          showUploadButtons: !t.isCompleted &&
+          showUploadButtons: !t.isTerminal &&
               (!t.isMaintenance || t.isInProgress) &&
               !fieldStaffAwaitingRequesterOnQc,
         ),
@@ -2222,7 +2230,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if (isEngineer &&
           isMyTicket &&
           !t.isMaintenance &&
-          !t.isCompleted &&
+          !t.isTerminal &&
           (!t.isNcr || _isNcrResolved(t))) ...[
         if (!fieldStaffAwaitingRequesterOnQc) ...[
           ..._engineerChecklistTemplateControls(t, l10n),
@@ -2238,7 +2246,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ],
       ],
       if (t.isMaintenance &&
-          !t.isCompleted &&
+          !t.isTerminal &&
           t.maintenanceAwaitingRequesterConfirmation &&
           t.requesterId == context.read<AuthProvider>().user?.id) ...[
         const SizedBox(height: 16),
@@ -2248,7 +2256,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       if (_canSubmitMaintenanceCompletion() &&
           _userOnMaintenanceTicket(t) &&
           t.isMaintenance &&
-          !t.isCompleted &&
+          !t.isTerminal &&
           t.isInProgress) ...[
         const SizedBox(height: 16),
         _maintenanceCompleteSection(t, l10n),
@@ -2454,7 +2462,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       }
     }
 
-    if (isMyTicket && !t.isCompleted) {
+    if (isMyTicket && !t.isTerminal) {
       // Status flow: ON_SITE -> IN_PROGRESS
       if (t.isOnSite) {
         widgets.add(_actionButton(
@@ -2550,7 +2558,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       widgets.add(const SizedBox(height: 12));
     }
 
-    if (isMyTicket && !t.isCompleted) {
+    if (isMyTicket && !t.isTerminal) {
       if (t.isOnSite) {
         widgets.add(_actionButton(
           icon: Icons.play_arrow_rounded,
@@ -2595,6 +2603,61 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
 
     return widgets;
+  }
+
+  Widget _cancelledTicketBanner(Ticket t, AppLocalizations l10n) {
+    final reason = t.cancellationReason?.trim() ?? '';
+    return _glassContainer(
+      Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.cancel_rounded, color: Color(0xFFFF6B81), size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.t('section_cancelled'),
+                    style: const TextStyle(
+                      color: Color(0xFFFF6B81),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (reason.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                l10n.t('ticket_cancellation_reason'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(120),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                reason,
+                style: TextStyle(
+                  color: Colors.white.withAlpha(200),
+                  fontSize: 14,
+                  height: 1.35,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              l10n.t('ticket_cancelled_readonly'),
+              style: TextStyle(color: Colors.white.withAlpha(110), fontSize: 12, height: 1.3),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _cancellationPendingBanner(Ticket t, AppLocalizations l10n) {
@@ -5188,7 +5251,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         (auth.isEngineer || auth.isTechnician);
     final canUseFromAssignment = t != null &&
         t.isMaintenance &&
-        !t.isCompleted &&
+        !t.isTerminal &&
         pc.hasWorkspace &&
         pc.isApproved &&
         pc.canRecordWarehouseMaterialOnTicket;

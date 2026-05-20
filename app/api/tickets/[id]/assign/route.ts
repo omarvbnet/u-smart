@@ -15,21 +15,40 @@ import { shouldDeferOnSiteUntilArrival } from '@/lib/workspace-site-arrival';
 
 const prisma = _prisma as any;
 
-/** One open lead assignment per requester (any non-completed status, including PENDING after self-assign). */
+const CLOSED_TICKET_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
+
+function ticketLeadAssignmentBlocksNewAssign(
+  payload: { _ticket?: boolean; assignedEngineerId?: string; status?: string },
+  requesterId: string,
+): boolean {
+  if (payload._ticket !== true) return false;
+  if (payload.assignedEngineerId !== requesterId) return false;
+  const payloadStatus = typeof payload.status === 'string' ? payload.status.trim().toUpperCase() : '';
+  if (payloadStatus && CLOSED_TICKET_STATUSES.has(payloadStatus)) return false;
+  return true;
+}
+
+/** One open lead assignment per requester (excludes completed/cancelled). */
 async function requesterHasAnotherOpenLeadTicket(
   requesterId: string,
   excludingTicketId: string,
 ): Promise<boolean> {
   const activeTickets = await prisma.visitorRequest.findMany({
-    where: { status: { not: 'COMPLETED' } },
-    select: { id: true, company: true },
+    where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+    select: { id: true, company: true, status: true },
   });
-  return activeTickets.some((t: { id: string; company: string | null }) => {
+  return activeTickets.some((t: { id: string; company: string | null; status: string | null }) => {
     if (t.id === excludingTicketId) return false;
+    const rowStatus = String(t.status ?? '').trim().toUpperCase();
+    if (CLOSED_TICKET_STATUSES.has(rowStatus)) return false;
     if (!t.company || typeof t.company !== 'string') return false;
     try {
-      const payload = JSON.parse(t.company) as { _ticket?: boolean; assignedEngineerId?: string };
-      return payload._ticket === true && payload.assignedEngineerId === requesterId;
+      const payload = JSON.parse(t.company) as {
+        _ticket?: boolean;
+        assignedEngineerId?: string;
+        status?: string;
+      };
+      return ticketLeadAssignmentBlocksNewAssign(payload, requesterId);
     } catch {
       return false;
     }
@@ -366,15 +385,21 @@ export async function PATCH(
       }
 
       const activeTickets = await prisma.visitorRequest.findMany({
-        where: { status: { not: 'COMPLETED' } },
-        select: { id: true, company: true },
+        where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        select: { id: true, company: true, status: true },
       });
-      const assigneeBusy = activeTickets.some((t: { id: string; company: string | null }) => {
+      const assigneeBusy = activeTickets.some((t: { id: string; company: string | null; status: string | null }) => {
         if (t.id === id) return false;
+        const rowStatus = String(t.status ?? '').trim().toUpperCase();
+        if (CLOSED_TICKET_STATUSES.has(rowStatus)) return false;
         if (!t.company || typeof t.company !== 'string') return false;
         try {
-          const p = JSON.parse(t.company) as { _ticket?: boolean; assignedEngineerId?: string };
-          return p._ticket === true && p.assignedEngineerId === assignee.id;
+          const p = JSON.parse(t.company) as {
+            _ticket?: boolean;
+            assignedEngineerId?: string;
+            status?: string;
+          };
+          return ticketLeadAssignmentBlocksNewAssign(p, assignee.id);
         } catch {
           return false;
         }
