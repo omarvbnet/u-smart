@@ -15,6 +15,27 @@ import { shouldDeferOnSiteUntilArrival } from '@/lib/workspace-site-arrival';
 
 const prisma = _prisma as any;
 
+/** One open lead assignment per requester (any non-completed status, including PENDING after self-assign). */
+async function requesterHasAnotherOpenLeadTicket(
+  requesterId: string,
+  excludingTicketId: string,
+): Promise<boolean> {
+  const activeTickets = await prisma.visitorRequest.findMany({
+    where: { status: { not: 'COMPLETED' } },
+    select: { id: true, company: true },
+  });
+  return activeTickets.some((t: { id: string; company: string | null }) => {
+    if (t.id === excludingTicketId) return false;
+    if (!t.company || typeof t.company !== 'string') return false;
+    try {
+      const payload = JSON.parse(t.company) as { _ticket?: boolean; assignedEngineerId?: string };
+      return payload._ticket === true && payload.assignedEngineerId === requesterId;
+    } catch {
+      return false;
+    }
+  });
+}
+
 async function resolveWorkspaceAssignStatus(
   ticket: {
     privateCompanyId: string | null;
@@ -472,6 +493,16 @@ export async function PATCH(
       );
     }
 
+    if (await requesterHasAnotherOpenLeadTicket(requester.id, id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'You already have an active ticket. Complete it before taking a new one.',
+        },
+        { status: 400 },
+      );
+    }
+
     const isQcPoolRole =
       roleUpper === 'ENGINEER' ||
       roleUpper === 'QUALITY_ENGINEER' ||
@@ -581,31 +612,6 @@ export async function PATCH(
           );
         }
       }
-    }
-
-    // Check if engineer already has an uncompleted assigned ticket.
-    // We parse ticket JSON payload instead of raw string search to avoid false positives.
-    const activeTickets = await prisma.visitorRequest.findMany({
-      where: {
-        status: { not: 'COMPLETED' },
-      },
-      select: { id: true, company: true },
-    });
-    const hasActiveAssignedTicket = activeTickets.some((t: { id: string; company: string | null }) => {
-      if (t.id === id) return false;
-      if (!t.company || typeof t.company !== 'string') return false;
-      try {
-        const payload = JSON.parse(t.company) as { _ticket?: boolean; assignedEngineerId?: string };
-        return payload._ticket === true && payload.assignedEngineerId === requester.id;
-      } catch {
-        return false;
-      }
-    });
-    if (hasActiveAssignedTicket) {
-      return NextResponse.json(
-        { success: false, message: 'You already have an active ticket. Complete it before taking a new one.' },
-        { status: 400 }
-      );
     }
 
     const newStatus = isPrivateCompanyStaffTicket(row)

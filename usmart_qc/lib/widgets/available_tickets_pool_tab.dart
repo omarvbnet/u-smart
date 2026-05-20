@@ -29,7 +29,7 @@ class AvailableTicketsPoolTab extends StatelessWidget {
         }
 
         final available = provider.availableTickets;
-        final hasActive = provider.hasActiveTicket;
+        final hasActive = !provider.canSelfAssignFromPool;
         final engineerProvince = provider.province;
         final filterActive = provider.provinceFilterActive;
         final isTechnician = auth.isTechnician;

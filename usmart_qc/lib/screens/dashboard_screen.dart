@@ -174,6 +174,7 @@ class _TicketsTab extends StatelessWidget {
           );
         }
 
+        final hasActive = provider.hasActiveTicket;
         final sections = <_TicketSection>[
           if (provider.pendingTickets.isNotEmpty)
             _TicketSection('Pending', provider.pendingTickets,
@@ -229,6 +230,35 @@ class _TicketsTab extends StatelessWidget {
                 ],
               ),
             ),
+            if (hasActive)
+              Container(
+                margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBBF24).withAlpha(15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: const Color(0xFFFBBF24).withAlpha(40)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: Color(0xFFFBBF24), size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        AppLocalizations.of(context).t('complete_current'),
+                        style: TextStyle(
+                          color: const Color(0xFFFBBF24).withAlpha(220),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             Expanded(
               child: sections.isEmpty
@@ -257,7 +287,8 @@ class _TicketsTab extends StatelessWidget {
                                         ticketId: ticket.id),
                                   ),
                                 ),
-                                onAssign: ticket.canBeAssigned
+                                onAssign: ticket.canBeAssigned &&
+                                        provider.canSelfAssignFromPool
                                     ? () => _assignTicket(
                                         context, provider, ticket)
                                     : null,

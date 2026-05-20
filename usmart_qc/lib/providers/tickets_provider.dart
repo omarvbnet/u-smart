@@ -195,17 +195,25 @@ class TicketsProvider extends ChangeNotifier {
               t.isCompleted && t.assignedEngineerId == _currentUserId)
           .toList();
 
-  // Engineer-specific: my active tickets (assigned to me, not completed)
+  /// Open field work for the current user (lead or crew), matching assign API rules.
+  bool ticketIsOpenAssignmentForUser(Ticket t, String userId) {
+    if (t.isCompleted || t.isCancelled) return false;
+    if (t.assignedEngineerId == userId) return true;
+    if (t.maintenanceCrewIds.contains(userId)) return true;
+    return false;
+  }
+
+  // Engineer/technician: assigned or on crew, not completed (includes PENDING after self-assign).
   List<Ticket> get myActiveTickets => _currentUserId == null
       ? []
       : _tickets
-          .where((t) =>
-              !t.isCompleted &&
-              !t.isPending &&
-              t.assignedEngineerId == _currentUserId)
+          .where((t) => ticketIsOpenAssignmentForUser(t, _currentUserId!))
           .toList();
 
   bool get hasActiveTicket => myActiveTickets.isNotEmpty;
+
+  /// Hide pool / self-assign when the user must finish open work first.
+  bool get canSelfAssignFromPool => !hasActiveTicket;
 
   /// Engineer inbox: tickets where requester resubmitted NCR, pending engineer response
   List<Ticket> get ticketsPendingNcrResponse => _currentUserId == null

@@ -639,9 +639,21 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _assignToMe() async {
+    final ticketsProv = context.read<TicketsProvider>();
+    if (ticketsProv.hasActiveTicket) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('complete_before_assign')),
+          backgroundColor: const Color(0xFFFBBF24),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _assigning = true);
-    final ok =
-        await context.read<TicketsProvider>().assignTicketToMe(widget.ticketId);
+    final ok = await ticketsProv.assignTicketToMe(widget.ticketId);
     if (mounted) {
       final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2395,7 +2407,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
-    final hasActive = context.read<TicketsProvider>().hasActiveTicket;
+    final ticketsProv = context.watch<TicketsProvider>();
+    final hasActive = ticketsProv.hasActiveTicket;
     final pc = context.read<PrivateCompanyProvider>();
     final maintDispatcherAssign = _maintenanceDispatchAssignEligible(t, pc);
 
@@ -2493,7 +2506,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _buildTechnicianActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
-    final hasActive = context.read<TicketsProvider>().hasActiveTicket;
+    final ticketsProv = context.watch<TicketsProvider>();
+    final hasActive = ticketsProv.hasActiveTicket;
     final pc = context.read<PrivateCompanyProvider>();
     final engDispatchPending = _maintenanceEngineerDispatchPending(t, pc);
 
