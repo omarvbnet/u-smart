@@ -9,6 +9,7 @@ import {
   deleteDepartmentTechniqueRows,
   upsertDepartmentTechniqueRows,
 } from '@/lib/private-company-department-techniques';
+import { normalizeEngineerTicketScope } from '@/lib/engineer-ticket-scope';
 import {
   normalizeMaintenanceDispatchMode,
 } from '@/lib/private-company-maintenance-dispatch';
@@ -127,6 +128,7 @@ export async function GET(req: NextRequest) {
       engineerAvailabilityPoolEnabled: true,
       technicianAvailabilityPoolEnabled: true,
       maintenanceDispatchMode: true,
+      engineerTicketScope: true,
       members: {
         select: {
           id: true,
@@ -174,6 +176,10 @@ export async function POST(req: NextRequest) {
       ? undefined
       : body.technicianAvailabilityPoolEnabled === true;
   const dispatchMode = normalizeMaintenanceDispatchMode(body?.maintenanceDispatchMode);
+  const engineerScope =
+    body?.engineerTicketScope !== undefined
+      ? normalizeEngineerTicketScope(body.engineerTicketScope)
+      : undefined;
   try {
     const dept = await prisma.privateCompanyDepartment.create({
       data: {
@@ -186,6 +192,7 @@ export async function POST(req: NextRequest) {
         maintenanceDispatchMode: dispatchMode,
         ...(engineerPool !== undefined ? { engineerAvailabilityPoolEnabled: engineerPool } : {}),
         ...(technicianPool !== undefined ? { technicianAvailabilityPoolEnabled: technicianPool } : {}),
+        ...(engineerScope !== undefined ? { engineerTicketScope: engineerScope } : {}),
       },
     });
     try {
@@ -244,6 +251,9 @@ export async function PATCH(req: NextRequest) {
     }
     if (body?.maintenanceDispatchMode !== undefined) {
       data.maintenanceDispatchMode = normalizeMaintenanceDispatchMode(body.maintenanceDispatchMode);
+    }
+    if (body?.engineerTicketScope !== undefined) {
+      data.engineerTicketScope = normalizeEngineerTicketScope(body.engineerTicketScope);
     }
   }
   if (body?.maintenanceProximityJoinEnabled !== undefined) {

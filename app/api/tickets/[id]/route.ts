@@ -7,6 +7,10 @@ import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates, embed
 import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
 import { MAINTENANCE_TECHNIQUES } from '@/lib/qc-conflict-mapper';
 import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
+import {
+  assertEngineerWorkspaceTicketDetailAccess,
+  isWorkspaceEngineerRole,
+} from '@/lib/workspace-task-assignment';
 import { isWorkspaceCrewTicketTechnique } from '@/lib/workspace-maintenance-crew';
 import {
   expenseRowToJson,
@@ -358,6 +362,16 @@ export async function GET(
         row
       );
       if (!detailOk) row = null;
+    }
+
+    if (row && isWorkspaceEngineerRole(requesterRole) && !isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId)) {
+      const engineerOk = await assertEngineerWorkspaceTicketDetailAccess(
+        prisma,
+        payload.requesterId,
+        engineerWorkspaceId,
+        row,
+      );
+      if (!engineerOk) row = null;
     }
 
     if (

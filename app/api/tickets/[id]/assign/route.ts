@@ -4,10 +4,12 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
+import { resolveEngineerTicketScope } from '@/lib/engineer-ticket-scope';
 import {
   departmentIdFromWorkspaceTechniqueSlug,
+  engineerWorkspaceTicketAccess,
   fetchWorkspaceTechniqueRows,
-  isQcPoolEngineerRole,
+  isWorkspaceEngineerRole,
   staffTicketTechniqueAllowed,
 } from '@/lib/workspace-task-assignment';
 import {
@@ -216,7 +218,7 @@ export async function PATCH(
 
     const role = requester.role ?? 'COMPANY';
     const roleUpper = (requester.role ?? 'COMPANY').toUpperCase();
-    const isQcEngineer = isQcPoolEngineerRole(role);
+    const isQcEngineer = isWorkspaceEngineerRole(role);
     const isTechnician = roleUpper === 'TECHNICIAN';
     const isDispatcherRole =
       isQcEngineer || roleUpper === 'MANAGER' || roleUpper === 'COORDINATOR';
@@ -495,10 +497,6 @@ export async function PATCH(
     if (isTechnician && !isMaintenance) {
       return NextResponse.json({ success: false, message: 'Technicians can only assign maintenance tickets' }, { status: 403 });
     }
-    if ((isQcEngineer || roleUpper === 'MANAGER' || roleUpper === 'COORDINATOR') && isMaintenance) {
-      return NextResponse.json({ success: false, message: 'Engineers handle QC only; maintenance tickets are for technicians' }, { status: 403 });
-    }
-
     let currentStatus = row.status ?? 'PENDING';
     let parsed: Record<string, unknown> = {};
     if (typeof row.company === 'string') {
@@ -545,6 +543,7 @@ export async function PATCH(
           privateCompanyId: true,
           privateCompanyDepartmentId: true,
           privateCompanyAllowedTaskSlugs: true,
+          privateCompanyEngineerTicketScope: true,
         },
       });
       if (!meFull || meFull.privateCompanyId !== row.privateCompanyId) {
@@ -603,16 +602,6 @@ export async function PATCH(
           );
         }
       }
-      if (isQcPoolRole && !isTechnician && !engineerPoolOk) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              'Your department cannot self-assign from the QC availability pool. Contact the workspace owner.',
-          },
-          { status: 403 }
-        );
-      }
       const targetDept = row.privateCompanyTargetDepartmentId ?? null;
       const deptFromTechnique = departmentIdFromWorkspaceTechniqueSlug(String(row.technique ?? ''));
       const staffDeptForScope = deptId ?? deptFromTechnique;
@@ -622,25 +611,62 @@ export async function PATCH(
           { status: 403 }
         );
       }
-      // Match GET /api/tickets list: department-targeted tickets skip the technique matrix.
-      if (!targetDept) {
-        const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
-        const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
-          ? meFull.privateCompanyAllowedTaskSlugs
-          : [];
-        if (
-          !staffTicketTechniqueAllowed({
-            technique: String(row.technique ?? ''),
-            staffDepartmentId: deptId,
-            staffAllowedSlugs: allowedSlugs,
-            workspaceRows: techRows,
-          })
-        ) {
+      const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
+      const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
+        ? meFull.privateCompanyAllowedTaskSlugs
+        : [];
+      let maintDispatch: string | null = null;
+      let deptEngineerScope = 'BOTH';
+      const scopeDept = targetDept || deptId;
+      if (scopeDept) {
+        const drow = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: scopeDept, companyId: row.privateCompanyId },
+          select: { maintenanceDispatchMode: true, engineerTicketScope: true },
+        });
+        maintDispatch = drow?.maintenanceDispatchMode ?? null;
+        deptEngineerScope = drow?.engineerTicketScope ?? 'BOTH';
+      }
+      const engineerTicketScope = resolveEngineerTicketScope(
+        (meFull as { privateCompanyEngineerTicketScope?: string | null }).privateCompanyEngineerTicketScope,
+        deptEngineerScope,
+      );
+      const pendingUnassigned =
+        currentStatus === 'PENDING' &&
+        !(typeof parsed.assignedEngineerId === 'string' && (parsed.assignedEngineerId as string).trim());
+      if (
+        !isTechnician &&
+        (isQcPoolRole || roleUpper === 'MANAGER' || roleUpper === 'COORDINATOR') &&
+        !engineerWorkspaceTicketAccess({
+          technique: String(row.technique ?? ''),
+          staffDepartmentId: deptId,
+          staffAllowedSlugs: allowedSlugs,
+          workspaceRows: techRows,
+          targetDepartmentId: targetDept,
+          maintenanceDispatchMode: maintDispatch,
+          engineerAvailabilityPoolEnabled: engineerPoolOk,
+          engineerTicketScope,
+          pendingUnassigned,
+          involvesRequester: false,
+        })
+      ) {
+        if (isMaintenance) {
           return NextResponse.json(
-            { success: false, message: 'This ticket is outside your department task scope.' },
-            { status: 403 }
+            {
+              success: false,
+              message:
+                'You are not allowed to take maintenance tickets (check department engineer ticket scope and maintenance dispatch mode).',
+            },
+            { status: 403 },
           );
         }
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'You are not allowed to take QC tickets (check department engineer ticket scope or QC availability pool).',
+          },
+          { status: 403 },
+        );
       }
     }
 

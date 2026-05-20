@@ -1783,6 +1783,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         const SizedBox(height: 12),
         _cancelledTicketBanner(t, l10n),
       ],
+      if (t.isCompleted) ...[
+        const SizedBox(height: 12),
+        _completedViewOnlyBanner(l10n),
+      ],
 
       // ─── Engineer/Technician action buttons ───
       if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
@@ -2395,22 +2399,55 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ]),
       ],
-      if (t.qfieldProjects.isNotEmpty) ...[
+      if (!t.isMaintenance) ..._buildQFieldSection(t, l10n),
+      if (t.attachmentUrls.isNotEmpty) ...[
         const SizedBox(height: 16),
-        _glassSection(l10n.t('ticket_qfield_card_title'), [
+        _glassSection(l10n.t('requester_attachments'), [
           Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: t.attachmentUrls
+                  .map((url) => _buildAttachmentThumbnail(url, l10n))
+                  .toList(),
+            ),
+          ),
+        ]),
+      ],
+      const SizedBox(height: 40),
+    ];
+  }
+
+  List<Widget> _buildQFieldSection(Ticket t, AppLocalizations l10n) {
+    final canWrite = !t.isTerminal && _canManageQField(t);
+    return [
+      const SizedBox(height: 16),
+      _glassSection(l10n.t('ticket_qfield_card_title'), [
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                t.isTerminal
+                    ? l10n.t('ticket_qfield_view_only')
+                    : l10n.t('ticket_qfield_card_subtitle'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(160),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (t.qfieldProjects.isEmpty)
                 Text(
-                  l10n.t('ticket_qfield_card_subtitle'),
+                  l10n.t('ticket_qfield_empty'),
                   style: TextStyle(
-                    color: Colors.white.withAlpha(160),
+                    color: Colors.white.withAlpha(130),
                     fontSize: 13,
                   ),
-                ),
-                const SizedBox(height: 12),
+                )
+              else ...[
                 ...t.qfieldProjects.take(4).map(
                       (p) => Padding(
                         padding: const EdgeInsets.only(bottom: 8),
@@ -2447,56 +2484,72 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ),
                     ),
                   ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: RLayout.minTouchTarget,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF00D4AA),
-                      foregroundColor: const Color(0xFF05051A),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => TicketQFieldWorkspaceScreen(
-                            ticketId: t.id,
-                            initialTicket: t,
-                            canWrite: _canManageQField(t),
-                          ),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: RLayout.minTouchTarget,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF00D4AA),
+                    foregroundColor: const Color(0xFF05051A),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TicketQFieldWorkspaceScreen(
+                          ticketId: t.id,
+                          initialTicket: t,
+                          canWrite: canWrite,
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.map_rounded, size: 22),
-                    label: Text(
-                      l10n.t('ticket_qfield_open'),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    canWrite ? Icons.map_rounded : Icons.visibility_rounded,
+                    size: 22,
+                  ),
+                  label: Text(
+                    canWrite ? l10n.t('ticket_qfield_open') : l10n.t('ticket_qfield_view'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ]),
-      ],
-      if (t.attachmentUrls.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        _glassSection(l10n.t('requester_attachments'), [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: t.attachmentUrls
-                  .map((url) => _buildAttachmentThumbnail(url, l10n))
-                  .toList(),
-            ),
-          ),
-        ]),
-      ],
-      const SizedBox(height: 40),
+        ),
+      ]),
     ];
+  }
+
+  Widget _completedViewOnlyBanner(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4ADE80).withAlpha(12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF4ADE80).withAlpha(35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline_rounded, color: Color(0xFF4ADE80), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              l10n.t('ticket_completed_view_only'),
+              style: TextStyle(
+                color: Colors.white.withAlpha(210),
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
@@ -2505,10 +2558,44 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final hasActive = ticketsProv.hasActiveTicket;
     final pc = context.read<PrivateCompanyProvider>();
     final maintDispatcherAssign = _maintenanceDispatchAssignEligible(t, pc);
+    final staffScope = pc.myStaffEntry?.engineerTicketScopeOverride;
+    final canClaim = pc.engineerMayClaimTicket(
+      isMaintenance: t.isMaintenance,
+      targetDepartmentId: t.privateCompanyTargetDepartmentId,
+      staffScopeOverride: staffScope,
+    );
 
     if (t.canBeAssigned) {
-      if (maintDispatcherAssign) {
+      if (maintDispatcherAssign && canClaim) {
         widgets.addAll(_maintenanceDispatcherAssignWidgets(t, l10n));
+      } else if (!canClaim) {
+        widgets.add(Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBBF24).withAlpha(15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFBBF24).withAlpha(40)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, color: Color(0xFFFBBF24), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  t.isMaintenance
+                      ? l10n.t('engineer_scope_maintenance_blocked')
+                      : l10n.t('engineer_scope_qc_blocked'),
+                  style: TextStyle(
+                    color: const Color(0xFFFBBF24).withAlpha(220),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
+        widgets.add(const SizedBox(height: 12));
       } else if (hasActive) {
         widgets.add(Container(
           width: double.infinity,

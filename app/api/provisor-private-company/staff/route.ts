@@ -186,6 +186,7 @@ export async function GET(req: NextRequest) {
           provinceFilterActive: true,
           privateCompanyDepartmentId: true,
           privateCompanyAllowedTaskSlugs: true,
+          privateCompanyEngineerTicketScope: true,
           maintenanceProximityJoinOverride: true,
           maintenanceProximityRadiusOverrideM: true,
           createdAt: true,
@@ -549,6 +550,25 @@ export async function PATCH(req: NextRequest) {
   if (body?.provinceFilterActive !== undefined) {
     data.provinceFilterActive = body.provinceFilterActive === true;
   }
+  if (body?.privateCompanyEngineerTicketScope !== undefined) {
+    if (!guard.isOwner) {
+      return NextResponse.json(
+        { success: false, message: 'Only the workspace owner can set per-engineer ticket scope.' },
+        { status: 403 },
+      );
+    }
+    if (body.privateCompanyEngineerTicketScope === null || body.privateCompanyEngineerTicketScope === '') {
+      data.privateCompanyEngineerTicketScope = null;
+    } else if (typeof body.privateCompanyEngineerTicketScope === 'string') {
+      const { normalizeEngineerTicketScope } = await import('@/lib/engineer-ticket-scope');
+      data.privateCompanyEngineerTicketScope = normalizeEngineerTicketScope(body.privateCompanyEngineerTicketScope);
+    } else {
+      return NextResponse.json(
+        { success: false, message: 'privateCompanyEngineerTicketScope must be a string or null.' },
+        { status: 400 },
+      );
+    }
+  }
   if (body?.privateCompanyAllowedTaskSlugs !== undefined) {
     if (!guard.isOwner) {
       return NextResponse.json(
@@ -660,6 +680,7 @@ export async function PATCH(req: NextRequest) {
       provinceFilterActive: true,
       privateCompanyDepartmentId: true,
       privateCompanyAllowedTaskSlugs: true,
+      privateCompanyEngineerTicketScope: true,
       maintenanceProximityJoinOverride: true,
       maintenanceProximityRadiusOverrideM: true,
     },

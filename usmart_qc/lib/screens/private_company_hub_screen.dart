@@ -1594,6 +1594,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   bool _engineerAvailabilityPool = true;
   bool _technicianAvailabilityPool = true;
   String _maintDispatchMode = 'DIRECT_TECHNICIAN';
+  String _engineerTicketScope = 'BOTH';
 
   static const _iconOptions = <String, IconData>{
     'engineering': Icons.engineering_rounded,
@@ -1632,6 +1633,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
     _engineerAvailabilityPool = widget.existing?.engineerAvailabilityPoolEnabled ?? true;
     _technicianAvailabilityPool = widget.existing?.technicianAvailabilityPoolEnabled ?? true;
     _maintDispatchMode = widget.existing?.maintenanceDispatchMode ?? 'DIRECT_TECHNICIAN';
+    _engineerTicketScope = widget.existing?.engineerTicketScope ?? 'BOTH';
   }
 
   @override
@@ -1656,6 +1658,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
         maintenanceDispatchMode: _maintDispatchMode,
+        engineerTicketScope: _engineerTicketScope,
       );
     } else {
       final r = int.tryParse(_proxRadius.text.trim());
@@ -1672,6 +1675,7 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         engineerAvailabilityPoolEnabled: _engineerAvailabilityPool,
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
         maintenanceDispatchMode: _maintDispatchMode,
+        engineerTicketScope: _engineerTicketScope,
       );
     }
     if (ok && mounted) Navigator.pop(context);
@@ -1872,6 +1876,39 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                       ? l10n.t('pc_dispatch_engineer_desc')
                       : l10n.t('pc_dispatch_direct_desc'),
                   style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11, height: 1.35),
+                ),
+                const SizedBox(height: 20),
+                const _SectionTitle('Engineers — ticket types'),
+                const SizedBox(height: 6),
+                Text(
+                  'Default for all engineers in this department. Override per engineer when editing staff.',
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(150),
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'QC_ONLY',
+                      label: Text('QC only', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                    ButtonSegment(
+                      value: 'MAINTENANCE_ONLY',
+                      label: Text('Maint.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                    ButtonSegment(
+                      value: 'BOTH',
+                      label: Text('Both', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                  selected: {_engineerTicketScope},
+                  onSelectionChanged: (v) {
+                    if (v.isEmpty) return;
+                    setState(() => _engineerTicketScope = v.first);
+                  },
                 ),
                 if (widget.existing != null) ...[
                   const SizedBox(height: 20),
@@ -2190,6 +2227,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
   String? _departmentId;
   String? _specialization;
   String? _province;
+  String? _engineerTicketScopeOverride;
 
   bool _initialDefaultsApplied = false;
 
@@ -2207,6 +2245,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
       _departmentId = e.departmentId;
       _specialization = e.specialization;
       _province = e.province;
+      _engineerTicketScopeOverride = e.engineerTicketScopeOverride;
     }
   }
 
@@ -2284,6 +2323,9 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
         specialization: _specialization ?? '',
         name: '${_firstName.text.trim()} ${_lastName.text.trim()}'.trim(),
         province: province,
+        clearEngineerTicketScopeOverride: _role == 'ENGINEER' && _engineerTicketScopeOverride == null,
+        privateCompanyEngineerTicketScope:
+            _role == 'ENGINEER' ? _engineerTicketScopeOverride : null,
       );
       if (ok && mounted) Navigator.pop(context);
     }
@@ -2468,6 +2510,58 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                           )),
                     ],
                   ),
+                if (_role == 'ENGINEER' && pc.isOwner) ...[
+                  const SizedBox(height: 18),
+                  const _SectionTitle('Engineer ticket types'),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Leave as department default, or override for this engineer only.',
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(150),
+                      fontSize: 11.5,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(() => _engineerTicketScopeOverride = null),
+                        child: _ChipBox(
+                          label: 'Dept default',
+                          selected: _engineerTicketScopeOverride == null,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _engineerTicketScopeOverride = 'QC_ONLY'),
+                        child: _ChipBox(
+                          label: 'QC only',
+                          selected: _engineerTicketScopeOverride == 'QC_ONLY',
+                          color: const Color(0xFF4ADE80),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _engineerTicketScopeOverride = 'MAINTENANCE_ONLY'),
+                        child: _ChipBox(
+                          label: 'Maintenance only',
+                          selected: _engineerTicketScopeOverride == 'MAINTENANCE_ONLY',
+                          color: const Color(0xFF00D4AA),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _engineerTicketScopeOverride = 'BOTH'),
+                        child: _ChipBox(
+                          label: 'Both',
+                          selected: _engineerTicketScopeOverride == 'BOTH',
+                          color: const Color(0xFF6C63FF),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 18),
                 const _SectionTitle('Specialization'),
                 const SizedBox(height: 8),

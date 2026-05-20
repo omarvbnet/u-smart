@@ -374,6 +374,8 @@ model TicketRequester {
   privateCompanyDepartment   PrivateCompanyDepartment? @relation("PrivateCompanyDepartmentMember", fields: [privateCompanyDepartmentId], references: [id], onDelete: SetNull)
   /// Optional allowlist of workspace ticket technique slugs; empty = inherit department/workspace technique catalog only.
   privateCompanyAllowedTaskSlugs String[] @default([])
+  /// Overrides department [engineerTicketScope] for ENGINEER role (QC_ONLY | MAINTENANCE_ONLY | BOTH).
+  privateCompanyEngineerTicketScope String?
   /// When set, overrides department defaults for maintenance proximity teaming.
   maintenanceProximityJoinOverride   Boolean?
   maintenanceProximityRadiusOverrideM Int?
@@ -1610,6 +1612,8 @@ model PrivateCompanyDepartment {
   technicianAvailabilityPoolEnabled Boolean @default(true)
   /// DIRECT_TECHNICIAN = pending maintenance goes to technician pool. ENGINEER_ASSIGNS = engineers/managers/coordinators assign a technician first (same department + ticket province rules as staff).
   maintenanceDispatchMode           String  @default("DIRECT_TECHNICIAN")
+  /// QC_ONLY | MAINTENANCE_ONLY | BOTH — which ticket kinds engineers in this department may claim from the pool.
+  engineerTicketScope               String  @default("BOTH")
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
   workspaceTargetedTickets VisitorRequest[] @relation("WorkspaceTicketTargetDepartment")

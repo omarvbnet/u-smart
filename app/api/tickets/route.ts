@@ -18,7 +18,13 @@ import {
   parseTicketCompanyJson,
   ticketFieldStaffInvolvesRequester,
 } from '@/lib/private-company-kpi';
-import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
+import { resolveEngineerTicketScope } from '@/lib/engineer-ticket-scope';
+import {
+  engineerWorkspaceTicketAccess,
+  fetchWorkspaceTechniqueRows,
+  isWorkspaceEngineerRole,
+  staffTicketTechniqueAllowed,
+} from '@/lib/workspace-task-assignment';
 import {
   departmentMaintenanceTechniqueSlug,
   departmentQcTechniqueSlug,
@@ -48,12 +54,6 @@ const QUALITY_CONTROL_TECHNIQUES = ['inspection', 'supervision', 'building', 'hs
 const MAINTENANCE_TECHNIQUES = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
 const ALL_TECHNIQUES = [...ENTERPRISE_TECHNIQUES, ...QUALITY_CONTROL_TECHNIQUES, ...MAINTENANCE_TECHNIQUES];
 const TASK_CATEGORY_VALUES = ['MAINTENANCE', 'QUALITY', 'SUPERVISION'];
-
-/** QC ticket pool (mobile / dashboard): not only legacy `ENGINEER` role. */
-function isQcPoolEngineerRole(role: string | null | undefined) {
-  const r = (role ?? '').toUpperCase();
-  return r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
-}
 
 /** Rows a field engineer/technician may hold as lead or crew (pool + assigned active work). */
 function buildFieldStaffTicketVisibilityOr(
@@ -1506,6 +1506,7 @@ export async function GET(req: NextRequest) {
         province: true,
         provinceFilterActive: true,
         privateCompanyId: true,
+        privateCompanyDepartmentId: true,
         privateCompanyOwned: { select: { id: true, status: true } },
         specialization: true,
       },
@@ -1529,6 +1530,8 @@ export async function GET(req: NextRequest) {
         ? (requester as { privateCompanyOwned?: { id: string } | null }).privateCompanyOwned?.id ?? null
         : null;
     const staffPrivateCompanyId = (requester as { privateCompanyId?: string | null }).privateCompanyId ?? null;
+    const requesterDepartmentId =
+      (requester as { privateCompanyDepartmentId?: string | null }).privateCompanyDepartmentId ?? null;
     const privateCompanyId = ownedPrivateCompanyId ?? staffPrivateCompanyId;
     let privateCompanyMemberIds: string[] = [];
     if (privateCompanyId) {
@@ -1576,13 +1579,17 @@ export async function GET(req: NextRequest) {
       : { OR: [{ assignmentScope: { not: 'PRIVATE_COMPANY_STAFF' as const } }, { privateCompanyId: null }] };
 
     let engineerMaintenanceDeptIds: string[] = [];
-    if (myStaffWorkspaceId && isQcPoolEngineerRole(requesterRole)) {
+    if (myStaffWorkspaceId && isWorkspaceEngineerRole(requesterRole)) {
       try {
+        const maintWhere: Record<string, unknown> = {
+          companyId: myStaffWorkspaceId,
+          maintenanceDispatchMode: MAINTENANCE_DISPATCH_ENGINEER,
+        };
+        if (requesterDepartmentId) {
+          maintWhere.id = requesterDepartmentId;
+        }
         const ed = await prisma.privateCompanyDepartment.findMany({
-          where: {
-            companyId: myStaffWorkspaceId,
-            maintenanceDispatchMode: MAINTENANCE_DISPATCH_ENGINEER,
-          },
+          where: maintWhere,
           select: { id: true },
         });
         engineerMaintenanceDeptIds = (ed as Array<{ id: string }>).map((e) => e.id);
@@ -1591,9 +1598,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (isQcPoolEngineerRole(requesterRole)) {
-      // Engineers: QC pool tickets, plus workspace maintenance tickets for departments
-      // where the owner set "engineer assigns technician" (same province / specialization rules).
+    if (isWorkspaceEngineerRole(requesterRole)) {
+      // Engineers: department-scoped QC + maintenance (when owner enables engineer dispatch).
       const pendingFilter: Record<string, unknown> = { status: 'PENDING' };
       if (provinceFilterActive && requesterProvince?.trim()) {
         pendingFilter.province = {
@@ -1619,33 +1625,57 @@ export async function GET(req: NextRequest) {
           ],
         });
       }
-      const qcBlock = {
-        technique: { notIn: MAINTENANCE_TECHNIQUES },
-        AND: engineerAnd,
-      };
-      const maintBlocks: Record<string, unknown>[] = [];
-      if (myStaffWorkspaceId && engineerMaintenanceDeptIds.length > 0) {
-        for (const deptId of engineerMaintenanceDeptIds) {
-          maintBlocks.push({
-            technique: { in: MAINTENANCE_TECHNIQUES },
+      const orBlocks: Record<string, unknown>[] = [];
+      if (myStaffWorkspaceId && requesterDepartmentId) {
+        const deptId = requesterDepartmentId;
+        orBlocks.push({
+          technique: departmentQcTechniqueSlug(deptId),
+          assignmentScope: 'PRIVATE_COMPANY_STAFF' as const,
+          privateCompanyId: myStaffWorkspaceId,
+          privateCompanyTargetDepartmentId: deptId,
+          AND: [...engineerAnd],
+        });
+        for (const maintDeptId of engineerMaintenanceDeptIds) {
+          orBlocks.push({
+            technique: departmentMaintenanceTechniqueSlug(maintDeptId),
             assignmentScope: 'PRIVATE_COMPANY_STAFF' as const,
             privateCompanyId: myStaffWorkspaceId,
-            privateCompanyTargetDepartmentId: deptId,
+            privateCompanyTargetDepartmentId: maintDeptId,
             AND: [...engineerAnd],
           });
         }
-      }
-      if (maintBlocks.length > 0) {
-        where = {
-          serviceSlug: filterServiceSlug,
-          OR: [qcBlock, ...maintBlocks],
-        };
+        orBlocks.push({
+          technique: { notIn: MAINTENANCE_TECHNIQUES },
+          AND: engineerAnd,
+        });
       } else {
-        where = {
-          serviceSlug: filterServiceSlug,
-          ...qcBlock,
-        };
+        orBlocks.push({
+          technique: { notIn: MAINTENANCE_TECHNIQUES },
+          AND: engineerAnd,
+        });
+        if (myStaffWorkspaceId && engineerMaintenanceDeptIds.length > 0) {
+          for (const deptId of engineerMaintenanceDeptIds) {
+            orBlocks.push({
+              technique: { in: MAINTENANCE_TECHNIQUES },
+              assignmentScope: 'PRIVATE_COMPANY_STAFF' as const,
+              privateCompanyId: myStaffWorkspaceId,
+              privateCompanyTargetDepartmentId: deptId,
+              AND: [...engineerAnd],
+            });
+            orBlocks.push({
+              technique: departmentMaintenanceTechniqueSlug(deptId),
+              assignmentScope: 'PRIVATE_COMPANY_STAFF' as const,
+              privateCompanyId: myStaffWorkspaceId,
+              privateCompanyTargetDepartmentId: deptId,
+              AND: [...engineerAnd],
+            });
+          }
+        }
       }
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: orBlocks,
+      };
     } else if (requesterRole === 'TECHNICIAN') {
       // Technicians: maintenance only. Pending pool uses province for open-market rows; workspace
       // PRIVATE_COMPANY_STAFF pending rows are matched without province in SQL, then filtered in memory.
@@ -1767,7 +1797,7 @@ export async function GET(req: NextRequest) {
     }
     if (
       myStaffWorkspaceId &&
-      (isQcPoolEngineerRole(requesterRole) || requesterRole === 'TECHNICIAN')
+      (isWorkspaceEngineerRole(requesterRole) || requesterRole === 'TECHNICIAN')
     ) {
       const [techRows, meRow] = await Promise.all([
         fetchWorkspaceTechniqueRows(prisma, myStaffWorkspaceId),
@@ -1776,27 +1806,38 @@ export async function GET(req: NextRequest) {
           select: {
             privateCompanyDepartmentId: true,
             privateCompanyAllowedTaskSlugs: true,
+            privateCompanyEngineerTicketScope: true,
           },
         }),
       ]);
-      const deptId = (meRow as { privateCompanyDepartmentId?: string | null } | null)?.privateCompanyDepartmentId ?? null;
+      const deptId =
+        (meRow as { privateCompanyDepartmentId?: string | null } | null)?.privateCompanyDepartmentId ??
+        requesterDepartmentId ??
+        null;
       const allowedSlugsRaw = (meRow as { privateCompanyAllowedTaskSlugs?: string[] | null } | null)?.privateCompanyAllowedTaskSlugs;
       const allowedSlugs = Array.isArray(allowedSlugsRaw) ? allowedSlugsRaw : [];
       let engineerAvailabilityPoolEnabled = true;
       let technicianAvailabilityPoolEnabled = true;
+      let deptEngineerScope = 'BOTH';
       if (deptId) {
         const drow = await prisma.privateCompanyDepartment.findFirst({
           where: { id: deptId, companyId: myStaffWorkspaceId },
           select: {
             engineerAvailabilityPoolEnabled: true,
             technicianAvailabilityPoolEnabled: true,
+            engineerTicketScope: true,
           },
         });
         if (drow) {
           engineerAvailabilityPoolEnabled = drow.engineerAvailabilityPoolEnabled !== false;
           technicianAvailabilityPoolEnabled = drow.technicianAvailabilityPoolEnabled !== false;
+          deptEngineerScope = drow.engineerTicketScope ?? 'BOTH';
         }
       }
+      const engineerTicketScope = resolveEngineerTicketScope(
+        (meRow as { privateCompanyEngineerTicketScope?: string | null } | null)?.privateCompanyEngineerTicketScope,
+        deptEngineerScope,
+      );
       const maintDeptIdsForDispatch = [
         ...new Set(
           rowsForList
@@ -1864,14 +1905,23 @@ export async function GET(req: NextRequest) {
             return false;
           }
         }
-        if (pendingUnassigned) {
-          // Technician availability pool only restricts self-assign (assign route), not list visibility.
-          if (isQcPoolEngineerRole(requesterRole) && !engineerAvailabilityPoolEnabled) {
-            const isMaint = MAINTENANCE_TECHNIQUES.includes((r.technique ?? '').toLowerCase());
-            const td = r.privateCompanyTargetDepartmentId;
-            const viaEngineerDispatch =
-              !!td && dispatchModeByDeptId.get(td) === MAINTENANCE_DISPATCH_ENGINEER;
-            if (!isMaint || !viaEngineerDispatch) return false;
+        if (pendingUnassigned && isWorkspaceEngineerRole(requesterRole)) {
+          const maintMode = targetDept ? dispatchModeByDeptId.get(targetDept) ?? null : null;
+          if (
+            !engineerWorkspaceTicketAccess({
+              technique: r.technique ?? '',
+              staffDepartmentId: deptId,
+              staffAllowedSlugs: allowedSlugs,
+              workspaceRows: techRows,
+              targetDepartmentId: targetDept,
+              maintenanceDispatchMode: maintMode,
+              engineerAvailabilityPoolEnabled,
+              engineerTicketScope,
+              pendingUnassigned: true,
+              involvesRequester: false,
+            })
+          ) {
+            return false;
           }
         }
         if (

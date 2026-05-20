@@ -194,6 +194,41 @@ class PrivateCompanyProvider extends ChangeNotifier {
   bool get canViewMaintenanceReasonAnalytics => canManageMaintenanceReasons;
 
   /// Pending maintenance in [ENGINEER_ASSIGNS] departments: who may pick a technician (API-enforced).
+  String engineerTicketScopeForDepartment(String? departmentId) {
+    if (!hasWorkspace || departmentId == null || departmentId.isEmpty) {
+      return 'BOTH';
+    }
+    for (final d in _workspace!.departments) {
+      if (d.id == departmentId) return d.engineerTicketScope;
+    }
+    return 'BOTH';
+  }
+
+  String resolvedEngineerTicketScope({String? staffOverride, String? departmentId}) {
+    if (staffOverride != null && staffOverride.trim().isNotEmpty) {
+      return staffOverride.trim().toUpperCase();
+    }
+    return engineerTicketScopeForDepartment(departmentId);
+  }
+
+  /// Whether the current engineer may self-assign or triage this ticket type.
+  bool engineerMayClaimTicket({
+    required bool isMaintenance,
+    String? targetDepartmentId,
+    String? staffScopeOverride,
+  }) {
+    final scope = resolvedEngineerTicketScope(
+      staffOverride: staffScopeOverride,
+      departmentId: myDepartmentId ?? targetDepartmentId,
+    );
+    if (isMaintenance) {
+      if (scope == 'QC_ONLY') return false;
+      return departmentUsesEngineerMaintenanceDispatch(targetDepartmentId);
+    }
+    if (scope == 'MAINTENANCE_ONLY') return false;
+    return true;
+  }
+
   bool departmentUsesEngineerMaintenanceDispatch(String? departmentId) {
     if (!hasWorkspace || departmentId == null || departmentId.isEmpty) return false;
     for (final d in _workspace!.departments) {
@@ -353,6 +388,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
   /// Cached entry of the current user inside the workspace's staff list (only set
   /// when [setCurrentRequesterId] has been called and the user is staff).
   PrivateCompanyStaff? _myStaffEntry;
+  PrivateCompanyStaff? get myStaffEntry => _myStaffEntry;
   String? _currentRequesterId;
 
   void setCurrentRequesterId(String? id) {
@@ -930,6 +966,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     bool engineerAvailabilityPoolEnabled = true,
     bool technicianAvailabilityPoolEnabled = true,
     String maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
+    String engineerTicketScope = 'BOTH',
   }) async {
     _submitting = true;
     notifyListeners();
@@ -946,6 +983,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
         'engineerAvailabilityPoolEnabled': engineerAvailabilityPoolEnabled,
         'technicianAvailabilityPoolEnabled': technicianAvailabilityPoolEnabled,
         'maintenanceDispatchMode': mode,
+        'engineerTicketScope': _normalizeEngineerTicketScope(engineerTicketScope),
       });
       if (res['success'] == true) {
         await refresh();
@@ -975,6 +1013,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     bool? engineerAvailabilityPoolEnabled,
     bool? technicianAvailabilityPoolEnabled,
     String? maintenanceDispatchMode,
+    String? engineerTicketScope,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -1000,6 +1039,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
               maintenanceDispatchMode.trim().toUpperCase() == 'ENGINEER_ASSIGNS'
                   ? 'ENGINEER_ASSIGNS'
                   : 'DIRECT_TECHNICIAN',
+        if (engineerTicketScope != null)
+          'engineerTicketScope': _normalizeEngineerTicketScope(engineerTicketScope),
       });
       if (res['success'] == true) {
         await refresh();
@@ -1101,6 +1142,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? province,
     bool? provinceFilterActive,
     List<String>? privateCompanyAllowedTaskSlugs,
+    String? privateCompanyEngineerTicketScope,
+    bool clearEngineerTicketScopeOverride = false,
     bool? maintenanceProximityJoinOverride,
     bool clearMaintenanceProximityJoinOverride = false,
     int? maintenanceProximityRadiusOverrideM,
@@ -1122,6 +1165,12 @@ class PrivateCompanyProvider extends ChangeNotifier {
           'provinceFilterActive': provinceFilterActive,
         if (privateCompanyAllowedTaskSlugs != null)
           'privateCompanyAllowedTaskSlugs': privateCompanyAllowedTaskSlugs,
+        if (clearEngineerTicketScopeOverride)
+          'privateCompanyEngineerTicketScope': null,
+        if (!clearEngineerTicketScopeOverride &&
+            privateCompanyEngineerTicketScope != null)
+          'privateCompanyEngineerTicketScope':
+              _normalizeEngineerTicketScope(privateCompanyEngineerTicketScope),
         if (clearMaintenanceProximityJoinOverride)
           'maintenanceProximityJoinOverride': null,
         if (!clearMaintenanceProximityJoinOverride &&
@@ -1444,5 +1493,12 @@ class PrivateCompanyProvider extends ChangeNotifier {
     _error = null;
     _lastSuccess = null;
     notifyListeners();
+  }
+
+  static String _normalizeEngineerTicketScope(String raw) {
+    final u = raw.trim().toUpperCase();
+    if (u == 'QC_ONLY') return 'QC_ONLY';
+    if (u == 'MAINTENANCE_ONLY') return 'MAINTENANCE_ONLY';
+    return 'BOTH';
   }
 }

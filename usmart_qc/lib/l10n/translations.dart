@@ -424,6 +424,14 @@ const Map<String, String> _en = {
   'ticket_qfield_card_subtitle':
       'Open in QField, track revisions, and sync field updates.',
   'ticket_qfield_open': 'Open workspace',
+  'ticket_qfield_view': 'View QField',
+  'ticket_qfield_view_only': 'View QField projects (read-only — ticket is closed).',
+  'ticket_completed_view_only':
+      'This ticket is completed. You can view details and QField files only — no edits.',
+  'engineer_scope_maintenance_blocked':
+      'Your department or profile is set to QC tickets only. Ask the workspace owner to allow maintenance.',
+  'engineer_scope_qc_blocked':
+      'Your department or profile is set to maintenance tickets only.',
   'ticket_qfield_hero_title': 'Field GIS packages',
   'ticket_qfield_hero_body':
       'Download or open packages in QField. Field staff can post new revisions with a short note.',

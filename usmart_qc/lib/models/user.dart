@@ -33,6 +33,7 @@ class User {
     this.mustChangePassword = false,
   });
 
+  /// Workspace field role is ENGINEER; legacy coordinator aliases still accepted.
   bool get isEngineer =>
       role == 'ENGINEER' ||
       role == 'QUALITY_ENGINEER' ||

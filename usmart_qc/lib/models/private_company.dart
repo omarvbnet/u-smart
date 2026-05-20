@@ -82,6 +82,7 @@ class PrivateCompanyDepartment {
     this.engineerAvailabilityPoolEnabled = true,
     this.technicianAvailabilityPoolEnabled = true,
     this.maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
+    this.engineerTicketScope = 'BOTH',
   });
 
   final String id;
@@ -100,6 +101,8 @@ class PrivateCompanyDepartment {
   final bool technicianAvailabilityPoolEnabled;
   /// `DIRECT_TECHNICIAN` (default) or `ENGINEER_ASSIGNS` (engineer/coordinator assigns techs first).
   final String maintenanceDispatchMode;
+  /// `QC_ONLY` | `MAINTENANCE_ONLY` | `BOTH` — default for engineers in this department.
+  final String engineerTicketScope;
 
   Color get colorValue {
     final raw = color;
@@ -143,7 +146,16 @@ class PrivateCompanyDepartment {
       technicianAvailabilityPoolEnabled: json['technicianAvailabilityPoolEnabled'] != false,
       maintenanceDispatchMode: _normalizeMaintenanceDispatchMode(
           json['maintenanceDispatchMode'] as String?),
+      engineerTicketScope: _normalizeEngineerTicketScope(
+          json['engineerTicketScope'] as String?),
     );
+  }
+
+  static String _normalizeEngineerTicketScope(String? raw) {
+    final u = (raw ?? '').trim().toUpperCase();
+    if (u == 'QC_ONLY') return 'QC_ONLY';
+    if (u == 'MAINTENANCE_ONLY') return 'MAINTENANCE_ONLY';
+    return 'BOTH';
   }
 
   static String _normalizeMaintenanceDispatchMode(String? raw) {
@@ -171,6 +183,7 @@ class PrivateCompanyStaff {
     this.privateCompanyAllowedTaskSlugs = const [],
     this.maintenanceProximityJoinOverride,
     this.maintenanceProximityRadiusOverrideM,
+    this.engineerTicketScopeOverride,
   });
 
   final String id;
@@ -188,6 +201,8 @@ class PrivateCompanyStaff {
   final List<String> privateCompanyAllowedTaskSlugs;
   final bool? maintenanceProximityJoinOverride;
   final int? maintenanceProximityRadiusOverrideM;
+  /// Per-engineer override: QC_ONLY | MAINTENANCE_ONLY | BOTH | null = use department default.
+  final String? engineerTicketScopeOverride;
 
   factory PrivateCompanyStaff.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyStaff(
@@ -222,6 +237,11 @@ class PrivateCompanyStaff {
           : null,
       maintenanceProximityRadiusOverrideM:
           (json['maintenanceProximityRadiusOverrideM'] as num?)?.toInt(),
+      engineerTicketScopeOverride: () {
+        final raw = json['privateCompanyEngineerTicketScope'];
+        if (raw == null || raw.toString().trim().isEmpty) return null;
+        return PrivateCompanyDepartment._normalizeEngineerTicketScope(raw.toString());
+      }(),
     );
   }
 }

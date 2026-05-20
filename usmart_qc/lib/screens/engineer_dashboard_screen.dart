@@ -670,6 +670,18 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
             departmentIds.contains(_departmentFilter) ? _departmentFilter : 'ALL';
 
         final allMyTickets = provider.myFieldTickets;
+        final active = currentUserId == null
+            ? <Ticket>[]
+            : allMyTickets
+                .where((t) => provider.ticketIsOpenAssignmentForUser(t, currentUserId!))
+                .toList();
+        final completed = currentUserId == null
+            ? <Ticket>[]
+            : allMyTickets.where((t) {
+                if (!t.isCompleted) return false;
+                return t.assignedEngineerId == currentUserId ||
+                    t.maintenanceCrewIds.contains(currentUserId);
+              }).toList();
         final statuses = ticketStatusFilterOptions(allMyTickets);
         final techniques = <String>{
           'ALL',
