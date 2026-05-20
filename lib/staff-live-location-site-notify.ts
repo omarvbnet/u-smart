@@ -50,7 +50,7 @@ export async function handleStaffLocationSiteProximity(
   const staff = (await prisma.ticketRequester.findUnique({
     where: { id: staffRequesterId },
     select: { name: true, username: true, role: true },
-  })) as { name: string | null; username: string } | null;
+  })) as { name: string | null; username: string; role: string } | null;
   if (!staff) return;
 
   const staffName = staff.name?.trim() || staff.username?.trim() || 'Staff';
@@ -79,7 +79,9 @@ export async function handleStaffLocationSiteProximity(
     where: { companyId, staffRequesterId },
     select: { id: true, siteId: true },
   });
-  const stateBySite = new Map(activeStates.map((s: { siteId: string; id: string }) => [s.siteId, s.id]));
+  const stateBySite = new Map<string, string>(
+    (activeStates as { siteId: string; id: string }[]).map((s) => [s.siteId, s.id])
+  );
 
   const nearSiteIds = new Set<string>();
 

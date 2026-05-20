@@ -6,8 +6,6 @@ import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
 import {
   MAINTENANCE_AWAITING_SINCE_KEY,
-  MAINTENANCE_COMPLETION_REASON_ID_KEY,
-  MAINTENANCE_COMPLETION_REASON_LABEL_KEY,
   MAINTENANCE_REJECT_REASON_KEY,
   MAINTENANCE_REQUESTER_CONFIRM_MINUTES,
   readMaintenanceAwaitingSince,
@@ -16,6 +14,8 @@ import {
   tryAutoConfirmExpiredMaintenanceAwaiting,
 } from '@/lib/maintenance-requester-confirmation';
 import {
+  MAINTENANCE_COMPLETION_REASON_ID_KEY,
+  MAINTENANCE_COMPLETION_REASON_LABEL_KEY,
   resolveMaintenanceReasonDepartmentId,
   validateMaintenanceCompletionReason,
 } from '@/lib/private-company-maintenance-reasons';

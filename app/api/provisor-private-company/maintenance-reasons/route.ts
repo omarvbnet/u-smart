@@ -45,6 +45,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  if (!departmentId) {
+    return NextResponse.json(
+      { success: false, message: 'departmentId is required.' },
+      { status: 400 }
+    );
+  }
+
   const dept = await prisma.privateCompanyDepartment.findFirst({
     where: { id: departmentId, companyId: guard.companyId },
     select: { id: true },
