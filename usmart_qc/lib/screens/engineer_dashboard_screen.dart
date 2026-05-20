@@ -238,12 +238,14 @@ class _EngineerInboxTab extends StatelessWidget {
     return Consumer3<TicketsProvider, ConflictsProvider, AuthProvider>(
       builder: (context, tickets, conflicts, auth, _) {
         final ncrTickets = tickets.ticketsPendingNcrResponse;
+        final urgentAssigned = auth.isTechnician ? tickets.ticketsAwaitingMyUrgentAction : <Ticket>[];
         final currentUserId = auth.user?.id;
         final myConflicts = currentUserId == null
             ? <ConflictCase>[]
             : conflicts.pendingConflicts
                 .where((c) => c.assignedEngineerId == currentUserId)
                 .toList();
+        final hasUrgent = urgentAssigned.isNotEmpty;
         final hasNcr = ncrTickets.isNotEmpty;
         final hasConflicts = myConflicts.isNotEmpty;
         final isLoading = tickets.loading && tickets.tickets.isEmpty;
@@ -332,7 +334,7 @@ class _EngineerInboxTab extends StatelessWidget {
                   ],
                 ),
               ),
-              if (!hasNcr && !hasConflicts)
+              if (!hasUrgent && !hasNcr && !hasConflicts)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(48),
@@ -355,6 +357,33 @@ class _EngineerInboxTab extends StatelessWidget {
                   ),
                 )
               else ...[
+                if (hasUrgent) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      l10n.t('inbox_urgent_assignments'),
+                      style: TextStyle(
+                        color: const Color(0xFFFF4757).withAlpha(220),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      l10n.t('inbox_urgent_assignments_hint'),
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(130),
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                  ...urgentAssigned.map((t) => _InboxUrgentAssignCard(ticket: t)),
+                  const SizedBox(height: 20),
+                ],
                 if (hasNcr) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -454,6 +483,72 @@ class _InboxNcrCard extends StatelessWidget {
             ),
             const Icon(Icons.chevron_right_rounded,
                 color: Color(0xFFFF6B81), size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InboxUrgentAssignCard extends StatelessWidget {
+  final Ticket ticket;
+  const _InboxUrgentAssignCard({required this.ticket});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TicketDetailScreen(ticketId: ticket.id),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF4757).withAlpha(18),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0x55FF4757)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF4757).withAlpha(30),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.priority_high_rounded,
+                  color: Color(0xFFFF4757), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ticket.siteName ?? l10n.t('unknown_site'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.t('status_assigned'),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(140),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFFFF4757), size: 24),
           ],
         ),
       ),

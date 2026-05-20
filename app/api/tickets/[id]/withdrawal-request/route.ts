@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
+import { notifyTechnicianUrgentAssignment } from '@/lib/ticket-assignment-notify';
 import {
   assignedStaffIdFromCompanyJson,
   maintenanceCrewIdsFromCompanyJson,
@@ -159,19 +160,19 @@ async function assignReplacementTechnician(
   }
 
   try {
-    await notifyRequesterI18n({
+    const dispatcher = await prisma.ticketRequester.findUnique({
+      where: { id: dispatcherId },
+      select: { name: true, username: true },
+    });
+    const siteName =
+      typeof parsed.siteName === 'string' ? parsed.siteName.trim() : '';
+    await notifyTechnicianUrgentAssignment({
       prisma,
-      type: 'status_changed',
       ticketId,
-      requesterId: assignee.id,
-      payload: {
-        key: 'staff_assigned',
-        vars: {
-          staffKind: 'technician',
-          assigneeName: assignee.name || assignee.username || '',
-        },
-      },
-      data: { ticketId, type: 'status_changed' },
+      technicianId: assignee.id,
+      assignerName: dispatcher?.name || dispatcher?.username || '',
+      siteName,
+      province: row.province,
     });
   } catch {
     /* ignore */

@@ -6,6 +6,7 @@ export type NotificationCopyKey =
   | 'new_ticket_role'
   | 'ticket_status_updated'
   | 'staff_assigned'
+  | 'ticket_assigned_urgent'
   | 'ticket_completed'
   | 'ticket_ncr_raised'
   | 'comment_engineer_reply'
@@ -219,6 +220,36 @@ const TEMPLATES: Record<
       title: v.staffKind === 'technician' ? 'تەکنیسین کرایەتە' : 'ئەندازیار کرایەتە',
       body: `${v.assigneeName} کرایەتە سەر تیکەتەکەت`,
     }),
+  },
+  ticket_assigned_urgent: {
+    en: (v) => {
+      const loc = v.province?.trim() ? ` (${v.province.trim()})` : '';
+      return {
+        title: 'Urgent: ticket assigned to you',
+        body: `${v.assignerName} assigned you to ${v.siteName}${loc}. Open the ticket and go on site.`,
+      };
+    },
+    ar: (v) => {
+      const loc = v.province?.trim() ? ` (${v.province.trim()})` : '';
+      return {
+        title: 'عاجل: تذكرة مُعينة لك',
+        body: `${v.assignerName} عيّنك على ${v.siteName}${loc}. افتح التذكرة وتوجّه إلى الموقع.`,
+      };
+    },
+    tr: (v) => {
+      const loc = v.province?.trim() ? ` (${v.province.trim()})` : '';
+      return {
+        title: 'Acil: size bilet atandı',
+        body: `${v.assignerName} sizi ${v.siteName}${loc} için atadı. Bileti açın ve sahaya gidin.`,
+      };
+    },
+    ku: (v) => {
+      const loc = v.province?.trim() ? ` (${v.province.trim()})` : '';
+      return {
+        title: 'پێویست: تیکێت بۆ تۆ دیاریکرا',
+        body: `${v.assignerName} تۆ دیاری کرد بۆ ${v.siteName}${loc}. تیکەتەکە بکەرەوە و بڕۆ بۆ شوێنەکە.`,
+      };
+    },
   },
   ticket_completed: {
     en: (v) => {

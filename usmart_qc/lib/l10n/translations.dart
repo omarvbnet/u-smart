@@ -90,6 +90,9 @@ const Map<String, String> _en = {
   'nav_available': 'Available',
   'nav_my_tickets': 'My Tickets',
   'inbox_empty': 'No resubmits or conflict cases',
+  'inbox_urgent_assignments': 'URGENT — ASSIGNED TO YOU',
+  'inbox_urgent_assignments_hint':
+      'An engineer assigned these tickets to you. Open each one and go on site.',
   'inbox_ncr_resubmits': 'NCR RESUBMITS',
   'inbox_conflicts': 'CONFLICT CASES',
   'section_pending': 'Pending',
@@ -1252,6 +1255,9 @@ const Map<String, String> _ar = {
   'nav_available': 'متاح',
   'nav_my_tickets': 'تذاكري',
   'inbox_empty': 'لا توجد إعادة تقديم أو حالات تعارض',
+  'inbox_urgent_assignments': 'عاجل — مُعيّن لك',
+  'inbox_urgent_assignments_hint':
+      'عيّنك مهندس على هذه التذاكر. افتح كل تذكرة وتوجّه إلى الموقع.',
   'inbox_ncr_resubmits': 'إعادة تقديم عدم المطابقة',
   'inbox_conflicts': 'حالات التعارض',
   'section_pending': 'قيد الانتظار',
@@ -2337,6 +2343,9 @@ const Map<String, String> _ku = {
   'nav_available': 'بەردەست',
   'nav_my_tickets': 'تیکێتەکانم',
   'inbox_empty': 'هیچ دووبارەناردنەوە یان کەیسی ناکۆکی نییە',
+  'inbox_urgent_assignments': 'پێویست — بۆ تۆ دیاریکراوە',
+  'inbox_urgent_assignments_hint':
+      'ئەندازیارێک ئەم تیکەتانەی بۆ تۆ دیاری کرد. هەر تیکەتێک بکەرەوە و بڕۆ بۆ شوێنەکە.',
   'inbox_ncr_resubmits': 'دووبارەناردنەوەی نەگونجاو',
   'inbox_conflicts': 'کەیسەکانی ناکۆکی',
   'section_pending': 'چاوەڕوان',
@@ -3438,6 +3447,9 @@ const Map<String, String> _tr = {
   'nav_available': 'Mevcut',
   'nav_my_tickets': 'Biletlerim',
   'inbox_empty': 'Yeniden gönderim veya uyuşmazlık yok',
+  'inbox_urgent_assignments': 'ACİL — SIZE ATANDI',
+  'inbox_urgent_assignments_hint':
+      'Bir mühendis bu biletleri size atadı. Her birini açın ve sahaya gidin.',
   'inbox_ncr_resubmits': 'NCR YENİDEN GÖNDERİMLER',
   'inbox_conflicts': 'UYUŞMAZLIk DURUMLARI',
   'section_pending': 'Beklemede',

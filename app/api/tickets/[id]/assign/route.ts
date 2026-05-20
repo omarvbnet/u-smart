@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
+import { notifyTechnicianUrgentAssignment } from '@/lib/ticket-assignment-notify';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { hasPrivilege } from '@/lib/coordinator-access';
 import { resolveEngineerTicketScope } from '@/lib/engineer-ticket-scope';
@@ -436,24 +437,16 @@ export async function PATCH(
         }
       }
       if (assignee.id) {
-        try {
-          await notifyRequesterI18n({
-            prisma,
-            type: 'status_changed',
-            ticketId: id,
-            requesterId: assignee.id,
-            payload: {
-              key: 'staff_assigned',
-              vars: {
-                staffKind: 'technician',
-                assigneeName: assignee.name || assignee.username || '',
-              },
-            },
-            data: { ticketId: id, type: 'status_changed' },
-          });
-        } catch {
-          /* ignore */
-        }
+        const siteName =
+          typeof parsed.siteName === 'string' ? parsed.siteName.trim() : '';
+        await notifyTechnicianUrgentAssignment({
+          prisma,
+          ticketId: id,
+          technicianId: assignee.id,
+          assignerName: requester.name || requester.username || '',
+          siteName,
+          province: row.province,
+        });
       }
       if (row.requesterId) {
         try {

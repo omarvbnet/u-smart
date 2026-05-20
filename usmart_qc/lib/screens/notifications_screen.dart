@@ -81,8 +81,11 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = DateFormat('MMM d, h:mm a');
+    final isUrgentAssign = notification.type == 'ticket_assigned_urgent';
     final isNew = notification.type == 'new_ticket';
-    final accent = isNew ? const Color(0xFF6C63FF) : const Color(0xFF00D4AA);
+    final accent = isUrgentAssign
+        ? const Color(0xFFFF4757)
+        : (isNew ? const Color(0xFF6C63FF) : const Color(0xFF00D4AA));
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -143,9 +146,11 @@ class _NotificationTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      isNew
-                          ? Icons.add_circle_outline_rounded
-                          : Icons.sync_rounded,
+                      isUrgentAssign
+                          ? Icons.priority_high_rounded
+                          : (isNew
+                              ? Icons.add_circle_outline_rounded
+                              : Icons.sync_rounded),
                       color: accent,
                       size: 18,
                     ),

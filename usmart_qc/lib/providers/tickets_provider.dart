@@ -228,6 +228,17 @@ class TicketsProvider extends ChangeNotifier {
   /// Hide pool / self-assign when the user must finish open work first.
   bool get canSelfAssignFromPool => !hasActiveTicket;
 
+  /// Assigned lead, still PENDING — engineer dispatch; technician must go on site.
+  List<Ticket> get ticketsAwaitingMyUrgentAction => _currentUserId == null
+      ? []
+      : _tickets
+          .where(
+            (t) =>
+                t.assignedEngineerId == _currentUserId &&
+                t.isAssignedAwaitingArrival,
+          )
+          .toList();
+
   /// Engineer inbox: tickets where requester resubmitted NCR, pending engineer response
   List<Ticket> get ticketsPendingNcrResponse => _currentUserId == null
       ? []

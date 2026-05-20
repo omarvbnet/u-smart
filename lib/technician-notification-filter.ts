@@ -57,6 +57,7 @@ export function technicianSeesMaintenanceInboxRow(
     return parsed.vars?.roleKind === 'maintenance';
   }
   if (parsed?.key === 'maintenance_crew_joined') return true;
+  if (parsed?.key === 'ticket_assigned_urgent') return true;
   if (typeof parsed?.key === 'string' && parsed.key.startsWith('material_')) return true;
   const tid = row.ticketId;
   if (tid && ticketIsMaintenance.get(tid) === true) return true;
