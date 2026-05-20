@@ -1,3 +1,4 @@
+import 'maintenance_completion_reason.dart';
 import 'private_company_expense.dart';
 import 'qfield_project.dart';
 
@@ -113,6 +114,10 @@ class Ticket {
   final String? conflictResolvedAt;
   /// Maintenance: reason for maintenance (stored in company.maintenanceReason)
   final String? maintenanceReason;
+  /// Handler-selected completion reason (while IN_PROGRESS / on complete).
+  final String? maintenanceCompletionReasonId;
+  final String? maintenanceCompletionReasonLabel;
+  final List<MaintenanceCompletionReasonOption> availableMaintenanceCompletionReasons;
   /// Maintenance: before photos (from VisitorRequest.beforeImageUrls)
   final List<String> beforeImageUrls;
   /// Maintenance: after photos (from VisitorRequest.finishingImageUrls)
@@ -204,6 +209,9 @@ class Ticket {
     this.conflictReportedAt,
     this.conflictResolvedAt,
     this.maintenanceReason,
+    this.maintenanceCompletionReasonId,
+    this.maintenanceCompletionReasonLabel,
+    this.availableMaintenanceCompletionReasons = const [],
     this.beforeImageUrls = const [],
     this.finishingImageUrls = const [],
     this.workflowState,
@@ -352,6 +360,14 @@ class Ticket {
       conflictReportedAt: json['conflictReportedAt'] as String?,
       conflictResolvedAt: json['conflictResolvedAt'] as String?,
       maintenanceReason: json['maintenanceReason'] as String?,
+      maintenanceCompletionReasonId: json['maintenanceCompletionReasonId'] as String?,
+      maintenanceCompletionReasonLabel: json['maintenanceCompletionReasonLabel'] as String?,
+      availableMaintenanceCompletionReasons:
+          (json['availableMaintenanceCompletionReasons'] as List<dynamic>?)
+                  ?.whereType<Map<String, dynamic>>()
+                  .map(MaintenanceCompletionReasonOption.fromJson)
+                  .toList() ??
+              const [],
       beforeImageUrls: (json['beforeImageUrls'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??

@@ -22,6 +22,8 @@ import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
 import '../widgets/workspace_expenses_analytics_panel.dart';
+import '../widgets/department_maintenance_reasons_sheet.dart';
+import '../widgets/workspace_maintenance_reasons_analytics_panel.dart';
 
 /// Drag handle + title with an explicit close control for modal bottom sheets.
 Widget _modalSheetTitleRow(BuildContext context, String title) {
@@ -1456,10 +1458,30 @@ class _DepartmentsTabState extends State<_DepartmentsTab> {
                           onSelected: (v) {
                             if (v == 'edit') _openCreate(existing: d);
                             if (v == 'delete') _confirmDelete(d);
+                            if (v == 'reasons') {
+                              DepartmentMaintenanceReasonsSheet.show(context, d);
+                            }
                           },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(color: Colors.white))),
-                            PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Color(0xFFFF4757)))),
+                          itemBuilder: (_) => [
+                            if (pc.canManageMaintenanceReasons &&
+                                (pc.isOwner || pc.myDepartmentId == d.id))
+                              const PopupMenuItem(
+                                value: 'reasons',
+                                child: Text(
+                                  'Completion reasons',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            if (pc.canManageDepartments) ...const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit', style: TextStyle(color: Colors.white)),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete', style: TextStyle(color: Color(0xFFFF4757))),
+                              ),
+                            ],
                           ],
                         ),
                     ],
@@ -5006,8 +5028,13 @@ class _ExpensesTab extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const WorkspaceExpensesAnalyticsPanel(compact: true),
-        ] else
+          const SizedBox(height: 20),
+          const WorkspaceMaintenanceReasonsAnalyticsPanel(compact: true),
+        ] else ...[
           const WorkspaceExpensesAnalyticsPanel(),
+          const SizedBox(height: 20),
+          const WorkspaceMaintenanceReasonsAnalyticsPanel(),
+        ],
       ],
     );
   }

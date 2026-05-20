@@ -25,6 +25,10 @@ import {
 } from '@/lib/maintenance-requester-confirmation';
 import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
 import { isWorkspaceTicketLeader } from '@/lib/private-company-ticket-visibility';
+import {
+  loadMaintenanceReasonsForTicket,
+  readMaintenanceCompletionReasonFromCompany,
+} from '@/lib/private-company-maintenance-reasons';
 
 const prisma = _prisma as any;
 
@@ -604,9 +608,34 @@ export async function GET(
     const maintenanceReason = (() => {
       try {
         const p = typeof row.company === 'string' ? JSON.parse(row.company) : {};
-        return (p._ticket && typeof p.maintenanceReason === 'string') ? p.maintenanceReason : null;
+        return typeof p.maintenanceReason === 'string' ? p.maintenanceReason : null;
       } catch { return null; }
     })();
+
+    let maintenanceCompletionReasonId: string | null = null;
+    let maintenanceCompletionReasonLabel: string | null = null;
+    let availableMaintenanceCompletionReasons: { id: string; label: string }[] = [];
+    try {
+      const p = typeof row.company === 'string' ? JSON.parse(row.company) : {};
+      const sel = readMaintenanceCompletionReasonFromCompany(p as Record<string, unknown>);
+      maintenanceCompletionReasonId = sel.id;
+      maintenanceCompletionReasonLabel = sel.label;
+      const reasonRows = await loadMaintenanceReasonsForTicket({
+        id: row.id,
+        technique: row.technique,
+        privateCompanyId: (row as { privateCompanyId?: string | null }).privateCompanyId ?? null,
+        privateCompanyTargetDepartmentId:
+          (row as { privateCompanyTargetDepartmentId?: string | null })
+            .privateCompanyTargetDepartmentId ?? null,
+        company: row.company,
+      });
+      availableMaintenanceCompletionReasons = reasonRows.map((r: { id: string; label: string }) => ({
+        id: r.id,
+        label: r.label,
+      }));
+    } catch {
+      /* optional tables / legacy */
+    }
 
     const dbChecklistTemplateId =
       typeof (row as { checklistTemplateId?: string | null }).checklistTemplateId === 'string'
@@ -699,6 +728,9 @@ export async function GET(
         statusTimeline,
         maintenanceDescription,
         maintenanceReason,
+        maintenanceCompletionReasonId,
+        maintenanceCompletionReasonLabel,
+        availableMaintenanceCompletionReasons,
         beforeImageUrls,
         finishingImageUrls,
         assignedTeam,

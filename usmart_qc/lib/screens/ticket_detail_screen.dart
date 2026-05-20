@@ -69,6 +69,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   /// Maintenance: before (4–6) and after (4–6) image URLs for completion
   List<String> _maintenanceBeforeUrls = [];
   List<String> _maintenanceAfterUrls = [];
+  String? _selectedMaintenanceCompletionReasonId;
+  bool _savingCompletionReason = false;
 
   Map<String, dynamic>? _ticketMaterialsSummary;
 
@@ -157,6 +159,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           if (onTicket && (role == 'TECHNICIAN' || role == 'WORKER') && t.isInProgress) {
             _maintenanceBeforeUrls = List.from(t.beforeImageUrls);
             _maintenanceAfterUrls = List.from(t.finishingImageUrls);
+            _selectedMaintenanceCompletionReasonId =
+                t.maintenanceCompletionReasonId?.trim().isNotEmpty == true
+                    ? t.maintenanceCompletionReasonId
+                    : null;
           } else if (t.isMaintenance) {
             _maintenanceBeforeUrls = [];
             _maintenanceAfterUrls = [];
@@ -2255,6 +2261,20 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ]),
       ],
+      if (t.isMaintenance &&
+          t.maintenanceCompletionReasonLabel != null &&
+          t.maintenanceCompletionReasonLabel!.trim().isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('maint_completion_reason'), [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              t.maintenanceCompletionReasonLabel!,
+              style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 14),
+            ),
+          ),
+        ]),
+      ],
       if (t.isMaintenance) ...[
         const SizedBox(height: 16),
         ..._maintenanceEvidenceSections(t, l10n),
@@ -3034,7 +3054,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     const maxImages = 6;
     final beforeOk = _maintenanceBeforeUrls.length >= minImages && _maintenanceBeforeUrls.length <= maxImages;
     final afterOk = _maintenanceAfterUrls.length >= minImages && _maintenanceAfterUrls.length <= maxImages;
-    final canComplete = beforeOk && afterOk;
+    final reasons = t.availableMaintenanceCompletionReasons;
+    final reasonRequired = reasons.isNotEmpty;
+    final reasonOk = !reasonRequired ||
+        (_selectedMaintenanceCompletionReasonId != null &&
+            _selectedMaintenanceCompletionReasonId!.isNotEmpty);
+    final canComplete = beforeOk && afterOk && reasonOk;
     final hasRequester = (t.requesterId ?? '').trim().isNotEmpty;
     final awaiting = t.maintenanceAwaitingRequesterConfirmation;
     final reject = (t.maintenanceRequesterRejectReason ?? '').trim();
@@ -3080,6 +3105,96 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12),
             ),
           ),
+          if (reasons.isNotEmpty && !awaiting) ...[
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.t('maint_completion_reason'),
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(200),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.t('maint_completion_reason_hint'),
+                    style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedMaintenanceCompletionReasonId,
+                    dropdownColor: const Color(0xFF12122A),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFF0A0A18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    hint: Text(
+                      l10n.t('maint_completion_reason'),
+                      style: TextStyle(color: Colors.white.withAlpha(120)),
+                    ),
+                    items: reasons
+                        .map(
+                          (r) => DropdownMenuItem<String>(
+                            value: r.id,
+                            child: Text(r.label, style: const TextStyle(color: Colors.white)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _savingCompletionReason
+                        ? null
+                        : (v) async {
+                            if (v == null) return;
+                            setState(() {
+                              _selectedMaintenanceCompletionReasonId = v;
+                              _savingCompletionReason = true;
+                            });
+                            final ok = await context
+                                .read<TicketsProvider>()
+                                .setMaintenanceCompletionReason(widget.ticketId, v);
+                            if (mounted) {
+                              setState(() => _savingCompletionReason = false);
+                              if (!ok) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(l10n.t('complete_failed')),
+                                    backgroundColor: const Color(0xFFFF4757),
+                                  ),
+                                );
+                              } else {
+                                await _load();
+                              }
+                            }
+                          },
+                  ),
+                  if (!reasonOk)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        l10n.t('maint_completion_reason_required'),
+                        style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ] else if (reasonRequired == false &&
+              t.isInProgress &&
+              !awaiting &&
+              _userOnMaintenanceTicket(t)) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Text(
+                l10n.t('maint_completion_reason_none'),
+                style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           _maintImageRow(l10n.t('before_photos'), _maintenanceBeforeUrls, true, minImages, maxImages, locked: awaiting),
           const SizedBox(height: 12),
@@ -3256,6 +3371,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         null,
         beforeImageUrls: _maintenanceBeforeUrls,
         finishingImageUrls: _maintenanceAfterUrls,
+        maintenanceCompletionReasonId: _selectedMaintenanceCompletionReasonId,
       );
       if (!mounted) return;
       if (r.success) {

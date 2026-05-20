@@ -70,7 +70,25 @@ List<QFieldPointLabelSpec> qfieldPointLabelSpecs({
   if (isHoleLayerName(layerName)) {
     final hole = holeIdFromProperties(props);
     if (hole != null && hole.isNotEmpty) {
-      labels.add(QFieldPointLabelSpec(text: hole, textOnly: true));
+      labels.add(QFieldPointLabelSpec(text: hole, textOnly: true, boldBlackId: true));
+    }
+    final closureId = closureOrOdfIdFromProperties(props);
+    if (closureId != null && closureId.isNotEmpty) {
+      labels.add(
+        QFieldPointLabelSpec(text: closureId, closureCircle: true, boldBlackId: true),
+      );
+    } else if (handholeContainsClosure(props)) {
+      labels.add(
+        const QFieldPointLabelSpec(text: '', closureCircle: true, boldBlackId: true),
+      );
+    }
+    if (labels.isEmpty) {
+      final fallback = mapLabelForFeature(props, layerName);
+      if (fallback != null &&
+          fallback.isNotEmpty &&
+          !fallback.toLowerCase().contains('fdt_hole')) {
+        labels.add(QFieldPointLabelSpec(text: fallback, textOnly: true));
+      }
     }
     return labels;
   }

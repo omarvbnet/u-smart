@@ -203,13 +203,20 @@ Map<String, dynamic> displayPropsForFeature(
   if (isHoleLayerName(layer)) {
     final holeKey = holeIdPropertyKey(f.properties);
     final holeId = holeIdFromProperties(f.properties);
+    final closureKey = closureOrOdfIdPropertyKey(f.properties);
+    final closureId = closureOrOdfIdFromProperties(f.properties);
     final ordered = <String, dynamic>{};
+    if (closureKey != null && closureId != null && closureId.isNotEmpty) {
+      ordered[closureKey] = closureId;
+    }
     if (holeId != null && holeId.isNotEmpty) {
       ordered['Hole_ID'] = holeId;
     }
     for (final e in m.entries) {
+      if (closureKey != null && e.key == closureKey) continue;
       if (holeKey != null && e.key == holeKey) continue;
       if (isHoleIdPropertyKey(e.key) && holeId != null) continue;
+      if (isLayerNameNoiseProperty(e.key, f.properties)) continue;
       ordered[e.key] = e.value;
     }
     return ordered;

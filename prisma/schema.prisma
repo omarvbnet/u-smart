@@ -1434,6 +1434,7 @@ model PrivateCompany {
   approvedAt       DateTime?
   approvedById     String? // admin User id (web admin)
   departments      PrivateCompanyDepartment[]
+  maintenanceCompletionReasons PrivateCompanyMaintenanceReason[]
   staff            TicketRequester[]          @relation("PrivateCompanyStaff")
   checklists       PrivateCompanyChecklist[]
   scopedTickets    VisitorRequest[]           @relation("PrivateCompanyScopedTickets")
@@ -1612,12 +1613,31 @@ model PrivateCompanyDepartment {
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
   workspaceTargetedTickets VisitorRequest[] @relation("WorkspaceTicketTargetDepartment")
+  maintenanceCompletionReasons PrivateCompanyMaintenanceReason[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
   @@unique([companyId, name])
   @@index([companyId])
   @@map("private_company_departments")
+}
+
+/// Preset labels technicians must pick when completing maintenance (per department).
+model PrivateCompanyMaintenanceReason {
+  id           String                   @id @default(cuid())
+  companyId    String
+  company      PrivateCompany           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departmentId String
+  department   PrivateCompanyDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  label        String
+  sortOrder    Int                      @default(0)
+  active       Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@unique([departmentId, label])
+  @@index([companyId, departmentId, active])
+  @@map("private_company_maintenance_reasons")
 }
 
 model PrivateCompanyChecklist {

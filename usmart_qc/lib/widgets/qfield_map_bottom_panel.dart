@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
@@ -122,8 +124,14 @@ class QFieldMapBottomPanel extends StatelessWidget {
           child: CustomScrollView(
             controller: scrollController,
             primary: false,
-            physics: const AlwaysScrollableScrollPhysics(),
-            cacheExtent: 1200,
+            physics: QFieldPanelScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(
+                parent: Platform.isIOS
+                    ? const BouncingScrollPhysics()
+                    : const ClampingScrollPhysics(),
+              ),
+            ),
+            cacheExtent: 640,
             slivers: [
               const SliverToBoxAdapter(child: _PanelDragHandle()),
               SliverPadding(
@@ -336,20 +344,35 @@ class QFieldMapBottomPanel extends StatelessWidget {
       );
 
   List<Widget> _infoSectionSlivers(BuildContext context) {
-    final sections = _infoSections(context);
+    final builders = _infoSectionBuilders(context);
+    if (builders.isEmpty) return const [];
     return [
-      for (var i = 0; i < sections.length; i++)
-        SliverPadding(
-          padding: i == 0 ? _infoPad : const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          sliver: SliverToBoxAdapter(child: sections[i]),
+      SliverPadding(
+        padding: _infoPad,
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              if (index > 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: RepaintBoundary(child: builders[index]()),
+                );
+              }
+              return RepaintBoundary(child: builders[index]());
+            },
+            childCount: builders.length,
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: false,
+          ),
         ),
+      ),
     ];
   }
 
-  List<Widget> _infoSections(BuildContext context) {
+  List<Widget Function()> _infoSectionBuilders(BuildContext context) {
     if (selected == null && layerGroups.isNotEmpty) {
       return [
-        Column(
+        () => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
@@ -373,7 +396,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (tapContext == null) {
       return [
-        Text(
+        () => Text(
           l10n.t('qfield_map_tap_feature'),
           style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
         ),
@@ -381,16 +404,16 @@ class QFieldMapBottomPanel extends StatelessWidget {
     }
 
     if (tapContext!.isRouteSelection) {
-      return _routeInfoSections();
+      return _routeInfoSectionBuilders();
     }
 
-    return _fatInfoSections();
+    return _fatInfoSectionBuilders();
   }
 
-  List<Widget> _routeInfoSections() {
+  List<Widget Function()> _routeInfoSectionBuilders() {
     final ctx = tapContext!;
-    final sections = <Widget>[
-      _SelectedElementHeader(
+    final sections = <Widget Function()>[
+      () => _SelectedElementHeader(
         title: ctx.routeId ?? featureTapListTitle(ctx.selected),
         subtitle: _tapHeaderSubtitle(l10n, ctx),
         icon: Icons.route_rounded,
@@ -398,7 +421,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
     ];
     if (ctx.routeSiteInfo.isNotEmpty) {
       sections.add(
-        _InfoSectionCard(
+        () => _InfoSectionCard(
           title: l10n.t('qfield_map_route_site_info'),
           icon: Icons.construction_rounded,
           accent: _mint,
@@ -409,7 +432,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
       );
     }
     sections.add(
-      _InfoSectionCard(
+      () => _InfoSectionCard(
         title: l10n.t('qfield_map_cables_in_route'),
         icon: Icons.cable_rounded,
         accent: _accent,
@@ -435,7 +458,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
       ),
     );
     sections.add(
-      _InfoSectionCard(
+      () => _InfoSectionCard(
         title: l10n.t('qfield_map_feature_data'),
         icon: Icons.info_outline_rounded,
         children: displayPropsForFeature(ctx.selected)
@@ -536,12 +559,12 @@ class QFieldMapBottomPanel extends StatelessWidget {
     );
   }
 
-  List<Widget> _fatInfoSections() {
+  List<Widget Function()> _fatInfoSectionBuilders() {
     final ctx = tapContext!;
-    final sections = <Widget>[_fatHeaderSection(ctx)];
+    final sections = <Widget Function()>[() => _fatHeaderSection(ctx)];
 
     sections.add(
-      _InfoSectionCard(
+      () => _InfoSectionCard(
         title: l10n.t('qfield_map_feature_data'),
         icon: Icons.info_outline_rounded,
         children: [
@@ -566,7 +589,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (ctx.fatSummary.isNotEmpty) {
       sections.add(
-        _InfoSectionCard(
+        () => _InfoSectionCard(
           title: l10n.t('qfield_map_fat_site_info'),
           icon: Icons.business_rounded,
           accent: _mint,
@@ -579,20 +602,20 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (ctx.handholes.isNotEmpty) {
       sections.add(
-        _SectionLabel(
+        () => _SectionLabel(
           icon: Icons.grid_on_rounded,
           title: l10n.t('qfield_map_handholes_for_fat'),
           color: const Color(0xFFE53935),
         ),
       );
       for (final bundle in ctx.handholes) {
-        sections.add(_handholeBundleCard(bundle));
+        sections.add(() => _handholeBundleCard(bundle));
       }
     }
 
     if (ctx.excavations.isNotEmpty) {
       sections.add(
-        _InfoSectionCard(
+        () => _InfoSectionCard(
           title: l10n.t('qfield_map_excavation_for_fat'),
           icon: Icons.landscape_rounded,
           children: [
@@ -609,7 +632,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (ctx.fatCablesByType.isNotEmpty) {
       sections.add(
-        _InfoSectionCard(
+        () => _InfoSectionCard(
           title: l10n.t('qfield_map_cables_at_location'),
           icon: Icons.cable_rounded,
           children: [
@@ -630,7 +653,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (ctx.otherLayerGroups.isNotEmpty) {
       sections.add(
-        _InfoSectionCard(
+        () => _InfoSectionCard(
           title: l10n.t('qfield_map_other_layers_at_location'),
           icon: Icons.more_horiz_rounded,
           children: [
@@ -646,7 +669,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (canWrite && fieldCtrls.isNotEmpty) {
       sections.add(
-        _InfoSectionCard(
+        () => _InfoSectionCard(
           title: l10n.t('qfield_map_edit_fields'),
           icon: Icons.edit_rounded,
           children: fieldCtrls.entries
@@ -685,7 +708,7 @@ class QFieldMapBottomPanel extends StatelessWidget {
 
     if (canWrite) {
       sections.add(
-        Column(
+        () => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
@@ -929,13 +952,14 @@ class _InfoSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = accent ?? const Color(0xFF6C63FF);
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF12122A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.withAlpha(50)),
-      ),
-      child: Column(
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF12122A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.withAlpha(50)),
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
@@ -969,6 +993,7 @@ class _InfoSectionCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -1418,7 +1443,7 @@ class _FeatureDataRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             flex: 3,
-            child: SelectableText(
+            child: Text(
               value.isEmpty ? '—' : value,
               style: const TextStyle(
                 color: Colors.white,
@@ -1431,5 +1456,28 @@ class _FeatureDataRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Snappier vertical scroll inside [DraggableScrollableSheet] info panels.
+class QFieldPanelScrollPhysics extends ScrollPhysics {
+  const QFieldPanelScrollPhysics({super.parent});
+
+  static const _dragGain = 1.22;
+  static const _flingGain = 1.45;
+
+  @override
+  QFieldPanelScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return QFieldPanelScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    return super.applyPhysicsToUserOffset(position, offset * _dragGain);
+  }
+
+  @override
+  Simulation? createBallisticSimulation(ScrollMetrics position, double velocity) {
+    return super.createBallisticSimulation(position, velocity * _flingGain);
   }
 }

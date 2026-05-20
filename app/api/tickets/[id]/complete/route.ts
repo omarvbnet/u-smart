@@ -6,6 +6,8 @@ import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { maintenanceCrewIdsFromCompanyJson } from '@/lib/private-company-kpi';
 import {
   MAINTENANCE_AWAITING_SINCE_KEY,
+  MAINTENANCE_COMPLETION_REASON_ID_KEY,
+  MAINTENANCE_COMPLETION_REASON_LABEL_KEY,
   MAINTENANCE_REJECT_REASON_KEY,
   MAINTENANCE_REQUESTER_CONFIRM_MINUTES,
   readMaintenanceAwaitingSince,
@@ -13,6 +15,10 @@ import {
   resolveIsMaintenanceVisitorRequest,
   tryAutoConfirmExpiredMaintenanceAwaiting,
 } from '@/lib/maintenance-requester-confirmation';
+import {
+  resolveMaintenanceReasonDepartmentId,
+  validateMaintenanceCompletionReason,
+} from '@/lib/private-company-maintenance-reasons';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -38,6 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         requesterId: true,
         technique: true,
         privateCompanyId: true,
+        privateCompanyTargetDepartmentId: true,
         beforeImageUrls: true,
         finishingImageUrls: true,
         coordinatorCompanyId: true,
@@ -123,6 +130,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       parsed.beforeImageUrls = beforeUrls;
       parsed.finishingImageUrls = afterUrls;
+
+      const reasonDeptId = await resolveMaintenanceReasonDepartmentId(ticket);
+      const reasonCheck = await validateMaintenanceCompletionReason(
+        ticket.privateCompanyId!,
+        reasonDeptId,
+        body.maintenanceCompletionReasonId
+      );
+      if (!reasonCheck.ok) {
+        return NextResponse.json({ success: false, message: reasonCheck.message }, { status: 400 });
+      }
+      if (reasonCheck.id) {
+        parsed[MAINTENANCE_COMPLETION_REASON_ID_KEY] = reasonCheck.id;
+        parsed[MAINTENANCE_COMPLETION_REASON_LABEL_KEY] = reasonCheck.label;
+      }
 
       // Requester-confirmation flow (Provisor requester tickets only; coordinator dashboard unchanged)
       if (ticket.requesterId && !coordinatorContext) {

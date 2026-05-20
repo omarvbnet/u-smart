@@ -155,6 +155,14 @@ class ApiConfig {
       '/api/provisor-private-company/cancellations/settings';
   static const String privateCompanyCancellationsAnalytics =
       '/api/provisor-private-company/cancellations/analytics';
+  static const String privateCompanyMaintenanceReasons =
+      '/api/provisor-private-company/maintenance-reasons';
+  static String privateCompanyMaintenanceReasonDetail(String id) =>
+      '/api/provisor-private-company/maintenance-reasons/$id';
+  static const String privateCompanyMaintenanceReasonsAnalytics =
+      '/api/provisor-private-company/maintenance-reasons/analytics';
+  static String ticketMaintenanceCompletionReason(String ticketId) =>
+      '/api/tickets/$ticketId/maintenance-completion-reason';
   static const String privateCompanyExport = '/api/provisor-private-company/export';
 
   // ── Private Company warehouse / materials ────────────────────────────────

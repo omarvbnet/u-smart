@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../config/api_config.dart';
 import '../models/private_company.dart';
 import '../models/private_company_cancellation.dart';
+import '../models/maintenance_completion_reason.dart';
 import '../models/private_company_expense.dart';
 import '../services/api_service.dart';
 
@@ -21,6 +22,10 @@ class PrivateCompanyProvider extends ChangeNotifier {
   bool _expenseAnalyticsLoading = false;
   CancellationAnalyticsSnapshot? _cancellationAnalytics;
   bool _cancellationAnalyticsLoading = false;
+  List<MaintenanceCompletionReasonRow> _maintenanceReasons = [];
+  bool _maintenanceReasonsLoading = false;
+  MaintenanceReasonAnalyticsSnapshot? _maintenanceReasonAnalytics;
+  bool _maintenanceReasonAnalyticsLoading = false;
   bool _loading = false;
   String? _error;
   String? _lastSuccess;
@@ -34,6 +39,11 @@ class PrivateCompanyProvider extends ChangeNotifier {
   bool get expenseAnalyticsLoading => _expenseAnalyticsLoading;
   CancellationAnalyticsSnapshot? get cancellationAnalytics => _cancellationAnalytics;
   bool get cancellationAnalyticsLoading => _cancellationAnalyticsLoading;
+  List<MaintenanceCompletionReasonRow> get maintenanceReasons => _maintenanceReasons;
+  bool get maintenanceReasonsLoading => _maintenanceReasonsLoading;
+  MaintenanceReasonAnalyticsSnapshot? get maintenanceReasonAnalytics =>
+      _maintenanceReasonAnalytics;
+  bool get maintenanceReasonAnalyticsLoading => _maintenanceReasonAnalyticsLoading;
   bool get loading => _loading;
   bool get submitting => _submitting;
   String? get error => _error;
@@ -170,6 +180,18 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   /// Only the workspace owner can create / edit / delete departments.
   bool get canManageDepartments => isOwner;
+
+  /// Owner (all departments) or manager/coordinator with an assigned department.
+  bool get canManageMaintenanceReasons {
+    if (!hasWorkspace || !isApproved) return false;
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    final role = _resolvedRole ?? '';
+    if (role != 'MANAGER' && role != 'COORDINATOR') return false;
+    return myDepartmentId != null && myDepartmentId!.isNotEmpty;
+  }
+
+  bool get canViewMaintenanceReasonAnalytics => canManageMaintenanceReasons;
 
   /// Pending maintenance in [ENGINEER_ASSIGNS] departments: who may pick a technician (API-enforced).
   bool departmentUsesEngineerMaintenanceDispatch(String? departmentId) {
@@ -631,6 +653,119 @@ class PrivateCompanyProvider extends ChangeNotifier {
       /* keep previous */
     } finally {
       _cancellationAnalyticsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchMaintenanceReasons({String? departmentId, bool includeInactive = true}) async {
+    if (!canManageMaintenanceReasons) return;
+    _maintenanceReasonsLoading = true;
+    notifyListeners();
+    try {
+      final query = <String, String>{};
+      if (includeInactive) query['includeInactive'] = '1';
+      var dept = departmentId?.trim();
+      if (!isOwner) dept = myDepartmentId;
+      if (dept != null && dept.isNotEmpty) query['departmentId'] = dept;
+      final res = await _api.getSafe(ApiConfig.privateCompanyMaintenanceReasons, query: query);
+      if (res != null && res['success'] == true) {
+        final raw = res['reasons'] as List<dynamic>? ?? [];
+        _maintenanceReasons = raw
+            .whereType<Map<String, dynamic>>()
+            .map(MaintenanceCompletionReasonRow.fromJson)
+            .toList();
+      }
+    } catch (_) {
+      /* keep previous */
+    } finally {
+      _maintenanceReasonsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> addMaintenanceReason({
+    required String departmentId,
+    required String label,
+  }) async {
+    if (!canManageMaintenanceReasons) return false;
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        ApiConfig.privateCompanyMaintenanceReasons,
+        body: {'departmentId': departmentId, 'label': label.trim()},
+      );
+      if (res['success'] == true) {
+        await fetchMaintenanceReasons(departmentId: departmentId);
+        _setSuccess('Maintenance reason added.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to add reason.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> removeMaintenanceReason(String id, {String? departmentId}) async {
+    if (!canManageMaintenanceReasons) return false;
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.delete(ApiConfig.privateCompanyMaintenanceReasonDetail(id));
+      if (res['success'] == true) {
+        await fetchMaintenanceReasons(departmentId: departmentId);
+        _setSuccess('Maintenance reason removed.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to remove reason.');
+      return false;
+    } catch (_) {
+      _setError('Network error.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchMaintenanceReasonAnalytics({
+    int days = 90,
+    DateTime? from,
+    DateTime? to,
+    String? departmentId,
+  }) async {
+    if (!canViewMaintenanceReasonAnalytics) return;
+    _maintenanceReasonAnalyticsLoading = true;
+    notifyListeners();
+    try {
+      final query = <String, String>{};
+      if (from != null && to != null) {
+        String ymd(DateTime d) =>
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        query['from'] = ymd(from);
+        query['to'] = ymd(to);
+      } else {
+        query['days'] = '${days.clamp(1, 730)}';
+      }
+      var dept = departmentId?.trim();
+      if (!isOwner) dept = myDepartmentId;
+      if (dept != null && dept.isNotEmpty) query['departmentId'] = dept;
+      final res = await _api.getSafe(
+        ApiConfig.privateCompanyMaintenanceReasonsAnalytics,
+        query: query,
+      );
+      if (res != null && res['success'] == true) {
+        _maintenanceReasonAnalytics = MaintenanceReasonAnalyticsSnapshot.fromJson(res);
+      }
+    } catch (_) {
+      /* keep previous */
+    } finally {
+      _maintenanceReasonAnalyticsLoading = false;
       notifyListeners();
     }
   }

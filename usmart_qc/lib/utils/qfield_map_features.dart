@@ -277,6 +277,7 @@ String? mapLabelForFeature(Map<String, dynamic> props, String? layerName) {
   }
   if (isHoleLayerName(layerName)) {
     return holeIdFromProperties(props) ??
+        closureOrOdfIdFromProperties(props) ??
         _propValue(props, ['id', 'name', 'label', 'code']);
   }
   if (isPassiveCabinetLayerName(layerName)) {
@@ -358,10 +359,10 @@ const _holeIdValueKeys = [
   'holeid',
   'hole_number',
   'hole_num',
-  'fdt_holes',
-  'FDT_Holes',
   'fdt_hole_id',
+  'FDT_Hole_ID',
   'fdt_hole_no',
+  'FDT_Hole_No',
 ];
 
 /// Whether [propertyKey] is a hole-ID attribute (not the layer name shown raw).
@@ -369,10 +370,30 @@ bool isHoleIdPropertyKey(String? propertyKey) {
   if (propertyKey == null || propertyKey.trim().isEmpty) return true;
   final k = propertyKey.trim().toLowerCase().replaceAll(RegExp(r'[\s_]+'), '');
   if (k == 'layer' || k == 'package') return false;
+  // Layer / table name fields (e.g. FDT_Holes) are not hole identifiers.
+  if (k == 'fdtholes' || k.endsWith('holes')) return false;
   for (final want in _holeIdValueKeys) {
     if (k == want.toLowerCase().replaceAll(RegExp(r'[\s_]+'), '')) return true;
   }
-  if (k.contains('hole') && !k.contains('handhole')) return true;
+  if (k.contains('holeid') || k.contains('holeno') || k.contains('holenum')) {
+    return true;
+  }
+  if (k.contains('hole') && !k.contains('handhole') && k != 'holes') {
+    return true;
+  }
+  return false;
+}
+
+/// GIS attribute that mirrors the layer/table name (e.g. key FDT_Holes = "FDT_Holes").
+bool isLayerNameNoiseProperty(String key, Map<String, dynamic> props) {
+  final k = key.trim().toLowerCase().replaceAll(RegExp(r'[\s_]+'), '');
+  final layer = (props['layer']?.toString().trim() ?? '')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_]+'), '');
+  if (layer.isNotEmpty && k == layer) return true;
+  if (k == 'fdtholes') return true;
+  final v = props[key];
+  if (v != null && _looksLikeLayerNameValue(v.toString(), props)) return true;
   return false;
 }
 
@@ -590,11 +611,18 @@ String? handholeIdFromProperties(Map<String, dynamic> props) {
   ]);
 }
 
-String? holeIdFromProperties(Map<String, dynamic> props) {
-  return _propValue(props, _holeIdValueKeys);
+bool _looksLikeLayerNameValue(String? value, Map<String, dynamic> props) {
+  if (value == null || value.trim().isEmpty) return true;
+  final v = value.trim().toLowerCase().replaceAll(RegExp(r'[\s_]+'), '');
+  final layer = (props['layer']?.toString().trim() ?? '')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_]+'), '');
+  if (layer.isNotEmpty && v == layer) return true;
+  if (v == 'fdtholes' || v == 'fdt_holes') return true;
+  return false;
 }
 
-String? holeIdPropertyKey(Map<String, dynamic> props) {
+String? holeIdFromProperties(Map<String, dynamic> props) {
   for (final want in _holeIdValueKeys) {
     for (final e in props.entries) {
       if (e.key.toLowerCase() != want.toLowerCase()) continue;
@@ -602,6 +630,23 @@ String? holeIdPropertyKey(Map<String, dynamic> props) {
       if (v == null) continue;
       final s = v.toString().trim();
       if (s.isEmpty || s == '[binary]') continue;
+      if (_looksLikeLayerNameValue(s, props)) continue;
+      return s;
+    }
+  }
+  return null;
+}
+
+String? holeIdPropertyKey(Map<String, dynamic> props) {
+  for (final want in _holeIdValueKeys) {
+    for (final e in props.entries) {
+      if (e.key.toLowerCase() != want.toLowerCase()) continue;
+      if (isLayerNameNoiseProperty(e.key, props)) continue;
+      final v = e.value;
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '[binary]') continue;
+      if (_looksLikeLayerNameValue(s, props)) continue;
       return e.key;
     }
   }
@@ -609,12 +654,16 @@ String? holeIdPropertyKey(Map<String, dynamic> props) {
 }
 
 const _closureOrOdfIdKeys = [
+  'Closure_OR_ODF_ID',
   'closure_or_odf_id',
+  'CLOSURE_OR_ODF_ID',
   'clouser_or_odf_id',
+  'Clouser_OR_ODF_ID',
   'closure_odf_id',
   'closureorodfid',
   'closure_or_odf',
   'odf_id',
+  'ODF_ID',
   'odf_no',
   'odf_number',
   'closure_id',
@@ -725,6 +774,8 @@ String featureTapListTitle(QFieldMapFeature f) {
     if (closureId != null && closureId.isNotEmpty) return closureId;
   }
   if (isHoleLayerName(layer)) {
+    final closureId = closureOrOdfIdFromProperties(f.properties);
+    if (closureId != null && closureId.isNotEmpty) return closureId;
     final holeId = holeIdFromProperties(f.properties);
     if (holeId != null && holeId.isNotEmpty) return holeId;
   }
@@ -772,6 +823,10 @@ String featureTapListSubtitle(QFieldMapFeature f) {
     final holeId = holeIdFromProperties(props);
     if (holeId != null && holeId.isNotEmpty) {
       parts.add('Hole ID $holeId');
+    }
+    final closureId = closureOrOdfIdFromProperties(props);
+    if (closureId != null && closureId.isNotEmpty) {
+      parts.add('Closure/ODF $closureId');
     }
     final gt = f.geometryType;
     if (gt != null && gt.isNotEmpty) parts.add(gt);
