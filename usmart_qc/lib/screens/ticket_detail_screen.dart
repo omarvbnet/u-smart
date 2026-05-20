@@ -1190,6 +1190,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       backgroundColor: const Color(0xFF05051A),
       foregroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
+      title: Text(
+        siteTitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
       actions: [
         MinTouchTarget(
           onTap: _shareTicket,
@@ -1200,21 +1210,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       ],
       flexibleSpace: FlexibleSpaceBar(
         centerTitle: false,
-        titlePadding: EdgeInsets.only(
-          left: hPad + 4,
-          right: hPad + 48,
-          bottom: 14,
-        ),
-        title: Text(
-          siteTitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        title: const SizedBox.shrink(),
         background: Stack(
           fit: StackFit.expand,
           children: [

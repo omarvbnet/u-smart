@@ -246,6 +246,7 @@ const Map<String, String> _en = {
       'Enter coordinates as: latitude, longitude (two numbers)',
   'site_search_by_id': 'Search by site ID',
   'site_create_ticket_here': 'New QC ticket for this site',
+  'site_create_maintenance_here': 'New maintenance ticket',
   'site_name': 'Site Name',
   'site_name_hint': 'Enter site name or ID',
   'site_coordinator': 'Site Coordinator / Location',
@@ -913,6 +914,16 @@ const Map<String, String> _en = {
   'pc_ws_tab_checklists': 'Checklists',
   'pc_ws_tab_performance': 'Performance',
   'pc_ws_tab_expenses': 'Expenses',
+  'pc_ws_tab_maint_reasons': 'Maint. reasons',
+  'pc_ws_tab_maint_reasons_stats': 'Reason stats',
+  'pc_maint_reasons_tab_manage_intro':
+      'Add completion reasons technicians must choose when finishing maintenance tickets (per department).',
+  'pc_maint_reasons_tab_analytics_intro':
+      'How often each completion reason was used on finished maintenance tickets in the selected period.',
+  'pc_maint_reasons_pick_department': 'Department',
+  'pc_maint_reasons_all_departments': 'All departments (summary)',
+  'pc_maint_reasons_no_department':
+      'Assign yourself to a department to manage maintenance completion reasons.',
   'pc_kpi_avg_assignments_per_day': 'Avg assignments / day',
   'pc_kpi_avg_assignments_per_day_hint':
       'Assigned tickets in the window divided by calendar days — workload rate for comparisons.',
@@ -1341,6 +1352,7 @@ const Map<String, String> _ar = {
   'ticket_coords_invalid': 'أدخل الإحداثيات: خط العرض، خط الطول (رقمان)',
   'site_search_by_id': 'بحث بمعرف الموقع',
   'site_create_ticket_here': 'تذكرة QC جديدة لهذا الموقع',
+  'site_create_maintenance_here': 'تذكرة صيانة جديدة',
   'site_name': 'اسم الموقع',
   'site_name_hint': 'أدخل اسم أو معرف الموقع',
   'site_coordinator': 'المنسق / الموقع',
@@ -1877,6 +1889,16 @@ const Map<String, String> _ar = {
   'pc_ws_tab_checklists': 'قوائم التحقق',
   'pc_ws_tab_performance': 'الأداء',
   'pc_ws_tab_expenses': 'المصروفات',
+  'pc_ws_tab_maint_reasons': 'أسباب الصيانة',
+  'pc_ws_tab_maint_reasons_stats': 'إحصاء الأسباب',
+  'pc_maint_reasons_tab_manage_intro':
+      'أضف أسباب الإكمال التي يجب على الفني اختيارها عند إنهاء تذاكر الصيانة (لكل قسم).',
+  'pc_maint_reasons_tab_analytics_intro':
+      'عدد مرات استخدام كل سبب إكمال على تذاكر الصيانة المنجزة في الفترة المحددة.',
+  'pc_maint_reasons_pick_department': 'القسم',
+  'pc_maint_reasons_all_departments': 'جميع الأقسام (ملخص)',
+  'pc_maint_reasons_no_department':
+      'يجب ربط حسابك بقسم لإدارة أسباب إكمال الصيانة.',
   'pc_kpi_avg_assignments_per_day': 'متوسط الإسناد / يوم',
   'pc_kpi_avg_assignments_per_day_hint':
       'التذاكر المعيّنة في الفترة مقسومة على عدد أيام التقويم — معدل عبء للمقارنة.',
@@ -2381,6 +2403,7 @@ const Map<String, String> _ku = {
   'ticket_coords_invalid': 'کۆئۆردینات بنووسە: پانی، درێژی (دوو ژمارە)',
   'site_search_by_id': 'گەڕان بەپێی ناسنامەی شوێن',
   'site_create_ticket_here': 'تیکەتی QCی نوێ بۆ ئەم شوێنە',
+  'site_create_maintenance_here': 'تیکێتی چاککردنەوەی نوێ',
   'site_name': 'ناوی شوێن',
   'site_name_hint': 'ناو یان ناسنامەی شوێن بنووسە',
   'site_coordinator': 'ڕێکخەر / شوێن',
@@ -2932,6 +2955,16 @@ const Map<String, String> _ku = {
   'pc_ws_tab_checklists': 'لیستی پشکنین',
   'pc_ws_tab_performance': 'ئەداء',
   'pc_ws_tab_expenses': 'مەسروفات',
+  'pc_ws_tab_maint_reasons': 'هۆکاری چاککردنەوە',
+  'pc_ws_tab_maint_reasons_stats': 'ئامارەکانی هۆکار',
+  'pc_maint_reasons_tab_manage_intro':
+      'هۆکارەکانی تەواوکردن زیاد بکە کە تەکنیشن دەبێت هەڵیبژێرێت لە کاتی تەواوکردنی تیکەتی چاککردنەوە (بۆ هەر بەش).',
+  'pc_maint_reasons_tab_analytics_intro':
+      'چەند جار هەر هۆکارێک لەسەر تیکەتە تەواوکراوەکانی چاککردنەوە لە ماوەی هەڵبژێردراو.',
+  'pc_maint_reasons_pick_department': 'بەش',
+  'pc_maint_reasons_all_departments': 'هەموو بەشەکان (کورتە)',
+  'pc_maint_reasons_no_department':
+      'پێویستە بە بەشێک دەستنیشان بکرێیت بۆ بەڕێوەبردنی هۆکارەکانی تەواوکردن.',
   'pc_kpi_avg_assignments_per_day': 'تێکڕای دیاریکردن / ڕۆژ',
   'pc_kpi_avg_assignments_per_day_hint':
       'تیکێتە دیاریکراوەکان لە ماوەکە دابەش بە ڕۆژەکانی ڕۆژژمێر — ڕێژەی بار بۆ بەراورد.',
@@ -3436,6 +3469,7 @@ const Map<String, String> _tr = {
   'ticket_coords_invalid': 'Koordinatları girin: enlem, boylem (iki sayı)',
   'site_search_by_id': 'Saha ID ile ara',
   'site_create_ticket_here': 'Bu saha için yeni QC bileti',
+  'site_create_maintenance_here': 'Yeni bakım bileti',
   'site_name': 'Site Adı',
   'site_name_hint': 'Site adı veya ID girin',
   'site_coordinator': 'Koordinatör / Konum',
@@ -3992,6 +4026,16 @@ const Map<String, String> _tr = {
   'pc_ws_tab_checklists': 'Kontrol listeleri',
   'pc_ws_tab_performance': 'Performans',
   'pc_ws_tab_expenses': 'Giderler',
+  'pc_ws_tab_maint_reasons': 'Bakım nedenleri',
+  'pc_ws_tab_maint_reasons_stats': 'Neden istatistikleri',
+  'pc_maint_reasons_tab_manage_intro':
+      'Teknisyenlerin bakım biletini tamamlarken seçmesi gereken tamamlama nedenlerini ekleyin (departmana göre).',
+  'pc_maint_reasons_tab_analytics_intro':
+      'Seçilen dönemde tamamlanan bakım biletlerinde her nedenin kullanım sayısı.',
+  'pc_maint_reasons_pick_department': 'Departman',
+  'pc_maint_reasons_all_departments': 'Tüm departmanlar (özet)',
+  'pc_maint_reasons_no_department':
+      'Bakım tamamlama nedenlerini yönetmek için bir departmana atanmalısınız.',
   'pc_kpi_avg_assignments_per_day': 'Günlük ort. atama',
   'pc_kpi_avg_assignments_per_day_hint':
       'Penceredeki atanan talepler ÷ takvim günleri — karşılaştırma için iş yükü oranı.',

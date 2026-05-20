@@ -8,6 +8,7 @@ import '../models/workspace_site.dart';
 import '../providers/sites_provider.dart';
 import '../providers/workspace_sites_provider.dart';
 import 'workspace_site_form_sheet.dart';
+import '../screens/create_maintenance_ticket_screen.dart';
 import '../screens/create_ticket_screen.dart';
 import '../screens/site_form_screen.dart';
 import '../utils/site_qfield_map.dart';
@@ -406,6 +407,11 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
           onCreateTicket: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => CreateTicketScreen(prefillSite: site),
+            ),
+          ),
+          onCreateMaintenanceTicket: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CreateMaintenanceTicketScreen(prefillSite: site),
             ),
           ),
           onOpenMap: site.canOpenQFieldMap

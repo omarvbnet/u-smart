@@ -24,7 +24,10 @@ const _maintenanceTypeKeys = [
 ];
 
 class CreateMaintenanceTicketScreen extends StatefulWidget {
-  const CreateMaintenanceTicketScreen({super.key});
+  /// When set, site id, location, province, QField, and design files are prefilled.
+  final Site? prefillSite;
+
+  const CreateMaintenanceTicketScreen({super.key, this.prefillSite});
 
   @override
   State<CreateMaintenanceTicketScreen> createState() =>
@@ -52,9 +55,39 @@ class _CreateMaintenanceTicketScreenState
   Site? _linkedSite;
   String? _selectedProvince;
 
+  void _applyPrefillFromSite(Site s) {
+    _linkedSite = s;
+    _siteNameCtrl.text = s.siteId;
+    _coordinatorCtrl.text = s.location;
+    final p = s.province.trim();
+    if (p.isNotEmpty) _selectedProvince = p;
+    _qfieldDrafts.clear();
+    for (final proj in s.qfieldProjects) {
+      final url = proj.currentUrl.trim();
+      if (url.isEmpty) continue;
+      _qfieldDrafts.add({
+        'url': url,
+        'fileName': proj.fileName,
+        'title': proj.title.isNotEmpty ? proj.title : proj.fileName,
+        'fromSite': '1',
+      });
+    }
+    for (final d in s.designDocuments) {
+      final url = d.url.trim();
+      if (url.isEmpty) continue;
+      if (!_specAttachmentUrls.contains(url)) {
+        _specAttachmentUrls.add(url);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    final pre = widget.prefillSite;
+    if (pre != null) {
+      _applyPrefillFromSite(pre);
+    }
     _siteNameCtrl.addListener(_onSiteIdEdited);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final sites = context.read<SitesProvider>();
@@ -170,12 +203,15 @@ class _CreateMaintenanceTicketScreenState
       technique = departmentMaintenanceTechniqueSlug(targetDeptId);
     }
     final designSpecs = _designSpecsCtrl.text.trim();
+    final linked = _linkedSite;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
       technique: technique,
       slaHours: sla,
       province: province,
+      siteLatitude: linked?.hasCoordinates == true ? linked!.latitude : null,
+      siteLongitude: linked?.hasCoordinates == true ? linked!.longitude : null,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       maintenanceReason: reason,
       attachmentUrls:
@@ -324,13 +360,7 @@ class _CreateMaintenanceTicketScreenState
   }
 
   void _applySiteQuickFill(Site s) {
-    setState(() {
-      _linkedSite = s;
-      _siteNameCtrl.text = s.siteId;
-      _coordinatorCtrl.text = s.location;
-      final p = s.province.trim();
-      if (p.isNotEmpty) _selectedProvince = p;
-    });
+    setState(() => _applyPrefillFromSite(s));
   }
 
   Widget _buildProvinceSection(AppLocalizations l10n) {

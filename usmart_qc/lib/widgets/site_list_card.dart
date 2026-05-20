@@ -11,6 +11,7 @@ class SiteListCard extends StatelessWidget {
     required this.l10n,
     required this.onTap,
     required this.onCreateTicket,
+    this.onCreateMaintenanceTicket,
     this.onOpenMap,
     this.onEdit,
     this.onDelete,
@@ -24,6 +25,7 @@ class SiteListCard extends StatelessWidget {
   final AppLocalizations l10n;
   final VoidCallback onTap;
   final VoidCallback onCreateTicket;
+  final VoidCallback? onCreateMaintenanceTicket;
   final VoidCallback? onOpenMap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
@@ -53,6 +55,16 @@ class SiteListCard extends StatelessWidget {
         onPressed: onCreateTicket,
       ),
     ];
+    if (onCreateMaintenanceTicket != null) {
+      actions.add(
+        _ActionChip(
+          icon: Icons.handyman_outlined,
+          label: l10n.t('site_create_maintenance_here'),
+          color: const Color(0xFFFF9F43),
+          onPressed: onCreateMaintenanceTicket!,
+        ),
+      );
+    }
     if (site.canOpenQFieldMap && onOpenMap != null) {
       actions.add(
         _ActionChip(

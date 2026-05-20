@@ -23,7 +23,7 @@ import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
 import '../widgets/workspace_expenses_analytics_panel.dart';
 import '../widgets/department_maintenance_reasons_sheet.dart';
-import '../widgets/workspace_maintenance_reasons_analytics_panel.dart';
+import '../widgets/workspace_maintenance_reasons_tabs.dart';
 
 /// Drag handle + title with an explicit close control for modal bottom sheets.
 Widget _modalSheetTitleRow(BuildContext context, String title) {
@@ -80,6 +80,11 @@ bool _pcHubShowsExpensesTab(PrivateCompanyProvider pc) {
     return pc.isOwner || pc.canManageStaff || pc.isPrivateWorkspaceFieldStaff;
   }
   return pc.canManageStaff;
+}
+
+bool _pcHubShowsMaintenanceReasonsTabs(PrivateCompanyProvider pc) {
+  if (!pc.hasWorkspace || !pc.isApproved) return false;
+  return pc.canManageMaintenanceReasons;
 }
 
 bool _pcUsesFieldStaffHub(PrivateCompanyProvider pc) {
@@ -528,10 +533,15 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
 
   int _hubTabCount(PrivateCompanyProvider pc) {
     if (_pcUsesFieldStaffHub(pc)) {
-      return _pcHubShowsExpensesTab(pc) ? 4 : 3;
+      var n = 3;
+      if (_pcHubShowsMaintenanceReasonsTabs(pc)) n += 2;
+      if (_pcHubShowsExpensesTab(pc)) n += 1;
+      return n;
     }
-    var n = _pcHubShowsExpensesTab(pc) ? 7 : 6;
+    var n = 6;
     if (_pcHubShowsConflictsTab(pc)) n += 1;
+    if (_pcHubShowsMaintenanceReasonsTabs(pc)) n += 2;
+    if (_pcHubShowsExpensesTab(pc)) n += 1;
     return n;
   }
 
@@ -574,6 +584,13 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
       if (_pcHubShowsConflictsTab(pc)) {
         context.read<ConflictsProvider>().fetchWorkspaceConflicts();
       }
+      if (_pcHubShowsMaintenanceReasonsTabs(pc)) {
+        final n = DateTime.now();
+        final end = DateTime(n.year, n.month, n.day);
+        final start = end.subtract(const Duration(days: 89));
+        pc.fetchMaintenanceReasons();
+        pc.fetchMaintenanceReasonAnalytics(from: start, to: end);
+      }
     });
   }
 
@@ -600,6 +617,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     final ws = widget.workspace;
     final l10n = AppLocalizations.of(context);
     final showExpensesTab = _pcHubShowsExpensesTab(pc);
+    final showMaintReasonsTabs = _pcHubShowsMaintenanceReasonsTabs(pc);
     final showConflictsTab = _pcHubShowsConflictsTab(pc);
     final fieldHub = _pcUsesFieldStaffHub(pc);
     final conflictsPending = context.watch<ConflictsProvider>().workspacePendingCount;
@@ -703,6 +721,16 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                       icon: const Icon(Icons.speed_rounded, size: 18),
                       text: l10n.t('pc_ws_tab_performance'),
                     ),
+                    if (showMaintReasonsTabs) ...[
+                      Tab(
+                        icon: const Icon(Icons.build_circle_outlined, size: 18),
+                        text: l10n.t('pc_ws_tab_maint_reasons'),
+                      ),
+                      Tab(
+                        icon: const Icon(Icons.bar_chart_rounded, size: 18),
+                        text: l10n.t('pc_ws_tab_maint_reasons_stats'),
+                      ),
+                    ],
                     if (showExpensesTab)
                       Tab(
                         icon: const Icon(Icons.payments_rounded, size: 18),
@@ -743,6 +771,16 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                         ),
                         text: l10n.t('pc_ws_tab_conflicts'),
                       ),
+                    if (showMaintReasonsTabs) ...[
+                      Tab(
+                        icon: const Icon(Icons.build_circle_outlined, size: 18),
+                        text: l10n.t('pc_ws_tab_maint_reasons'),
+                      ),
+                      Tab(
+                        icon: const Icon(Icons.bar_chart_rounded, size: 18),
+                        text: l10n.t('pc_ws_tab_maint_reasons_stats'),
+                      ),
+                    ],
                     if (showExpensesTab)
                       Tab(
                         icon: const Icon(Icons.payments_rounded, size: 18),
@@ -762,6 +800,10 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                 ? [
                     _OverviewTab(workspace: ws),
                     _KpisTab(workspace: ws),
+                    if (showMaintReasonsTabs) ...[
+                      MaintenanceReasonsManageTab(workspace: ws),
+                      const MaintenanceReasonsAnalyticsTab(),
+                    ],
                     if (showExpensesTab) const _ExpensesTab(),
                     _WarehouseTab(workspace: ws),
                   ]
@@ -773,6 +815,10 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                     _KpisTab(workspace: ws),
                     if (showConflictsTab)
                       const ConflictsScreen(embedded: true, workspaceMode: true),
+                    if (showMaintReasonsTabs) ...[
+                      MaintenanceReasonsManageTab(workspace: ws),
+                      const MaintenanceReasonsAnalyticsTab(),
+                    ],
                     if (showExpensesTab) const _ExpensesTab(),
                     _WarehouseTab(workspace: ws),
                   ],
@@ -5028,13 +5074,8 @@ class _ExpensesTab extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const WorkspaceExpensesAnalyticsPanel(compact: true),
-          const SizedBox(height: 20),
-          const WorkspaceMaintenanceReasonsAnalyticsPanel(compact: true),
-        ] else ...[
+        ] else
           const WorkspaceExpensesAnalyticsPanel(),
-          const SizedBox(height: 20),
-          const WorkspaceMaintenanceReasonsAnalyticsPanel(),
-        ],
       ],
     );
   }

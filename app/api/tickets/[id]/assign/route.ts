@@ -281,23 +281,7 @@ export async function PATCH(
             { status: 403 },
           );
         }
-        const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
-        const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
-          ? meFull.privateCompanyAllowedTaskSlugs
-          : [];
-        if (
-          !staffTicketTechniqueAllowed({
-            technique: String(row.technique ?? ''),
-            staffDepartmentId: myDept,
-            staffAllowedSlugs: allowedSlugs,
-            workspaceRows: techRows,
-          })
-        ) {
-          return NextResponse.json(
-            { success: false, message: 'This ticket is outside your department task scope.' },
-            { status: 403 },
-          );
-        }
+        // Department-targeted maintenance tickets are scoped by targetDeptId (same as GET /api/tickets).
       }
 
       const assignee = await prisma.ticketRequester.findFirst({
@@ -570,29 +554,32 @@ export async function PATCH(
           { status: 403 }
         );
       }
-      const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
-      const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
-        ? meFull.privateCompanyAllowedTaskSlugs
-        : [];
-      if (
-        !staffTicketTechniqueAllowed({
-          technique: String(row.technique ?? ''),
-          staffDepartmentId: deptId,
-          staffAllowedSlugs: allowedSlugs,
-          workspaceRows: techRows,
-        })
-      ) {
-        return NextResponse.json(
-          { success: false, message: 'This ticket is outside your department task scope.' },
-          { status: 403 }
-        );
-      }
       const targetDept = row.privateCompanyTargetDepartmentId ?? null;
-      if (targetDept && (deptId == null || deptId !== targetDept)) {
+      if (targetDept && deptId && targetDept !== deptId) {
         return NextResponse.json(
           { success: false, message: 'This ticket is scoped to another department.' },
           { status: 403 }
         );
+      }
+      // Match GET /api/tickets list: department-targeted tickets skip the technique matrix.
+      if (!targetDept) {
+        const techRows = await fetchWorkspaceTechniqueRows(prisma, row.privateCompanyId);
+        const allowedSlugs = Array.isArray(meFull.privateCompanyAllowedTaskSlugs)
+          ? meFull.privateCompanyAllowedTaskSlugs
+          : [];
+        if (
+          !staffTicketTechniqueAllowed({
+            technique: String(row.technique ?? ''),
+            staffDepartmentId: deptId,
+            staffAllowedSlugs: allowedSlugs,
+            workspaceRows: techRows,
+          })
+        ) {
+          return NextResponse.json(
+            { success: false, message: 'This ticket is outside your department task scope.' },
+            { status: 403 }
+          );
+        }
       }
     }
 

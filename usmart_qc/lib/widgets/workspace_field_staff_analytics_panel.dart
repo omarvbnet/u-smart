@@ -12,7 +12,6 @@ import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
 import 'workspace_cancellations_analytics_panel.dart';
 import 'workspace_expenses_analytics_panel.dart';
-import 'workspace_maintenance_reasons_analytics_panel.dart';
 import 'workspace_material_budget_analytics_panel.dart';
 
 /// Loads workspace KPIs, material requests (mine), and staff material budgets when
@@ -35,13 +34,6 @@ Future<void> refreshWorkspaceFieldStaffAnalytics(BuildContext context) async {
       final start = end.subtract(const Duration(days: 89));
       return pc.fetchExpenseAnalytics(from: start, to: end);
     }(),
-    if (pc.canViewMaintenanceReasonAnalytics)
-      () {
-        final n = DateTime.now();
-        final end = DateTime(n.year, n.month, n.day);
-        final start = end.subtract(const Duration(days: 89));
-        return pc.fetchMaintenanceReasonAnalytics(from: start, to: end);
-      }(),
     wh.refreshMaterialRequests('mine'),
     wh.loadStaffMaterialBudgets(),
   ]);
@@ -372,7 +364,6 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
           }),
         const WorkspaceMaterialBudgetAnalyticsPanel(skipInitialLoad: true),
         const WorkspaceExpensesAnalyticsPanel(compact: true),
-        const WorkspaceMaintenanceReasonsAnalyticsPanel(compact: true),
         const WorkspaceCancellationsAnalyticsPanel(compact: true),
       ],
     );
