@@ -133,6 +133,10 @@ const Map<String, String> _en = {
   'withdrawal_pick_replacement': 'Choose replacement technician',
   'withdrawal_respond_success': 'Withdrawal request updated',
   'withdrawal_respond_failed': 'Could not update withdrawal request',
+  'withdrawal_role_lead': 'Lead technician',
+  'withdrawal_role_crew': 'Crew member',
+  'pc_expenses_filters_title': 'Filters',
+  'pc_expenses_loading_data': 'Loading expense data…',
   'no_tickets': 'No tickets yet',
   'create_first_ticket': 'Create your first ticket to get started',
   'assign_first_ticket': 'Assign yourself a ticket to get started',
@@ -894,6 +898,7 @@ const Map<String, String> _en = {
   'analytics_kpi_crew_joins': 'Crew joins',
   'analytics_kpi_empty':
       'No KPI row for your account in this period (no matching assigned tickets).',
+  'analytics_loading': 'Loading analytics…',
   'analytics_kpi_unavailable':
       'Performance data could not be loaded. Pull to refresh.',
   'analytics_material_requests': 'Material requests',
@@ -1267,6 +1272,24 @@ const Map<String, String> _ar = {
   'assign': 'تعيين',
   'assign_success': 'تم تعيين التذكرة لك!',
   'assign_failed': 'فشل التعيين',
+  'withdrawal_request': 'طلب انسحاب',
+  'withdrawal_request_hint':
+      'اطلب من المهندس إزالتك من التذكرة. إذا كنت القائد، يجب تعيين فني بديل.',
+  'withdrawal_reason_hint': 'السبب (اختياري)',
+  'withdrawal_requested_success': 'تم إرسال طلب الانسحاب إلى المهندس.',
+  'withdrawal_requested_failed': 'تعذر إرسال طلب الانسحاب',
+  'withdrawal_pending_banner': 'انسحاب قيد الانتظار — بانتظار موافقة المهندس.',
+  'withdrawal_incoming_banner':
+      '{{name}} طلب الانسحاب ({{role}}). السبب: {{reason}}',
+  'withdrawal_accept': 'قبول الانسحاب',
+  'withdrawal_reject': 'رفض',
+  'withdrawal_pick_replacement': 'اختر فنيًا بديلًا',
+  'withdrawal_respond_success': 'تم تحديث طلب الانسحاب',
+  'withdrawal_respond_failed': 'تعذر تحديث طلب الانسحاب',
+  'withdrawal_role_lead': 'فني قائد',
+  'withdrawal_role_crew': 'عضو طاقم',
+  'pc_expenses_filters_title': 'عوامل التصفية',
+  'pc_expenses_loading_data': 'جاري تحميل بيانات المصاريف…',
   'no_tickets': 'لا توجد تذاكر بعد',
   'create_first_ticket': 'أنشئ تذكرتك الأولى للبدء',
   'assign_first_ticket': 'عيّن لنفسك تذكرة للبدء',
@@ -1913,6 +1936,7 @@ const Map<String, String> _ar = {
   'analytics_kpi_arrival_hours': 'ساعات الوصول',
   'analytics_kpi_avg_arrival': 'متوسط الوصول',
   'analytics_kpi_empty': 'لا صف أداء لحسابك في هذه الفترة (لا تذاكر مطابقة).',
+  'analytics_loading': 'جاري تحميل التحليلات…',
   'analytics_kpi_unavailable': 'تعذر تحميل بيانات الأداء. اسحب للتحديث.',
   'analytics_material_requests': 'طلبات المواد',
   'analytics_material_requests_hint':
@@ -2082,6 +2106,7 @@ const Map<String, String> _ar = {
   'pc_dispatch_engineer_desc':
       'المهندسون أو المديرون أو المنسّقون في هذا القسم يختارون الفني قبل بدء العمل.',
   'maint_assign_technician': 'تعيين فني',
+  'maint_assign_to_me_lead': 'تولي القيادة (تعيين ذاتي)',
   'maint_assign_technician_empty':
       'لا يوجد فنيون في القسم يطابقون محافظة التذكرة (أو غير نشطين).',
   'pc_dept_workspace_field_crew_title': 'طاقم ميداني متعدد',
@@ -2324,6 +2349,24 @@ const Map<String, String> _ku = {
   'assign': 'دیاریکردن',
   'assign_success': 'تیکێتەکە دیاری کرا بۆ تۆ!',
   'assign_failed': 'دیاریکردن سەرکەوتوو نەبوو',
+  'withdrawal_request': 'داواکاری کشانەوە',
+  'withdrawal_request_hint':
+      'داوا لە ئەندازیار بکە لەم تیکەتە لاببرێیت. بۆ سەرپەرشتیار، دەبێت تەکنیسینێکی تر دیاری بکرێت.',
+  'withdrawal_reason_hint': 'هۆکار (ئارەزوومەندانە)',
+  'withdrawal_requested_success': 'داواکاری کشانەوە نێردرا بۆ ئەندازیار.',
+  'withdrawal_requested_failed': 'نەتوانرا داواکاری کشانەوە بنێردرێت',
+  'withdrawal_pending_banner': 'کشانەوە چاوەڕوانە — چاوەڕوانی پەسەندکردنی ئەندازیار.',
+  'withdrawal_incoming_banner':
+      '{{name}} داوای کشانەوە کرد ({{role}}). هۆکار: {{reason}}',
+  'withdrawal_accept': 'پەسەندکردنی کشانەوە',
+  'withdrawal_reject': 'ڕەتکردنەوە',
+  'withdrawal_pick_replacement': 'تەکنیسینی جێگرەوە هەڵبژێرە',
+  'withdrawal_respond_success': 'داواکاری کشانەوە نوێکرایەوە',
+  'withdrawal_respond_failed': 'نەتوانرا داواکاری کشانەوە نوێ بکرێتەوە',
+  'withdrawal_role_lead': 'تەکنیسینی سەرپەرشتیار',
+  'withdrawal_role_crew': 'ئەندامی لیژنە',
+  'pc_expenses_filters_title': 'فلتەرەکان',
+  'pc_expenses_loading_data': 'بارکردنی داتای خەرجی…',
   'no_tickets': 'هێشتا تیکێت نییە',
   'create_first_ticket': 'یەکەم تیکێتت دروست بکە بۆ دەستپێکردن',
   'assign_first_ticket': 'تیکێتێک بۆ خۆت دیاری بکە بۆ دەستپێکردن',
@@ -2988,6 +3031,7 @@ const Map<String, String> _ku = {
   'analytics_kpi_arrival_hours': 'کاتژمێری گەیشتن',
   'analytics_kpi_avg_arrival': 'تێکڕای گەیشتن',
   'analytics_kpi_empty': 'هیچ هێڵی ئەدایەک بۆ هەژمارەکەت نییە لەم ماوەیە.',
+  'analytics_loading': 'بارکردنی شیکاری…',
   'analytics_kpi_unavailable': 'زانیاری ئەدا بار نەکرا. ڕاکێشە بۆ نوێکردنەوە.',
   'analytics_material_requests': 'داواکاری کەرەستە',
   'analytics_material_requests_hint': 'داواکاری کۆگاکانت (نوێترین سەرەتا).',
@@ -3154,6 +3198,7 @@ const Map<String, String> _ku = {
   'pc_dispatch_engineer_desc':
       'ئەندازیار، بەڕێوەبەر، یان هەماهەنگکەر لەم بەشە تەکنیسین هەڵدەبژێرێت پێش دەستپێکردن.',
   'maint_assign_technician': 'تەکنیسین دیاری بکە',
+  'maint_assign_to_me_lead': 'وەرگرتن وەک سەرکرد (خۆت دیاری بکە)',
   'maint_assign_technician_empty':
       'تەکنیسین لەم بەشەدا نییە کە لەگەڵ پارێزگای تیکەتدا بگونجێت (یان چالاک نین).',
   'pc_dept_workspace_field_crew_title': 'تیمی مەیدانی فرە کەس',
@@ -3397,6 +3442,24 @@ const Map<String, String> _tr = {
   'assign': 'Ata',
   'assign_success': 'Bilet size atandı!',
   'assign_failed': 'Atama başarısız',
+  'withdrawal_request': 'Çekilme talebi',
+  'withdrawal_request_hint':
+      'Mühendisten bu biletten çıkarılmanızı isteyin. Lider iseniz yerine bir teknisyen atanmalıdır.',
+  'withdrawal_reason_hint': 'Gerekçe (isteğe bağlı)',
+  'withdrawal_requested_success': 'Çekilme talebi mühendise gönderildi.',
+  'withdrawal_requested_failed': 'Çekilme talebi gönderilemedi',
+  'withdrawal_pending_banner': 'Çekilme bekliyor — mühendis onayı gerekli.',
+  'withdrawal_incoming_banner':
+      '{{name}} çekilme istedi ({{role}}). Gerekçe: {{reason}}',
+  'withdrawal_accept': 'Çekilmeyi onayla',
+  'withdrawal_reject': 'Reddet',
+  'withdrawal_pick_replacement': 'Yedek teknisyen seç',
+  'withdrawal_respond_success': 'Çekilme talebi güncellendi',
+  'withdrawal_respond_failed': 'Çekilme talebi güncellenemedi',
+  'withdrawal_role_lead': 'Lider teknisyen',
+  'withdrawal_role_crew': 'Ekip üyesi',
+  'pc_expenses_filters_title': 'Filtreler',
+  'pc_expenses_loading_data': 'Gider verileri yükleniyor…',
   'no_tickets': 'Henüz bilet yok',
   'create_first_ticket': 'Başlamak için ilk biletinizi oluşturun',
   'assign_first_ticket': 'Başlamak için kendinize bir bilet atayın',
@@ -4065,6 +4128,7 @@ const Map<String, String> _tr = {
   'analytics_kpi_avg_arrival': 'Ort. varış',
   'analytics_kpi_empty':
       'Bu dönemde hesabınız için KPI satırı yok (eşleşen atanan talep yok).',
+  'analytics_loading': 'Analizler yükleniyor…',
   'analytics_kpi_unavailable':
       'Performans verisi yüklenemedi. Yenilemek için çekin.',
   'analytics_material_requests': 'Malzeme talepleri',
@@ -4232,6 +4296,7 @@ const Map<String, String> _tr = {
   'pc_dispatch_engineer_desc':
       'Bu departmandaki mühendis, yönetici veya koordinatör işe başlamadan teknisyeni seçer.',
   'maint_assign_technician': 'Teknisyen ata',
+  'maint_assign_to_me_lead': 'Lider olarak üstlen (kendine ata)',
   'maint_assign_technician_empty': 'Bilet iline uyan veya aktif teknisyen yok.',
   'pc_dept_workspace_field_crew_title': 'Çok kişilik saha ekibi',
   'pc_dept_workspace_field_crew_desc':

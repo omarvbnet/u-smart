@@ -4653,28 +4653,34 @@ class _KpisTab extends StatefulWidget {
 class _KpisTabState extends State<_KpisTab> {
   int _days = 365;
   String? _provinceFilter;
-  bool _bootstrapped = false;
+  bool _kpiLoadScheduled = false;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_bootstrapped) return;
-    _bootstrapped = true;
-    final pc = context.read<PrivateCompanyProvider>();
-    if (pc.canViewKpis) {
-      pc.fetchKpis(days: _days, province: _provinceFilter);
-    }
+  void _scheduleKpiLoadIfNeeded(PrivateCompanyProvider pc) {
+    if (!pc.canViewKpis || pc.kpiLoading || _kpiLoadScheduled) return;
+    if (pc.kpiSnapshot != null) return;
+    _kpiLoadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final live = context.read<PrivateCompanyProvider>();
+      if (!live.canViewKpis) {
+        _kpiLoadScheduled = false;
+        return;
+      }
+      await live.fetchKpis(days: _days, province: _provinceFilter);
+      if (mounted) setState(() => _kpiLoadScheduled = false);
+    });
   }
 
-  Future<void> _refresh() => context.read<PrivateCompanyProvider>().fetchKpis(
-        days: _days,
-        province: _provinceFilter,
-      );
+  Future<void> _refresh() async {
+    final pc = context.read<PrivateCompanyProvider>();
+    await pc.fetchKpis(days: _days, province: _provinceFilter);
+  }
 
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
     final l10n = AppLocalizations.of(context);
+    _scheduleKpiLoadIfNeeded(pc);
     if (!pc.canViewKpis) {
       return Center(
         child: Text(
@@ -4742,14 +4748,41 @@ class _KpisTabState extends State<_KpisTab> {
             child: pc.kpiLoading && pc.kpiSnapshot == null
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: const [
-                      SizedBox(height: 120),
+                    children: [
+                      const SizedBox(height: 120),
                       Center(
-                          child:
-                              CircularProgressIndicator(color: Color(0xFF6C63FF))),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                            const SizedBox(height: 12),
+                            Text(
+                              l10n.t('analytics_loading'),
+                              style: TextStyle(
+                                color: Colors.white.withAlpha(140),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   )
-                : ListView(
+                : pc.kpiSnapshot == null
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                        children: [
+                          Text(
+                            l10n.t('pc_kpi_error_subtitle'),
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(160),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     children: [

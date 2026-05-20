@@ -18,6 +18,7 @@ import {
   Share2,
   MessageSquare,
 } from 'lucide-react';
+import { MaintenanceEvidenceGallery } from '@/components/ticket/MaintenanceEvidenceGallery';
 
 type AssignedTeam = {
   id: string;
@@ -38,6 +39,8 @@ type TicketDetail = {
   maintenanceDescription: string | null;
   beforeImageUrls?: string[];
   finishingImageUrls: string[];
+  maintenanceAwaitingRequesterSince?: string | null;
+  maintenanceRequesterConfirmedAt?: string | null;
   assignedTeam?: AssignedTeam;
   designSpecifications?: string | null;
   attachmentUrls?: string[];
@@ -398,19 +401,31 @@ export default function PublicTicketPage() {
               </section>
             )}
 
-            {(ticket.beforeImageUrls?.length ?? 0) > 0 && (
-              <section>
-                <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" />
-                  Before images
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {ticket.beforeImageUrls!.map((url, idx) => (
-                    <a key={idx} href={url.startsWith('http') ? url : url.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${url}` : url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-xl border border-white/10 bg-white/5 overflow-hidden hover:border-cyan-500/30 transition-colors">
-                      <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt={`Before ${idx + 1}`} className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
+            {!isQCTicket && (
+              <MaintenanceEvidenceGallery
+                beforeImageUrls={ticket.beforeImageUrls}
+                finishingImageUrls={ticket.finishingImageUrls}
+                beforeTitle="Before images"
+                afterTitle="After images"
+                emptyHint="No before or after photos uploaded yet."
+              />
+            )}
+
+            {!isQCTicket && ticket.maintenanceAwaitingRequesterSince && !ticket.maintenanceRequesterConfirmedAt && (
+              <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <p className="text-sm text-amber-200 font-medium">Awaiting requester confirmation</p>
+                <p className="text-xs text-amber-200/80 mt-1">
+                  Field work is done. Review the before and after photos above, then confirm completion in the Provisor app.
+                </p>
+              </section>
+            )}
+
+            {!isQCTicket && ticket.maintenanceRequesterConfirmedAt && (
+              <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <p className="text-sm text-emerald-300 font-medium">Requester confirmed completion</p>
+                <p className="text-xs text-emerald-200/80 mt-1">
+                  Confirmed at {formatDate(ticket.maintenanceRequesterConfirmedAt)}
+                </p>
               </section>
             )}
 
@@ -469,26 +484,7 @@ export default function PublicTicketPage() {
               </section>
             )}
 
-            <section>
-              <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <ImageIcon className="w-4 h-4" />
-                Finishing site images
-              </h2>
-              {ticket.finishingImageUrls && ticket.finishingImageUrls.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {ticket.finishingImageUrls.map((url, idx) => (
-                    <a key={idx} href={url.startsWith('http') ? url : url.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${url}` : url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-xl border border-white/10 bg-white/5 overflow-hidden hover:border-cyan-500/30 transition-colors">
-                      <img src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`} alt={`Finishing ${idx + 1}`} className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-                  <ImageIcon className="w-10 h-10 text-gray-500 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No finishing images added yet.</p>
-                </div>
-              )}
-            </section>
+
           </div>
         </div>
       </div>

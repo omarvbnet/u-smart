@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
-import { DEFAULT_MAINTENANCE_SLUGS } from '@/lib/provisor-technique-defaults';
 import { parseQFieldProjectsFromCompanyJson } from '@/lib/qfield-projects';
 import {
   coordsFromQfieldProjects,
@@ -14,40 +12,15 @@ import {
   parseSiteDesignDocuments,
   siteDesignDocumentsToJsonValue,
 } from '@/lib/site-design-documents';
+import {
+  getMaintenanceSlugs,
+  inspectionTechniqueWhere,
+  maintenanceTechniqueWhere,
+  sumCompletedHours,
+} from '@/lib/site-ticket-meta';
 
 function getSiteDelegate() {
   return (prisma as any).site;
-}
-
-async function getMaintenanceSlugs(): Promise<string[]> {
-  try {
-    const rows = await (prisma as any).provisorTechnique.findMany({
-      where: { category: 'MAINTENANCE', active: true },
-      select: { slug: true },
-    });
-    if (rows?.length) return rows.map((r: { slug: string }) => r.slug);
-  } catch {
-    /* table missing pre-migration */
-  }
-  return [...DEFAULT_MAINTENANCE_SLUGS];
-}
-
-async function sumCompletedHours(where: Prisma.VisitorRequestWhereInput): Promise<number> {
-  const rows = await prisma.visitorRequest.findMany({
-    where: {
-      ...where,
-      status: 'COMPLETED',
-      completedAt: { not: null },
-    },
-    select: { createdAt: true, completedAt: true },
-  });
-  let sum = 0;
-  for (const r of rows) {
-    if (r.completedAt) {
-      sum += (r.completedAt.getTime() - r.createdAt.getTime()) / 3600000;
-    }
-  }
-  return Math.round(sum * 10) / 10;
 }
 
 type SiteRow = {
@@ -100,13 +73,13 @@ async function siteWithTicketCounts(
       },
     }),
     prisma.visitorRequest.count({
-      where: { ...qcBase, technique: { notIn: maintenanceSlugs } },
+      where: { ...qcBase, ...inspectionTechniqueWhere(maintenanceSlugs) },
     }),
     prisma.visitorRequest.count({
-      where: { ...qcBase, technique: { in: maintenanceSlugs } },
+      where: { ...qcBase, ...maintenanceTechniqueWhere(maintenanceSlugs) },
     }),
-    sumCompletedHours({ ...qcBase, technique: { notIn: maintenanceSlugs } }),
-    sumCompletedHours({ ...qcBase, technique: { in: maintenanceSlugs } }),
+    sumCompletedHours({ ...qcBase, ...inspectionTechniqueWhere(maintenanceSlugs) }),
+    sumCompletedHours({ ...qcBase, ...maintenanceTechniqueWhere(maintenanceSlugs) }),
   ]);
   return {
     ...siteRow,
@@ -144,10 +117,18 @@ export async function GET(req: NextRequest) {
   try {
     const me = await prisma.ticketRequester.findUnique({
       where: { id: payload.requesterId },
-      select: { role: true },
+      select: {
+        role: true,
+        privateCompanyId: true,
+        privateCompanyOwned: { select: { id: true, status: true } },
+      },
     });
     const myRole = me?.role ?? 'COMPANY';
     const canReceiveSharedSites = myRole === 'COMPANY' || myRole === 'PERSONAL';
+    const workspaceCompanyId =
+      me?.privateCompanyOwned?.status === 'APPROVED'
+        ? me.privateCompanyOwned.id
+        : me?.privateCompanyId ?? null;
 
     const sites = await site.findMany({
       where: { requesterId: payload.requesterId },
@@ -185,7 +166,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const maintenanceSlugs = await getMaintenanceSlugs();
+    const maintenanceSlugs = await getMaintenanceSlugs(workspaceCompanyId);
 
     const ownedWithMeta = await Promise.all(
       (sites as SiteRow[]).map(async (siteRow) => {

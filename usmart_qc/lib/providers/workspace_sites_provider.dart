@@ -92,6 +92,8 @@ class WorkspaceSitesProvider extends ChangeNotifier {
     String? siteCode,
     String? location,
     String? province,
+    double? latitude,
+    double? longitude,
     List<Map<String, dynamic>>? qfieldProjects,
     List<Map<String, dynamic>>? designDocuments,
     bool removeQfield = false,
@@ -101,6 +103,8 @@ class WorkspaceSitesProvider extends ChangeNotifier {
       if (siteCode != null) body['siteCode'] = siteCode;
       if (location != null) body['location'] = location;
       if (province != null) body['province'] = province;
+      if (latitude != null) body['latitude'] = latitude;
+      if (longitude != null) body['longitude'] = longitude;
       if (qfieldProjects != null) body['qfieldProjects'] = qfieldProjects;
       if (designDocuments != null) body['designDocuments'] = designDocuments;
       if (removeQfield) body['removeQfield'] = true;

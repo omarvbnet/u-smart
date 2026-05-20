@@ -34,6 +34,7 @@ import {
   readMaintenanceCompletionReasonFromCompany,
 } from '@/lib/private-company-maintenance-reasons';
 import { readWithdrawalRequest } from '@/lib/ticket-field-withdrawal';
+import { resolveMaintenanceImageUrlsFromTicketRow } from '@/lib/ticket-maintenance-images';
 
 const prisma = _prisma as any;
 
@@ -605,8 +606,11 @@ export async function GET(
     });
 
     const maintenanceDescription = (row as any).maintenanceDescription ?? null;
-    const beforeImageUrls = Array.isArray((row as any).beforeImageUrls) ? (row as any).beforeImageUrls : [];
-    const finishingImageUrls = Array.isArray((row as any).finishingImageUrls) ? (row as any).finishingImageUrls : [];
+    const { beforeImageUrls, finishingImageUrls } = resolveMaintenanceImageUrlsFromTicketRow({
+      beforeImageUrls: (row as { beforeImageUrls?: unknown }).beforeImageUrls,
+      finishingImageUrls: (row as { finishingImageUrls?: unknown }).finishingImageUrls,
+      company: row.company,
+    });
     const assignedTeam = (row as any).assignedTeam
       ? {
           id: (row as any).assignedTeam.id,

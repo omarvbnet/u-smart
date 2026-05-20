@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Send,
 } from 'lucide-react';
+import { MaintenanceEvidenceGallery } from '@/components/ticket/MaintenanceEvidenceGallery';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { QRCodeSVG } from 'qrcode.react';
@@ -731,31 +732,15 @@ export default function TicketDetailPage() {
               </section>
             )}
 
-            {/* Before images */}
-            {(ticket.beforeImageUrls?.length ?? 0) > 0 && (
-              <section>
-                <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" />
-                  Before images
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {ticket.beforeImageUrls!.map((url, idx) => (
-                    <a
-                      key={idx}
-                      href={url.startsWith('http') ? url : url.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${url}` : url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block aspect-video rounded-xl border border-white/10 bg-white/5 overflow-hidden hover:border-cyan-500/30 transition-colors"
-                    >
-                      <img
-                        src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`}
-                        alt={`Before ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              </section>
+            {/* Maintenance before / after evidence */}
+            {!isQCTicket && (
+              <MaintenanceEvidenceGallery
+                beforeImageUrls={ticket.beforeImageUrls}
+                finishingImageUrls={ticket.finishingImageUrls}
+                beforeTitle="Before images"
+                afterTitle="After images"
+                emptyHint="No before or after photos uploaded yet."
+              />
             )}
 
             {/* Description - Inspections for QC, Maintenance for others */}
@@ -771,38 +756,6 @@ export default function TicketDetailPage() {
                   <p className="text-sm text-gray-500 italic">{isQCTicket ? 'No inspection description added yet.' : 'No description added yet.'}</p>
                 )}
               </div>
-            </section>
-
-            {/* Finishing site images */}
-            <section>
-              <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <ImageIcon className="w-4 h-4" />
-                Finishing site images
-              </h2>
-              {ticket.finishingImageUrls && ticket.finishingImageUrls.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {ticket.finishingImageUrls.map((url, idx) => (
-                    <a
-                      key={idx}
-                      href={url.startsWith('http') ? url : url.startsWith('/') ? `${typeof window !== 'undefined' ? window.location.origin : ''}${url}` : url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block aspect-video rounded-xl border border-white/10 bg-white/5 overflow-hidden hover:border-cyan-500/30 transition-colors"
-                    >
-                      <img
-                        src={url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`}
-                        alt={`Finishing ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-                  <ImageIcon className="w-10 h-10 text-gray-500 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No finishing images added yet.</p>
-                </div>
-              )}
             </section>
 
             {/* Comments (engineer, technician & requester) */}

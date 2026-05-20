@@ -25,6 +25,8 @@ import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
+import '../providers/provisor_techniques_provider.dart';
+import '../utils/technique_display.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/workspace_ticket_expenses_section.dart';
 import '../widgets/comments_widget.dart';
@@ -93,6 +95,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _isTicketRequester(Ticket t) {
     final uid = context.read<AuthProvider>().user?.id;
     return uid != null && t.requesterId == uid;
+  }
+
+  bool _canViewMaintenanceEvidence(Ticket t) {
+    if (!t.isMaintenance) return false;
+    if (_isEngineer || _isTechnician || _isAssignedFieldStaff(t)) return true;
+    if (!_isTicketRequester(t)) return false;
+    return t.beforeImageUrls.isNotEmpty ||
+        t.finishingImageUrls.isNotEmpty ||
+        t.maintenanceAwaitingRequesterConfirmation ||
+        t.isCompleted;
   }
 
   bool _isAssignedFieldStaff(Ticket t) {
@@ -1127,6 +1139,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final name = wr.requestedByName?.trim().isNotEmpty == true
         ? wr.requestedByName!.trim()
         : wr.requestedBy;
+    final roleLabel = wr.role == 'CREW'
+        ? l10n.t('withdrawal_role_crew')
+        : l10n.t('withdrawal_role_lead');
     return [
       Container(
         width: double.infinity,
@@ -1139,7 +1154,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         child: Text(
           l10n.t('withdrawal_incoming_banner', {
             'name': name,
-            'role': wr.role,
+            'role': roleLabel,
             'reason': wr.reason?.trim().isNotEmpty == true ? wr.reason!.trim() : '—',
           }),
           style: TextStyle(color: Colors.white.withAlpha(210), fontSize: 13, height: 1.35),
@@ -2271,7 +2286,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _row(l10n.t('coordinator'), t.siteCoordinator ?? '-'),
         if (_targetDepartmentLabel(t) != null)
           _row(l10n.t('ticket_department'), _targetDepartmentLabel(t)!),
-        _row(l10n.t('technique_label'), _techniqueLabel(t.technique, l10n)),
+        _row(
+          l10n.t('technique_label'),
+          _techniqueLabel(t, l10n),
+        ),
         if (t.workspaceTicketExpensesEnabled || t.ticketExpenses.isNotEmpty)
           _row(
             l10n.t('pc_expenses_total'),
@@ -2788,8 +2806,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ]),
       ],
-      if (t.isMaintenance &&
-          (_isEngineer || _isTechnician || _isAssignedFieldStaff(t))) ...[
+      if (_canViewMaintenanceEvidence(t) &&
+          !(_isTicketRequester(t) && t.maintenanceAwaitingRequesterConfirmation)) ...[
         const SizedBox(height: 16),
         ..._maintenanceEvidenceSections(t, l10n),
       ],
@@ -3705,6 +3723,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               l10n.t('maint_sent_for_confirmation'),
               style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 13, height: 1.35),
             ),
+            if (t.beforeImageUrls.isNotEmpty || t.finishingImageUrls.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              ..._maintenanceEvidenceSections(t, l10n),
+            ],
             const SizedBox(height: 16),
             Row(
               children: [
@@ -6213,25 +6235,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  String _techniqueKey(String t) {
-    final lower = t.toLowerCase();
-    final upper = t.toUpperCase().replaceAll(' ', '_');
-    if (lower == 'fiber_route') return 'maint_fiber_route';
-    if (lower == 'fiber_site') return 'maint_fiber_site';
-    if (lower == 'electrical') return 'maint_electrical';
-    if (lower == 'telecom') return 'maint_telecom';
-    if (lower == 'ftth') return 'maint_ftth';
-    if (upper.contains('INSPECTION')) return 'tech_inspection';
-    if (upper.contains('SUPERVISION')) return 'tech_supervision';
-    if (upper.contains('BUILDING')) return 'tech_building';
-    if (upper.contains('HSE')) return 'tech_hse';
-    if (upper.contains('INVESTIGATION')) return 'tech_investigation';
-    if (upper.contains('TRACKING')) return 'tech_tracking';
-    return 'tech_inspection';
-  }
-
-  String _techniqueLabel(String t, AppLocalizations l10n) =>
-      l10n.t(_techniqueKey(t));
+  String _techniqueLabel(Ticket t, AppLocalizations l10n) =>
+      techniqueDisplayLabel(
+        technique: t.technique,
+        l10n: l10n,
+        techniques: context.read<ProvisorTechniquesProvider>(),
+        isMaintenance: t.isMaintenance,
+      );
 
   // ─── Workflow state helpers ───────────────────────────────────────────────
 

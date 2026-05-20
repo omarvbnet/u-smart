@@ -65,6 +65,33 @@ class SitesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Latest copy from cache by personal id, workspace id, or site code.
+  Site? findSite({String? id, String? siteId, String? workspaceSiteId}) {
+    if (workspaceSiteId != null && workspaceSiteId.isNotEmpty) {
+      for (final s in _sites) {
+        if (s.workspaceSiteId == workspaceSiteId) return s;
+      }
+    }
+    if (id != null && id.isNotEmpty) {
+      for (final s in _sites) {
+        if (s.id == id) return s;
+      }
+      if (id.startsWith('ws-')) {
+        final wsId = id.substring(3);
+        for (final s in _sites) {
+          if (s.workspaceSiteId == wsId) return s;
+        }
+      }
+    }
+    if (siteId != null && siteId.isNotEmpty) {
+      final key = siteId.toLowerCase();
+      for (final s in _sites) {
+        if (s.siteId.toLowerCase() == key) return s;
+      }
+    }
+    return null;
+  }
+
   Future<void> fetchSites({bool includeWorkspace = false}) async {
     _loading = true;
     notifyListeners();
@@ -146,8 +173,20 @@ class SitesProvider extends ChangeNotifier {
     bool removeQfield = false,
   }) async {
     try {
+      final existing = findSite(id: id);
+      final workspaceSiteId = existing?.workspaceSiteId ??
+          (id.startsWith('ws-') ? id.substring(3) : null);
+      final isWorkspace = existing?.isWorkspace == true ||
+          (workspaceSiteId != null && workspaceSiteId.isNotEmpty);
+
       final body = <String, dynamic>{};
-      if (siteId != null) body['siteId'] = siteId;
+      if (siteId != null) {
+        if (isWorkspace) {
+          body['siteCode'] = siteId;
+        } else {
+          body['siteId'] = siteId;
+        }
+      }
       if (location != null) body['location'] = location;
       if (province != null) body['province'] = province;
       if (latitude != null) body['latitude'] = latitude;
@@ -158,8 +197,15 @@ class SitesProvider extends ChangeNotifier {
 
       if (body.isEmpty) return false;
 
-      final data = await _api.patch(ApiConfig.siteDetail(id), body: body);
+      final path = isWorkspace && workspaceSiteId != null
+          ? ApiConfig.privateCompanySiteDetail(workspaceSiteId)
+          : ApiConfig.siteDetail(id);
+      final data = await _api.patch(path, body: body);
       if (data['success'] == true) {
+        final siteJson = data['site'];
+        if (isWorkspace && siteJson is Map<String, dynamic>) {
+          mergeWorkspaceSiteFromJson(siteJson);
+        }
         await fetchSites(includeWorkspace: _isWorkspaceMember);
         return true;
       }

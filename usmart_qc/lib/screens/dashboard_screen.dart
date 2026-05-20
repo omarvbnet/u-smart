@@ -309,22 +309,27 @@ class _TicketsTab extends StatelessWidget {
 
   Future<void> _assignTicket(
       BuildContext context, TicketsProvider provider, Ticket ticket) async {
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF12122A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Assign to Me',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        title: Text(
+          l10n.t('assign_to_me'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
         content: Text(
-          'Assign "${ticket.siteName}" to yourself?',
+          l10n.t('assign_confirm', {'site': ticket.siteName ?? ''}),
           style: TextStyle(color: Colors.white.withAlpha(180)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: TextStyle(color: Colors.white.withAlpha(120))),
+            child: Text(
+              l10n.t('cancel'),
+              style: TextStyle(color: Colors.white.withAlpha(120)),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -333,8 +338,10 @@ class _TicketsTab extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Assign',
-                style: TextStyle(color: Colors.white)),
+            child: Text(
+              l10n.t('assign'),
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -347,10 +354,10 @@ class _TicketsTab extends StatelessWidget {
           SnackBar(
             content: Text(
               res.ok
-                  ? 'Ticket assigned to you'
+                  ? l10n.t('assign_success')
                   : (res.message?.trim().isNotEmpty == true
                       ? res.message!.trim()
-                      : 'Failed to assign'),
+                      : l10n.t('assign_failed')),
             ),
             backgroundColor:
                 res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),

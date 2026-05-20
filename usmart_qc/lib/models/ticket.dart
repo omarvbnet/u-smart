@@ -504,6 +504,13 @@ class Ticket {
   /// Updated when admin/requester loads `/api/provisor-techniques` (maintenance slugs).
   static List<String> maintenanceSlugs = List<String>.from(maintenanceTechniques);
 
-  bool get isMaintenance =>
-      maintenanceSlugs.any((s) => s.toLowerCase() == technique.toLowerCase());
+  static bool slugIsMaintenance(String technique) {
+    final lower = technique.trim().toLowerCase();
+    if (lower.isEmpty) return false;
+    if (lower == 'maintenance') return true;
+    if (lower.startsWith('pc_dept_m_')) return true;
+    return maintenanceSlugs.any((s) => s.toLowerCase() == lower);
+  }
+
+  bool get isMaintenance => Ticket.slugIsMaintenance(technique);
 }

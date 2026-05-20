@@ -11,7 +11,6 @@ import {
   qfieldProjectsToJsonValue,
   type QFieldProjectStored,
 } from '@/lib/qfield-projects';
-import { DEFAULT_MAINTENANCE_SLUGS } from '@/lib/provisor-technique-defaults';
 import {
   CAN_MANAGE_SITES_ROLES,
   CAN_PROPOSE_SITE_CHANGES_ROLES,
@@ -23,6 +22,13 @@ import {
   parseSiteDesignDocuments,
   siteDesignDocumentsToJsonValue,
 } from '@/lib/site-design-documents';
+import {
+  getMaintenanceSlugs,
+  inspectionTechniqueWhere,
+  maintenanceTechniqueWhere,
+  sumCompletedHours,
+  techniqueIsMaintenance,
+} from '@/lib/site-ticket-meta';
 import { prisma as _prisma } from '@/lib/prisma';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,17 +157,8 @@ export function normalizeQfieldProjectsInput(raw: unknown, actor: { id: string; 
   return out;
 }
 
-export async function getMaintenanceSlugs(): Promise<string[]> {
-  try {
-    const rows = await prisma.provisorTechnique.findMany({
-      where: { category: 'MAINTENANCE', active: true },
-      select: { slug: true },
-    });
-    if (rows?.length) return rows.map((r: { slug: string }) => r.slug);
-  } catch {
-    /* pre-migration */
-  }
-  return [...DEFAULT_MAINTENANCE_SLUGS];
+export async function getMaintenanceSlugsForSiteCounts(companyId?: string | null): Promise<string[]> {
+  return getMaintenanceSlugs(companyId);
 }
 
 type SiteRow = {
@@ -229,24 +226,29 @@ export function serializeWorkspaceSite(
 }
 
 export async function ticketCountsForSite(companyId: string, siteCode: string) {
-  const maintenanceSlugs = await getMaintenanceSlugs();
+  const maintenanceSlugs = await getMaintenanceSlugs(companyId);
   const qcBase = {
     privateCompanyId: companyId,
     siteName: siteCode,
     serviceSlug: 'quality-control-supervision',
   };
-  const [inspectionQcCount, maintenanceQcCount, supervisionTotal] = await Promise.all([
-    prisma.visitorRequest.count({
-      where: { ...qcBase, technique: { notIn: maintenanceSlugs } },
-    }),
-    prisma.visitorRequest.count({
-      where: { ...qcBase, technique: { in: maintenanceSlugs } },
-    }),
-    prisma.visitorRequest.count({ where: qcBase }),
-  ]);
+  const [inspectionQcCount, maintenanceQcCount, supervisionTotal, inspectionHoursTotal, maintenanceHoursTotal] =
+    await Promise.all([
+      prisma.visitorRequest.count({
+        where: { ...qcBase, ...inspectionTechniqueWhere(maintenanceSlugs) },
+      }),
+      prisma.visitorRequest.count({
+        where: { ...qcBase, ...maintenanceTechniqueWhere(maintenanceSlugs) },
+      }),
+      prisma.visitorRequest.count({ where: qcBase }),
+      sumCompletedHours({ ...qcBase, ...inspectionTechniqueWhere(maintenanceSlugs) }),
+      sumCompletedHours({ ...qcBase, ...maintenanceTechniqueWhere(maintenanceSlugs) }),
+    ]);
   return {
     inspectionQcCount,
     maintenanceQcCount,
+    inspectionHoursTotal,
+    maintenanceHoursTotal,
     supervisionTicketCount: supervisionTotal,
     ticketCount: supervisionTotal,
   };
@@ -257,7 +259,7 @@ export async function listTicketsForSite(
   siteCode: string,
   filter: 'all' | 'maintenance' | 'inspection'
 ) {
-  const maintenanceSlugs = await getMaintenanceSlugs();
+  const maintenanceSlugs = await getMaintenanceSlugs(companyId);
   const base = {
     privateCompanyId: companyId,
     siteName: siteCode,
@@ -265,9 +267,9 @@ export async function listTicketsForSite(
   };
   const where =
     filter === 'maintenance'
-      ? { ...base, technique: { in: maintenanceSlugs } }
+      ? { ...base, ...maintenanceTechniqueWhere(maintenanceSlugs) }
       : filter === 'inspection'
-        ? { ...base, technique: { notIn: maintenanceSlugs } }
+        ? { ...base, ...inspectionTechniqueWhere(maintenanceSlugs) }
         : base;
   const rows = await prisma.visitorRequest.findMany({
     where,
@@ -304,7 +306,7 @@ export async function listTicketsForSite(
       title,
       createdAt: (t.createdAt as Date).toISOString(),
       completedAt: t.completedAt ? (t.completedAt as Date).toISOString() : null,
-      isMaintenance: maintenanceSlugs.includes(String(t.technique ?? '')),
+      isMaintenance: techniqueIsMaintenance(String(t.technique ?? ''), maintenanceSlugs),
     };
   });
 }

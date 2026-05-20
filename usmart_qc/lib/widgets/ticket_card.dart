@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
+import '../providers/provisor_techniques_provider.dart';
+import '../utils/technique_display.dart';
 import '../utils/ticket_status_filter.dart';
 import 'status_badge.dart';
 
@@ -35,30 +38,10 @@ class TicketCard extends StatelessWidget {
     }
   }
 
-  String _techniqueKey(Ticket ticket) {
-    if (ticket.isMaintenance) {
-      final lower = ticket.technique.toLowerCase();
-      if (lower == 'fiber_route') return 'maint_fiber_route';
-      if (lower == 'fiber_site') return 'maint_fiber_site';
-      if (lower == 'electrical') return 'maint_electrical';
-      if (lower == 'telecom') return 'maint_telecom';
-      if (lower == 'ftth') return 'maint_ftth';
-      return 'maint_technique_maintenance';
-    }
-    final t = ticket.technique;
-    final upper = t.toUpperCase().replaceAll(' ', '_');
-    if (upper.contains('INSPECTION')) return 'tech_inspection';
-    if (upper.contains('SUPERVISION')) return 'tech_supervision';
-    if (upper.contains('BUILDING')) return 'tech_building';
-    if (upper.contains('HSE')) return 'tech_hse';
-    if (upper.contains('INVESTIGATION')) return 'tech_investigation';
-    if (upper.contains('TRACKING')) return 'tech_tracking';
-    return 'tech_inspection';
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final techniques = context.watch<ProvisorTechniquesProvider>();
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -146,7 +129,12 @@ class TicketCard extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       _chip(Icons.build_outlined,
-                          l10n.t(_techniqueKey(ticket))),
+                          techniqueDisplayLabel(
+                            technique: ticket.technique,
+                            l10n: l10n,
+                            techniques: techniques,
+                            isMaintenance: ticket.isMaintenance,
+                          )),
                       _chip(
                           Icons.access_time_rounded,
                           DateFormat('MMM d, HH:mm')

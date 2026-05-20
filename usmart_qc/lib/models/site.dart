@@ -150,6 +150,10 @@ class Site {
       ticketCount: json['ticketCount'] as int? ?? 0,
       inspectionQcCount: json['inspectionQcCount'] as int? ?? 0,
       maintenanceQcCount: json['maintenanceQcCount'] as int? ?? 0,
+      inspectionHoursTotal:
+          (json['inspectionHoursTotal'] as num?)?.toDouble() ?? 0,
+      maintenanceHoursTotal:
+          (json['maintenanceHoursTotal'] as num?)?.toDouble() ?? 0,
       sharedWithMe: false,
       canEdit: json['canManage'] == true,
       isWorkspace: true,

@@ -6,7 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
+import '../models/private_company.dart';
 import '../models/private_company_expense.dart';
 import '../providers/private_company_provider.dart';
 import '../screens/ticket_detail_screen.dart';
@@ -28,8 +30,8 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
   late DateTime _rangeEnd;
   String? _provinceFilter;
   String? _departmentFilter;
-  bool _bootstrapped = false;
   bool _exporting = false;
+  bool _expenseLoadScheduled = false;
 
   @override
   void initState() {
@@ -144,12 +146,16 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_bootstrapped) return;
-    _bootstrapped = true;
-    _refresh();
+  void _scheduleExpenseLoadIfNeeded(PrivateCompanyProvider pc, bool enabled) {
+    if (!enabled || !pc.hasWorkspace || !pc.isApproved) return;
+    if (_expenseLoadScheduled || pc.expenseAnalyticsLoading) return;
+    if (pc.expenseAnalytics != null) return;
+    _expenseLoadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _refresh();
+      if (mounted) setState(() => _expenseLoadScheduled = false);
+    });
   }
 
   Future<void> _refresh() {
@@ -159,6 +165,253 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
       to: _rangeEnd,
       province: _provinceFilter,
       departmentId: _departmentFilter,
+    );
+  }
+
+  List<String> _provinceOptions(ExpenseAnalyticsSnapshot? snap) {
+    final fromSnap = snap?.byProvince.map((p) => p.province.trim()).where((s) => s.isNotEmpty).toList() ?? const <String>[];
+    if (fromSnap.isNotEmpty) return fromSnap;
+    return List<String>.from(kIraqProvinces);
+  }
+
+  List<PrivateCompanyDepartment> _departmentOptions(PrivateCompanyProvider pc) {
+    return pc.workspace?.departments ?? const <PrivateCompanyDepartment>[];
+  }
+
+  List<Widget> _expenseFilterSection(
+    BuildContext context,
+    AppLocalizations l10n,
+    PrivateCompanyProvider pc,
+    ExpenseAnalyticsSnapshot? snap,
+  ) {
+    if (!pc.isOwner) return const [];
+    final provinces = _provinceOptions(snap);
+    final departments = _departmentOptions(pc);
+    if (provinces.isEmpty && departments.isEmpty) return const [];
+
+    return [
+      const SizedBox(height: 8),
+      _glass(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.t('pc_expenses_filters_title'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              if (provinces.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String?>(
+                  value: _provinceFilter,
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: l10n.t('pc_expenses_filter_province'),
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(l10n.t('pc_expenses_all_provinces')),
+                    ),
+                    ...provinces.map(
+                      (p) => DropdownMenuItem(value: p, child: Text(p)),
+                    ),
+                  ],
+                  onChanged: pc.expenseAnalyticsLoading
+                      ? null
+                      : (v) {
+                          setState(() => _provinceFilter = v);
+                          _refresh();
+                        },
+                ),
+              ],
+              if (departments.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String?>(
+                  value: _departmentFilter,
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: l10n.t('pc_expenses_filter_department'),
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(l10n.t('pc_expenses_all_departments')),
+                    ),
+                    ...departments.map(
+                      (d) => DropdownMenuItem(
+                        value: d.id,
+                        child: Text(d.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: pc.expenseAnalyticsLoading
+                      ? null
+                      : (v) {
+                          setState(() => _departmentFilter = v);
+                          _refresh();
+                        },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+    ];
+  }
+
+  Widget _expenseDataSection(
+    BuildContext context,
+    AppLocalizations l10n,
+    PrivateCompanyProvider pc,
+    ExpenseAnalyticsSnapshot? snap,
+  ) {
+    if (pc.expenseAnalyticsLoading && snap == null) {
+      return _glass(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  l10n.t('pc_expenses_loading_data'),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (snap == null) {
+      return _glass(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            pc.expenseAnalyticsError?.trim().isNotEmpty == true
+                ? pc.expenseAnalyticsError!.trim()
+                : l10n.t('analytics_kpi_unavailable'),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 12),
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, c) {
+            final narrow = c.maxWidth < 340;
+            final children = <Widget>[
+              _metricTile(
+                context,
+                l10n.t('pc_expenses_total'),
+                '${snap.summaryTotalAmount.toStringAsFixed(2)} IQD',
+                const Color(0xFF00D4AA),
+                Icons.account_balance_wallet_outlined,
+              ),
+              _metricTile(
+                context,
+                l10n.t('pc_expenses_lines'),
+                '${snap.summaryExpenseCount}',
+                const Color(0xFF38BDF8),
+                Icons.receipt_long_rounded,
+              ),
+              _metricTile(
+                context,
+                l10n.t('pc_expenses_tickets'),
+                '${snap.summaryTicketCount}',
+                const Color(0xFFC9A227),
+                Icons.confirmation_number_outlined,
+              ),
+            ];
+            if (narrow) {
+              return Column(
+                children: [
+                  for (var i = 0; i < children.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    children[i],
+                  ],
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: children[0]),
+                const SizedBox(width: 8),
+                Expanded(child: children[1]),
+                const SizedBox(width: 8),
+                Expanded(child: children[2]),
+              ],
+            );
+          },
+        ),
+        if (widget.compact && pc.isPrivateWorkspaceFieldStaff && snap.byDepartment.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _sectionLabel(l10n.t('pc_kpi_your_department')),
+          const SizedBox(height: 8),
+          ...snap.byDepartment.map(
+            (d) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _glass(
+                child: ListTile(
+                  dense: true,
+                  title: Text(
+                    d.departmentName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${l10n.t('pc_expenses_total')}: ${d.totalAmount.toStringAsFixed(2)} · '
+                    '${d.expenseCount} ${l10n.t('pc_expenses_lines')}',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (!widget.compact && snap.byStaff.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _sectionLabel(l10n.t('pc_expenses_by_staff')),
+          const SizedBox(height: 8),
+          ...snap.byStaff.take(12).map((s) => _staffCard(context, l10n, s)),
+        ],
+        if (snap.tickets.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _sectionLabel(l10n.t('pc_expenses_related_tickets')),
+          const SizedBox(height: 8),
+          ...snap.tickets.take(15).map((t) => _ticketCard(context, l10n, t)),
+        ],
+      ],
     );
   }
 
@@ -179,6 +432,7 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
     final pc = context.watch<PrivateCompanyProvider>();
     final snap = pc.expenseAnalytics;
     final enabled = pc.workspace?.ticketExpensesEnabled == true;
+    _scheduleExpenseLoadIfNeeded(pc, enabled);
 
     if (!pc.canOpenPrivateWorkspace) return const SizedBox.shrink();
     if (!enabled && !pc.canManageStaff) return const SizedBox.shrink();
@@ -421,188 +675,8 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
             ),
             const SizedBox(height: 8),
           ],
-            if (pc.isOwner && snap != null && snap.byProvince.isNotEmpty) ...[
-              _glass(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: DropdownButtonFormField<String?>(
-                    value: _provinceFilter,
-                    dropdownColor: const Color(0xFF12122A),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      labelText: l10n.t('pc_expenses_filter_province'),
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                    items: [
-                      DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text(l10n.t('pc_expenses_all_provinces')),
-                      ),
-                      ...snap.byProvince.map(
-                        (p) => DropdownMenuItem(value: p.province, child: Text(p.province)),
-                      ),
-                    ],
-                    onChanged: (v) {
-                      setState(() => _provinceFilter = v);
-                      _refresh();
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (pc.isOwner && snap != null && snap.byDepartment.isNotEmpty) ...[
-              _glass(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: DropdownButtonFormField<String?>(
-                    value: _departmentFilter,
-                    dropdownColor: const Color(0xFF12122A),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      labelText: l10n.t('pc_expenses_filter_department'),
-                      labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                    items: [
-                      DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text(l10n.t('pc_expenses_all_departments')),
-                      ),
-                      ...snap.byDepartment.map(
-                        (d) => DropdownMenuItem(
-                          value: d.departmentId,
-                          child: Text(d.departmentName),
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) {
-                      setState(() => _departmentFilter = v);
-                      _refresh();
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          if (pc.expenseAnalyticsLoading && snap == null)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
-                ),
-              ),
-            )
-          else if (snap == null)
-            _glass(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Text(
-                  l10n.t('analytics_kpi_unavailable'),
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 12),
-                ),
-              ),
-            )
-          else ...[
-            LayoutBuilder(
-              builder: (context, c) {
-                final narrow = c.maxWidth < 340;
-                final children = <Widget>[
-                  _metricTile(
-                    context,
-                    l10n.t('pc_expenses_total'),
-                    '${snap.summaryTotalAmount.toStringAsFixed(2)} IQD',
-                    const Color(0xFF00D4AA),
-                    Icons.account_balance_wallet_outlined,
-                  ),
-                  _metricTile(
-                    context,
-                    l10n.t('pc_expenses_lines'),
-                    '${snap.summaryExpenseCount}',
-                    const Color(0xFF38BDF8),
-                    Icons.receipt_long_rounded,
-                  ),
-                  _metricTile(
-                    context,
-                    l10n.t('pc_expenses_tickets'),
-                    '${snap.summaryTicketCount}',
-                    const Color(0xFFC9A227),
-                    Icons.confirmation_number_outlined,
-                  ),
-                ];
-                if (narrow) {
-                  return Column(
-                    children: [
-                      for (var i = 0; i < children.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 8),
-                        children[i],
-                      ],
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: children[0]),
-                    const SizedBox(width: 8),
-                    Expanded(child: children[1]),
-                    const SizedBox(width: 8),
-                    Expanded(child: children[2]),
-                  ],
-                );
-              },
-            ),
-            if (widget.compact &&
-                pc.isPrivateWorkspaceFieldStaff &&
-                snap.byDepartment.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              _sectionLabel(l10n.t('pc_kpi_your_department')),
-              const SizedBox(height: 8),
-              ...snap.byDepartment.map(
-                (d) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _glass(
-                    child: ListTile(
-                      dense: true,
-                      title: Text(
-                        d.departmentName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${l10n.t('pc_expenses_total')}: ${d.totalAmount.toStringAsFixed(2)} · '
-                        '${d.expenseCount} ${l10n.t('pc_expenses_lines')}',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.65),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (!widget.compact && snap.byStaff.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              _sectionLabel(l10n.t('pc_expenses_by_staff')),
-              const SizedBox(height: 8),
-              ...snap.byStaff.take(12).map((s) => _staffCard(context, l10n, s)),
-            ],
-            if (snap.tickets.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              _sectionLabel(l10n.t('pc_expenses_related_tickets')),
-              const SizedBox(height: 8),
-              ...snap.tickets.take(15).map((t) => _ticketCard(context, l10n, t)),
-            ],
-          ],
+          ..._expenseFilterSection(context, l10n, pc, snap),
+          _expenseDataSection(context, l10n, pc, snap),
         ],
       ],
     );

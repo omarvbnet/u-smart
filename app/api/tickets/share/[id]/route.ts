@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { commentAuthorDisplayRole } from '@/lib/ticket-comment-author-role';
 import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
+import { resolveMaintenanceImageUrlsFromTicketRow } from '@/lib/ticket-maintenance-images';
+import {
+  readMaintenanceAwaitingSince,
+  MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY,
+} from '@/lib/maintenance-requester-confirmation';
 
 const prisma = _prisma as any;
 
@@ -128,8 +133,25 @@ export async function GET(
         : [{ status: status as string, createdAt: row.createdAt }];
 
     const maintenanceDescription = (row as any).maintenanceDescription ?? null;
-    const beforeImageUrls = Array.isArray((row as any).beforeImageUrls) ? (row as any).beforeImageUrls : [];
-    const finishingImageUrls = Array.isArray((row as any).finishingImageUrls) ? (row as any).finishingImageUrls : [];
+    const { beforeImageUrls, finishingImageUrls } = resolveMaintenanceImageUrlsFromTicketRow({
+      beforeImageUrls: (row as { beforeImageUrls?: unknown }).beforeImageUrls,
+      finishingImageUrls: (row as { finishingImageUrls?: unknown }).finishingImageUrls,
+      company: row.company,
+    });
+    let maintenanceAwaitingRequesterSince: string | null = null;
+    let maintenanceRequesterConfirmedAt: string | null = null;
+    try {
+      const parsed =
+        typeof row.company === 'string' && row.company.trim()
+          ? (JSON.parse(row.company) as Record<string, unknown>)
+          : {};
+      maintenanceAwaitingRequesterSince = readMaintenanceAwaitingSince(parsed);
+      const confRaw = parsed[MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY];
+      maintenanceRequesterConfirmedAt =
+        typeof confRaw === 'string' && confRaw.trim() ? confRaw.trim() : null;
+    } catch {
+      /* ignore */
+    }
 
     const commentsRows = await prisma.ticketComment.findMany({
       where: { visitorRequestId: id },
@@ -179,6 +201,8 @@ export async function GET(
         maintenanceDescription,
         beforeImageUrls,
         finishingImageUrls,
+        maintenanceAwaitingRequesterSince,
+        maintenanceRequesterConfirmedAt,
         assignedTeam,
         designSpecifications,
         attachmentUrls,

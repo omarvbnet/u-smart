@@ -90,9 +90,16 @@ class _CreateMaintenanceTicketScreenState
     }
     _siteNameCtrl.addListener(_onSiteIdEdited);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final sites = context.read<SitesProvider>();
-      await sites.fetchSites();
       if (!mounted) return;
+      final pc = context.read<PrivateCompanyProvider>();
+      if (pc.workspace == null && (pc.membership.isOwner || pc.membership.isStaff)) {
+        await pc.refresh();
+      }
+      if (!mounted) return;
+      final sites = context.read<SitesProvider>();
+      await sites.fetchSites(includeWorkspace: pc.canOpenPrivateWorkspace);
+      if (!mounted) return;
+      _refreshLinkedSiteFromProvider(sites);
       final tech = context.read<ProvisorTechniquesProvider>();
       await tech.ensureLoaded();
       if (!mounted) return;
@@ -100,14 +107,22 @@ class _CreateMaintenanceTicketScreenState
       if (slugs.isNotEmpty && !slugs.contains(_maintenanceType)) {
         setState(() => _maintenanceType = slugs.first);
       }
-      final pc = context.read<PrivateCompanyProvider>();
-      if (pc.workspace == null && (pc.membership.isOwner || pc.membership.isStaff)) {
-        await pc.refresh();
-      }
       if (!mounted) return;
       final inWs = pc.isApproved && (pc.isOwner || pc.isStaff);
       if (inWs) setState(() => _assignmentScope = 'PRIVATE_COMPANY');
     });
+  }
+
+  void _refreshLinkedSiteFromProvider(SitesProvider sites) {
+    final ref = _linkedSite ?? widget.prefillSite;
+    if (ref == null) return;
+    final fresh = sites.findSite(
+      id: ref.id,
+      siteId: ref.siteId,
+      workspaceSiteId: ref.workspaceSiteId,
+    );
+    if (fresh == null) return;
+    setState(() => _applyPrefillFromSite(fresh));
   }
 
   bool _usesWorkspaceDepartmentRouting(PrivateCompanyProvider pc) {

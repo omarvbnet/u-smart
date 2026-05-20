@@ -151,14 +151,26 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
             ],
           ),
         ),
-        if (pc.kpiLoading || (!_initialRefreshDone && snap == null))
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+        if (pc.kpiLoading && snap == null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+                  ),
+                  if (!_initialRefreshDone) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.t('analytics_loading'),
+                      style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+                    ),
+                  ],
+                ],
               ),
             ),
           )

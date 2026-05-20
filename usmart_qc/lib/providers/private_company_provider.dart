@@ -20,6 +20,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
   bool _kpiLoading = false;
   ExpenseAnalyticsSnapshot? _expenseAnalytics;
   bool _expenseAnalyticsLoading = false;
+  String? _expenseAnalyticsError;
   CancellationAnalyticsSnapshot? _cancellationAnalytics;
   bool _cancellationAnalyticsLoading = false;
   List<MaintenanceCompletionReasonRow> _maintenanceReasons = [];
@@ -37,6 +38,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
   bool get kpiLoading => _kpiLoading;
   ExpenseAnalyticsSnapshot? get expenseAnalytics => _expenseAnalytics;
   bool get expenseAnalyticsLoading => _expenseAnalyticsLoading;
+  String? get expenseAnalyticsError => _expenseAnalyticsError;
   CancellationAnalyticsSnapshot? get cancellationAnalytics => _cancellationAnalytics;
   bool get cancellationAnalyticsLoading => _cancellationAnalyticsLoading;
   List<MaintenanceCompletionReasonRow> get maintenanceReasons => _maintenanceReasons;
@@ -589,6 +591,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
   }) async {
     if (!hasWorkspace || !isApproved) return;
     _expenseAnalyticsLoading = true;
+    _expenseAnalyticsError = null;
     notifyListeners();
     try {
       String? deptQ = departmentId?.trim();
@@ -614,10 +617,20 @@ class PrivateCompanyProvider extends ChangeNotifier {
       if (s != null && s.isNotEmpty) query['staffId'] = s;
       final res = await _api.getSafe(ApiConfig.privateCompanyExpensesAnalytics, query: query);
       if (res != null && res['success'] == true) {
-        _expenseAnalytics = ExpenseAnalyticsSnapshot.fromJson(res);
+        try {
+          _expenseAnalytics = ExpenseAnalyticsSnapshot.fromJson(res);
+          _expenseAnalyticsError = null;
+        } catch (_) {
+          _expenseAnalytics = null;
+          _expenseAnalyticsError = 'Could not read expense analytics.';
+        }
+      } else {
+        _expenseAnalytics = null;
+        _expenseAnalyticsError =
+            res?['message']?.toString() ?? 'Expense analytics unavailable.';
       }
     } catch (_) {
-      /* keep previous */
+      _expenseAnalyticsError = 'Network error loading expense analytics.';
     } finally {
       _expenseAnalyticsLoading = false;
       notifyListeners();

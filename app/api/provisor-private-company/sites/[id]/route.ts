@@ -148,6 +148,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.location === 'string') data.location = body.location.trim();
   if (typeof body.province === 'string') data.province = body.province.trim();
 
+  const rawLat = body.latitude;
+  const rawLng = body.longitude;
+  if (typeof rawLat === 'number' && typeof rawLng === 'number' && Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+    data.latitude = rawLat;
+    data.longitude = rawLng;
+  } else if (rawLat === null && rawLng === null) {
+    data.latitude = null;
+    data.longitude = null;
+  }
+
   if (body.qfieldProjects !== undefined) {
     const projects = normalizeQfieldProjectsInput(body.qfieldProjects, {
       id: guard.requesterId,
