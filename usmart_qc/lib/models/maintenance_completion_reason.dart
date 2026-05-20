@@ -50,6 +50,8 @@ class MaintenanceReasonAnalyticsSnapshot {
     required this.totalWithReason,
     required this.ticketSampleSize,
     required this.byReason,
+    this.byProvince = const [],
+    this.cases = const [],
     required this.catalog,
     this.departmentId,
     this.from,
@@ -63,6 +65,8 @@ class MaintenanceReasonAnalyticsSnapshot {
   final int totalWithReason;
   final int ticketSampleSize;
   final List<MaintenanceReasonCount> byReason;
+  final List<MaintenanceReasonProvinceCount> byProvince;
+  final List<MaintenanceReasonCaseRow> cases;
   final List<MaintenanceCompletionReasonRow> catalog;
 
   factory MaintenanceReasonAnalyticsSnapshot.fromJson(Map<String, dynamic> json) {
@@ -78,11 +82,77 @@ class MaintenanceReasonAnalyticsSnapshot {
               .map(MaintenanceReasonCount.fromJson)
               .toList() ??
           const [],
+      byProvince: (json['byProvince'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(MaintenanceReasonProvinceCount.fromJson)
+              .toList() ??
+          const [],
+      cases: (json['cases'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(MaintenanceReasonCaseRow.fromJson)
+              .toList() ??
+          const [],
       catalog: (json['catalog'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map(MaintenanceCompletionReasonRow.fromJson)
               .toList() ??
           const [],
+    );
+  }
+}
+
+class MaintenanceReasonProvinceCount {
+  const MaintenanceReasonProvinceCount({
+    required this.province,
+    required this.count,
+    this.byReason = const [],
+  });
+
+  final String province;
+  final int count;
+  final List<MaintenanceReasonCount> byReason;
+
+  factory MaintenanceReasonProvinceCount.fromJson(Map<String, dynamic> json) {
+    return MaintenanceReasonProvinceCount(
+      province: json['province']?.toString() ?? '—',
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      byReason: (json['byReason'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(MaintenanceReasonCount.fromJson)
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+class MaintenanceReasonCaseRow {
+  const MaintenanceReasonCaseRow({
+    required this.ticketId,
+    required this.reasonLabel,
+    this.reasonId,
+    this.siteName,
+    this.province,
+    this.departmentName,
+    this.completedAt,
+  });
+
+  final String ticketId;
+  final String reasonLabel;
+  final String? reasonId;
+  final String? siteName;
+  final String? province;
+  final String? departmentName;
+  final String? completedAt;
+
+  factory MaintenanceReasonCaseRow.fromJson(Map<String, dynamic> json) {
+    return MaintenanceReasonCaseRow(
+      ticketId: json['ticketId']?.toString() ?? '',
+      reasonLabel: json['reasonLabel']?.toString() ?? json['label']?.toString() ?? '—',
+      reasonId: json['reasonId']?.toString(),
+      siteName: json['siteName']?.toString(),
+      province: json['province']?.toString(),
+      departmentName: json['departmentName']?.toString(),
+      completedAt: json['completedAt']?.toString(),
     );
   }
 }

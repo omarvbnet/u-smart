@@ -714,6 +714,23 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  Future<List<int>?> downloadCancellationReasonsExport({
+    required DateTime from,
+    required DateTime to,
+    String? province,
+    String? departmentId,
+  }) async {
+    if (!canManageStaff || !hasWorkspace || !isApproved) return null;
+    String ymd(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final query = <String, String>{'from': ymd(from), 'to': ymd(to)};
+    final p = province?.trim();
+    if (p != null && p.isNotEmpty) query['province'] = p;
+    final d = isOwner ? departmentId?.trim() : null;
+    if (d != null && d.isNotEmpty) query['departmentId'] = d;
+    return _api.getBytes(ApiConfig.privateCompanyCancellationsExport, query: query);
+  }
+
   Future<void> fetchMaintenanceReasons({String? departmentId, bool includeInactive = true}) async {
     if (!canManageMaintenanceReasons) return;
     _maintenanceReasonsLoading = true;
@@ -794,6 +811,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     int days = 90,
     DateTime? from,
     DateTime? to,
+    String? province,
     String? departmentId,
   }) async {
     if (!canViewMaintenanceReasonAnalytics) return;
@@ -809,6 +827,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
       } else {
         query['days'] = '${days.clamp(1, 730)}';
       }
+      final p = province?.trim();
+      if (p != null && p.isNotEmpty) query['province'] = p;
       var dept = departmentId?.trim();
       if (!isOwner) dept = myDepartmentId;
       if (dept != null && dept.isNotEmpty) query['departmentId'] = dept;
@@ -825,6 +845,23 @@ class PrivateCompanyProvider extends ChangeNotifier {
       _maintenanceReasonAnalyticsLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<List<int>?> downloadMaintenanceReasonsExport({
+    required DateTime from,
+    required DateTime to,
+    String? province,
+    String? departmentId,
+  }) async {
+    if (!canViewMaintenanceReasonAnalytics || !hasWorkspace || !isApproved) return null;
+    String ymd(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final query = <String, String>{'from': ymd(from), 'to': ymd(to)};
+    final p = province?.trim();
+    if (p != null && p.isNotEmpty) query['province'] = p;
+    final d = isOwner ? departmentId?.trim() : null;
+    if (d != null && d.isNotEmpty) query['departmentId'] = d;
+    return _api.getBytes(ApiConfig.privateCompanyMaintenanceReasonsExport, query: query);
   }
 
   Future<Map<String, dynamic>?> fetchCancellationSettings() async {

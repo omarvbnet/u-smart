@@ -1,9 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/private_company.dart';
+import '../models/maintenance_completion_reason.dart';
 import '../providers/private_company_provider.dart';
+import '../screens/ticket_detail_screen.dart';
+import '../utils/share_position_origin.dart';
 
 /// Completion-reason usage counters for owners / managers / coordinators.
 class WorkspaceMaintenanceReasonsAnalyticsPanel extends StatefulWidget {
@@ -20,6 +28,9 @@ class _WorkspaceMaintenanceReasonsAnalyticsPanelState
     extends State<WorkspaceMaintenanceReasonsAnalyticsPanel> {
   late DateTime _rangeStart;
   late DateTime _rangeEnd;
+  String? _provinceFilter;
+  String? _departmentFilter;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -33,7 +44,67 @@ class _WorkspaceMaintenanceReasonsAnalyticsPanelState
 
   Future<void> _refresh() async {
     final pc = context.read<PrivateCompanyProvider>();
-    await pc.fetchMaintenanceReasonAnalytics(from: _rangeStart, to: _rangeEnd);
+    await pc.fetchMaintenanceReasonAnalytics(
+      from: _rangeStart,
+      to: _rangeEnd,
+      province: _provinceFilter,
+      departmentId: pc.isOwner ? _departmentFilter : null,
+    );
+  }
+
+  List<String> _provinceOptions(MaintenanceReasonAnalyticsSnapshot? snap) {
+    final fromSnap =
+        snap?.byProvince.map((p) => p.province).where((p) => p.isNotEmpty) ??
+            const Iterable<String>.empty();
+    if (fromSnap.isNotEmpty) return fromSnap.toSet().toList()..sort();
+    return const [];
+  }
+
+  List<PrivateCompanyDepartment> _departmentOptions(PrivateCompanyProvider pc) {
+    return pc.workspace?.departments ?? const <PrivateCompanyDepartment>[];
+  }
+
+  Future<void> _runExport(
+    BuildContext context,
+    AppLocalizations l10n,
+    PrivateCompanyProvider pc,
+  ) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await pc.downloadMaintenanceReasonsExport(
+        from: _rangeStart,
+        to: _rangeEnd,
+        province: _provinceFilter,
+        departmentId: _departmentFilter,
+      );
+      if (!mounted) return;
+      if (bytes == null || bytes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.t('pc_expenses_export_failed'))),
+        );
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final from = DateFormat('yyyyMMdd').format(_rangeStart);
+      final to = DateFormat('yyyyMMdd').format(_rangeEnd);
+      final file = File('${dir.path}/maintenance_reasons_${from}_to_$to.xlsx');
+      await file.writeAsBytes(bytes, flush: true);
+      final origin = sharePositionOriginForShareSheet(context);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Maintenance reasons analytics ($from-$to)',
+        subject: l10n.t('export_excel'),
+        sharePositionOrigin: origin,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('pc_expenses_export_failed'))),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _pickRange() async {
@@ -60,7 +131,7 @@ class _WorkspaceMaintenanceReasonsAnalyticsPanelState
 
     final snap = pc.maintenanceReasonAnalytics;
     final fmt = DateFormat.yMMMd();
-    final rows = snap?.byReason ?? [];
+    final rows = snap?.byReason ?? const <MaintenanceReasonCount>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -80,14 +151,38 @@ class _WorkspaceMaintenanceReasonsAnalyticsPanelState
           style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11, height: 1.35),
         ),
         const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: _pickRange,
-          icon: const Icon(Icons.date_range_rounded, size: 18),
-          label: Text('${fmt.format(_rangeStart)} – ${fmt.format(_rangeEnd)}'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white70,
-            side: BorderSide(color: Colors.white.withAlpha(40)),
-          ),
+        if (pc.isOwner || pc.isDepartmentManager) ...[
+          _filtersCard(context, l10n, pc, snap),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickRange,
+                icon: const Icon(Icons.date_range_rounded, size: 18),
+                label: Text('${fmt.format(_rangeStart)} – ${fmt.format(_rangeEnd)}'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  side: BorderSide(color: Colors.white.withAlpha(40)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: _exporting || pc.maintenanceReasonAnalyticsLoading
+                  ? null
+                  : () => _runExport(context, l10n, pc),
+              icon: _exporting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
+              tooltip: l10n.t('export_excel'),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         if (pc.maintenanceReasonAnalyticsLoading)
@@ -117,7 +212,7 @@ class _WorkspaceMaintenanceReasonsAnalyticsPanelState
               l10n.t('analytics_kpi_empty'),
               style: TextStyle(color: Colors.white.withAlpha(100), fontSize: 12),
             )
-          else
+          else ...[
             ...rows.map((r) {
               final max = rows.first.count > 0 ? rows.first.count : 1;
               final frac = r.count / max;
@@ -167,8 +262,188 @@ class _WorkspaceMaintenanceReasonsAnalyticsPanelState
                 ),
               );
             }),
+            if (snap.byProvince.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                l10n.t('pc_kpi_by_province'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(190),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...snap.byProvince.map(
+                (p) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF12122A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withAlpha(14)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          p.province,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${p.count}',
+                        style: const TextStyle(
+                          color: Color(0xFF38BDF8),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (snap.cases.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                l10n.t('pc_cancellation_cases'),
+                style: TextStyle(
+                  color: Colors.white.withAlpha(190),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...snap.cases.take(widget.compact ? 5 : 20).map(
+                (c) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF12122A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withAlpha(14)),
+                  ),
+                  child: ListTile(
+                    title: Text(
+                      c.siteName?.trim().isNotEmpty == true ? c.siteName! : c.ticketId,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      '${c.reasonLabel} · ${c.departmentName ?? c.province ?? ''}',
+                      style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TicketDetailScreen(ticketId: c.ticketId),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ],
+    );
+  }
+
+  Widget _filtersCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    PrivateCompanyProvider pc,
+    MaintenanceReasonAnalyticsSnapshot? snap,
+  ) {
+    final provinces = _provinceOptions(snap);
+    final departments = pc.isOwner ? _departmentOptions(pc) : const <PrivateCompanyDepartment>[];
+    if (provinces.isEmpty && departments.isEmpty && !pc.isDepartmentManager) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12122A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.t('pc_expenses_filters_title'),
+            style: TextStyle(
+              color: Colors.white.withAlpha(220),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (pc.isDepartmentManager && !pc.isOwner) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.t('pc_expenses_filter_department_scoped'),
+              style: TextStyle(color: Colors.white.withAlpha(130), fontSize: 11),
+            ),
+          ],
+          if (provinces.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String?>(
+              value: _provinceFilter,
+              dropdownColor: const Color(0xFF12122A),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                labelText: l10n.t('pc_expenses_filter_province'),
+                labelStyle: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(l10n.t('pc_expenses_all_provinces')),
+                ),
+                ...provinces.map((p) => DropdownMenuItem(value: p, child: Text(p))),
+              ],
+              onChanged: pc.maintenanceReasonAnalyticsLoading
+                  ? null
+                  : (v) {
+                      setState(() => _provinceFilter = v);
+                      _refresh();
+                    },
+            ),
+          ],
+          if (departments.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            DropdownButtonFormField<String?>(
+              value: _departmentFilter,
+              dropdownColor: const Color(0xFF12122A),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                labelText: l10n.t('pc_expenses_filter_department'),
+                labelStyle: TextStyle(color: Colors.white.withAlpha(150), fontSize: 11),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(l10n.t('pc_expenses_all_departments')),
+                ),
+                ...departments.map(
+                  (d) => DropdownMenuItem(value: d.id, child: Text(d.name)),
+                ),
+              ],
+              onChanged: pc.maintenanceReasonAnalyticsLoading
+                  ? null
+                  : (v) {
+                      setState(() => _departmentFilter = v);
+                      _refresh();
+                    },
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

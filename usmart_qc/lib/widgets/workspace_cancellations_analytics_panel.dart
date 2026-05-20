@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/private_company.dart';
 import '../models/private_company_cancellation.dart';
 import '../providers/private_company_provider.dart';
 import '../screens/ticket_detail_screen.dart';
+import '../utils/share_position_origin.dart';
 
 class WorkspaceCancellationsAnalyticsPanel extends StatefulWidget {
   const WorkspaceCancellationsAnalyticsPanel({super.key, this.compact = false});
@@ -29,6 +34,7 @@ class _WorkspaceCancellationsAnalyticsPanelState
   List<String> _reasons = [];
   bool _reasonsLoaded = false;
   bool _reasonsSaving = false;
+  bool _exporting = false;
 
   @override
   void dispose() {
@@ -80,6 +86,45 @@ class _WorkspaceCancellationsAnalyticsPanelState
           backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
         ),
       );
+    }
+  }
+
+  Future<void> _runExport(AppLocalizations l10n, PrivateCompanyProvider pc) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await pc.downloadCancellationReasonsExport(
+        from: _rangeStart,
+        to: _rangeEnd,
+        province: _provinceFilter,
+        departmentId: _departmentFilter,
+      );
+      if (!mounted) return;
+      if (bytes == null || bytes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.t('pc_expenses_export_failed'))),
+        );
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final from = DateFormat('yyyyMMdd').format(_rangeStart);
+      final to = DateFormat('yyyyMMdd').format(_rangeEnd);
+      final file = File('${dir.path}/cancellation_reasons_${from}_to_$to.xlsx');
+      await file.writeAsBytes(bytes, flush: true);
+      final origin = sharePositionOriginForShareSheet(context);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Cancellation reasons analytics ($from-$to)',
+        subject: l10n.t('export_excel'),
+        sharePositionOrigin: origin,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('pc_expenses_export_failed'))),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -294,6 +339,24 @@ class _WorkspaceCancellationsAnalyticsPanelState
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Icon(Icons.refresh_rounded, color: Colors.white.withValues(alpha: 0.85)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            child: IconButton(
+              onPressed: _exporting || pc.cancellationAnalyticsLoading
+                  ? null
+                  : () => _runExport(l10n, pc),
+              icon: _exporting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded, color: Color(0xFF00D4AA)),
+              tooltip: l10n.t('export_excel'),
             ),
           ),
         ],

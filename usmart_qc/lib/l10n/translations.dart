@@ -962,6 +962,7 @@ const Map<String, String> _en = {
   'pc_ws_tab_checklists': 'Checklists',
   'pc_ws_tab_performance': 'Performance',
   'pc_ws_tab_expenses': 'Expenses',
+  'pc_ws_tab_cancellation_reasons': 'Cancel reasons',
   'pc_ws_tab_maint_reasons': 'Maint. reasons',
   'pc_ws_tab_maint_reasons_stats': 'Reason stats',
   'pc_maint_reasons_tab_manage_intro':
@@ -1974,6 +1975,7 @@ const Map<String, String> _ar = {
   'pc_ws_tab_checklists': 'قوائم التحقق',
   'pc_ws_tab_performance': 'الأداء',
   'pc_ws_tab_expenses': 'المصروفات',
+  'pc_ws_tab_cancellation_reasons': 'أسباب الإلغاء',
   'pc_ws_tab_maint_reasons': 'أسباب الصيانة',
   'pc_ws_tab_maint_reasons_stats': 'إحصاء الأسباب',
   'pc_maint_reasons_tab_manage_intro':
@@ -3079,6 +3081,7 @@ const Map<String, String> _ku = {
   'pc_ws_tab_checklists': 'لیستی پشکنین',
   'pc_ws_tab_performance': 'ئەداء',
   'pc_ws_tab_expenses': 'مەسروفات',
+  'pc_ws_tab_cancellation_reasons': 'هۆکاری هەڵوەشاندنەوە',
   'pc_ws_tab_maint_reasons': 'هۆکاری چاککردنەوە',
   'pc_ws_tab_maint_reasons_stats': 'ئامارەکانی هۆکار',
   'pc_maint_reasons_tab_manage_intro':
@@ -4189,6 +4192,7 @@ const Map<String, String> _tr = {
   'pc_ws_tab_checklists': 'Kontrol listeleri',
   'pc_ws_tab_performance': 'Performans',
   'pc_ws_tab_expenses': 'Giderler',
+  'pc_ws_tab_cancellation_reasons': 'Iptal nedenleri',
   'pc_ws_tab_maint_reasons': 'Bakım nedenleri',
   'pc_ws_tab_maint_reasons_stats': 'Neden istatistikleri',
   'pc_maint_reasons_tab_manage_intro':

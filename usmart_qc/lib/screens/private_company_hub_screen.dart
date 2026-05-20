@@ -82,6 +82,12 @@ bool _pcHubShowsExpensesTab(PrivateCompanyProvider pc) {
   return pc.canManageStaff;
 }
 
+bool _pcHubShowsCancellationReasonsTab(PrivateCompanyProvider pc) {
+  if (!pc.hasWorkspace || !pc.isApproved) return false;
+  if (_pcUsesFieldStaffHub(pc)) return false;
+  return pc.canManageStaff;
+}
+
 bool _pcHubShowsMaintenanceReasonsTabs(PrivateCompanyProvider pc) {
   if (!pc.hasWorkspace || !pc.isApproved) return false;
   return pc.canManageMaintenanceReasons;
@@ -540,6 +546,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     }
     var n = 6;
     if (_pcHubShowsConflictsTab(pc)) n += 1;
+    if (_pcHubShowsCancellationReasonsTab(pc)) n += 1;
     if (_pcHubShowsMaintenanceReasonsTabs(pc)) n += 2;
     if (_pcHubShowsExpensesTab(pc)) n += 1;
     return n;
@@ -619,6 +626,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
     final showExpensesTab = _pcHubShowsExpensesTab(pc);
     final showMaintReasonsTabs = _pcHubShowsMaintenanceReasonsTabs(pc);
     final showConflictsTab = _pcHubShowsConflictsTab(pc);
+    final showCancellationReasonsTab = _pcHubShowsCancellationReasonsTab(pc);
     final fieldHub = _pcUsesFieldStaffHub(pc);
     final conflictsPending = context.watch<ConflictsProvider>().workspacePendingCount;
     return Column(
@@ -771,6 +779,11 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                         ),
                         text: l10n.t('pc_ws_tab_conflicts'),
                       ),
+                    if (showCancellationReasonsTab)
+                      Tab(
+                        icon: const Icon(Icons.cancel_presentation_rounded, size: 18),
+                        text: l10n.t('pc_ws_tab_cancellation_reasons'),
+                      ),
                     if (showMaintReasonsTabs) ...[
                       Tab(
                         icon: const Icon(Icons.build_circle_outlined, size: 18),
@@ -815,6 +828,7 @@ class _ApprovedHubViewState extends State<_ApprovedHubView>
                     _KpisTab(workspace: ws),
                     if (showConflictsTab)
                       const ConflictsScreen(embedded: true, workspaceMode: true),
+                    if (showCancellationReasonsTab) const _CancellationReasonsTab(),
                     if (showMaintReasonsTabs) ...[
                       MaintenanceReasonsManageTab(workspace: ws),
                       const MaintenanceReasonsAnalyticsTab(),
@@ -5204,6 +5218,45 @@ class _ExpensesTab extends StatelessWidget {
         ] else
           const WorkspaceExpensesAnalyticsPanel(),
       ],
+    );
+  }
+}
+
+class _CancellationReasonsTab extends StatelessWidget {
+  const _CancellationReasonsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return RefreshIndicator(
+      onRefresh: () async {
+        final pc = context.read<PrivateCompanyProvider>();
+        final n = DateTime.now();
+        final end = DateTime(n.year, n.month, n.day);
+        final start = end.subtract(const Duration(days: 89));
+        await pc.fetchCancellationAnalytics(from: start, to: end);
+      },
+      color: const Color(0xFFFF6B81),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        children: [
+          Text(
+            l10n.t('pc_cancellation_analytics_title'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l10n.t('pc_cancellation_analytics_hint'),
+            style: TextStyle(color: Colors.white.withAlpha(150), fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          const WorkspaceCancellationsAnalyticsPanel(),
+        ],
+      ),
     );
   }
 }

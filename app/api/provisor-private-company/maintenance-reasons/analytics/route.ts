@@ -11,14 +11,16 @@ import {
 } from '@/lib/private-company-maintenance-reasons';
 import { resolveIsMaintenanceVisitorRequest } from '@/lib/maintenance-requester-confirmation';
 import { parseTicketCompanyJson } from '@/lib/private-company-kpi';
+import { normalizeProvince } from '@/lib/private-company-warehouse';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
 type ReasonAgg = { reasonId: string; label: string; count: number };
+type ProvinceAgg = { province: string; count: number; byReason: Map<string, number> };
 
 /**
- * GET /api/provisor-private-company/maintenance-reasons/analytics?from=&to=&days=90&departmentId=
+ * GET /api/provisor-private-company/maintenance-reasons/analytics?from=&to=&days=90&departmentId=&province=
  */
 export async function GET(req: NextRequest) {
   const guard = await maintenanceReasonsGuard(req);
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
   const periodParsed = parseAnalyticsPeriod(url);
   if (!periodParsed.ok) return analyticsPeriodBadRequest(periodParsed.message);
   const { from: rangeFrom, to: rangeTo } = periodParsed;
+  const provinceFilter = normalizeProvince(url.searchParams.get('province'));
 
   let departmentId = url.searchParams.get('departmentId')?.trim() || null;
   let scope: 'workspace' | 'department' = 'workspace';
@@ -64,7 +67,7 @@ export async function GET(req: NextRequest) {
     ticketWhere.privateCompanyTargetDepartmentId = departmentId;
   }
 
-  const [catalogRows, tickets] = await Promise.all([
+  const [catalogRows, departments, tickets] = await Promise.all([
     prisma.privateCompanyMaintenanceReason.findMany({
       where: {
         companyId: guard.companyId,
@@ -73,6 +76,10 @@ export async function GET(req: NextRequest) {
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
       select: { id: true, label: true, departmentId: true, active: true },
     }),
+    prisma.privateCompanyDepartment.findMany({
+      where: { companyId: guard.companyId },
+      select: { id: true, name: true },
+    }),
     prisma.visitorRequest.findMany({
       where: ticketWhere,
       select: {
@@ -80,14 +87,32 @@ export async function GET(req: NextRequest) {
         technique: true,
         privateCompanyId: true,
         privateCompanyTargetDepartmentId: true,
+        province: true,
+        siteName: true,
         company: true,
         completedAt: true,
+        updatedAt: true,
       },
       take: 5000,
     }),
   ]);
 
   const counts = new Map<string, ReasonAgg>();
+  const byProvince = new Map<string, ProvinceAgg>();
+  const departmentNameById = new Map<string, string>();
+  for (const d of departments as Array<{ id: string; name: string }>) {
+    departmentNameById.set(d.id, d.name);
+  }
+  const cases: Array<{
+    ticketId: string;
+    siteName: string | null;
+    reasonId: string;
+    reasonLabel: string;
+    province: string | null;
+    departmentId: string | null;
+    departmentName: string | null;
+    completedAt: string | null;
+  }> = [];
   const bump = (reasonId: string, label: string) => {
     const key = reasonId || `label:${label.toLowerCase()}`;
     const cur = counts.get(key);
@@ -115,7 +140,36 @@ export async function GET(req: NextRequest) {
         ? String(parsed[MAINTENANCE_COMPLETION_REASON_LABEL_KEY]).trim()
         : '';
     if (!reasonId && !label) continue;
-    bump(reasonId, label || 'Unknown');
+    const reasonLabel = label || 'Unknown';
+    const province = (t.province ?? '').trim() || null;
+    if (provinceFilter && province !== provinceFilter) continue;
+
+    bump(reasonId, reasonLabel);
+
+    const provinceKey = province ?? 'Unknown';
+    const prov = byProvince.get(provinceKey) ?? {
+      province: provinceKey,
+      count: 0,
+      byReason: new Map<string, number>(),
+    };
+    prov.count += 1;
+    const rk = reasonId || `label:${reasonLabel.toLowerCase()}`;
+    prov.byReason.set(rk, (prov.byReason.get(rk) ?? 0) + 1);
+    byProvince.set(provinceKey, prov);
+
+    const departmentIdForCase = t.privateCompanyTargetDepartmentId ?? null;
+    cases.push({
+      ticketId: t.id,
+      siteName: t.siteName ?? null,
+      reasonId,
+      reasonLabel,
+      province,
+      departmentId: departmentIdForCase,
+      departmentName: departmentIdForCase
+        ? (departmentNameById.get(departmentIdForCase) ?? null)
+        : null,
+      completedAt: (t.completedAt ?? t.updatedAt)?.toISOString() ?? null,
+    });
   }
 
   const byReason = [...counts.values()].sort((a, b) => b.count - a.count);
@@ -127,6 +181,7 @@ export async function GET(req: NextRequest) {
     departmentId,
     from: rangeFrom.toISOString(),
     to: rangeTo.toISOString(),
+    provinceFilter,
     totalWithReason,
     ticketSampleSize: tickets.length,
     catalog: catalogRows.map((r: { id: string; label: string; departmentId: string; active: boolean }) => ({
@@ -137,5 +192,20 @@ export async function GET(req: NextRequest) {
       count: counts.get(r.id)?.count ?? 0,
     })),
     byReason,
+    byProvince: [...byProvince.values()]
+      .map((p) => ({
+        province: p.province,
+        count: p.count,
+        byReason: byReason
+          .map((r) => ({
+            reasonId: r.reasonId,
+            label: r.label,
+            count: p.byReason.get(r.reasonId || `label:${r.label.toLowerCase()}`) ?? 0,
+          }))
+          .filter((r) => r.count > 0)
+          .sort((a, b) => b.count - a.count),
+      }))
+      .sort((a, b) => b.count - a.count),
+    cases: cases.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')),
   });
 }
