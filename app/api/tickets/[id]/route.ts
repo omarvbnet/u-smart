@@ -33,6 +33,7 @@ import {
   loadMaintenanceReasonsForTicket,
   readMaintenanceCompletionReasonFromCompany,
 } from '@/lib/private-company-maintenance-reasons';
+import { readWithdrawalRequest } from '@/lib/ticket-field-withdrawal';
 
 const prisma = _prisma as any;
 
@@ -491,6 +492,7 @@ export async function GET(
     let cancellationReason: string | null = null;
     let cancellationRejectedAt: string | null = null;
     let cancellationRejectionReason: string | null = null;
+    let withdrawalRequest: ReturnType<typeof readWithdrawalRequest> = null;
     let workflowState: string | null = (row as { workflowState?: string | null }).workflowState ?? null;
     let resubmitReason: string | null = (row as { resubmitReason?: string | null }).resubmitReason ?? null;
     let resubmittedAt: string | null = (row as { resubmittedAt?: Date | null }).resubmittedAt
@@ -562,6 +564,7 @@ export async function GET(
         conflictReportedAt = typeof parsed.conflictReportedAt === 'string' ? parsed.conflictReportedAt : null;
         conflictResolvedAt = typeof parsed.conflictResolvedAt === 'string' ? parsed.conflictResolvedAt : null;
         qfieldProjects = parseQFieldProjectsFromCompanyJson(parsed as Record<string, unknown>);
+        withdrawalRequest = readWithdrawalRequest(row.company);
       }
       if (!workflowState && typeof parsed.workflowState === 'string') {
         workflowState = parsed.workflowState;
@@ -803,6 +806,7 @@ export async function GET(
         cancellationReason,
         cancellationRejectedAt,
         cancellationRejectionReason,
+        withdrawalRequest,
         canRequestCancellation:
           String(status).toUpperCase() === 'PENDING' && cancellationRequestStatus !== 'PENDING',
         workflowState: workflowState ?? 'OPEN',

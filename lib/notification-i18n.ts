@@ -31,13 +31,17 @@ export type NotificationCopyKey =
   | 'material_request_receipt_disputed'
   | 'material_request_issue_acknowledged'
   | 'maintenance_crew_joined'
+  | 'maintenance_crew_invited'
   | 'maintenance_awaiting_your_confirm'
   | 'ticket_cancellation_requested'
   | 'ticket_cancellation_approved'
   | 'ticket_cancellation_rejected'
   | 'ticket_resubmit_to_requester'
   | 'ticket_resubmit_to_staff'
-  | 'maintenance_rejected_by_requester';
+  | 'maintenance_rejected_by_requester'
+  | 'ticket_withdrawal_requested'
+  | 'ticket_withdrawal_accepted'
+  | 'ticket_withdrawal_rejected';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -736,6 +740,24 @@ const TEMPLATES: Record<
       };
     },
   },
+  maintenance_crew_invited: {
+    en: (v) => ({
+      title: 'Added to maintenance crew',
+      body: `${v.name} added you to the crew on ticket ${v.ticketId}. Open the ticket to view details and evidence.`,
+    }),
+    ar: (v) => ({
+      title: 'أُضيفت إلى طاقم الصيانة',
+      body: `${v.name} أضافك إلى طاقم التذكرة ${v.ticketId}. افتح التذكرة لعرض التفاصيل والأدلة.`,
+    }),
+    tr: (v) => ({
+      title: 'Bakım ekibine eklendiniz',
+      body: `${v.name} sizi ${v.ticketId} numaralı biletin ekibine ekledi. Ayrıntılar için bileti açın.`,
+    }),
+    ku: (v) => ({
+      title: 'زیادکرا بۆ لیژنەی چاککردنەوە',
+      body: `${v.name} تۆ زیادکرد بۆ لیژنەی تیکەتی ${v.ticketId}. بۆ بینینی وردەکارییەکان تیکەتەکە بکەرەوە.`,
+    }),
+  },
   maintenance_awaiting_your_confirm: {
     en: (v) => ({
       title: 'Confirm maintenance completion',
@@ -860,6 +882,60 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: 'داواکار کێشەیەکی ڕاگەیاند',
       body: `تیکەت ${v.ticketId}: ${v.reason}`,
+    }),
+  },
+  ticket_withdrawal_requested: {
+    en: (v) => ({
+      title: 'Withdrawal requested',
+      body: `${v.name} asked to leave ticket ${v.ticketId}. Reason: ${v.reason}`,
+    }),
+    ar: (v) => ({
+      title: 'طلب انسحاب',
+      body: `${v.name} طلب الانسحاب من التذكرة ${v.ticketId}. السبب: ${v.reason}`,
+    }),
+    tr: (v) => ({
+      title: 'Çekilme talebi',
+      body: `${v.name}, ${v.ticketId} numaralı biletten ayrılmak istiyor. Gerekçe: ${v.reason}`,
+    }),
+    ku: (v) => ({
+      title: 'داواکاری کشانەوە',
+      body: `${v.name} داوای کشانەوە لە تیکەتی ${v.ticketId} کرد. هۆکار: ${v.reason}`,
+    }),
+  },
+  ticket_withdrawal_accepted: {
+    en: (v) => ({
+      title: 'Withdrawal accepted',
+      body: `Your withdrawal from ticket ${v.ticketId} was accepted.`,
+    }),
+    ar: (v) => ({
+      title: 'تم قبول الانسحاب',
+      body: `تم قبول طلب انسحابك من التذكرة ${v.ticketId}.`,
+    }),
+    tr: (v) => ({
+      title: 'Çekilme onaylandı',
+      body: `${v.ticketId} numaralı biletten çekilme talebiniz kabul edildi.`,
+    }),
+    ku: (v) => ({
+      title: 'کشانەوە پەسەند کرا',
+      body: `داواکاری کشانەوەت لە تیکەتی ${v.ticketId} پەسەند کرا.`,
+    }),
+  },
+  ticket_withdrawal_rejected: {
+    en: (v) => ({
+      title: 'Withdrawal declined',
+      body: `Your withdrawal from ticket ${v.ticketId} was declined. Continue the assignment.`,
+    }),
+    ar: (v) => ({
+      title: 'تم رفض الانسحاب',
+      body: `تم رفض طلب انسحابك من التذكرة ${v.ticketId}. يُرجى متابعة المهمة.`,
+    }),
+    tr: (v) => ({
+      title: 'Çekilme reddedildi',
+      body: `${v.ticketId} numaralı biletten çekilme talebiniz reddedildi.`,
+    }),
+    ku: (v) => ({
+      title: 'کشانەوە ڕەت کرا',
+      body: `داواکاری کشانەوەت لە تیکەتی ${v.ticketId} ڕەت کرا.`,
     }),
   },
   workspace_announcement: {

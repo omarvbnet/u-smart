@@ -83,6 +83,8 @@ class ApiConfig {
       '/api/tickets/$ticketId/cancellation-request';
   static String ticketCancellationRespond(String ticketId) =>
       '/api/tickets/$ticketId/cancellation-respond';
+  static String ticketWithdrawalRequest(String ticketId) =>
+      '/api/tickets/$ticketId/withdrawal-request';
 
   static const String inspectionChecklists = '/api/inspection-checklists';
   static String inspectionChecklistDetail(String id) => '/api/inspection-checklists/$id';

@@ -48,6 +48,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _loading = true;
   bool _assigning = false;
   bool _assigningTechnician = false;
+  bool _addingCrew = false;
   bool _updatingStatus = false;
 
   List<TicketComment> _comments = [];
@@ -64,6 +65,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _confirmingMaintenance = false;
   bool _maintenanceCrewBusy = false;
   bool _cancellationBusy = false;
+  bool _withdrawalBusy = false;
   final _cancellationReasonCtrl = TextEditingController();
   String? _selectedCancellationReason;
 
@@ -129,9 +131,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return false;
   }
 
-  bool _canSubmitMaintenanceCompletion() {
+  bool _canSubmitMaintenanceCompletion(Ticket t) {
     final r = (context.read<AuthProvider>().user?.role ?? '').toUpperCase();
-    return r == 'TECHNICIAN' || r == 'WORKER';
+    if (r == 'TECHNICIAN' || r == 'WORKER') return true;
+    if (_isEngineer) {
+      final uid = context.read<AuthProvider>().user?.id;
+      return uid != null && t.assignedEngineerId == uid;
+    }
+    return false;
   }
 
   @override
@@ -567,7 +574,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _maintenanceDispatcherAssignWidgets(Ticket t, AppLocalizations l10n) {
     final hasActive = context.read<TicketsProvider>().hasActiveTicket;
-    if (hasActive) {
+    final uid = context.read<AuthProvider>().user?.id;
+    final isLead = uid != null && t.assignedEngineerId == uid;
+    if (hasActive && t.canBeAssigned) {
       return [
         Container(
           width: double.infinity,
@@ -597,22 +606,74 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         const SizedBox(height: 12),
       ];
     }
-    return [
-      _actionButton(
-        icon: Icons.group_add_rounded,
-        label: l10n.t('maint_assign_technician'),
-        gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
-        loading: _assigningTechnician,
-        onTap: () => _openAssignTechnicianPicker(t),
-      ),
-      const SizedBox(height: 12),
-    ];
+    final out = <Widget>[];
+    if (t.canBeAssigned) {
+      out.add(
+        _actionButton(
+          icon: Icons.group_add_rounded,
+          label: l10n.t('maint_assign_technician'),
+          gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+          loading: _assigningTechnician,
+          onTap: () => _openStaffSearchPicker(
+            t,
+            title: l10n.t('maint_assign_technician'),
+            multiSelect: false,
+            excludeIds: {if (t.assignedEngineerId != null) t.assignedEngineerId!},
+            onPickedSingle: _assignTicketToTechnician,
+          ),
+        ),
+      );
+      out.add(const SizedBox(height: 12));
+      if (!hasActive) {
+        out.add(
+          _actionButton(
+            icon: Icons.person_add_rounded,
+            label: l10n.t('maint_assign_to_me_lead'),
+            gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
+            loading: _assigning,
+            onTap: _assignToMe,
+          ),
+        );
+        out.add(const SizedBox(height: 12));
+      }
+    }
+    if (isLead && !t.isTerminal) {
+      out.add(
+        _actionButton(
+          icon: Icons.groups_rounded,
+          label: l10n.t('maint_add_crew_technicians'),
+          gradient: const [Color(0xFF38BDF8), Color(0xFF0EA5E9)],
+          loading: _addingCrew,
+          onTap: () => _openStaffSearchPicker(
+            t,
+            title: l10n.t('maint_add_crew_technicians'),
+            multiSelect: true,
+            excludeIds: {
+              if (t.assignedEngineerId != null) t.assignedEngineerId!,
+              ...t.maintenanceCrewIds,
+            },
+            onPickedMultiple: _addCrewTechnicians,
+          ),
+        ),
+      );
+      out.add(const SizedBox(height: 12));
+    }
+    return out;
   }
 
-  Future<void> _openAssignTechnicianPicker(Ticket t) async {
+  Future<void> _openStaffSearchPicker(
+    Ticket t, {
+    required String title,
+    required bool multiSelect,
+    Set<String> excludeIds = const {},
+    Future<void> Function(String id)? onPickedSingle,
+    Future<void> Function(List<String> ids)? onPickedMultiple,
+  }) async {
     final l10n = AppLocalizations.of(context);
     final pc = context.read<PrivateCompanyProvider>();
-    final candidates = _technicianAssignCandidates(t, pc);
+    final candidates = _technicianAssignCandidates(t, pc)
+        .where((s) => !excludeIds.contains(s.id))
+        .toList();
     if (!mounted) return;
     if (candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -624,84 +685,208 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       );
       return;
     }
-    final maxH = MediaQuery.of(context).size.height * 0.5;
-    final picked = await showModalBottomSheet<String>(
+    final maxH = MediaQuery.of(context).size.height * 0.62;
+    String query = '';
+    final selected = <String>{};
+
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF12122A),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxH),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                  child: Text(
-                    l10n.t('maint_assign_technician'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final q = query.trim().toLowerCase();
+            final filtered = candidates.where((s) {
+              if (q.isEmpty) return true;
+              final label =
+                  (s.name?.trim().isNotEmpty == true) ? s.name!.trim() : s.username;
+              final blob = '$label ${s.username} ${s.province ?? ''}'.toLowerCase();
+              return blob.contains(q);
+            }).toList();
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+                child: SizedBox(
+                  height: maxH,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TextField(
+                          autofocus: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: l10n.t('maint_search_technicians'),
+                            hintStyle: TextStyle(color: Colors.white.withAlpha(120)),
+                            prefixIcon: const Icon(Icons.search_rounded,
+                                color: Color(0xFF6C63FF)),
+                            filled: true,
+                            fillColor: Colors.white.withAlpha(8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (v) => setModalState(() => query = v),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Text(
+                                  l10n.t('maint_search_no_results'),
+                                  style: TextStyle(color: Colors.white.withAlpha(140)),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (_, i) {
+                                  final s = filtered[i];
+                                  final label = (s.name?.trim().isNotEmpty == true)
+                                      ? s.name!.trim()
+                                      : s.username;
+                                  final sub = (s.province ?? '').trim();
+                                  if (multiSelect) {
+                                    final checked = selected.contains(s.id);
+                                    return CheckboxListTile(
+                                      value: checked,
+                                      onChanged: (v) {
+                                        setModalState(() {
+                                          if (v == true) {
+                                            selected.add(s.id);
+                                          } else {
+                                            selected.remove(s.id);
+                                          }
+                                        });
+                                      },
+                                      activeColor: const Color(0xFF6C63FF),
+                                      title: Text(label,
+                                          style: const TextStyle(color: Colors.white)),
+                                      subtitle: sub.isNotEmpty
+                                          ? Text(sub,
+                                              style: TextStyle(
+                                                  color: Colors.white.withAlpha(160),
+                                                  fontSize: 12))
+                                          : null,
+                                      secondary: const Icon(Icons.person_rounded,
+                                          color: Color(0xFF6C63FF)),
+                                    );
+                                  }
+                                  return ListTile(
+                                    leading: const Icon(Icons.person_rounded,
+                                        color: Color(0xFF6C63FF)),
+                                    title: Text(label,
+                                        style: const TextStyle(color: Colors.white)),
+                                    subtitle: sub.isNotEmpty
+                                        ? Text(sub,
+                                            style: TextStyle(
+                                                color: Colors.white.withAlpha(160),
+                                                fontSize: 12))
+                                        : null,
+                                    onTap: () => Navigator.pop(ctx, s.id),
+                                  );
+                                },
+                              ),
+                      ),
+                      if (multiSelect)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: FilledButton(
+                            onPressed: selected.isEmpty
+                                ? null
+                                : () => Navigator.pop(ctx, selected.toList()),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF6C63FF),
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                            child: Text(l10n.t('maint_add_crew_confirm')),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                Expanded(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: candidates.length,
-                    itemBuilder: (_, i) {
-                      final s = candidates[i];
-                      final label =
-                          (s.name?.trim().isNotEmpty == true) ? s.name!.trim() : s.username;
-                      final sub = (s.province ?? '').trim();
-                      return ListTile(
-                        leading:
-                            const Icon(Icons.person_rounded, color: Color(0xFF6C63FF)),
-                        title: Text(label, style: const TextStyle(color: Colors.white)),
-                        subtitle: sub.isNotEmpty
-                            ? Text(sub,
-                                style: TextStyle(
-                                    color: Colors.white.withAlpha(160), fontSize: 12))
-                            : null,
-                        onTap: () => Navigator.pop(ctx, s.id),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
-    if (picked == null || !mounted) return;
-    await _assignTicketToTechnician(picked);
+
+    if (!mounted || result == null) return;
+    if (multiSelect) {
+      final ids = result is List<String> ? result : <String>[];
+      if (ids.isEmpty) return;
+      await onPickedMultiple?.call(ids);
+    } else if (result is String) {
+      await onPickedSingle?.call(result);
+    }
   }
 
   Future<void> _assignTicketToTechnician(String assigneeRequesterId) async {
     setState(() => _assigningTechnician = true);
-    final ok = await context
+    final res = await context
         .read<TicketsProvider>()
         .assignTicketToRequester(widget.ticketId, assigneeRequesterId);
     if (!mounted) return;
     final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? l10n.t('assign_success') : l10n.t('assign_failed')),
-        backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+        content: Text(
+          res.ok
+              ? l10n.t('assign_success')
+              : (res.message?.trim().isNotEmpty == true
+                  ? res.message!.trim()
+                  : l10n.t('assign_failed')),
+        ),
+        backgroundColor: res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
-    if (ok) await _load();
+    if (res.ok) await _load();
     setState(() => _assigningTechnician = false);
+  }
+
+  Future<void> _addCrewTechnicians(List<String> memberIds) async {
+    setState(() => _addingCrew = true);
+    final res = await context
+        .read<TicketsProvider>()
+        .addMaintenanceCrewMembers(widget.ticketId, memberIds);
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res.ok
+              ? l10n.t('maint_crew_added')
+              : (res.message?.trim().isNotEmpty == true
+                  ? res.message!.trim()
+                  : l10n.t('maint_crew_add_failed')),
+        ),
+        backgroundColor: res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    if (res.ok) await _load();
+    setState(() => _addingCrew = false);
   }
 
   Future<void> _assignToMe() async {
@@ -745,26 +930,247 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _updateStatus(String newStatus) async {
     setState(() => _updatingStatus = true);
-    final ok = await context
-        .read<TicketsProvider>()
-        .updateTicketStatus(widget.ticketId, newStatus);
+    double? lat;
+    double? lng;
+    if (newStatus == 'ON_SITE') {
+      final pos = await _tryGetCurrentPositionForCrew();
+      if (pos != null) {
+        lat = pos.lat;
+        lng = pos.lng;
+      }
+    }
+    final res = await context.read<TicketsProvider>().updateTicketStatus(
+          widget.ticketId,
+          newStatus,
+          latitude: lat,
+          longitude: lng,
+        );
     if (mounted) {
       final l10n = AppLocalizations.of(context);
+      final serverMsg = res.message?.trim();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok
-              ? l10n.t('status_updated', {'status': _statusLabel(newStatus, l10n)})
-              : l10n.t('status_failed')),
+          content: Text(
+            res.ok
+                ? l10n.t('status_updated', {'status': _statusLabel(newStatus, l10n)})
+                : (serverMsg != null && serverMsg.isNotEmpty
+                    ? serverMsg
+                    : l10n.t('status_failed')),
+          ),
           backgroundColor:
-              ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+              res.ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      if (ok) await _load();
+      if (res.ok) await _load();
       setState(() => _updatingStatus = false);
     }
+  }
+
+  Future<void> _requestWithdrawal(Ticket t) async {
+    final l10n = AppLocalizations.of(context);
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        title: Text(l10n.t('withdrawal_request'), style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              l10n.t('withdrawal_request_hint'),
+              style: TextStyle(color: Colors.white.withAlpha(200), fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: l10n.t('withdrawal_reason_hint'),
+                hintStyle: TextStyle(color: Colors.white.withAlpha(120)),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('withdrawal_request')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _withdrawalBusy = true);
+    final res = await context.read<TicketsProvider>().requestTicketWithdrawal(
+          widget.ticketId,
+          reason: reasonCtrl.text,
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res.ok
+              ? l10n.t('withdrawal_requested_success')
+              : (res.message?.trim().isNotEmpty == true
+                  ? res.message!.trim()
+                  : l10n.t('withdrawal_requested_failed')),
+        ),
+      ),
+    );
+    if (res.ok) await _load();
+    setState(() => _withdrawalBusy = false);
+  }
+
+  Future<void> _acceptWithdrawal(Ticket t) async {
+    final wr = t.withdrawalRequest;
+    if (wr == null || !wr.isPending) return;
+    final l10n = AppLocalizations.of(context);
+    String? replacementId;
+    if (wr.role == 'LEAD') {
+      await _openStaffSearchPicker(
+        t,
+        title: l10n.t('withdrawal_pick_replacement'),
+        multiSelect: false,
+        excludeIds: {wr.requestedBy},
+        onPickedSingle: (id) async {
+          replacementId = id;
+        },
+      );
+      if (!mounted || replacementId == null) return;
+    }
+    setState(() => _withdrawalBusy = true);
+    final res = await context.read<TicketsProvider>().respondToTicketWithdrawal(
+          widget.ticketId,
+          action: 'accept',
+          replacementRequesterId: replacementId,
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res.ok
+              ? l10n.t('withdrawal_respond_success')
+              : (res.message?.trim().isNotEmpty == true
+                  ? res.message!.trim()
+                  : l10n.t('withdrawal_respond_failed')),
+        ),
+      ),
+    );
+    if (res.ok) await _load();
+    setState(() => _withdrawalBusy = false);
+  }
+
+  Future<void> _rejectWithdrawal() async {
+    setState(() => _withdrawalBusy = true);
+    final res = await context.read<TicketsProvider>().respondToTicketWithdrawal(
+          widget.ticketId,
+          action: 'reject',
+        );
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res.ok
+              ? l10n.t('withdrawal_respond_success')
+              : (res.message?.trim().isNotEmpty == true
+                  ? res.message!.trim()
+                  : l10n.t('withdrawal_respond_failed')),
+        ),
+      ),
+    );
+    if (res.ok) await _load();
+    setState(() => _withdrawalBusy = false);
+  }
+
+  List<Widget> _withdrawalFieldStaffWidgets(Ticket t, AppLocalizations l10n) {
+    final uid = context.read<AuthProvider>().user?.id;
+    if (uid == null || !_isAssignedFieldStaff(t) || t.isTerminal) return const [];
+    final widgets = <Widget>[];
+    if (t.hasPendingWithdrawalRequest) {
+      widgets.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBBF24).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFBBF24).withAlpha(40)),
+        ),
+        child: Text(
+          l10n.t('withdrawal_pending_banner'),
+          style: TextStyle(color: Colors.white.withAlpha(210), fontSize: 13),
+        ),
+      ));
+      widgets.add(const SizedBox(height: 12));
+      return widgets;
+    }
+    widgets.add(_actionButton(
+      icon: Icons.exit_to_app_rounded,
+      label: l10n.t('withdrawal_request'),
+      gradient: const [Color(0xFFFF9F43), Color(0xFFE67E22)],
+      loading: _withdrawalBusy,
+      onTap: () => _requestWithdrawal(t),
+    ));
+    widgets.add(const SizedBox(height: 12));
+    return widgets;
+  }
+
+  List<Widget> _withdrawalEngineerRespondWidgets(Ticket t, AppLocalizations l10n) {
+    if (!t.hasPendingWithdrawalRequest) return const [];
+    final wr = t.withdrawalRequest!;
+    final name = wr.requestedByName?.trim().isNotEmpty == true
+        ? wr.requestedByName!.trim()
+        : wr.requestedBy;
+    return [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF9F43).withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFF9F43).withAlpha(40)),
+        ),
+        child: Text(
+          l10n.t('withdrawal_incoming_banner', {
+            'name': name,
+            'role': wr.role,
+            'reason': wr.reason?.trim().isNotEmpty == true ? wr.reason!.trim() : '—',
+          }),
+          style: TextStyle(color: Colors.white.withAlpha(210), fontSize: 13, height: 1.35),
+        ),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _actionButton(
+              icon: Icons.check_rounded,
+              label: l10n.t('withdrawal_accept'),
+              gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
+              loading: _withdrawalBusy,
+              onTap: () => _acceptWithdrawal(t),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _actionButton(
+              icon: Icons.close_rounded,
+              label: l10n.t('withdrawal_reject'),
+              gradient: const [Color(0xFFFF4757), Color(0xFFE84393)],
+              loading: _withdrawalBusy,
+              onTap: _rejectWithdrawal,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+    ];
   }
 
   Future<void> _addComment(String body) async {
@@ -1791,7 +2197,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       // ─── Engineer/Technician action buttons ───
       if (isEngineer) ..._buildEngineerActions(t, isMyTicket, l10n),
       if (maintDispatchAssignNonEngineer) ..._maintenanceDispatcherAssignWidgets(t, l10n),
-      if (_isTechnician && t.isMaintenance) ..._buildTechnicianActions(t, isMyTicket, l10n),
+      if (_isTechnician && !_isEngineer)
+        ..._buildTechnicianActions(t, isMyTicket, l10n),
 
       // ─── Resubmit for edit: field staff sends ticket back to coordinator ───
       if ((isEngineer || _isTechnician) &&
@@ -2343,7 +2750,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _maintenanceRequesterConfirmCard(t, l10n),
       ],
       // Maintenance complete: before/after images + send for confirmation (when requester exists)
-      if (_canSubmitMaintenanceCompletion() &&
+      if (_canSubmitMaintenanceCompletion(t) &&
           _userOnMaintenanceTicket(t) &&
           t.isMaintenance &&
           !t.isTerminal &&
@@ -2381,7 +2788,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ),
         ]),
       ],
-      if (t.isMaintenance) ...[
+      if (t.isMaintenance &&
+          (_isEngineer || _isTechnician || _isAssignedFieldStaff(t))) ...[
         const SizedBox(height: 16),
         ..._maintenanceEvidenceSections(t, l10n),
       ],
@@ -2554,6 +2962,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _buildEngineerActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
+    widgets.addAll(_withdrawalEngineerRespondWidgets(t, l10n));
     final ticketsProv = context.watch<TicketsProvider>();
     final hasActive = ticketsProv.hasActiveTicket;
     final pc = context.read<PrivateCompanyProvider>();
@@ -2635,6 +3044,31 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       }
     }
 
+    if (isMyTicket && !t.isTerminal && t.isMaintenance) {
+      final leadUid = context.read<AuthProvider>().user?.id;
+      if (leadUid != null && t.assignedEngineerId == leadUid) {
+        widgets.add(
+          _actionButton(
+            icon: Icons.groups_rounded,
+            label: l10n.t('maint_add_crew_technicians'),
+            gradient: const [Color(0xFF38BDF8), Color(0xFF0EA5E9)],
+            loading: _addingCrew,
+            onTap: () => _openStaffSearchPicker(
+              t,
+              title: l10n.t('maint_add_crew_technicians'),
+              multiSelect: true,
+              excludeIds: {
+                leadUid,
+                ...t.maintenanceCrewIds,
+              },
+              onPickedMultiple: _addCrewTechnicians,
+            ),
+          ),
+        );
+        widgets.add(const SizedBox(height: 12));
+      }
+    }
+
     if (isMyTicket && !t.isTerminal) {
       if (t.isAssignedAwaitingArrival) {
         widgets.add(Container(
@@ -2675,7 +3109,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       } else if (t.isOnSite) {
         widgets.add(_actionButton(
           icon: Icons.play_arrow_rounded,
-          label: l10n.t('start_inspection'),
+          label: t.isMaintenance
+              ? l10n.t('start_maintenance')
+              : l10n.t('start_inspection'),
           gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
           loading: _updatingStatus,
           onTap: () => _updateStatus('IN_PROGRESS'),
@@ -2721,6 +3157,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   List<Widget> _buildTechnicianActions(Ticket t, bool isMyTicket, AppLocalizations l10n) {
     final widgets = <Widget>[];
+    widgets.addAll(_withdrawalFieldStaffWidgets(t, l10n));
     final ticketsProv = context.watch<TicketsProvider>();
     final hasActive = ticketsProv.hasActiveTicket;
     final pc = context.read<PrivateCompanyProvider>();
@@ -2805,7 +3242,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       } else if (t.isOnSite) {
         widgets.add(_actionButton(
           icon: Icons.play_arrow_rounded,
-          label: l10n.t('start_maintenance'),
+          label: t.isMaintenance
+              ? l10n.t('start_maintenance')
+              : l10n.t('start_inspection'),
           gradient: const [Color(0xFF00D4AA), Color(0xFF00B894)],
           loading: _updatingStatus,
           onTap: () => _updateStatus('IN_PROGRESS'),

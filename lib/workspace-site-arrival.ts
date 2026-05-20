@@ -199,3 +199,92 @@ export async function processSiteArrivalForStaff(
 
   return updated;
 }
+
+export type ManualOnSiteProximityResult = {
+  requiresProximity: boolean;
+  allowed: boolean;
+  message?: string;
+  distanceM?: number;
+  radiusM?: number;
+};
+
+/** Gate manual PENDING → ON_SITE for workspace QC / maintenance tickets. */
+export async function validateManualOnSiteProximity(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prisma: any,
+  row: {
+    company: string | null;
+    technique: string | null;
+    privateCompanyId: string | null;
+    assignmentScope: string | null;
+    privateCompanyTargetDepartmentId?: string | null;
+    siteName: string | null;
+    requesterId: string | null;
+  },
+  staff: {
+    privateCompanyDepartmentId: string | null;
+    maintenanceProximityRadiusOverrideM: number | null | undefined;
+  },
+  position: { lat: number; lng: number } | null
+): Promise<ManualOnSiteProximityResult> {
+  if (!row.privateCompanyId || row.assignmentScope !== 'PRIVATE_COMPANY_STAFF') {
+    return { requiresProximity: false, allowed: true };
+  }
+  const crewTicket = await isWorkspaceCrewTicketTechnique(
+    prisma,
+    row.privateCompanyId,
+    row.technique
+  );
+  if (!crewTicket) {
+    return { requiresProximity: false, allowed: true };
+  }
+  const deptId =
+    row.privateCompanyTargetDepartmentId ?? staff.privateCompanyDepartmentId ?? null;
+  const settings = await loadSiteArrivalSettingsForStaff(
+    prisma,
+    row.privateCompanyId,
+    deptId,
+    staff.maintenanceProximityRadiusOverrideM
+  );
+  if (!settings.autoOnSiteEnabled) {
+    return { requiresProximity: false, allowed: true };
+  }
+  if (!position) {
+    return {
+      requiresProximity: true,
+      allowed: false,
+      radiusM: settings.radiusM,
+      message: `On-site requires your GPS location within ${settings.radiusM}m of the job site. Stay pending until you are close enough.`,
+    };
+  }
+  const sitePoint = await resolveTicketSitePointForVisitor(prisma, {
+    companyJson: row.company,
+    siteName: row.siteName,
+    requesterId: row.requesterId,
+  });
+  if (!sitePoint) {
+    return {
+      requiresProximity: true,
+      allowed: false,
+      radiusM: settings.radiusM,
+      message:
+        'This ticket has no site coordinates. Ask the workspace owner to pin the site before marking on site.',
+    };
+  }
+  const distanceM = haversineDistanceMeters(position, sitePoint);
+  if (distanceM > settings.radiusM) {
+    return {
+      requiresProximity: true,
+      allowed: false,
+      distanceM: Math.round(distanceM),
+      radiusM: settings.radiusM,
+      message: `You are about ${Math.round(distanceM)}m from the site. Move within ${settings.radiusM}m to mark on site (ticket stays pending until then).`,
+    };
+  }
+  return {
+    requiresProximity: true,
+    allowed: true,
+    distanceM: Math.round(distanceM),
+    radiusM: settings.radiusM,
+  };
+}

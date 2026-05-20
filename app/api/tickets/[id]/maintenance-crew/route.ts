@@ -7,7 +7,12 @@ import {
   maintenanceCrewIdsFromCompanyJson,
   parseTicketCompanyJson,
 } from '@/lib/private-company-kpi';
-import { fetchWorkspaceTechniqueRows, staffTicketTechniqueAllowed } from '@/lib/workspace-task-assignment';
+import {
+  fetchWorkspaceTechniqueRows,
+  isWorkspaceEngineerRole,
+  staffTicketTechniqueAllowed,
+} from '@/lib/workspace-task-assignment';
+import { MAINTENANCE_DISPATCH_ENGINEER, normalizeMaintenanceDispatchMode } from '@/lib/private-company-maintenance-dispatch';
 import {
   findActiveMaintenanceCrewConflict,
   isWorkspaceCrewTicketTechnique,
@@ -36,7 +41,7 @@ function parseClientLatLng(body: unknown): { lat: number; lng: number } | null {
 
 /**
  * POST /api/tickets/[id]/maintenance-crew
- * Body: { action: "join" | "leave", latitude?, longitude? }
+ * Body: { action: "join" | "leave" | "add", latitude?, longitude?, memberRequesterId?, memberRequesterIds? }
  * Join requires GPS within the workspace proximity radius (department default ± owner
  * per-staff override). Lead / crew receive localized notifications after a successful join.
  */
@@ -51,8 +56,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const body = await req.json().catch(() => ({}));
   const action = typeof body?.action === 'string' ? body.action.trim().toLowerCase() : '';
-  if (action !== 'join' && action !== 'leave') {
-    return NextResponse.json({ success: false, message: 'action must be join or leave' }, { status: 400 });
+  if (action !== 'join' && action !== 'leave' && action !== 'add') {
+    return NextResponse.json(
+      { success: false, message: 'action must be join, leave, or add' },
+      { status: 400 },
+    );
   }
 
   const me = await prisma.ticketRequester.findUnique({
@@ -183,6 +191,116 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!parsed._ticket) parsed._ticket = true;
   let crew = maintenanceCrewIdsFromCompanyJson(parsed);
   const lead = assignedStaffIdFromCompanyJson(parsed);
+
+  if (action === 'add') {
+    const rawIds: string[] = [];
+    if (typeof body?.memberRequesterId === 'string' && body.memberRequesterId.trim()) {
+      rawIds.push(body.memberRequesterId.trim());
+    }
+    if (Array.isArray(body?.memberRequesterIds)) {
+      for (const x of body.memberRequesterIds) {
+        if (typeof x === 'string' && x.trim()) rawIds.push(x.trim());
+      }
+    }
+    const memberIds = [...new Set(rawIds)].filter((id) => id !== lead);
+    if (memberIds.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'memberRequesterId or memberRequesterIds is required.' },
+        { status: 400 },
+      );
+    }
+    const roleUpper = String(me.role ?? '').toUpperCase();
+    const isLead = lead === me.id;
+    const isDispatcher =
+      isWorkspaceEngineerRole(me.role as string) ||
+      roleUpper === 'MANAGER' ||
+      roleUpper === 'COORDINATOR';
+    if (!isLead && !isDispatcher) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Only the ticket lead or a department dispatcher can add crew technicians.',
+        },
+        { status: 403 },
+      );
+    }
+    const targetDept = ticket.privateCompanyTargetDepartmentId ?? null;
+    if (targetDept && isDispatcher && !isLead) {
+      const myDept = me.privateCompanyDepartmentId ?? null;
+      if (!myDept || myDept !== targetDept) {
+        return NextResponse.json(
+          { success: false, message: 'You can only add crew for tickets in your department.' },
+          { status: 403 },
+        );
+      }
+      if (isWorkspaceEngineerRole(me.role as string)) {
+        const drow = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: targetDept, companyId: ticket.privateCompanyId },
+          select: { maintenanceDispatchMode: true },
+        });
+        if (
+          normalizeMaintenanceDispatchMode(drow?.maintenanceDispatchMode) !== MAINTENANCE_DISPATCH_ENGINEER
+        ) {
+          return NextResponse.json(
+            { success: false, message: 'This department does not use engineer maintenance dispatch.' },
+            { status: 403 },
+          );
+        }
+      }
+    }
+    const added: string[] = [];
+    const leadName =
+      (typeof parsed.assignedEngineerName === 'string' && parsed.assignedEngineerName.trim()) ||
+      'Lead';
+    for (const memberId of memberIds) {
+      if (crew.includes(memberId)) continue;
+      const tech = await prisma.ticketRequester.findFirst({
+        where: {
+          id: memberId,
+          privateCompanyId: ticket.privateCompanyId,
+          role: 'TECHNICIAN',
+          status: 'ACTIVE',
+          ...(targetDept ? { privateCompanyDepartmentId: targetDept } : {}),
+        },
+        select: { id: true, name: true, username: true },
+      });
+      if (!tech?.id) {
+        return NextResponse.json(
+          { success: false, message: 'Technician not found in this department.' },
+          { status: 404 },
+        );
+      }
+      crew = [...crew, memberId];
+      added.push(memberId);
+      try {
+        await notifyRequesterI18n({
+          prisma,
+          type: 'maintenance_crew_joined',
+          ticketId,
+          requesterId: memberId,
+          payload: {
+            key: 'maintenance_crew_invited',
+            vars: {
+              name: leadName,
+              ticketId,
+            },
+          },
+          data: { ticketId, type: 'maintenance_crew_invited', invitedBy: me.id },
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    if (added.length === 0) {
+      return NextResponse.json({ success: true, maintenanceCrewIds: crew, added: [] });
+    }
+    parsed.maintenanceCrewIds = crew;
+    await prisma.visitorRequest.update({
+      where: { id: ticketId },
+      data: { company: JSON.stringify(parsed) },
+    });
+    return NextResponse.json({ success: true, maintenanceCrewIds: crew, added });
+  }
 
   if (action === 'join') {
     if (lead === me.id || crew.includes(me.id)) {

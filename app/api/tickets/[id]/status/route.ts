@@ -3,6 +3,7 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
+import { validateManualOnSiteProximity } from '@/lib/workspace-site-arrival';
 
 const prisma = _prisma as any;
 
@@ -92,24 +93,44 @@ export async function PATCH(
     }
 
     let requesterRole = 'COMPANY';
+    let staffDeptId: string | null = null;
+    let staffRadiusOverride: number | null | undefined;
     try {
       const reqRow = await prisma.ticketRequester.findUnique({
         where: { id: auth.payload.requesterId },
-        select: { role: true },
+        select: {
+          role: true,
+          privateCompanyDepartmentId: true,
+          maintenanceProximityRadiusOverrideM: true,
+        },
       });
       requesterRole = reqRow?.role ?? 'COMPANY';
+      staffDeptId = reqRow?.privateCompanyDepartmentId ?? null;
+      staffRadiusOverride = reqRow?.maintenanceProximityRadiusOverrideM;
     } catch { /* fallback */ }
+
+    const ticketSelect = {
+      id: true,
+      status: true,
+      company: true,
+      requesterId: true,
+      technique: true,
+      privateCompanyId: true,
+      assignmentScope: true,
+      privateCompanyTargetDepartmentId: true,
+      siteName: true,
+    };
 
     let row: any;
     if (requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN') {
       row = await prisma.visitorRequest.findUnique({
         where: { id },
-        select: { id: true, status: true, company: true, requesterId: true },
+        select: ticketSelect,
       });
     } else {
       row = await prisma.visitorRequest.findFirst({
         where: { id, requesterId: auth.payload.requesterId },
-        select: { id: true, status: true, company: true, requesterId: true },
+        select: ticketSelect,
       });
     }
 
@@ -156,6 +177,39 @@ export async function PATCH(
         },
         { status: 400 }
       );
+    }
+
+    if (currentStatus === 'PENDING' && newStatus === 'ON_SITE') {
+      const latRaw = body.latitude ?? body.lat;
+      const lngRaw = body.longitude ?? body.lng;
+      const lat = typeof latRaw === 'number' ? latRaw : parseFloat(String(latRaw ?? ''));
+      const lng = typeof lngRaw === 'number' ? lngRaw : parseFloat(String(lngRaw ?? ''));
+      const position =
+        Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+      const proximity = await validateManualOnSiteProximity(
+        prisma,
+        row,
+        {
+          privateCompanyDepartmentId: staffDeptId,
+          maintenanceProximityRadiusOverrideM: staffRadiusOverride,
+        },
+        position
+      );
+      if (proximity.requiresProximity && !proximity.allowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              proximity.message ??
+              `You must be within ${proximity.radiusM ?? '?'}m of the job site before going on site.`,
+            status: 'PENDING',
+            requiresProximity: true,
+            distanceM: proximity.distanceM,
+            radiusM: proximity.radiusM,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     if (parsed._ticket) {

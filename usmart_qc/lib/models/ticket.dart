@@ -45,6 +45,37 @@ class StatusLogEntry {
   }
 }
 
+class TicketWithdrawalRequest {
+  final String requestedBy;
+  final String? requestedByName;
+  final String requestedAt;
+  final String? reason;
+  final String status;
+  final String role;
+
+  TicketWithdrawalRequest({
+    required this.requestedBy,
+    this.requestedByName,
+    required this.requestedAt,
+    this.reason,
+    required this.status,
+    required this.role,
+  });
+
+  factory TicketWithdrawalRequest.fromJson(Map<String, dynamic> json) {
+    return TicketWithdrawalRequest(
+      requestedBy: json['requestedBy'] as String? ?? '',
+      requestedByName: json['requestedByName'] as String?,
+      requestedAt: json['requestedAt'] as String? ?? '',
+      reason: json['reason'] as String?,
+      status: (json['status'] as String? ?? 'PENDING').toUpperCase(),
+      role: (json['role'] as String? ?? 'LEAD').toUpperCase(),
+    );
+  }
+
+  bool get isPending => status == 'PENDING';
+}
+
 class NcrResubmission {
   final String at;
   final String by;
@@ -166,6 +197,7 @@ class Ticket {
   final String? cancellationRejectedAt;
   final String? cancellationRejectionReason;
   final bool canRequestCancellation;
+  final TicketWithdrawalRequest? withdrawalRequest;
   final List<String> workspaceCancellationReasons;
   final List<String> platformCancellationReasons;
   final List<String> platformResubmitReasons;
@@ -243,6 +275,7 @@ class Ticket {
     this.cancellationRejectedAt,
     this.cancellationRejectionReason,
     this.canRequestCancellation = false,
+    this.withdrawalRequest,
     this.workspaceCancellationReasons = const [],
     this.platformCancellationReasons = const [],
     this.platformResubmitReasons = const [],
@@ -255,6 +288,7 @@ class Ticket {
   /// Completed or cancelled — no field edits, staff may take a new ticket from the pool.
   bool get isTerminal => isCompleted || isCancelled;
   bool get hasPendingCancellationRequest => cancellationRequestStatus == 'PENDING';
+  bool get hasPendingWithdrawalRequest => withdrawalRequest?.isPending == true;
 
   bool get awaitsRequesterResubmit =>
       workflowState == 'RESUBMITTED' && resubmitTarget == 'REQUESTER';
@@ -439,6 +473,11 @@ class Ticket {
       cancellationRejectedAt: json['cancellationRejectedAt'] as String?,
       cancellationRejectionReason: json['cancellationRejectionReason'] as String?,
       canRequestCancellation: json['canRequestCancellation'] == true,
+      withdrawalRequest: json['withdrawalRequest'] is Map<String, dynamic>
+          ? TicketWithdrawalRequest.fromJson(
+              json['withdrawalRequest'] as Map<String, dynamic>,
+            )
+          : null,
       workspaceCancellationReasons: () {
         final raw = json['workspaceCancellationReasons'];
         if (raw is! List) return const <String>[];

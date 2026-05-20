@@ -18,7 +18,10 @@ import {
   parseTicketCompanyJson,
   ticketFieldStaffInvolvesRequester,
 } from '@/lib/private-company-kpi';
-import { resolveEngineerTicketScope } from '@/lib/engineer-ticket-scope';
+import {
+  engineerScopeAllowsMaintenance,
+  resolveEngineerTicketScope,
+} from '@/lib/engineer-ticket-scope';
 import {
   engineerWorkspaceTicketAccess,
   fetchWorkspaceTechniqueRows,
@@ -230,6 +233,7 @@ async function notifyPrivateCompanyMembersNewTicket(
             provinceFilterActive: true,
             privateCompanyDepartmentId: true,
             privateCompanyAllowedTaskSlugs: true,
+            privateCompanyEngineerTicketScope: true,
           },
         },
       },
@@ -239,14 +243,16 @@ async function notifyPrivateCompanyMembersNewTicket(
       opts?.maintenanceStyle === true || MAINTENANCE_TECHNIQUES.includes(technique);
     const targetDept = opts?.targetDepartmentId?.trim() || null;
     let maintenanceViaEngineer = false;
+    let targetDeptEngineerScope = 'BOTH';
     if (isMaintenance && targetDept) {
       try {
         const drow = await prisma.privateCompanyDepartment.findFirst({
           where: { id: targetDept, companyId: privateCompanyId },
-          select: { maintenanceDispatchMode: true },
+          select: { maintenanceDispatchMode: true, engineerTicketScope: true },
         });
         maintenanceViaEngineer =
           normalizeMaintenanceDispatchMode(drow?.maintenanceDispatchMode) === MAINTENANCE_DISPATCH_ENGINEER;
+        targetDeptEngineerScope = drow?.engineerTicketScope ?? 'BOTH';
       } catch {
         maintenanceViaEngineer = false;
       }
@@ -281,6 +287,16 @@ async function notifyPrivateCompanyMembersNewTicket(
       }
       const role = String(s.role ?? '').toUpperCase();
       if (!allowed.has(role)) continue;
+      if (
+        maintenanceViaEngineer &&
+        isWorkspaceEngineerRole(role)
+      ) {
+        const scope = resolveEngineerTicketScope(
+          (s as { privateCompanyEngineerTicketScope?: string | null }).privateCompanyEngineerTicketScope,
+          targetDeptEngineerScope,
+        );
+        if (!engineerScopeAllowsMaintenance(scope)) continue;
+      }
       const filterActive = s.provinceFilterActive ?? true;
       const provNorm = (province ?? '').trim().toLowerCase();
       const staffProv = (s.province ?? '').trim().toLowerCase();

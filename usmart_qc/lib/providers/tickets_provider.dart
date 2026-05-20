@@ -625,18 +625,80 @@ class TicketsProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateTicketStatus(String id, String status) async {
+  Future<({bool ok, String? message})> updateTicketStatus(
+    String id,
+    String status, {
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
-      final data = await _api.patch(
-        ApiConfig.ticketStatus(id),
-        body: {'status': status},
-      );
+      final body = <String, dynamic>{'status': status};
+      if (latitude != null &&
+          longitude != null &&
+          latitude.isFinite &&
+          longitude.isFinite) {
+        body['latitude'] = latitude;
+        body['longitude'] = longitude;
+      }
+      final data = await _api.patch(ApiConfig.ticketStatus(id), body: body);
+      final msg = data['message'] as String?;
       if (data['success'] == true) {
         await fetchTickets();
-        return true;
+        return (ok: true, message: msg);
       }
-    } catch (_) {}
-    return false;
+      return (ok: false, message: msg);
+    } catch (e) {
+      return (ok: false, message: e.toString());
+    }
+  }
+
+  Future<({bool ok, String? message})> requestTicketWithdrawal(
+    String ticketId, {
+    String? reason,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      final r = reason?.trim();
+      if (r != null && r.isNotEmpty) body['reason'] = r;
+      final data = await _api.post(
+        ApiConfig.ticketWithdrawalRequest(ticketId),
+        body: body,
+      );
+      final msg = data['message'] as String?;
+      if (data['success'] == true) {
+        await fetchTickets();
+        return (ok: true, message: msg);
+      }
+      return (ok: false, message: msg);
+    } catch (e) {
+      return (ok: false, message: e.toString());
+    }
+  }
+
+  Future<({bool ok, String? message})> respondToTicketWithdrawal(
+    String ticketId, {
+    required String action,
+    String? replacementRequesterId,
+  }) async {
+    try {
+      final body = <String, dynamic>{'action': action};
+      final rep = replacementRequesterId?.trim();
+      if (rep != null && rep.isNotEmpty) {
+        body['replacementRequesterId'] = rep;
+      }
+      final data = await _api.patch(
+        ApiConfig.ticketWithdrawalRequest(ticketId),
+        body: body,
+      );
+      final msg = data['message'] as String?;
+      if (data['success'] == true) {
+        await fetchTickets();
+        return (ok: true, message: msg);
+      }
+      return (ok: false, message: msg);
+    } catch (e) {
+      return (ok: false, message: e.toString());
+    }
   }
 
   Future<({bool ok, String? message})> assignTicketToMe(String id) async {
@@ -654,18 +716,48 @@ class TicketsProvider extends ChangeNotifier {
   }
 
   /// Workspace maintenance: assign a technician by requester id (engineer-dispatch departments).
-  Future<bool> assignTicketToRequester(String ticketId, String assigneeRequesterId) async {
+  Future<({bool ok, String? message})> assignTicketToRequester(
+    String ticketId,
+    String assigneeRequesterId,
+  ) async {
     try {
       final data = await _api.patch(
         ApiConfig.ticketAssign(ticketId),
         body: {'assigneeRequesterId': assigneeRequesterId},
       );
+      final msg = data['message'] as String?;
       if (data['success'] == true) {
         await fetchTickets();
-        return true;
+        return (ok: true, message: msg);
       }
-    } catch (_) {}
-    return false;
+      return (ok: false, message: msg);
+    } catch (e) {
+      return (ok: false, message: e.toString());
+    }
+  }
+
+  /// Lead / dispatcher adds technicians to maintenance crew (notifies each).
+  Future<({bool ok, String? message})> addMaintenanceCrewMembers(
+    String ticketId,
+    List<String> memberRequesterIds,
+  ) async {
+    try {
+      final data = await _api.post(
+        ApiConfig.ticketMaintenanceCrew(ticketId),
+        body: {
+          'action': 'add',
+          'memberRequesterIds': memberRequesterIds,
+        },
+      );
+      final msg = data['message'] as String?;
+      if (data['success'] == true) {
+        await fetchTickets();
+        return (ok: true, message: msg);
+      }
+      return (ok: false, message: msg);
+    } catch (e) {
+      return (ok: false, message: e.toString());
+    }
   }
 
   Future<bool> submitNcrResubmission(

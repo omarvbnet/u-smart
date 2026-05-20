@@ -118,6 +118,21 @@ const Map<String, String> _en = {
   'assign': 'Assign',
   'assign_success': 'Ticket assigned to you!',
   'assign_failed': 'Failed to assign',
+  'withdrawal_request': 'Request withdrawal',
+  'withdrawal_request_hint':
+      'Ask an engineer to remove you from this ticket. For lead assignments, they must assign a replacement technician.',
+  'withdrawal_reason_hint': 'Reason (optional)',
+  'withdrawal_requested_success': 'Withdrawal request sent to your engineer.',
+  'withdrawal_requested_failed': 'Could not send withdrawal request',
+  'withdrawal_pending_banner':
+      'Withdrawal pending — waiting for engineer approval.',
+  'withdrawal_incoming_banner':
+      '{{name}} requested withdrawal ({{role}}). Reason: {{reason}}',
+  'withdrawal_accept': 'Accept withdrawal',
+  'withdrawal_reject': 'Decline',
+  'withdrawal_pick_replacement': 'Choose replacement technician',
+  'withdrawal_respond_success': 'Withdrawal request updated',
+  'withdrawal_respond_failed': 'Could not update withdrawal request',
   'no_tickets': 'No tickets yet',
   'create_first_ticket': 'Create your first ticket to get started',
   'assign_first_ticket': 'Assign yourself a ticket to get started',
@@ -1006,6 +1021,13 @@ const Map<String, String> _en = {
   'pc_dispatch_engineer_desc':
       'Engineers, managers, or coordinators in this department pick the technician before work starts.',
   'maint_assign_technician': 'Assign technician',
+  'maint_assign_to_me_lead': 'Take as lead (self-assign)',
+  'maint_add_crew_technicians': 'Add crew technicians',
+  'maint_add_crew_confirm': 'Add selected to crew',
+  'maint_search_technicians': 'Search by name, username, province…',
+  'maint_search_no_results': 'No technicians match your search.',
+  'maint_crew_added': 'Crew technicians added and notified.',
+  'maint_crew_add_failed': 'Could not add crew technicians.',
   'maint_assign_technician_empty':
       'No technicians in this department match the ticket province (or they are inactive).',
   'pc_dept_workspace_field_crew_title': 'Multi-person field crew',
