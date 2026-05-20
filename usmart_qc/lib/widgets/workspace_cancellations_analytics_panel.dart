@@ -21,6 +21,63 @@ class _WorkspaceCancellationsAnalyticsPanelState
   late DateTime _rangeStart;
   late DateTime _rangeEnd;
   bool _bootstrapped = false;
+  final _reasonAddCtrl = TextEditingController();
+  List<String> _reasons = [];
+  bool _reasonsLoaded = false;
+  bool _reasonsSaving = false;
+
+  @override
+  void dispose() {
+    _reasonAddCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadReasons() async {
+    final pc = context.read<PrivateCompanyProvider>();
+    final fromWorkspace = pc.workspace?.ticketCancellationReasons ?? const [];
+    if (fromWorkspace.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _reasons = List<String>.from(fromWorkspace);
+          _reasonsLoaded = true;
+        });
+      }
+      return;
+    }
+    final snap = await pc.fetchCancellationSettings();
+    if (!mounted) return;
+    final settings = snap?['settings'];
+    final list = settings is Map
+        ? (settings['reasons'] as List<dynamic>?)
+                ?.map((e) => e.toString().trim())
+                .where((s) => s.isNotEmpty)
+                .toList() ??
+            <String>[]
+        : <String>[];
+    setState(() {
+      _reasons = list;
+      _reasonsLoaded = true;
+    });
+  }
+
+  Future<void> _saveReasons() async {
+    setState(() => _reasonsSaving = true);
+    final pc = context.read<PrivateCompanyProvider>();
+    final ok = await pc.patchCancellationSettings(reasons: _reasons);
+    if (mounted) {
+      setState(() => _reasonsSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? AppLocalizations.of(context).t('pc_ws_cancellation_reasons_saved')
+                : (pc.error ?? AppLocalizations.of(context).t('action_failed')),
+          ),
+          backgroundColor: ok ? const Color(0xFF00D4AA) : const Color(0xFFFF4757),
+        ),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -66,6 +123,7 @@ class _WorkspaceCancellationsAnalyticsPanelState
     if (_bootstrapped) return;
     _bootstrapped = true;
     _refresh();
+    _loadReasons();
   }
 
   Future<void> _refresh() {
@@ -148,7 +206,7 @@ class _WorkspaceCancellationsAnalyticsPanelState
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      l10n.t('pc_cancellation_admin_reasons_hint'),
+                      l10n.t('pc_cancellation_workspace_reasons_hint'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 10,
@@ -230,6 +288,75 @@ class _WorkspaceCancellationsAnalyticsPanelState
       children: [
         const SizedBox(height: 8),
         hero,
+        if (pc.canManageCancellationReasons && _reasonsLoaded) ...[
+          _glass(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.t('pc_cancellation_settings'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _reasonAddCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: l10n.t('pc_cancellation_reason_add_hint'),
+                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.45)),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFFFF6B81)),
+                        onPressed: () {
+                          final s = _reasonAddCtrl.text.trim();
+                          if (s.isEmpty || _reasons.contains(s)) return;
+                          setState(() {
+                            _reasons = [..._reasons, s];
+                            _reasonAddCtrl.clear();
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  if (_reasons.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _reasons
+                          .map(
+                            (r) => InputChip(
+                              label: Text(r, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                              deleteIconColor: Colors.white70,
+                              backgroundColor: const Color(0xFFFF6B81).withValues(alpha: 0.15),
+                              side: BorderSide(color: const Color(0xFFFF6B81).withValues(alpha: 0.35)),
+                              onDeleted: () => setState(() => _reasons = _reasons.where((x) => x != r).toList()),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: _reasonsSaving ? null : _saveReasons,
+                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFF6B81)),
+                      child: Text(_reasonsSaving ? '…' : l10n.t('submit')),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         periodRow,
         if (snap == null && pc.cancellationAnalyticsLoading)
           const Padding(

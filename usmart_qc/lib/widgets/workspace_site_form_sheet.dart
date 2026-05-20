@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/iraq_provinces.dart';
@@ -10,6 +11,7 @@ import '../providers/private_company_provider.dart';
 import '../providers/sites_provider.dart';
 import '../models/site_design_document.dart';
 import '../providers/workspace_sites_provider.dart';
+import '../screens/site_map_picker_screen.dart';
 import 'site_design_documents_section.dart';
 
 Future<void> showWorkspaceSiteFormSheet(
@@ -52,7 +54,10 @@ class WorkspaceSiteFormSheet extends StatefulWidget {
 class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
   final _code = TextEditingController();
   final _location = TextEditingController();
+  final _coordsCtrl = TextEditingController();
   String? _province;
+  double? _latitude;
+  double? _longitude;
   bool _attachQfield = false;
   String? _qfieldUrl;
   String? _qfieldFileName;
@@ -70,6 +75,52 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
       _province = s.province;
       _attachQfield = s.hasQfield;
       _designDocuments = List<SiteDesignDocument>.from(s.designDocuments);
+      if (s.hasCoordinates) {
+        _latitude = s.latitude;
+        _longitude = s.longitude;
+        _coordsCtrl.text =
+            '${s.latitude!.toStringAsFixed(6)}, ${s.longitude!.toStringAsFixed(6)}';
+      }
+    }
+  }
+
+  void _applyCoordinates(double lat, double lng) {
+    setState(() {
+      _latitude = lat;
+      _longitude = lng;
+      _coordsCtrl.text = '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+    });
+  }
+
+  Future<void> _openMapPicker() async {
+    final result = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (context) => SiteMapPickerScreen(
+          initialLat: _latitude,
+          initialLng: _longitude,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      _applyCoordinates(result.latitude, result.longitude);
+    }
+  }
+
+  void _parseCoordsFromField() {
+    final text = _coordsCtrl.text.trim();
+    if (text.isEmpty) {
+      setState(() {
+        _latitude = null;
+        _longitude = null;
+      });
+      return;
+    }
+    final parts = text.split(RegExp(r'[,\s;]+')).where((s) => s.isNotEmpty).toList();
+    if (parts.length < 2) return;
+    final lat = double.tryParse(parts[0]);
+    final lng = double.tryParse(parts[1]);
+    if (lat != null && lng != null) {
+      _applyCoordinates(lat, lng);
     }
   }
 
@@ -77,6 +128,7 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
   void dispose() {
     _code.dispose();
     _location.dispose();
+    _coordsCtrl.dispose();
     super.dispose();
   }
 
@@ -138,6 +190,8 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
         siteCode: code,
         location: loc,
         province: prov,
+        latitude: _latitude,
+        longitude: _longitude,
         hasQfield: _attachQfield && qf != null,
         qfieldProjects: qf,
         designDocuments: designPayload,
@@ -148,6 +202,8 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
         siteCode: widget.directEdit ? code : null,
         location: loc,
         province: prov,
+        latitude: _latitude,
+        longitude: _longitude,
         qfieldProjects: qf,
         designDocuments: designPayload,
       );
@@ -241,6 +297,41 @@ class _WorkspaceSiteFormSheetState extends State<WorkspaceSiteFormSheet> {
                   .toList(),
               onChanged: (v) => setState(() => _province = v),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _coordsCtrl,
+              style: const TextStyle(color: Colors.white),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              decoration: InputDecoration(
+                labelText: l10n.t('site_coordinates'),
+                hintText: l10n.t('site_coordinates_hint'),
+                labelStyle: TextStyle(color: Colors.white.withAlpha(160)),
+              ),
+              onSubmitted: (_) => _parseCoordsFromField(),
+              onEditingComplete: _parseCoordsFromField,
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openMapPicker,
+                icon: const Icon(Icons.map, size: 20),
+                label: Text(l10n.t('site_select_on_map')),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withAlpha(100)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            if (_latitude != null && _longitude != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '${l10n.t('site_coordinates')}: ${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
+                  style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 12),
+                ),
+              ),
             const SizedBox(height: 16),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

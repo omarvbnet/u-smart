@@ -42,6 +42,10 @@ import {
   normalizeSpecializationTags,
 } from '@/lib/technique-specialization-tags';
 import { lookupProvisorTechniqueCategory } from '@/lib/provisor-technique-lookup';
+import {
+  resolveTicketSiteCoordinates,
+  resolveWorkspaceSiteCoordinates,
+} from '@/lib/ticket-detail-enrichment';
 import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-rows';
 import { normalizeQFieldProjectsFromCreateBody, qfieldProjectsToJsonValue } from '@/lib/qfield-projects';
 import { extractTicketApiKeyFromRequest, resolveTicketApiKey } from '@/lib/ticket-api-key-auth';
@@ -833,6 +837,29 @@ export async function POST(req: NextRequest) {
       if (Number.isFinite(la) && Number.isFinite(lo)) {
         embedSiteLat = la;
         embedSiteLng = lo;
+      }
+    }
+
+    if (embedSiteLat === undefined && embedSiteLng === undefined && siteName.trim()) {
+      const wsCompanyId =
+        privateCompanyIdForTicket ?? creatorPrivateWorkspaceId ?? approvedWorkspaceCompanyId;
+      if (wsCompanyId) {
+        const fromWs = await resolveWorkspaceSiteCoordinates(prisma, wsCompanyId, siteName);
+        if ('siteLatitude' in fromWs) {
+          embedSiteLat = fromWs.siteLatitude;
+          embedSiteLng = fromWs.siteLongitude;
+        }
+      }
+      if (embedSiteLat === undefined && payload?.requesterId) {
+        const fromPersonal = await resolveTicketSiteCoordinates(
+          prisma,
+          siteName,
+          payload.requesterId
+        );
+        if ('siteLatitude' in fromPersonal) {
+          embedSiteLat = fromPersonal.siteLatitude;
+          embedSiteLng = fromPersonal.siteLongitude;
+        }
       }
     }
 

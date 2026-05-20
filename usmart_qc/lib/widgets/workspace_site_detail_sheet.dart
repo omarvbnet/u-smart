@@ -109,6 +109,13 @@ Future<void> showWorkspaceSiteDetailSheet(
                     '${s.location} · ${s.province}',
                     style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 13),
                   ),
+                  if (s.hasCoordinates) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '${l10n.t('site_coordinates')}: ${s.latitude!.toStringAsFixed(6)}, ${s.longitude!.toStringAsFixed(6)}',
+                      style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 12),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
@@ -136,6 +143,8 @@ Future<void> showWorkspaceSiteDetailSheet(
                             'siteCode': s.siteCode,
                             'location': s.location,
                             'province': s.province,
+                            'latitude': s.latitude,
+                            'longitude': s.longitude,
                             'hasQfield': s.hasQfield,
                             'qfieldProjects': s.qfieldProjects
                                 .map((p) => {

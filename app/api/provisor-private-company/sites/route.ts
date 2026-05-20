@@ -103,7 +103,20 @@ export async function POST(req: NextRequest) {
       ? normalizeQfieldProjectsInput(qfieldRaw, { id: guard.requesterId, name: actorName })
       : [];
   const hasQfieldInput = body.hasQfield === true || projects.length > 0;
-  const coords = hasQfieldInput && projects.length > 0 ? await coordsFromQfieldProjects(projects) : { latitude: null as number | null, longitude: null as number | null, hasQfield: false };
+  const rawLat = body.latitude;
+  const rawLng = body.longitude;
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  if (typeof rawLat === 'number' && typeof rawLng === 'number' && Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+    latitude = rawLat;
+    longitude = rawLng;
+  }
+  const coords =
+    latitude != null && longitude != null
+      ? { latitude, longitude, hasQfield: hasQfieldInput && projects.length > 0 }
+      : hasQfieldInput && projects.length > 0
+        ? await coordsFromQfieldProjects(projects)
+        : { latitude: null as number | null, longitude: null as number | null, hasQfield: false };
 
   try {
     const created = await prisma.privateCompanySite.create({

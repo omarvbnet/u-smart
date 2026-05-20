@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
-import { assertReasonInList, loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
+import { assertReasonInList } from '@/lib/platform-ticket-policy';
+import { resolveEffectiveCancellationReasons } from '@/lib/private-company-cancellations';
 import {
   assertNotBlockedForCancellation,
   canRequesterRequestCancellation,
@@ -98,12 +99,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const policy = await loadPlatformTicketPolicy();
-  const reasonCheck = assertReasonInList(
-    reason,
-    policy.cancellationReasons,
-    'Cancellation reasons'
-  );
+  const allowedReasons = await resolveEffectiveCancellationReasons(ticket.privateCompanyId);
+  const reasonCheck = assertReasonInList(reason, allowedReasons, 'Cancellation reasons');
   if (!reasonCheck.ok) {
     return NextResponse.json(
       {

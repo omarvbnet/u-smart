@@ -8,7 +8,44 @@ import { normalizeExpenseReasons } from '@/lib/private-company-expenses';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-export const CAN_CONFIGURE_CANCELLATION_REASONS = new Set(['COMPANY', 'MANAGER', 'COORDINATOR']);
+export const CAN_CONFIGURE_CANCELLATION_REASONS = new Set(['MANAGER', 'COORDINATOR']);
+
+export function canConfigureCancellationReasons(guard: CancellationsGuardSuccess): boolean {
+  return guard.isOwner || CAN_CONFIGURE_CANCELLATION_REASONS.has(guard.actorRole);
+}
+
+export async function resolveEffectiveCancellationReasons(
+  privateCompanyId: string | null | undefined
+): Promise<string[]> {
+  const cid = privateCompanyId?.trim();
+  if (cid) {
+    const row = await loadCancellationSettings(cid);
+    const workspace = serializeCancellationSettings(row ?? { ticketCancellationReasons: [] }).reasons;
+    if (workspace.length > 0) return workspace;
+  }
+  const { loadPlatformTicketPolicy } = await import('@/lib/platform-ticket-policy');
+  const policy = await loadPlatformTicketPolicy();
+  return policy.cancellationReasons;
+}
+
+export async function ticketCancellationReasonFields(privateCompanyId: string | null | undefined) {
+  const cid = privateCompanyId?.trim();
+  let workspaceCancellationReasons: string[] = [];
+  if (cid) {
+    const row = await loadCancellationSettings(cid);
+    workspaceCancellationReasons = serializeCancellationSettings(row ?? { ticketCancellationReasons: [] }).reasons;
+  }
+  const { loadPlatformTicketPolicy } = await import('@/lib/platform-ticket-policy');
+  const policy = await loadPlatformTicketPolicy();
+  const platformCancellationReasons = policy.cancellationReasons;
+  const cancellationReasonOptions =
+    workspaceCancellationReasons.length > 0 ? workspaceCancellationReasons : platformCancellationReasons;
+  return {
+    workspaceCancellationReasons,
+    platformCancellationReasons,
+    cancellationReasonOptions,
+  };
+}
 
 export type CancellationsGuardSuccess = {
   ok: true;

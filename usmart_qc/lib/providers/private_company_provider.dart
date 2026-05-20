@@ -158,6 +158,9 @@ class PrivateCompanyProvider extends ChangeNotifier {
     return role == 'MANAGER' || role == 'COORDINATOR';
   }
 
+  /// Owner, manager, or coordinator — manage workspace cancellation reason presets.
+  bool get canManageCancellationReasons => canManageStaff;
+
   /// Who may download the ticket-expenses XLSX (API-enforced).
   bool get canExportExpenseLines {
     if (!hasWorkspace || !isApproved) return false;
@@ -819,8 +822,18 @@ class PrivateCompanyProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>?> fetchCancellationSettings() async {
+    try {
+      final res = await _api.get(ApiConfig.privateCompanyCancellationSettings);
+      if (res['success'] == true) {
+        return Map<String, dynamic>.from(res as Map);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<bool> patchCancellationSettings({List<String>? reasons}) async {
-    if (!canManageStaff) return false;
+    if (!canManageCancellationReasons) return false;
     _submitting = true;
     notifyListeners();
     try {

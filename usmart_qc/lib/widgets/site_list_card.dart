@@ -236,6 +236,19 @@ class SiteListCard extends StatelessWidget {
                               fontSize: 11,
                             ),
                           ),
+                          if (site.hasCoordinates) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '${site.latitude!.toStringAsFixed(5)}, ${site.longitude!.toStringAsFixed(5)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFF6C63FF).withAlpha(200),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                           if (addedBy != null) ...[
                             const SizedBox(height: 3),
                             Text(

@@ -162,6 +162,8 @@ export async function processSiteArrivalForStaff(
       companyJson: t.company,
       siteName: t.siteName,
       requesterId: t.requesterId,
+      privateCompanyId:
+        (t as { privateCompanyId?: string | null }).privateCompanyId ?? staff.privateCompanyId,
     });
     if (!sitePoint) continue;
 
@@ -261,6 +263,7 @@ export async function validateManualOnSiteProximity(
     companyJson: row.company,
     siteName: row.siteName,
     requesterId: row.requesterId,
+    privateCompanyId: (row as { privateCompanyId?: string | null }).privateCompanyId ?? null,
   });
   if (!sitePoint) {
     return {

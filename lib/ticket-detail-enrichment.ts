@@ -13,6 +13,34 @@ export function embeddedTicketSiteCoords(parsed: unknown): { siteLatitude: numbe
   return {};
 }
 
+/** Coordinates from a workspace site row (private company site catalog). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function resolveWorkspaceSiteCoordinates(
+  prisma: any,
+  companyId: string | null | undefined,
+  siteCode: string | null | undefined
+): Promise<{ siteLatitude: number; siteLongitude: number } | Record<string, never>> {
+  const cid = companyId?.trim();
+  const code = siteCode?.trim();
+  if (!cid || !code) return {};
+  try {
+    const site = await prisma.privateCompanySite.findFirst({
+      where: {
+        companyId: cid,
+        siteCode: code,
+        confirmationStatus: 'CONFIRMED',
+      },
+      select: { latitude: true, longitude: true },
+    });
+    if (site?.latitude != null && site?.longitude != null) {
+      return { siteLatitude: site.latitude, siteLongitude: site.longitude };
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function resolveTicketSiteCoordinates(prisma: any, siteName: string | null, ownerRequesterId: string | null) {
   if (!siteName?.trim() || !ownerRequesterId?.trim()) return {};
@@ -92,7 +120,12 @@ export async function resolveInspectionChecklistTemplate(prisma: any, templateId
 export async function resolveTicketSitePointForVisitor(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma client from route handlers
   prisma: any,
-  args: { companyJson: string | null | undefined; siteName: string | null | undefined; requesterId: string | null | undefined }
+  args: {
+    companyJson: string | null | undefined;
+    siteName: string | null | undefined;
+    requesterId: string | null | undefined;
+    privateCompanyId?: string | null | undefined;
+  }
 ): Promise<{ lat: number; lng: number } | null> {
   try {
     const p = typeof args.companyJson === 'string' ? JSON.parse(args.companyJson) : {};
@@ -102,6 +135,14 @@ export async function resolveTicketSitePointForVisitor(
     }
   } catch {
     /* ignore */
+  }
+  const fromWorkspace = await resolveWorkspaceSiteCoordinates(
+    prisma,
+    args.privateCompanyId ?? null,
+    args.siteName ?? null
+  );
+  if ('siteLatitude' in fromWorkspace) {
+    return { lat: fromWorkspace.siteLatitude, lng: fromWorkspace.siteLongitude };
   }
   const fromSite = await resolveTicketSiteCoordinates(prisma, args.siteName ?? null, args.requesterId ?? null);
   if ('siteLatitude' in fromSite) {

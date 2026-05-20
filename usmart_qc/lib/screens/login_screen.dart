@@ -761,6 +761,26 @@ class _LoginScreenState extends State<LoginScreen>
                                   const SizedBox(height: 12),
                                   if (_usePasswordLogin) ...[
                                     if (_isPrivateRoleMode) ...[
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: TextButton.icon(
+                                          onPressed: () => setState(() {
+                                            _usePasswordLogin = false;
+                                            _isPrivateRoleMode = false;
+                                            _otpSent = false;
+                                            _otpCodeCtrl.clear();
+                                          }),
+                                          icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                                          label: Text(l10n.t('login_back_to_phone')),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: const Color(0xFF8B5CF6),
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
                                       _buildPrivateRoleHeader(l10n),
                                       const SizedBox(height: 14),
                                     ],

@@ -200,13 +200,15 @@ class Ticket {
   final TicketWithdrawalRequest? withdrawalRequest;
   final List<String> workspaceCancellationReasons;
   final List<String> platformCancellationReasons;
+  final List<String> cancellationReasonOptions;
   final List<String> platformResubmitReasons;
   final bool canEditForResubmit;
 
-  List<String> get effectiveCancellationReasons =>
-      platformCancellationReasons.isNotEmpty
-          ? platformCancellationReasons
-          : workspaceCancellationReasons;
+  List<String> get effectiveCancellationReasons {
+    if (cancellationReasonOptions.isNotEmpty) return cancellationReasonOptions;
+    if (workspaceCancellationReasons.isNotEmpty) return workspaceCancellationReasons;
+    return platformCancellationReasons;
+  }
 
   Ticket({
     required this.id,
@@ -278,6 +280,7 @@ class Ticket {
     this.withdrawalRequest,
     this.workspaceCancellationReasons = const [],
     this.platformCancellationReasons = const [],
+    this.cancellationReasonOptions = const [],
     this.platformResubmitReasons = const [],
     this.canEditForResubmit = false,
   });
@@ -484,7 +487,12 @@ class Ticket {
         return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
       }(),
       platformCancellationReasons: () {
-        final raw = json['platformCancellationReasons'] ?? json['workspaceCancellationReasons'];
+        final raw = json['platformCancellationReasons'];
+        if (raw is! List) return const <String>[];
+        return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+      }(),
+      cancellationReasonOptions: () {
+        final raw = json['cancellationReasonOptions'];
         if (raw is! List) return const <String>[];
         return raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
       }(),

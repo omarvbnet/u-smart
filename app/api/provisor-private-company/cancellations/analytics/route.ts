@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
-import { cancellationsGuard } from '@/lib/private-company-cancellations';
+import { cancellationsGuard, loadCancellationSettings, serializeCancellationSettings } from '@/lib/private-company-cancellations';
 import { loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
 import { CANCELLATION_REASON_KEY, readCancellationFromParsed } from '@/lib/ticket-cancellation';
 import { normalizeProvince } from '@/lib/private-company-warehouse';
@@ -37,8 +37,14 @@ export async function GET(req: NextRequest) {
   const guard = await cancellationsGuard(req);
   if (!guard.ok) return guard.response;
 
-  const policy = await loadPlatformTicketPolicy();
-  const settings = { reasons: policy.cancellationReasons };
+  const row = await loadCancellationSettings(guard.companyId);
+  const workspace = serializeCancellationSettings(row ?? { ticketCancellationReasons: [] });
+  const platform = await loadPlatformTicketPolicy();
+  const settings = {
+    reasons: workspace.reasons.length > 0 ? workspace.reasons : platform.cancellationReasons,
+    workspaceReasons: workspace.reasons,
+    platformReasons: platform.cancellationReasons,
+  };
 
   const url = new URL(req.url);
   const hasExplicitRange =

@@ -19,6 +19,7 @@ import {
   serializeExpenseSettings,
 } from '@/lib/private-company-expenses';
 import { loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
+import { ticketCancellationReasonFields } from '@/lib/private-company-cancellations';
 import { readCancellationFromParsed } from '@/lib/ticket-cancellation';
 import { readResubmitMeta, totalResubmissionHoursFromParsed } from '@/lib/ticket-resubmit';
 import {
@@ -187,15 +188,9 @@ export async function GET(
       const mergedCoords =
         Object.keys(embedCoords).length > 0 ? embedCoords : siteCoords;
 
-      let platformCancellationReasons: string[] = [];
-      let platformResubmitReasons: string[] = [];
-      try {
-        const policy = await loadPlatformTicketPolicy();
-        platformCancellationReasons = policy.cancellationReasons;
-        platformResubmitReasons = policy.resubmitReasons;
-      } catch {
-        /* ignore */
-      }
+      const cancelReasons = await ticketCancellationReasonFields(
+        (row as { privateCompanyId?: string | null }).privateCompanyId ?? null
+      );
 
       return NextResponse.json({
         success: true,
@@ -221,8 +216,8 @@ export async function GET(
           resubmittedAt: row.resubmittedAt ?? null,
           requesterId: row.requesterId ?? null,
           qfieldProjects: qfieldProjectsCoordinator,
-          platformCancellationReasons,
-          platformResubmitReasons,
+          ...cancelReasons,
+          platformResubmitReasons: (await loadPlatformTicketPolicy()).resubmitReasons,
         },
       });
     } catch (err) {
@@ -501,8 +496,8 @@ export async function GET(
       : null;
     let resubmitTarget: string | null = null;
     let resubmissionHours: number | null = null;
-    let platformCancellationReasons: string[] = [];
-    let platformResubmitReasons: string[] = [];
+    let ticketExpenses: ReturnType<typeof expenseRowToJson>[] = [];
+    let workspaceExpenseSettings: ReturnType<typeof serializeExpenseSettings> | null = null;
     try {
       const parsed = typeof row.company === 'string' ? JSON.parse(row.company) : {};
       if (parsed._ticket) {
@@ -696,11 +691,10 @@ export async function GET(
       }
     }
 
-    let ticketExpenses: ReturnType<typeof expenseRowToJson>[] = [];
-    let workspaceExpenseSettings: ReturnType<typeof serializeExpenseSettings> | null = null;
+    let platformResubmitReasons: string[] = [];
+    const cancelReasons = await ticketCancellationReasonFields(privateCompanyIdVal);
     try {
       const policy = await loadPlatformTicketPolicy();
-      platformCancellationReasons = policy.cancellationReasons;
       platformResubmitReasons = policy.resubmitReasons;
     } catch {
       /* policy table may be absent before migrate */
@@ -818,10 +812,8 @@ export async function GET(
         resubmittedAt,
         resubmitTarget,
         resubmissionHours,
-        platformCancellationReasons,
+        ...cancelReasons,
         platformResubmitReasons,
-        /** @deprecated use platformCancellationReasons */
-        workspaceCancellationReasons: platformCancellationReasons,
         canEditForResubmit:
           workflowState === 'RESUBMITTED' && resubmitTarget === 'REQUESTER',
         ...mergedSiteCoords,

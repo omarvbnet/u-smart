@@ -355,7 +355,10 @@ const Map<String, String> _en = {
   'pc_cancellation_cases': 'Recent cases',
   'pc_cancellation_admin_reasons_hint':
       'Reason labels are configured in the web admin under Ticket cancel / resubmit.',
+  'pc_cancellation_workspace_reasons_hint':
+      'Manage preset reasons below. Requesters pick from this list when cancelling a ticket. Included in workspace export.',
   'pc_ws_cancellation_reasons_saved': 'Cancellation reasons saved.',
+  'login_back_to_phone': 'Back to phone sign-in',
   'pc_expenses_days': 'Period',
   'pc_analytics_date_range_label': 'Date range (tap to change)',
   'pc_expenses_export_uses_period':
@@ -2050,6 +2053,10 @@ const Map<String, String> _ar = {
   'pc_cancellation_cases': 'حالات حديثة',
   'pc_cancellation_admin_reasons_hint':
       'تُعد تسميات الأسباب في لوحة الويب ضمن سياسة إلغاء التذكرة وإعادة الإرسال.',
+  'pc_cancellation_workspace_reasons_hint':
+      'أدر الأسباب المحددة مسبقاً أدناه. يختار مقدم الطلب منها عند إلغاء التذكرة. تُضمَّن في تصدير مساحة العمل.',
+  'pc_ws_cancellation_reasons_saved': 'تم حفظ أسباب الإلغاء.',
+  'login_back_to_phone': 'العودة لتسجيل الدخول بالهاتف',
   'pc_expenses_days': 'الفترة',
   'pc_analytics_date_range_label': 'نطاق التاريخ (اضغط للتغيير)',
   'pc_expenses_export_uses_period':
@@ -3143,6 +3150,10 @@ const Map<String, String> _ku = {
   'pc_cancellation_cases': 'حاڵەتە نوێکان',
   'pc_cancellation_admin_reasons_hint':
       'پێناسەی هۆکارەکان لە ئەدمینی وێب بۆ سیاسەی هەڵوەشاندنەوە و دووبارە ناردنەوە دابنرێن.',
+  'pc_cancellation_workspace_reasons_hint':
+      'هۆکارە دیاریکراوەکان لە خوارەوە بەڕێوەببە. داواکار لەم لیستە هەڵدەبژێرێت کاتێک تیکێت هەڵدەوەشێنێتەوە. لە هەناردەی workspace دەگرێتەوە.',
+  'pc_ws_cancellation_reasons_saved': 'هۆکارەکانی هەڵوەشاندنەوە پاشەکەوت کران.',
+  'login_back_to_phone': 'گەڕانەوە بۆ چوونەژوورەوە بە تەلەفۆن',
   'pc_expenses_days': 'ماوە',
   'pc_analytics_date_range_label': 'ماوەی بەروار (دەست لێ بدە بۆ گۆڕین)',
   'pc_expenses_export_uses_period':
@@ -4240,6 +4251,10 @@ const Map<String, String> _tr = {
   'pc_cancellation_cases': 'Son iptaller',
   'pc_cancellation_admin_reasons_hint':
       'Neden metinleri web yönetiminde bilet iptal / yeniden gönderim politikasında yapılandırılır.',
+  'pc_cancellation_workspace_reasons_hint':
+      'Aşağıda önceden tanımlı nedenleri yönetin. Talep edenler bilet iptal ederken bu listeden seçer. Çalışma alanı dışa aktarımına dahildir.',
+  'pc_ws_cancellation_reasons_saved': 'İptal nedenleri kaydedildi.',
+  'login_back_to_phone': 'Telefonla girişe dön',
   'pc_expenses_days': 'Dönem',
   'pc_analytics_date_range_label': 'Tarih aralığı (değiştirmek için dokunun)',
   'pc_expenses_export_uses_period':

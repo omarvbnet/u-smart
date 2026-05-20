@@ -8,6 +8,11 @@ import {
   siteArrivalHours,
   taskDurationHours,
 } from '@/lib/private-company-kpi';
+import {
+  loadCancellationSettings,
+  serializeCancellationSettings,
+} from '@/lib/private-company-cancellations';
+import { CANCELLATION_REASON_KEY, readCancellationFromParsed } from '@/lib/ticket-cancellation';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -112,7 +117,13 @@ export async function GET(req: NextRequest) {
 
   const companyRow = await prisma.privateCompany.findUnique({
     where: { id: m.effectiveCompanyId },
-    select: { id: true, name: true, status: true, ownerRequesterId: true },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      ownerRequesterId: true,
+      ticketCancellationReasons: true,
+    },
   });
   if (!companyRow || companyRow.status !== 'APPROVED') {
     return NextResponse.json({ success: false, message: 'Workspace is not active.' }, { status: 403 });
@@ -489,6 +500,30 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  const cancellationReasons = serializeCancellationSettings({
+    ticketCancellationReasons: companyRow.ticketCancellationReasons ?? [],
+  }).reasons;
+
+  const cancellationByReason = new Map<string, number>();
+  for (const t of tickets as Array<{ id: string; status: string; company: string | null }>) {
+    if (String(t.status).toUpperCase() !== 'CANCELLED') continue;
+    const parsed = parseTicketCompanyJson(t.company);
+    const cancel = readCancellationFromParsed(parsed);
+    const reason =
+      (cancel.cancellationReason?.trim() ||
+        (typeof parsed[CANCELLATION_REASON_KEY] === 'string'
+          ? String(parsed[CANCELLATION_REASON_KEY]).trim()
+          : '')) ||
+      'Unknown';
+    cancellationByReason.set(reason, (cancellationByReason.get(reason) ?? 0) + 1);
+  }
+  const cancellationAnalytics = {
+    totalCancelled: [...cancellationByReason.values()].reduce((s, n) => s + n, 0),
+    byReason: [...cancellationByReason.entries()]
+      .map(([reason, ticketCount]) => ({ reason, ticketCount }))
+      .sort((a, b) => b.ticketCount - a.ticketCount),
+  };
+
   const payload = {
     success: true,
     exportedAt: new Date().toISOString(),
@@ -499,6 +534,10 @@ export async function GET(req: NextRequest) {
     staff: staffExport,
     tickets: ticketsLite,
     ticketSummary,
+    cancellation: {
+      reasons: cancellationReasons,
+      analytics: cancellationAnalytics,
+    },
     performance: {
       ticketCount: tickets.length,
       ticketSummary,
