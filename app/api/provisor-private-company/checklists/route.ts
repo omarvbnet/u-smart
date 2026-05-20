@@ -33,7 +33,8 @@ function normalizeItems(raw: unknown): StoredChecklistItem[] | null {
       const label = typeof item.label === 'string' ? item.label.trim() : '';
       if (!label) return null;
       const sev = typeof item.severity === 'string' ? item.severity.trim().toLowerCase() : '';
-      const severity: 'minor' | 'major' = sev === 'major' ? 'major' : 'minor';
+      const wt = typeof item.weight === 'string' ? item.weight.trim().toLowerCase() : '';
+      const severity: 'minor' | 'major' = sev === 'major' || wt === 'major' ? 'major' : 'minor';
       return {
         id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : crypto.randomBytes(6).toString('hex'),
         label,

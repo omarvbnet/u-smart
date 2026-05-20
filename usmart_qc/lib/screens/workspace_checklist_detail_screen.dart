@@ -36,6 +36,8 @@ class WorkspaceChecklistDetailScreen extends StatelessWidget {
         checklist: checklist,
         workspaceName: workspace.name,
         departmentName: _departmentName(),
+        labels: ChecklistPdfLabels.fromL10n(l10n),
+        localeCode: l10n.locale.languageCode,
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -55,6 +57,8 @@ class WorkspaceChecklistDetailScreen extends StatelessWidget {
         checklist: checklist,
         workspaceName: workspace.name,
         departmentName: _departmentName(),
+        labels: ChecklistPdfLabels.fromL10n(l10n),
+        localeCode: l10n.locale.languageCode,
       );
       if (!context.mounted) return;
       await shareWorkspaceChecklistPdf(

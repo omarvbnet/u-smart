@@ -249,8 +249,9 @@ class PrivateCompanyStaff {
 /// Severity of a checklist item — used during inspection to weight findings.
 enum PrivateCompanyChecklistItemSeverity { minor, major }
 
-PrivateCompanyChecklistItemSeverity _severityFromString(String? raw) {
-  return (raw ?? '').toLowerCase() == 'major'
+PrivateCompanyChecklistItemSeverity _severityFromString(String? raw, {String? weightFallback}) {
+  final v = (raw ?? weightFallback ?? '').trim().toLowerCase();
+  return v == 'major'
       ? PrivateCompanyChecklistItemSeverity.major
       : PrivateCompanyChecklistItemSeverity.minor;
 }
@@ -282,7 +283,10 @@ class PrivateCompanyChecklistItem {
       label: json['label'] as String? ?? '',
       weight: json['weight'] as String?,
       required: json['required'] == true,
-      severity: _severityFromString(json['severity'] as String?),
+      severity: _severityFromString(
+        json['severity'] as String?,
+        weightFallback: json['weight'] as String?,
+      ),
     );
   }
 

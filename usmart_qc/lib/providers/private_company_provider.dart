@@ -1329,6 +1329,22 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   // ─── Checklists ──────────────────────────────────────────────────────────
 
+  Future<PrivateCompanyChecklist?> fetchChecklistById(String id) async {
+    final trimmed = id.trim();
+    if (trimmed.isEmpty) return null;
+    final cached = workspace?.checklists.where((c) => c.id == trimmed);
+    if (cached != null && cached.isNotEmpty) return cached.first;
+    try {
+      final res = await _api.get(ApiConfig.privateCompanyChecklistDetail(trimmed));
+      if (res['success'] == true && res['checklist'] is Map) {
+        return PrivateCompanyChecklist.fromJson(
+          Map<String, dynamic>.from(res['checklist'] as Map),
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<bool> createChecklist({
     required String name,
     String? description,

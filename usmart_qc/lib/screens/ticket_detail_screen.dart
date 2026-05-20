@@ -297,25 +297,51 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _loadChecklistsForTicket(Ticket t) async {
     final provider = context.read<TicketsProvider>();
+    final pc = context.read<PrivateCompanyProvider>();
     setState(() => _loadingChecklists = true);
     var checklists = await provider.fetchChecklists(technique: t.technique);
     final tid = t.checklistTemplateId?.trim();
-    final preview = t.checklistTemplate;
-    if (tid != null && tid.isNotEmpty && preview != null && preview.isNotEmpty) {
-      final has = checklists.any((c) => c.id == tid);
-      if (!has) {
-        try {
-          final itemsRaw = preview['items'];
-          final synthetic = InspectionChecklist.fromJson({
-            'id': preview['id'] ?? tid,
-            'name': (preview['name'] as String?)?.trim().isNotEmpty == true
-                ? preview['name']
-                : 'Checklist',
-            'items': itemsRaw is List ? itemsRaw : <dynamic>[],
-            'archived': false,
-          });
-          checklists = [synthetic, ...checklists];
-        } catch (_) {}
+    if (tid != null && tid.isNotEmpty) {
+      PrivateCompanyChecklist? workspaceCl;
+      if (pc.workspace != null) {
+        for (final c in pc.workspace!.checklists) {
+          if (c.id == tid) {
+            workspaceCl = c;
+            break;
+          }
+        }
+      }
+      workspaceCl ??= await pc.fetchChecklistById(tid);
+
+      InspectionChecklist? attached;
+      if (workspaceCl != null) {
+        attached = inspectionChecklistFromWorkspace(workspaceCl);
+      } else {
+        final preview = t.checklistTemplate;
+        if (preview != null && preview.isNotEmpty) {
+          try {
+            attached = InspectionChecklist.fromJson({
+              'id': preview['id'] ?? tid,
+              'name': (preview['name'] as String?)?.trim().isNotEmpty == true
+                  ? preview['name']
+                  : 'Checklist',
+              'items': normalizeChecklistItemsJson(
+                preview['items'] is List ? preview['items'] as List : null,
+              ),
+              'archived': false,
+            });
+          } catch (_) {}
+        }
+      }
+
+      if (attached != null) {
+        final idx = checklists.indexWhere((c) => c.id == tid);
+        if (idx >= 0) {
+          checklists = [...checklists];
+          checklists[idx] = attached;
+        } else {
+          checklists = [attached, ...checklists];
+        }
       }
     }
     if (mounted) {
@@ -324,6 +350,22 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _loadingChecklists = false;
       });
     }
+  }
+
+  List<ChecklistItem>? _attachedTemplateItemsFor(Ticket t) {
+    final tid = t.checklistTemplateId?.trim();
+    if (tid == null || tid.isEmpty) return null;
+    for (final c in _checklists) {
+      if (c.id == tid) return c.items;
+    }
+    final previewItems = t.checklistTemplate?['items'];
+    if (previewItems is List) {
+      return previewItems
+          .whereType<Map>()
+          .map((e) => ChecklistItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+    return null;
   }
 
   Future<void> _loadArchivedChecklists() async {
@@ -2083,7 +2125,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     if (preview == null && (tid == null || tid.isEmpty)) return [];
 
     final name = preview?['name'] as String?;
-    final rawItems = preview?['items'];
 
     return [
       const SizedBox(height: 16),
@@ -2111,70 +2152,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               ),
             ),
           ),
-        if (rawItems is List && rawItems.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              l10n.t('ticket_checklist_items_count', {'count': '${rawItems.length}'}),
-              style: TextStyle(
-                color: Colors.white.withAlpha(100),
-                fontSize: 12,
-              ),
-            ),
-          ),
-          ...rawItems.map((raw) {
-            if (raw is! Map) return const SizedBox.shrink();
-            final m = Map<String, dynamic>.from(raw);
-            final label = m['label'] as String? ?? '';
-            if (label.isEmpty) return const SizedBox.shrink();
-            final w = (m['weight'] as String?)?.toLowerCase();
-            final isMajor = w == 'major';
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.radio_button_unchecked_rounded,
-                    size: 16,
-                    color: Colors.white.withAlpha(120),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: Colors.white.withAlpha(200),
-                        fontSize: 13,
-                      ),
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: (isMajor ? const Color(0xFFFF4757) : const Color(0xFF818CF8))
-                          .withAlpha(36),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withAlpha(22)),
-                    ),
-                    child: Text(
-                      isMajor ? l10n.t('checklist_weight_major') : l10n.t('checklist_weight_minor'),
-                      style: TextStyle(
-                        color: isMajor ? const Color(0xFFFF8A94) : const Color(0xFFB4B9FF),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 8),
-        ],
+        const SizedBox(height: 8),
       ]),
     ];
   }
@@ -2568,10 +2546,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         const SizedBox(height: 16),
         _glassSection(l10n.t('inspection_checklist'), [
           ...t.inspectionChecklist!.map((item) {
-            final label = item['label'] as String? ?? '';
-            final result = item['result'] as String? ?? (item['checked'] == true ? 'accepted' : 'rejected');
+            final itemMap = Map<String, dynamic>.from(item);
+            final label = itemMap['label'] as String? ?? '';
+            final result = itemMap['result'] as String? ?? (itemMap['checked'] == true ? 'accepted' : 'rejected');
             final isAccepted = result == 'accepted';
-            final comment = item['comment'] as String?;
+            final comment = itemMap['comment'] as String?;
+            final isMajor = resolveTicketChecklistItemWeight(
+                  itemMap,
+                  checklistTemplate: t.checklistTemplate,
+                  templateItems: _attachedTemplateItemsFor(t),
+                ) ==
+                'major';
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
@@ -2603,6 +2588,31 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                           ),
                         ),
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isMajor
+                                  ? const Color(0xFFFF4757)
+                                  : const Color(0xFF818CF8))
+                              .withAlpha(36),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withAlpha(22)),
+                        ),
+                        child: Text(
+                          isMajor
+                              ? l10n.t('checklist_weight_major')
+                              : l10n.t('checklist_weight_minor'),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: isMajor
+                                ? const Color(0xFFFF8A94)
+                                : const Color(0xFFB4B9FF),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
@@ -6175,8 +6185,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       final hasReject = items.any((i) =>
           (i['result'] as String? ?? '').toLowerCase() == 'rejected' ||
           (i['checked'] == false && i['result'] == null));
-      final hasMajor = items.any((i) =>
-          (i['weight'] as String? ?? '').toLowerCase() == 'major');
+      final templateItems = _attachedTemplateItemsFor(t);
+      final hasMajor = items.any((i) {
+        final m = Map<String, dynamic>.from(i);
+        return resolveTicketChecklistItemWeight(
+              m,
+              checklistTemplate: t.checklistTemplate,
+              templateItems: templateItems,
+            ) ==
+            'major';
+      });
       if (hasReject && hasMajor) return 'ncr';
       if (hasReject) return 'not_accepted';
       final hasComments = items.any((i) =>

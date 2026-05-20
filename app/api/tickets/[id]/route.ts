@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveChecklistItemSeverity } from '@/lib/checklist-item-severity';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
@@ -516,13 +517,14 @@ export async function GET(
         inspectionChecklist = Array.isArray(parsed.inspectionChecklist)
           ? parsed.inspectionChecklist
             .filter((c: unknown) => c && typeof c === 'object' && 'id' in c && 'label' in c && 'checked' in c)
-            .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string; result?: string }) => ({
+            .map((c: { id: string; label: string; checked: boolean; comment?: string; weight?: string; severity?: string; result?: string }) => ({
               id: c.id,
               label: c.label,
               checked: !!c.checked,
               result: typeof c.result === 'string' ? c.result : (c.checked ? 'accepted' : 'rejected'),
               comment: c.comment,
-              weight: c.weight === 'major' ? 'major' : 'minor',
+              weight: resolveChecklistItemSeverity(c as Record<string, unknown>),
+              severity: resolveChecklistItemSeverity(c as Record<string, unknown>),
             }))
           : [];
         ncrReason = (parsed.ncrReason as string) ?? null;

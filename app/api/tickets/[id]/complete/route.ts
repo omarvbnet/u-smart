@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveChecklistItemSeverity } from '@/lib/checklist-item-severity';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
@@ -230,14 +231,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (checklistResponse) {
       parsed.checklistResponse = checklistResponse;
       const items = Array.isArray(checklistResponse.items) ? checklistResponse.items : [];
-      parsed.inspectionChecklist = items.map((item: Record<string, unknown>) => ({
-        id: String(item.id ?? ''),
-        label: String(item.label ?? ''),
-        checked: !!item.checked,
-        result: typeof item.result === 'string' ? item.result : item.checked ? 'accepted' : 'rejected',
-        comment: typeof item.comment === 'string' ? item.comment : typeof item.note === 'string' ? item.note : undefined,
-        weight: typeof item.weight === 'string' ? item.weight : 'minor',
-      }));
+      parsed.inspectionChecklist = items.map((item: Record<string, unknown>) => {
+        const severity = resolveChecklistItemSeverity(item);
+        return {
+          id: String(item.id ?? ''),
+          label: String(item.label ?? ''),
+          checked: !!item.checked,
+          result: typeof item.result === 'string' ? item.result : item.checked ? 'accepted' : 'rejected',
+          comment: typeof item.comment === 'string' ? item.comment : typeof item.note === 'string' ? item.note : undefined,
+          weight: severity,
+          severity,
+        };
+      });
     }
     if (inspectionResult) {
       parsed.inspectionResult = inspectionResult;
