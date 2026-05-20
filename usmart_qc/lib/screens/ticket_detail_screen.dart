@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -73,6 +74,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _savingCompletionReason = false;
 
   Map<String, dynamic>? _ticketMaterialsSummary;
+  Timer? _siteArrivalTimer;
 
   final _picker = ImagePicker();
 
@@ -140,8 +142,70 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   @override
   void dispose() {
+    _siteArrivalTimer?.cancel();
     _cancellationReasonCtrl.dispose();
     super.dispose();
+  }
+
+  String? _targetDepartmentLabel(Ticket t) {
+    final fromApi = t.privateCompanyTargetDepartmentName?.trim();
+    if (fromApi != null && fromApi.isNotEmpty) return fromApi;
+    final id = t.privateCompanyTargetDepartmentId;
+    if (id == null) return null;
+    for (final d in context.read<PrivateCompanyProvider>().workspace?.departments ??
+        const <PrivateCompanyDepartment>[]) {
+      if (d.id == id) {
+        final n = d.name.trim();
+        return n.isNotEmpty ? n : null;
+      }
+    }
+    return null;
+  }
+
+  List<String> _progressStepsFor(Ticket t) {
+    if (!t.isMaintenance && t.isWorkspaceScoped) {
+      return ['PENDING', 'ASSIGNED', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'];
+    }
+    return ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'];
+  }
+
+  int _progressStepIndex(Ticket t, List<String> steps) {
+    final s = t.status.toUpperCase();
+    if (s == 'COMPLETED') return steps.indexOf('COMPLETED');
+    if (s == 'IN_PROGRESS') return steps.indexOf('IN_PROGRESS');
+    if (s == 'ON_SITE') return steps.indexOf('ON_SITE');
+    if (t.isAssignedAwaitingArrival && steps.contains('ASSIGNED')) {
+      return steps.indexOf('ASSIGNED');
+    }
+    return steps.indexOf('PENDING').clamp(0, steps.length - 1);
+  }
+
+  void _syncSiteArrivalWatcher() {
+    _siteArrivalTimer?.cancel();
+    final t = _ticket;
+    if (t == null || !t.isWorkspaceScoped) return;
+    final uid = context.read<AuthProvider>().user?.id;
+    if (uid == null || t.assignedEngineerId != uid) return;
+    if (!t.isAssignedAwaitingArrival) return;
+    _siteArrivalTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      _checkSiteArrivalAuto();
+    });
+    _checkSiteArrivalAuto();
+  }
+
+  Future<void> _checkSiteArrivalAuto() async {
+    if (!mounted) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    if (!pc.hasWorkspace) return;
+    final n = await pc.checkWorkspaceSiteArrival();
+    if (!mounted || n < 1) return;
+    final updated =
+        await context.read<TicketsProvider>().fetchTicketDetail(widget.ticketId);
+    if (!mounted || updated == null) return;
+    setState(() => _ticket = updated);
+    if (!updated.isAssignedAwaitingArrival) {
+      _siteArrivalTimer?.cancel();
+    }
   }
 
   Future<void> _load() async {
@@ -177,6 +241,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         _loadChecklistsForTicket(t);
         _loadArchivedChecklists();
       }
+      _syncSiteArrivalWatcher();
       context.read<SitesProvider>().fetchSites();
       Future.microtask(() => _loadTicketWarehouseSummary());
     }
@@ -856,6 +921,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Future<void> _completeWithChecklist(
       Map<String, dynamic> checklistResponse) async {
+    final t = _ticket;
+    if (t == null) return;
+    if (!t.isInProgress) {
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.t('qc_must_be_in_progress')),
+          backgroundColor: const Color(0xFFFBBF24),
+        ),
+      );
+      return;
+    }
     final items = (checklistResponse['items'] as List?) ?? [];
     final allAccepted = items.every((i) =>
         (i is Map && (i['result'] ?? i['checked']) == 'accepted') ||
@@ -1775,6 +1852,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         if (t.assignedEngineerId != null)
           _rowWithCopy(l10n.t('assigned_engineer_id'), t.assignedEngineerId!, l10n),
         _row(l10n.t('coordinator'), t.siteCoordinator ?? '-'),
+        if (_targetDepartmentLabel(t) != null)
+          _row(l10n.t('ticket_department'), _targetDepartmentLabel(t)!),
         _row(l10n.t('technique_label'), _techniqueLabel(t.technique, l10n)),
         if (t.workspaceTicketExpensesEnabled || t.ticketExpenses.isNotEmpty)
           _row(
@@ -2231,6 +2310,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           isMyTicket &&
           !t.isMaintenance &&
           !t.isTerminal &&
+          t.isInProgress &&
           (!t.isNcr || _isNcrResolved(t))) ...[
         if (!fieldStaffAwaitingRequesterOnQc) ...[
           ..._engineerChecklistTemplateControls(t, l10n),
@@ -2463,8 +2543,43 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
 
     if (isMyTicket && !t.isTerminal) {
-      // Status flow: ON_SITE -> IN_PROGRESS
-      if (t.isOnSite) {
+      if (t.isAssignedAwaitingArrival) {
+        widgets.add(Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF6C63FF).withAlpha(15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF6C63FF).withAlpha(40)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on_rounded, color: Color(0xFF6C63FF), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.t('awaiting_site_arrival'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(210),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
+        widgets.add(const SizedBox(height: 10));
+        widgets.add(_actionButton(
+          icon: Icons.place_rounded,
+          label: l10n.t('mark_on_site'),
+          gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+          loading: _updatingStatus,
+          onTap: () => _updateStatus('ON_SITE'),
+        ));
+        widgets.add(const SizedBox(height: 12));
+      } else if (t.isOnSite) {
         widgets.add(_actionButton(
           icon: Icons.play_arrow_rounded,
           label: l10n.t('start_inspection'),
@@ -2475,7 +2590,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         widgets.add(const SizedBox(height: 12));
       }
 
-      // Status stepper
       widgets.add(_buildStatusStepper(t, l10n));
       widgets.add(const SizedBox(height: 16));
     }
@@ -2559,7 +2673,43 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
 
     if (isMyTicket && !t.isTerminal) {
-      if (t.isOnSite) {
+      if (t.isAssignedAwaitingArrival) {
+        widgets.add(Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF6C63FF).withAlpha(15),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF6C63FF).withAlpha(40)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on_rounded, color: Color(0xFF6C63FF), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.t('awaiting_site_arrival'),
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(210),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
+        widgets.add(const SizedBox(height: 10));
+        widgets.add(_actionButton(
+          icon: Icons.place_rounded,
+          label: l10n.t('mark_on_site'),
+          gradient: const [Color(0xFF6C63FF), Color(0xFF5A52E0)],
+          loading: _updatingStatus,
+          onTap: () => _updateStatus('ON_SITE'),
+        ));
+        widgets.add(const SizedBox(height: 12));
+      } else if (t.isOnSite) {
         widgets.add(_actionButton(
           icon: Icons.play_arrow_rounded,
           label: l10n.t('start_maintenance'),
@@ -3487,9 +3637,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Widget _buildStatusStepper(Ticket t, AppLocalizations l10n) {
-    final steps = ['PENDING', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED'];
-    final currentIdx =
-        steps.indexOf(t.status.toUpperCase()).clamp(0, steps.length - 1);
+    final steps = _progressStepsFor(t);
+    final currentIdx = _progressStepIndex(t, steps);
     final labelSize = RLayout.isNarrow(context) ? 8.5 : 10.0;
     final stepper = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3637,6 +3786,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       final d = tl.isNotEmpty ? tl.first.createdAt : t.createdAt;
       return fmt.format(d.toLocal());
     }
+    if (up == 'ASSIGNED') {
+      if (t.assignedAt != null && t.assignedAt!.trim().isNotEmpty) {
+        final d = DateTime.tryParse(t.assignedAt!);
+        if (d != null) return fmt.format(d.toLocal());
+      }
+      return '—';
+    }
     if (up == 'ON_SITE') {
       final d = lastFor('ON_SITE');
       return d != null ? fmt.format(d.toLocal()) : '—';
@@ -3682,6 +3838,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     switch (status.toUpperCase()) {
       case 'PENDING':
         return Icons.schedule;
+      case 'ASSIGNED':
+        return Icons.person_pin_circle_rounded;
       case 'ON_SITE':
         return Icons.location_on;
       case 'IN_PROGRESS':
@@ -5434,6 +5592,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     switch (status.toUpperCase()) {
       case 'PENDING':
         return const Color(0xFFFBBF24);
+      case 'ASSIGNED':
+        return const Color(0xFF8B83FF);
       case 'ON_SITE':
         return const Color(0xFF6C63FF);
       case 'IN_PROGRESS':
@@ -5491,6 +5651,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     switch (s.toUpperCase()) {
       case 'PENDING':
         return l10n.t('section_pending');
+      case 'ASSIGNED':
+        return l10n.t('status_assigned');
       case 'ON_SITE':
         return l10n.t('section_on_site');
       case 'IN_PROGRESS':

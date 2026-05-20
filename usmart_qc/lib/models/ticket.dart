@@ -141,6 +141,7 @@ class Ticket {
   final String? privateCompanyId;
   /// Optional department target for workspace pool visibility (null = all departments).
   final String? privateCompanyTargetDepartmentId;
+  final String? privateCompanyTargetDepartmentName;
   /// Additional workspace staff requester ids on the same ticket (`maintenanceCrewIds` in company JSON; used for maintenance and QC).
   final List<String> maintenanceCrewIds;
   /// ISO timestamp: field team sent completion for requester confirmation (maintenance).
@@ -225,6 +226,7 @@ class Ticket {
     this.assignmentScope,
     this.privateCompanyId,
     this.privateCompanyTargetDepartmentId,
+    this.privateCompanyTargetDepartmentName,
     this.maintenanceCrewIds = const [],
     this.maintenanceAwaitingRequesterSince,
     this.maintenanceRequesterRejectReason,
@@ -278,6 +280,9 @@ class Ticket {
   }
   bool get isAssigned => assignedEngineerId != null;
   bool get canBeAssigned => isPending && !isAssigned;
+
+  /// Assigned lead, still PENDING until on-site (manual or GPS auto arrival).
+  bool get isAssignedAwaitingArrival => isPending && isAssigned;
 
   bool get maintenanceAwaitingRequesterConfirmation =>
       maintenanceAwaitingRequesterSince != null &&
@@ -393,6 +398,8 @@ class Ticket {
       privateCompanyId: json['privateCompanyId'] as String?,
       privateCompanyTargetDepartmentId:
           json['privateCompanyTargetDepartmentId'] as String?,
+      privateCompanyTargetDepartmentName:
+          json['privateCompanyTargetDepartmentName'] as String?,
       maintenanceCrewIds: (json['maintenanceCrewIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .where((s) => s.isNotEmpty)

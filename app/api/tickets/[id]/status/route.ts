@@ -138,10 +138,22 @@ export async function PATCH(
       }
     }
 
+    const assignedId =
+      typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId.trim() : '';
+    if (currentStatus === 'PENDING' && newStatus === 'ON_SITE' && !assignedId) {
+      return NextResponse.json(
+        { success: false, message: 'Ticket must be assigned before going on site.' },
+        { status: 400 }
+      );
+    }
+
     const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
     if (!allowed.includes(newStatus)) {
       return NextResponse.json(
-        { success: false, message: `Cannot transition from ${currentStatus} to ${newStatus}` },
+        {
+          success: false,
+          message: `Cannot transition from ${currentStatus} to ${newStatus}. Follow: pending → assigned → on site → in progress → completed.`,
+        },
         { status: 400 }
       );
     }

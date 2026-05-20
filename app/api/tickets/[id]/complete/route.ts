@@ -94,6 +94,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ticket.privateCompanyId
     );
 
+    const effectiveStatusForQc = readTicketJsonStatus(parsed, String(ticket.status ?? 'PENDING'));
+    if (!isMaintenance && effectiveStatusForQc !== 'IN_PROGRESS') {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Quality tickets must be in progress before completion. Update status in order: assigned → on site → in progress, then complete.',
+        },
+        { status: 400 }
+      );
+    }
+
     const body = await req.json();
     const checklistResponse = body.checklistResponse ?? null;
 

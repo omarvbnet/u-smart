@@ -14,6 +14,7 @@ import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 import {
   assignedStaffIdFromCompanyJson,
+  maintenanceCrewIdsFromCompanyJson,
   parseTicketCompanyJson,
   ticketFieldStaffInvolvesRequester,
 } from '@/lib/private-company-kpi';
@@ -52,6 +53,31 @@ const TASK_CATEGORY_VALUES = ['MAINTENANCE', 'QUALITY', 'SUPERVISION'];
 function isQcPoolEngineerRole(role: string | null | undefined) {
   const r = (role ?? '').toUpperCase();
   return r === 'ENGINEER' || r === 'QUALITY_ENGINEER' || r === 'SUPERVISION_ENGINEER';
+}
+
+/** Rows a field engineer/technician may hold as lead or crew (pool + assigned active work). */
+function buildFieldStaffTicketVisibilityOr(
+  requesterId: string,
+  myStaffWorkspaceId: string | null,
+  pendingFilter: Record<string, unknown>
+): Record<string, unknown>[] {
+  const or: Record<string, unknown>[] = [
+    pendingFilter,
+    { company: { contains: requesterId } },
+  ];
+  if (myStaffWorkspaceId) {
+    or.push({
+      status: 'PENDING',
+      OR: [{ assignmentScope: 'PRIVATE_COMPANY_STAFF' }, { assignmentScope: null }],
+      privateCompanyId: myStaffWorkspaceId,
+    });
+    or.push({
+      status: { in: ['ON_SITE', 'IN_PROGRESS'] },
+      OR: [{ assignmentScope: 'PRIVATE_COMPANY_STAFF' }, { assignmentScope: null }],
+      privateCompanyId: myStaffWorkspaceId,
+    });
+  }
+  return or;
 }
 const PLAN_RATE_USD: Record<string, number> = {
   WEEKLY: 0.7,
@@ -1577,7 +1603,11 @@ export async function GET(req: NextRequest) {
       }
       const engineerAnd: Record<string, unknown>[] = [
         {
-          OR: [pendingFilter, { company: { contains: payload.requesterId } }],
+          OR: buildFieldStaffTicketVisibilityOr(
+            payload.requesterId,
+            myStaffWorkspaceId,
+            pendingFilter
+          ),
         },
         privateCompanyTicketScope,
       ];
@@ -1626,30 +1656,14 @@ export async function GET(req: NextRequest) {
           mode: 'insensitive',
         };
       }
-      const technicianPendingOr: Record<string, unknown>[] = [
-        pendingWithProvince,
-        { company: { contains: payload.requesterId } },
-      ];
-      if (myStaffWorkspaceId) {
-        technicianPendingOr.push({
-          status: 'PENDING',
-          OR: [
-            { assignmentScope: 'PRIVATE_COMPANY_STAFF' },
-            { assignmentScope: null },
-          ],
-          privateCompanyId: myStaffWorkspaceId,
-        });
-        technicianPendingOr.push({
-          status: { in: ['ON_SITE', 'IN_PROGRESS'] },
-          OR: [
-            { assignmentScope: 'PRIVATE_COMPANY_STAFF' },
-            { assignmentScope: null },
-          ],
-          privateCompanyId: myStaffWorkspaceId,
-        });
-      }
       const technicianAnd: Record<string, unknown>[] = [
-        { OR: technicianPendingOr },
+        {
+          OR: buildFieldStaffTicketVisibilityOr(
+            payload.requesterId,
+            myStaffWorkspaceId,
+            pendingWithProvince
+          ),
+        },
         privateCompanyTicketScope,
       ];
       if (requesterSpecialization) {
@@ -1918,8 +1932,14 @@ export async function GET(req: NextRequest) {
       let assignedEngineerId: string | null = null;
       let assignedEngineerName: string | null = null;
       let assignedAt: string | null = null;
+      let maintenanceCrewIds: string[] = [];
       try {
-        const parsed = typeof r.company === 'string' ? JSON.parse(r.company) : {} as Record<string, unknown>;
+        const parsed = parseTicketCompanyJson(r.company);
+        assignedEngineerId = assignedStaffIdFromCompanyJson(parsed);
+        assignedEngineerName =
+          typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
+        assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
+        maintenanceCrewIds = maintenanceCrewIdsFromCompanyJson(parsed);
         if (parsed._ticket) {
           siteName = (parsed.siteName as string) ?? null;
           siteCoordinator = (parsed.siteCoordinator as string) ?? null;
@@ -1934,9 +1954,6 @@ export async function GET(req: NextRequest) {
           ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
             ? (parsed.ncrResubmissions as Array<{ at?: string; by?: string; action?: string; comment?: string; imageUrls?: string[] }>).map((e) => ({ at: e.at || '', by: e.by || '', action: e.action || 'resubmit', comment: e.comment ?? null, imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [] }))
             : [];
-          assignedEngineerId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
-          assignedEngineerName = typeof parsed.assignedEngineerName === 'string' ? parsed.assignedEngineerName : null;
-          assignedAt = typeof parsed.assignedAt === 'string' ? parsed.assignedAt : null;
         }
       } catch {
         /* ignore */
@@ -1965,6 +1982,7 @@ export async function GET(req: NextRequest) {
         assignedEngineerId,
         assignedEngineerName,
         assignedAt,
+        maintenanceCrewIds,
         statusTimeline: statusTimeline.map((e) => ({ status: e.status, createdAt: e.createdAt })),
         requesterId: r.requesterId ?? null,
         privateCompanyId: r.privateCompanyId ?? null,

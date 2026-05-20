@@ -117,14 +117,6 @@ export async function processSiteArrivalForStaff(
   },
   position: { lat: number; lng: number }
 ): Promise<SiteArrivalCheckResult[]> {
-  const settings = await loadSiteArrivalSettingsForStaff(
-    prisma,
-    staff.privateCompanyId,
-    staff.privateCompanyDepartmentId,
-    staff.maintenanceProximityRadiusOverrideM
-  );
-  if (!settings.autoOnSiteEnabled) return [];
-
   const tickets = await prisma.visitorRequest.findMany({
     where: {
       privateCompanyId: staff.privateCompanyId,
@@ -154,6 +146,18 @@ export async function processSiteArrivalForStaff(
     );
     if (!crewTicket) continue;
 
+    const ticketDeptId =
+      (t as { privateCompanyTargetDepartmentId?: string | null }).privateCompanyTargetDepartmentId ??
+      staff.privateCompanyDepartmentId ??
+      null;
+    const ticketSettings = await loadSiteArrivalSettingsForStaff(
+      prisma,
+      staff.privateCompanyId,
+      ticketDeptId,
+      staff.maintenanceProximityRadiusOverrideM
+    );
+    if (!ticketSettings.autoOnSiteEnabled) continue;
+
     const sitePoint = await resolveTicketSitePointForVisitor(prisma, {
       companyJson: t.company,
       siteName: t.siteName,
@@ -162,7 +166,7 @@ export async function processSiteArrivalForStaff(
     if (!sitePoint) continue;
 
     const distanceM = haversineDistanceMeters(position, sitePoint);
-    if (distanceM > settings.radiusM) continue;
+    if (distanceM > ticketSettings.radiusM) continue;
 
     const nextParsed: Record<string, unknown> = {
       ...parsed,
@@ -189,7 +193,7 @@ export async function processSiteArrivalForStaff(
     updated.push({
       ticketId: t.id,
       distanceM: Math.round(distanceM),
-      radiusM: settings.radiusM,
+      radiusM: ticketSettings.radiusM,
     });
   }
 

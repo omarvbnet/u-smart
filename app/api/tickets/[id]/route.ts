@@ -685,6 +685,23 @@ export async function GET(
       /* policy table may be absent before migrate */
     }
 
+    let privateCompanyTargetDepartmentName: string | null = null;
+    const targetDeptId =
+      (row as { privateCompanyTargetDepartmentId?: string | null }).privateCompanyTargetDepartmentId ??
+      null;
+    if (targetDeptId && privateCompanyIdVal) {
+      try {
+        const deptRow = await prisma.privateCompanyDepartment.findFirst({
+          where: { id: targetDeptId, companyId: privateCompanyIdVal },
+          select: { name: true },
+        });
+        const dn = deptRow?.name?.trim();
+        privateCompanyTargetDepartmentName = dn || null;
+      } catch {
+        /* departments table may be absent */
+      }
+    }
+
     if (privateCompanyIdVal) {
       try {
         const settingsRow = await loadExpenseSettings(privateCompanyIdVal);
@@ -722,6 +739,7 @@ export async function GET(
         privateCompanyTargetDepartmentId:
           (row as { privateCompanyTargetDepartmentId?: string | null }).privateCompanyTargetDepartmentId ??
           null,
+        privateCompanyTargetDepartmentName,
         allowWorkspaceCrewJoin,
         createdAt: row.createdAt,
         completedAt,

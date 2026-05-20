@@ -655,7 +655,7 @@ class _MyTicketsTabState extends State<_MyTicketsTab> {
         final effectiveDept =
             departmentIds.contains(_departmentFilter) ? _departmentFilter : 'ALL';
 
-        final allMyTickets = [...provider.myActiveTickets, ...provider.myCompletedTickets];
+        final allMyTickets = provider.myFieldTickets;
         final statuses = <String>{
           'ALL',
           ...allMyTickets.map((t) => t.status),

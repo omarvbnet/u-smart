@@ -212,6 +212,19 @@ class TicketsProvider extends ChangeNotifier {
 
   bool get hasActiveTicket => myActiveTickets.isNotEmpty;
 
+  /// All tickets where the current user is lead or crew (active + completed).
+  List<Ticket> get myFieldTickets => _currentUserId == null
+      ? []
+      : _tickets.where((t) {
+          final uid = _currentUserId!;
+          if (ticketIsOpenAssignmentForUser(t, uid)) return true;
+          if ((t.isCompleted || t.isCancelled) &&
+              (t.assignedEngineerId == uid || t.maintenanceCrewIds.contains(uid))) {
+            return true;
+          }
+          return false;
+        }).toList();
+
   /// Hide pool / self-assign when the user must finish open work first.
   bool get canSelfAssignFromPool => !hasActiveTicket;
 
