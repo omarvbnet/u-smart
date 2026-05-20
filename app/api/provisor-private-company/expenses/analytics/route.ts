@@ -251,7 +251,7 @@ export async function GET(req: NextRequest) {
     })
     .sort((a, b) => b.totalAmount - a.totalAmount);
 
-  let byDepartmentOut =
+  const byDepartmentOut =
     scope === 'workspace' || scope === 'department'
       ? [...byDepartment.entries()]
           .map(([departmentId, agg]) => ({
@@ -261,29 +261,6 @@ export async function GET(req: NextRequest) {
           }))
           .sort((a, b) => b.totalAmount - a.totalAmount)
       : [];
-
-  if (scope === 'self' && guard.actorDepartmentId) {
-    const deptRows = await prisma.privateCompanyTicketExpense.findMany({
-      where: {
-        companyId: guard.companyId,
-        departmentId: guard.actorDepartmentId,
-        createdAt: { gte: rangeFrom, lte: rangeTo },
-        ...(provinceFilter ? { ticketProvince: provinceFilter } : {}),
-      },
-      select: { amount: true, ticketId: true },
-    });
-    const deptAgg: Agg = { totalAmount: 0, expenseCount: 0, ticketIds: new Set() };
-    for (const r of deptRows as Array<{ amount: number; ticketId: string }>) {
-      bump(deptAgg, r.amount, r.ticketId);
-    }
-    byDepartmentOut = [
-      {
-        departmentId: guard.actorDepartmentId,
-        departmentName: deptName.get(guard.actorDepartmentId) ?? 'Department',
-        ...finalizeAgg(deptAgg),
-      },
-    ];
-  }
 
   const byStaffOut = [...byStaff.entries()]
     .map(([staffId, agg]) => {

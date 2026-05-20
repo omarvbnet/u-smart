@@ -178,16 +178,28 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
     return pc.workspace?.departments ?? const <PrivateCompanyDepartment>[];
   }
 
+  String _expenseHeroHint(AppLocalizations l10n, PrivateCompanyProvider pc, ExpenseAnalyticsSnapshot? snap) {
+    final scope = snap?.scope ?? (pc.isPrivateWorkspaceFieldStaff ? 'self' : pc.isOwner ? 'workspace' : 'department');
+    if (scope == 'self' || pc.isPrivateWorkspaceFieldStaff) {
+      return l10n.t('pc_expenses_my_expenses_hint');
+    }
+    if (scope == 'department' || pc.isDepartmentManager) {
+      return l10n.t('pc_expenses_analytics_hint_dept');
+    }
+    return l10n.t('pc_expenses_analytics_hint');
+  }
+
   List<Widget> _expenseFilterSection(
     BuildContext context,
     AppLocalizations l10n,
     PrivateCompanyProvider pc,
     ExpenseAnalyticsSnapshot? snap,
   ) {
-    if (!pc.isOwner) return const [];
+    final canFilter = pc.isOwner || pc.isDepartmentManager;
+    if (!canFilter) return const [];
     final provinces = _provinceOptions(snap);
-    final departments = _departmentOptions(pc);
-    if (provinces.isEmpty && departments.isEmpty) return const [];
+    final departments = pc.isOwner ? _departmentOptions(pc) : const <PrivateCompanyDepartment>[];
+    if (provinces.isEmpty && departments.isEmpty && !pc.isDepartmentManager) return const [];
 
     return [
       const SizedBox(height: 8),
@@ -206,6 +218,13 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
                   letterSpacing: 0.3,
                 ),
               ),
+              if (pc.isDepartmentManager && !pc.isOwner) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.t('pc_expenses_filter_department_scoped'),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11, height: 1.35),
+                ),
+              ],
               if (provinces.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String?>(
@@ -368,9 +387,13 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
             );
           },
         ),
-        if (widget.compact && pc.isPrivateWorkspaceFieldStaff && snap.byDepartment.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          _sectionLabel(l10n.t('pc_kpi_your_department')),
+        if (snap.scope != 'self' && snap.byDepartment.isNotEmpty && !widget.compact) ...[
+          const SizedBox(height: 18),
+          _sectionLabel(
+            snap.scope == 'workspace'
+                ? l10n.t('pc_expenses_by_department')
+                : l10n.t('pc_kpi_your_department'),
+          ),
           const SizedBox(height: 8),
           ...snap.byDepartment.map(
             (d) => Padding(
@@ -399,11 +422,42 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
             ),
           ),
         ],
-        if (!widget.compact && snap.byStaff.isNotEmpty) ...[
+        if (snap.byReason.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _sectionLabel(l10n.t('pc_overview_expenses_by_reason')),
+          const SizedBox(height: 8),
+          ...snap.byReason.take(widget.compact ? 8 : 20).map(
+                (r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _glass(
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        r.reason,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      trailing: Text(
+                        '${r.totalAmount.toStringAsFixed(2)} · ×${r.expenseCount}',
+                        style: const TextStyle(
+                          color: Color(0xFF00D4AA),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+        ],
+        if (snap.scope != 'self' && snap.byStaff.isNotEmpty) ...[
           const SizedBox(height: 18),
           _sectionLabel(l10n.t('pc_expenses_by_staff')),
           const SizedBox(height: 8),
-          ...snap.byStaff.take(12).map((s) => _staffCard(context, l10n, s)),
+          ...snap.byStaff.take(widget.compact ? 6 : 12).map((s) => _staffCard(context, l10n, s)),
         ],
         if (snap.tickets.isNotEmpty) ...[
           const SizedBox(height: 18),
@@ -481,7 +535,7 @@ class _WorkspaceExpensesAnalyticsPanelState extends State<WorkspaceExpensesAnaly
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      l10n.t('pc_expenses_analytics_hint'),
+                      _expenseHeroHint(l10n, pc, snap),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 11,

@@ -599,7 +599,12 @@ class PrivateCompanyProvider extends ChangeNotifier {
     try {
       String? deptQ = departmentId?.trim();
       String? staffQ = staffId?.trim();
-      if (!isOwner) {
+      if (isOwner) {
+        // Owner may filter by department and staff.
+      } else if (isDepartmentManager) {
+        staffQ = null;
+        deptQ = null;
+      } else {
         deptQ = null;
         staffQ = null;
       }

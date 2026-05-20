@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/private_company.dart';
+import '../models/private_company_cancellation.dart';
 import '../providers/private_company_provider.dart';
 import '../screens/ticket_detail_screen.dart';
 
@@ -21,6 +23,8 @@ class _WorkspaceCancellationsAnalyticsPanelState
   late DateTime _rangeStart;
   late DateTime _rangeEnd;
   bool _bootstrapped = false;
+  String? _provinceFilter;
+  String? _departmentFilter;
   final _reasonAddCtrl = TextEditingController();
   List<String> _reasons = [];
   bool _reasonsLoaded = false;
@@ -127,10 +131,23 @@ class _WorkspaceCancellationsAnalyticsPanelState
   }
 
   Future<void> _refresh() {
-    return context.read<PrivateCompanyProvider>().fetchCancellationAnalytics(
-          from: _rangeStart,
-          to: _rangeEnd,
-        );
+    final pc = context.read<PrivateCompanyProvider>();
+    return pc.fetchCancellationAnalytics(
+      from: _rangeStart,
+      to: _rangeEnd,
+      province: _provinceFilter,
+      departmentId: pc.isOwner ? _departmentFilter : null,
+    );
+  }
+
+  List<String> _provinceOptions(CancellationAnalyticsSnapshot? snap) {
+    final fromSnap = snap?.byProvince.map((p) => p.province).where((p) => p.isNotEmpty) ?? const Iterable<String>.empty();
+    if (fromSnap.isNotEmpty) return fromSnap.toSet().toList()..sort();
+    return const [];
+  }
+
+  List<PrivateCompanyDepartment> _departmentOptions(PrivateCompanyProvider pc) {
+    return pc.workspace?.departments ?? const <PrivateCompanyDepartment>[];
   }
 
   static Widget _glass({required Widget child}) {
@@ -357,6 +374,8 @@ class _WorkspaceCancellationsAnalyticsPanelState
           ),
           const SizedBox(height: 12),
         ],
+        if (pc.isOwner || pc.isDepartmentManager)
+          _cancellationFilterSection(context, l10n, pc, snap),
         periodRow,
         if (snap == null && pc.cancellationAnalyticsLoading)
           const Padding(
@@ -454,14 +473,14 @@ class _WorkspaceCancellationsAnalyticsPanelState
               ),
             ),
           ],
-          if (!widget.compact && snap.cases.isNotEmpty) ...[
+          if (snap.cases.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
               l10n.t('pc_cancellation_cases'),
               style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w800, fontSize: 12),
             ),
             const SizedBox(height: 8),
-            ...snap.cases.take(15).map(
+            ...snap.cases.take(widget.compact ? 5 : 15).map(
                   (c) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _glass(
@@ -488,6 +507,104 @@ class _WorkspaceCancellationsAnalyticsPanelState
           ],
         ],
       ],
+    );
+  }
+
+  Widget _cancellationFilterSection(
+    BuildContext context,
+    AppLocalizations l10n,
+    PrivateCompanyProvider pc,
+    CancellationAnalyticsSnapshot? snap,
+  ) {
+    final provinces = _provinceOptions(snap);
+    final departments = pc.isOwner ? _departmentOptions(pc) : const <PrivateCompanyDepartment>[];
+    if (provinces.isEmpty && departments.isEmpty && !pc.isDepartmentManager) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _glass(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.t('pc_expenses_filters_title'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (pc.isDepartmentManager && !pc.isOwner) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.t('pc_expenses_filter_department_scoped'),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11, height: 1.35),
+                ),
+              ],
+              if (provinces.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String?>(
+                  value: _provinceFilter,
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: l10n.t('pc_expenses_filter_province'),
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(l10n.t('pc_expenses_all_provinces')),
+                    ),
+                    ...provinces.map((p) => DropdownMenuItem(value: p, child: Text(p))),
+                  ],
+                  onChanged: pc.cancellationAnalyticsLoading
+                      ? null
+                      : (v) {
+                          setState(() => _provinceFilter = v);
+                          _refresh();
+                        },
+                ),
+              ],
+              if (departments.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String?>(
+                  value: _departmentFilter,
+                  dropdownColor: const Color(0xFF12122A),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: l10n.t('pc_expenses_filter_department'),
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(l10n.t('pc_expenses_all_departments')),
+                    ),
+                    ...departments.map(
+                      (d) => DropdownMenuItem(value: d.id, child: Text(d.name)),
+                    ),
+                  ],
+                  onChanged: pc.cancellationAnalyticsLoading
+                      ? null
+                      : (v) {
+                          setState(() => _departmentFilter = v);
+                          _refresh();
+                        },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

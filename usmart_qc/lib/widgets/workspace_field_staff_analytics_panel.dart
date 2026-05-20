@@ -10,7 +10,6 @@ import '../models/private_company_warehouse.dart';
 import '../providers/auth_provider.dart';
 import '../providers/private_company_provider.dart';
 import '../providers/private_company_warehouse_provider.dart';
-import 'workspace_cancellations_analytics_panel.dart';
 import 'workspace_expenses_analytics_panel.dart';
 import 'workspace_material_budget_analytics_panel.dart';
 
@@ -376,7 +375,6 @@ class _WorkspaceFieldStaffAnalyticsPanelState extends State<WorkspaceFieldStaffA
           }),
         const WorkspaceMaterialBudgetAnalyticsPanel(skipInitialLoad: true),
         const WorkspaceExpensesAnalyticsPanel(compact: true),
-        const WorkspaceCancellationsAnalyticsPanel(compact: true),
       ],
     );
   }

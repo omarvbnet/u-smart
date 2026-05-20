@@ -340,6 +340,11 @@ const Map<String, String> _en = {
   'pc_expenses_analytics_title': 'Ticket expenses',
   'pc_expenses_analytics_hint':
       'Rollups by province, department, and staff. Tap a ticket to open it.',
+  'pc_expenses_analytics_hint_dept':
+      'Expenses for your department in the selected period. Filter by province if needed.',
+  'pc_expenses_by_department': 'By department',
+  'pc_expenses_filter_department_scoped':
+      'Showing your assigned department only.',
   'pc_overview_expenses_title': 'Ticket expenses overview',
   'pc_overview_expenses_hint': 'Last {{days}} days (scoped to your workspace role).',
   'pc_overview_expenses_by_reason': 'By expense reason',
@@ -2038,6 +2043,10 @@ const Map<String, String> _ar = {
   'pc_expenses_analytics_title': 'مصاريف التذاكر',
   'pc_expenses_analytics_hint':
       'ملخصات حسب المحافظة والقسم والموظف. انقر تذكرة لفتحها.',
+  'pc_expenses_analytics_hint_dept':
+      'مصاريف قسمك في الفترة المحددة. يمكنك التصفية حسب المحافظة.',
+  'pc_expenses_by_department': 'حسب القسم',
+  'pc_expenses_filter_department_scoped': 'عرض قسمك المعيّن فقط.',
   'pc_overview_expenses_title': 'نظرة عامة على مصاريف التذاكر',
   'pc_overview_expenses_hint': 'آخر {{days}} يومًا (حسب صلاحية دورك في مساحة العمل).',
   'pc_overview_expenses_by_reason': 'حسب سبب المصروف',
@@ -3135,6 +3144,10 @@ const Map<String, String> _ku = {
   'pc_expenses_analytics_title': 'خەرجی تیکێتەکان',
   'pc_expenses_analytics_hint':
       'کورتە بەپێی پارێزگا و بەش و کارمەند. کرتە لە تیکێت بکە بۆ کردنەوە.',
+  'pc_expenses_analytics_hint_dept':
+      'خەرجییەکانی بەشەکەت لە ماوەی هەڵبژێردراو. دەتوانیت بەپێی پارێزگا فلتەر بکەیت.',
+  'pc_expenses_by_department': 'بەپێی بەش',
+  'pc_expenses_filter_department_scoped': 'تەنها بەشی دیاریکراوت پیشان دەدرێت.',
   'pc_overview_expenses_title': 'پێشبینینی خەرجی تیکێت',
   'pc_overview_expenses_hint': 'دوایین {{days}} ڕۆژ (بەپێی ڕۆڵی تۆ لە شوێنی کار).',
   'pc_overview_expenses_by_reason': 'بەپێی هۆکاری خەرجی',
@@ -4236,6 +4249,10 @@ const Map<String, String> _tr = {
   'pc_expenses_analytics_title': 'Bilet giderleri',
   'pc_expenses_analytics_hint':
       'İl, departman ve personele göre özetler. Açmak için bir bilete dokunun.',
+  'pc_expenses_analytics_hint_dept':
+      'Seçilen dönemde departmanınızın giderleri. İl filtresi uygulayabilirsiniz.',
+  'pc_expenses_by_department': 'Departmana göre',
+  'pc_expenses_filter_department_scoped': 'Yalnızca atandığınız departman gösteriliyor.',
   'pc_overview_expenses_title': 'Bilet giderleri özeti',
   'pc_overview_expenses_hint': 'Son {{days}} gün (çalışma alanı rolünüze göre).',
   'pc_overview_expenses_by_reason': 'Gider nedeni',
