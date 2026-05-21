@@ -26,6 +26,45 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 
+# iCloud/Desktop sync can evict CocoaPods `.lproj` bundles after install, breaking Archive.
+def restore_pod_resources_if_missing(pod_name, relative_resources_path)
+  require 'fileutils'
+
+  dest_resources = File.expand_path(
+    File.join('Pods', pod_name, relative_resources_path),
+    __dir__,
+  )
+  return unless File.directory?(dest_resources)
+
+  missing = Dir.glob(File.join(dest_resources, '*')).empty? ||
+            Dir.glob(File.join(dest_resources, '*.lproj')).empty?
+  return unless missing
+
+  cache_root = File.expand_path(
+    File.join('~/Library/Caches/CocoaPods/Pods/Release', pod_name),
+  )
+  return unless File.directory?(cache_root)
+
+  cache_versions = Dir.glob(File.join(cache_root, '*'))
+                      .select { |path| File.directory?(path) }
+                      .sort
+  return if cache_versions.empty?
+
+  src_resources = File.join(cache_versions.last, relative_resources_path)
+  return unless File.directory?(src_resources)
+
+  restored = 0
+  Dir.glob(File.join(src_resources, '*')).each do |entry|
+    target = File.join(dest_resources, File.basename(entry))
+    next if File.exist?(target)
+
+    FileUtils.cp_r(entry, dest_resources)
+    restored += 1
+  end
+
+  puts "Restored #{restored} missing #{pod_name} resource(s) from CocoaPods cache" if restored.positive?
+end
+
 target 'Runner' do
   # Static linkage avoids missing GoogleDataTransport/Firebase headers with dynamic frameworks.
   use_frameworks! :linkage => :static
@@ -44,4 +83,13 @@ post_install do |installer|
       config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386'
     end
   end
+
+  restore_pod_resources_if_missing(
+    'DKImagePickerController',
+    'Sources/DKImagePickerController/Resource/Resources',
+  )
+  restore_pod_resources_if_missing(
+    'DKPhotoGallery',
+    'DKPhotoGallery/Resource/Resources',
+  )
 end

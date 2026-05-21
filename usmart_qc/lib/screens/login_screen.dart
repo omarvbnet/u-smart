@@ -42,6 +42,12 @@ class _LoginScreenState extends State<LoginScreen>
   Timer? _forgotCooldownTimer;
   VoidCallback? _forgotSheetRedraw;
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _usernameFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _otpFocus = FocusNode();
+  final GlobalKey _loginActionsKey = GlobalKey();
+  final GlobalKey _otpActionsKey = GlobalKey();
 
   void _notifyForgotSheet() {
     if (mounted) setState(() {});
@@ -100,6 +106,49 @@ class _LoginScreenState extends State<LoginScreen>
     );
     _animCtrl.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSavedCredentials());
+    _usernameFocus.addListener(_scrollFocusedFieldIntoView);
+    _passwordFocus.addListener(_scrollFocusedFieldIntoView);
+    _phoneFocus.addListener(_scrollFocusedFieldIntoView);
+    _otpFocus.addListener(_scrollFocusedFieldIntoView);
+  }
+
+  void _scrollFocusedFieldIntoView() {
+    final hasFocus = _usernameFocus.hasFocus ||
+        _passwordFocus.hasFocus ||
+        _phoneFocus.hasFocus ||
+        _otpFocus.hasFocus;
+    if (!hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+      final actionsCtx = (_usePasswordLogin ? _loginActionsKey : _otpActionsKey)
+          .currentContext;
+      if (actionsCtx != null) {
+        await Scrollable.ensureVisible(
+          actionsCtx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 0.05,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        );
+        return;
+      }
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
+
+  void _focusOtpFieldAfterSend() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _otpFocus.requestFocus();
+    });
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -155,6 +204,7 @@ class _LoginScreenState extends State<LoginScreen>
           setState(() => _otpResendCooldown--);
         }
       });
+      _focusOtpFieldAfterSend();
     }
     final snackMsg =
         sent.error ?? l10n.otpDeliverySuccessMessage(sent.otpChannel);
@@ -565,6 +615,14 @@ class _LoginScreenState extends State<LoginScreen>
     _otpCodeCtrl.dispose();
     _otpCooldownTimer?.cancel();
     _forgotCooldownTimer?.cancel();
+    _usernameFocus.removeListener(_scrollFocusedFieldIntoView);
+    _passwordFocus.removeListener(_scrollFocusedFieldIntoView);
+    _phoneFocus.removeListener(_scrollFocusedFieldIntoView);
+    _otpFocus.removeListener(_scrollFocusedFieldIntoView);
+    _usernameFocus.dispose();
+    _passwordFocus.dispose();
+    _phoneFocus.dispose();
+    _otpFocus.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -574,6 +632,8 @@ class _LoginScreenState extends State<LoginScreen>
     final l10n = AppLocalizations.of(context);
     final mq = MediaQuery.of(context);
     final kbOpen = mq.viewInsets.bottom > 0;
+    final compactLayout = kbOpen;
+    final otpScrollPad = compactLayout ? (_otpSent ? 260.0 : 200.0) : 120.0;
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFF05051A),
@@ -615,107 +675,161 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
           SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.only(
-                  left: 24,
-                  right: 24,
-                  top: kbOpen ? 8 : 16,
-                  // Scaffold already shrinks with keyboard; only add safe-area inset (no duplicate viewInsets).
-                  bottom: 12 + mq.padding.bottom,
-                ),
-                child: FadeTransition(
-                  opacity: _fadeIn,
-                  child: SlideTransition(
-                    position: _slideUp,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedBuilder(
-                          animation: _logoCtrl,
-                          builder: (context, child) {
-                            final logoSize = kbOpen ? 72.0 : 98.0;
-                            return Transform.rotate(
-                              angle: _logoRotate.value,
-                              child: Transform.scale(
-                                scale: _logoScale.value,
-                                child: Container(
-                                  width: logoSize,
-                                  height: logoSize,
-                                  padding: EdgeInsets.all(kbOpen ? 3 : 4),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(30),
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFF6C63FF).withAlpha(120),
-                                        blurRadius: _logoGlow.value,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(26),
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Image.asset('assets/provisor_icon.png', fit: BoxFit.cover),
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.white.withAlpha(24),
-                                                Colors.transparent,
-                                                Colors.black.withAlpha(20),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  controller: _scrollController,
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: compactLayout ? 4 : 16,
+                    bottom: 16 + mq.padding.bottom,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: FadeTransition(
+                      opacity: _fadeIn,
+                      child: SlideTransition(
+                        position: _slideUp,
+                        child: Column(
+                          mainAxisAlignment:
+                              compactLayout ? MainAxisAlignment.start : MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedCrossFade(
+                              duration: const Duration(milliseconds: 220),
+                              sizeCurve: Curves.easeOutCubic,
+                              crossFadeState: compactLayout
+                                  ? CrossFadeState.showSecond
+                                  : CrossFadeState.showFirst,
+                              firstChild: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AnimatedBuilder(
+                                    animation: _logoCtrl,
+                                    builder: (context, child) {
+                                      return Transform.rotate(
+                                        angle: _logoRotate.value,
+                                        child: Transform.scale(
+                                          scale: _logoScale.value,
+                                          child: Container(
+                                            width: 98,
+                                            height: 98,
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(30),
+                                              gradient: const LinearGradient(
+                                                colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(0xFF6C63FF).withAlpha(120),
+                                                  blurRadius: _logoGlow.value,
+                                                  spreadRadius: 2,
+                                                ),
                                               ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
                                             ),
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(26),
+                                              child: Stack(
+                                                fit: StackFit.expand,
+                                                children: [
+                                                  Image.asset('assets/provisor_icon.png', fit: BoxFit.cover),
+                                                  Container(
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(
+                                                        colors: [
+                                                          Colors.white.withAlpha(24),
+                                                          Colors.transparent,
+                                                          Colors.black.withAlpha(20),
+                                                        ],
+                                                        begin: Alignment.topLeft,
+                                                        end: Alignment.bottomRight,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 28),
+                                  ShaderMask(
+                                    shaderCallback: (bounds) => const LinearGradient(
+                                      colors: [
+                                        Color(0xFF6C63FF),
+                                        Color(0xFF00D4AA),
+                                      ],
+                                    ).createShader(bounds),
+                                    child: const Text(
+                                      'PROVISOR',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    l10n.t('app_subtitle'),
+                                    style: const TextStyle(
+                                      color: Color(0xFF6B7280),
+                                      fontSize: 14,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 48),
+                                ],
+                              ),
+                              secondChild: Padding(
+                                padding: const EdgeInsets.only(bottom: 12, top: 4),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.asset(
+                                        'assets/provisor_icon.png',
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'PROVISOR',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 2,
+                                          ),
+                                        ),
+                                        Text(
+                                          _usePasswordLogin
+                                              ? l10n.t('login_sign_in')
+                                              : l10n.t('login_send_otp'),
+                                          style: TextStyle(
+                                            color: Colors.white.withAlpha(140),
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
+                                  ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                        SizedBox(height: kbOpen ? 12 : 28),
-                        ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [
-                              Color(0xFF6C63FF),
-                              Color(0xFF00D4AA),
-                            ],
-                          ).createShader(bounds),
-                          child: Text(
-                            'PROVISOR',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: kbOpen ? 24 : 30,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: kbOpen ? 3 : 4,
                             ),
-                          ),
-                        ),
-                        SizedBox(height: kbOpen ? 4 : 8),
-                        Text(
-                          l10n.t('app_subtitle'),
-                          style: TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 14,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        SizedBox(height: kbOpen ? 20 : 48),
 
                         // Glass card
                         ClipRRect(
@@ -780,14 +894,19 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      _buildPrivateRoleHeader(l10n),
-                                      const SizedBox(height: 14),
+                                      if (!compactLayout) ...[
+                                        const SizedBox(height: 8),
+                                        _buildPrivateRoleHeader(l10n),
+                                        const SizedBox(height: 14),
+                                      ] else
+                                        const SizedBox(height: 8),
                                     ],
                                     _buildField(
                                       controller: _usernameCtrl,
                                       hint: l10n.t('login_username'),
                                       icon: Icons.person_outline_rounded,
+                                      focusNode: _usernameFocus,
+                                      scrollPaddingBottom: compactLayout ? 220 : 120,
                                     ),
                                     const SizedBox(height: 16),
                                     _buildField(
@@ -795,6 +914,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       hint: l10n.t('login_password'),
                                       icon: Icons.lock_outline_rounded,
                                       obscure: _obscure,
+                                      focusNode: _passwordFocus,
+                                      scrollPaddingBottom: compactLayout ? 220 : 120,
                                       suffix: IconButton(
                                         icon: Icon(
                                           _obscure
@@ -813,133 +934,155 @@ class _LoginScreenState extends State<LoginScreen>
                                       hint: l10n.t('login_phone_hint'),
                                       icon: Icons.phone_android_outlined,
                                       keyboardType: TextInputType.phone,
+                                      focusNode: _phoneFocus,
+                                      scrollPaddingBottom: otpScrollPad,
                                     ),
                                     const SizedBox(height: 16),
-                                    _privacyCheckboxTile(l10n),
-                                    const SizedBox(height: 12),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 50,
-                                      child: OutlinedButton(
-                                        onPressed: (_otpSendLoading || !_agreedToTerms)
-                                                || _otpResendCooldown > 0
-                                            ? null
-                                            : () => _sendPhoneOtp(l10n),
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: Colors.white,
-                                          side: BorderSide(
-                                              color: Colors.white.withAlpha(60)),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(16),
-                                          ),
-                                        ),
-                                        child: _otpSendLoading
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2.5,
-                                                  color: Colors.white,
-                                                ),
-                                              )
-                                            : Text(
-                                                _otpResendCooldown > 0
-                                                    ? '${l10n.t('login_send_otp')} (${_otpResendCooldown}s)'
-                                                    : l10n.t('login_send_otp'),
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
+                                    if (!compactLayout || !_otpSent) ...[
+                                      _privacyCheckboxTile(l10n),
+                                      const SizedBox(height: 12),
+                                    ],
+                                    KeyedSubtree(
+                                      key: _otpActionsKey,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 50,
+                                            child: OutlinedButton(
+                                              onPressed: (_otpSendLoading || !_agreedToTerms)
+                                                      || _otpResendCooldown > 0
+                                                  ? null
+                                                  : () => _sendPhoneOtp(l10n),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: Colors.white,
+                                                side: BorderSide(
+                                                    color: Colors.white.withAlpha(60)),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
                                                 ),
                                               ),
-                                      ),
-                                    ),
-                                    if (_otpSent) ...[
-                                      const SizedBox(height: 16),
-                                      _buildField(
-                                        controller: _otpCodeCtrl,
-                                        hint: l10n.t('login_otp_hint'),
-                                        icon: Icons.pin_outlined,
-                                        keyboardType: TextInputType.number,
-                                        onSubmitted: (_) =>
-                                            _submitOtpLogin(l10n),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        height: 54,
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: const LinearGradient(
-                                              colors: [
-                                                Color(0xFF6C63FF),
-                                                Color(0xFF5A52E0),
-                                              ],
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(16),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: const Color(0xFF6C63FF)
-                                                    .withAlpha(80),
-                                                blurRadius: 20,
-                                                offset: const Offset(0, 6),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ElevatedButton(
-                                            onPressed:
-                                                (_otpVerifyLoading ||
-                                                        !_agreedToTerms)
-                                                    ? null
-                                                    : () => _submitOtpLogin(
-                                                        l10n),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              shadowColor:
-                                                  Colors.transparent,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                              ),
-                                            ),
-                                            child: _otpVerifyLoading
-                                                ? const SizedBox(
-                                                    width: 22,
-                                                    height: 22,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2.5,
-                                                      color: Colors.white,
+                                              child: _otpSendLoading
+                                                  ? const SizedBox(
+                                                      width: 22,
+                                                      height: 22,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2.5,
+                                                        color: Colors.white,
+                                                      ),
+                                                    )
+                                                  : Text(
+                                                      _otpResendCooldown > 0
+                                                          ? '${l10n.t('login_send_otp')} (${_otpResendCooldown}s)'
+                                                          : l10n.t('login_send_otp'),
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
                                                     ),
-                                                  )
-                                                : Text(
-                                                    l10n.t(
-                                                        'login_verify_sign_in'),
-                                                    style: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                      letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          if (_otpSent) ...[
+                                            const SizedBox(height: 16),
+                                            _buildField(
+                                              controller: _otpCodeCtrl,
+                                              hint: l10n.t('login_otp_hint'),
+                                              icon: Icons.pin_outlined,
+                                              keyboardType: TextInputType.number,
+                                              focusNode: _otpFocus,
+                                              scrollPaddingBottom: otpScrollPad,
+                                              onSubmitted: (_) =>
+                                                  _submitOtpLogin(l10n),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              height: 54,
+                                              child: DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  gradient: const LinearGradient(
+                                                    colors: [
+                                                      Color(0xFF6C63FF),
+                                                      Color(0xFF5A52E0),
+                                                    ],
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: const Color(0xFF6C63FF)
+                                                          .withAlpha(80),
+                                                      blurRadius: 20,
+                                                      offset: const Offset(0, 6),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ElevatedButton(
+                                                  onPressed:
+                                                      (_otpVerifyLoading ||
+                                                              !_agreedToTerms)
+                                                          ? null
+                                                          : () => _submitOtpLogin(
+                                                              l10n),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    shadowColor:
+                                                        Colors.transparent,
+                                                    foregroundColor: Colors.white,
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(16),
                                                     ),
                                                   ),
-                                          ),
-                                        ),
+                                                  child: _otpVerifyLoading
+                                                      ? const SizedBox(
+                                                          width: 22,
+                                                          height: 22,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            strokeWidth: 2.5,
+                                                            color: Colors.white,
+                                                          ),
+                                                        )
+                                                      : Text(
+                                                          l10n.t(
+                                                              'login_verify_sign_in'),
+                                                          style: const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            letterSpacing: 0.5,
+                                                          ),
+                                                        ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
+                                    ),
+                                    if (!compactLayout) ...[
+                                      const SizedBox(height: 20),
+                                      _buildPrivateRoleCta(l10n),
                                     ],
-                                    const SizedBox(height: 20),
-                                    _buildPrivateRoleCta(l10n),
                                   ],
                                   if (_usePasswordLogin) ...[
                                     const SizedBox(height: 16),
                                     _privacyCheckboxTile(l10n),
                                     const SizedBox(height: 16),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 54,
-                                      child: DecoratedBox(
+                                    KeyedSubtree(
+                                      key: _loginActionsKey,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 54,
+                                            child: DecoratedBox(
                                         decoration: BoxDecoration(
                                           gradient: const LinearGradient(
                                             colors: [
@@ -1015,6 +1158,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                       ),
                                     ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ],
                               ),
@@ -1026,6 +1172,8 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ),
               ),
+                );
+              },
             ),
           ),
         ],
@@ -1066,12 +1214,17 @@ class _LoginScreenState extends State<LoginScreen>
           width: double.infinity,
           height: 52,
           child: OutlinedButton.icon(
-            onPressed: () => setState(() {
-              _usePasswordLogin = true;
-              _isPrivateRoleMode = true;
-              _otpSent = false;
-              _otpCodeCtrl.clear();
-            }),
+            onPressed: () {
+              setState(() {
+                _usePasswordLogin = true;
+                _isPrivateRoleMode = true;
+                _otpSent = false;
+                _otpCodeCtrl.clear();
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _usernameFocus.requestFocus();
+              });
+            },
             icon: const Icon(Icons.workspaces_rounded,
                 color: Color(0xFF8B5CF6), size: 20),
             label: Text(
@@ -1163,12 +1316,15 @@ class _LoginScreenState extends State<LoginScreen>
     Widget? suffix,
     TextInputType keyboardType = TextInputType.text,
     void Function(String)? onSubmitted,
+    FocusNode? focusNode,
+    double scrollPaddingBottom = 40,
   }) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       obscureText: obscure,
       keyboardType: keyboardType,
-      scrollPadding: const EdgeInsets.only(bottom: 40),
+      scrollPadding: EdgeInsets.only(bottom: scrollPaddingBottom),
       style: const TextStyle(color: Colors.white, fontSize: 15),
       decoration: InputDecoration(
         hintText: hint,

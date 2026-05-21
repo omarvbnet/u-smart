@@ -18,6 +18,47 @@ function getTransporter() {
   });
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Parse SMTP_FROM / optional display name; envelope always uses SMTP_USER when set. */
+function resolveMailFrom(override?: string): { from: string; envelopeFrom: string; replyTo: string } {
+  const authUser = (process.env.SMTP_USER || '').trim().replace(/\s+/g, '');
+  const raw = (override || process.env.SMTP_FROM || '').trim().replace(/\s+/g, ' ');
+  const displayName = (process.env.SMTP_FROM_NAME || '').trim().replace(/\s+/g, ' ');
+
+  let name = displayName;
+  let email = authUser;
+
+  if (raw) {
+    const bracket = raw.match(/^(.+?)\s*<([^>]+)>$/);
+    if (bracket) {
+      if (!name) name = bracket[1].trim().replace(/^["']|["']$/g, '');
+      email = bracket[2].trim();
+    } else if (EMAIL_RE.test(raw)) {
+      email = raw;
+    } else {
+      const embedded = raw.match(/([^\s<>"']+@[^\s<>"']+)$/);
+      if (embedded && EMAIL_RE.test(embedded[1])) {
+        email = embedded[1];
+        if (!name) {
+          const prefix = raw.slice(0, raw.length - embedded[1].length).trim();
+          if (prefix) name = prefix.replace(/^["']|["']$/g, '');
+        }
+      }
+    }
+  }
+
+  if (!email) email = authUser || 'noreply@localhost';
+  const envelopeFrom = authUser || email;
+  const headerEmail = authUser && email !== authUser ? authUser : email;
+  const from =
+    name && !name.includes('@')
+      ? `"${name.replace(/"/g, '\\"')}" <${headerEmail}>`
+      : headerEmail;
+
+  return { from, envelopeFrom, replyTo: headerEmail };
+}
+
 /** Build professional welcome email HTML (table-based for email clients). */
 function buildWelcomeEmailHtml(greeting: string): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
@@ -504,7 +545,7 @@ export async function sendEmail(options: {
     return false;
   }
 
-  const from = options.from || process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@localhost';
+  const { from, envelopeFrom, replyTo } = resolveMailFrom(options.from);
   const text = options.text ?? htmlToPlainText(options.html);
 
   let lastError: unknown;
@@ -512,13 +553,14 @@ export async function sendEmail(options: {
     try {
       await transporter.sendMail({
         from,
+        envelope: { from: envelopeFrom, to: options.to },
         to: options.to,
         subject: options.subject,
         text,
         html: options.html,
         headers: {
           'X-Mailer': 'U-SMART',
-          'Reply-To': from,
+          'Reply-To': replyTo,
           'Message-ID': `<${Date.now()}.${Math.random().toString(36).slice(2)}@${typeof process.env.SMTP_HOST === 'string' ? process.env.SMTP_HOST.replace(/^smtp\./, '') : 'usmart'}>`,
         },
       });
