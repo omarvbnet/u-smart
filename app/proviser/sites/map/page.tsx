@@ -62,23 +62,46 @@ function SitesMapContent({
             : Promise.resolve(null),
         ]);
 
+        const pushSite = (
+          row: {
+            id: string;
+            siteId?: string;
+            siteCode?: string;
+            location?: string;
+            province?: string;
+            latitude?: number | null;
+            longitude?: number | null;
+            hasQfield?: boolean;
+            qfieldProjects?: unknown;
+            canEdit?: boolean;
+            sharedWithMe?: boolean;
+            confirmationStatus?: string;
+          },
+          source: 'personal' | 'workspace',
+          canPreview: boolean
+        ) => {
+          const projects = parseProjects(row.qfieldProjects);
+          if (!projects.length && !row.hasQfield) return;
+          const lat = row.latitude != null ? Number(row.latitude) : 33.3152;
+          const lng = row.longitude != null ? Number(row.longitude) : 44.3661;
+          out.push({
+            id: row.id,
+            source,
+            siteId: row.siteCode ?? row.siteId ?? row.id,
+            location: row.location ?? '',
+            province: row.province ?? '',
+            latitude: lat,
+            longitude: lng,
+            hasQfield: true,
+            qfieldProjects: projects,
+            canPreviewQfield: canPreview && projects.length > 0,
+          });
+        };
+
         const personal = await personalRes.json();
         if (personal.success && Array.isArray(personal.sites)) {
           for (const s of personal.sites) {
-            if (s.latitude == null || s.longitude == null) continue;
-            const projects = parseProjects(s.qfieldProjects);
-            out.push({
-              id: s.id,
-              source: 'personal',
-              siteId: s.siteId ?? s.id,
-              location: s.location ?? '',
-              province: s.province ?? '',
-              latitude: Number(s.latitude),
-              longitude: Number(s.longitude),
-              hasQfield: !!s.hasQfield || projects.length > 0,
-              qfieldProjects: projects,
-              canPreviewQfield: canPreviewPersonal || !!s.canEdit || !!s.sharedWithMe,
-            });
+            pushSite(s, 'personal', canPreviewPersonal || !!s.canEdit || !!s.sharedWithMe);
           }
         }
 
@@ -86,21 +109,8 @@ function SitesMapContent({
           const workspace = await workspaceRes.json();
           if (workspace.success && Array.isArray(workspace.sites)) {
             for (const s of workspace.sites) {
-              if (s.latitude == null || s.longitude == null) continue;
               if (s.confirmationStatus && s.confirmationStatus !== 'CONFIRMED') continue;
-              const projects = parseProjects(s.qfieldProjects);
-              out.push({
-                id: s.id,
-                source: 'workspace',
-                siteId: s.siteCode ?? s.siteId ?? s.id,
-                location: s.location ?? '',
-                province: s.province ?? '',
-                latitude: Number(s.latitude),
-                longitude: Number(s.longitude),
-                hasQfield: !!s.hasQfield || projects.length > 0,
-                qfieldProjects: projects,
-                canPreviewQfield: true,
-              });
+              pushSite(s, 'workspace', true);
             }
           }
         }
@@ -120,16 +130,17 @@ function SitesMapContent({
         <ArrowLeft className="w-4 h-4" />
         Sites list
       </Link>
-      <h1 className="text-xl font-semibold mb-4">Sites map &amp; QField</h1>
+      <h1 className="text-xl font-semibold mb-1">QField layers map</h1>
+      <p className="text-sm text-gray-500 mb-4">All project files and vector layers load on the map automatically.</p>
       {error && <p className="text-red-400 mb-4">{error}</p>}
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
         </div>
-      ) : pins.length === 0 ? (
-        <p className="text-gray-500">No sites with coordinates yet.</p>
+      ) : pins.filter((p) => p.qfieldProjects.length > 0).length === 0 ? (
+        <p className="text-gray-500">No sites with QField project files yet. Upload .qgz / .gpkg on a site first.</p>
       ) : (
-        <SitesMapClient sites={pins} />
+        <SitesMapClient sites={pins.filter((p) => p.qfieldProjects.length > 0 && p.canPreviewQfield)} />
       )}
     </div>
   );
