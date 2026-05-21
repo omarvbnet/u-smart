@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, MapPin, Users } from 'lucide-react';
 
 export type MapSitePin = {
   id: string;
@@ -14,15 +14,15 @@ export type MapSitePin = {
   hasQfield: boolean;
   qfieldProjects: Array<{ id: string; title: string; fileName?: string }>;
   canPreviewQfield: boolean;
+  hasCoordinates: boolean;
 };
 
 type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
 
 type LayerRow = {
   id: string;
-  siteLabel: string;
-  projectTitle: string;
   layerName: string;
+  projectTitle: string;
   color: string;
   visible: boolean;
   status: 'loading' | 'ready' | 'error' | 'empty';
@@ -30,20 +30,24 @@ type LayerRow = {
   featureCount: number;
 };
 
-const FILE_COLORS = [
-  '#f59e0b',
-  '#38bdf8',
-  '#a78bfa',
-  '#4ade80',
-  '#fb7185',
-  '#f472b6',
-  '#2dd4bf',
-  '#facc15',
-  '#60a5fa',
-  '#c084fc',
-];
+type StaffPin = {
+  requesterId: string;
+  latitude: number;
+  longitude: number;
+  name?: string | null;
+  role?: string | null;
+  departmentName?: string | null;
+  updatedAt: string;
+};
 
-const LAYER_STROKES = ['#fbbf24', '#22d3ee', '#c4b5fd', '#86efac', '#fda4af', '#fde047', '#93c5fd'];
+type FeatureSelection = {
+  layerName: string;
+  projectTitle: string;
+  geometryType: string;
+  properties: Record<string, unknown>;
+};
+
+const LAYER_STROKES = ['#fbbf24', '#22d3ee', '#c4b5fd', '#86efac', '#fda4af', '#fde047', '#93c5fd', '#f59e0b'];
 
 function previewUrl(site: MapSitePin, projectId: string) {
   const base =
@@ -63,49 +67,66 @@ function groupFeaturesByLayer(geojson: GeoJsonFeatureCollection): Map<string, Ge
   const groups = new Map<string, GeoJSON.Feature[]>();
   for (const f of geojson.features ?? []) {
     if (!f.geometry) continue;
-    const name = String((f.properties as Record<string, unknown>)?.layer ?? 'Features');
+    const props = (f.properties ?? {}) as Record<string, unknown>;
+    const name = String(props.layer ?? props.name ?? 'Features');
     const list = groups.get(name) ?? [];
     list.push(f);
     groups.set(name, list);
   }
-  if (!groups.size) {
-    groups.set('Features', []);
-  }
   return groups;
 }
 
-type LoadTask = {
-  site: MapSitePin;
-  project: MapSitePin['qfieldProjects'][number];
-  fileColor: string;
-};
+function formatPropertyValue(v: unknown): string {
+  if (v == null) return '—';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
 
-export function SitesMapClient({ sites }: { sites: MapSitePin[] }) {
+const SKIP_PROPS = new Set(['layer', 'package', 'packagePath', 'crsEpsg', 'fid']);
+
+export function SitesMapClient({
+  sites,
+  enableLiveLocations = false,
+}: {
+  sites: MapSitePin[];
+  enableLiveLocations?: boolean;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<import('leaflet').Map | null>(null);
-  const leafletLayersRef = useRef<Map<string, import('leaflet').GeoJSON>>(new Map());
+  const siteMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
+  const staffMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
+  const qfieldLayersRef = useRef<Map<string, import('leaflet').GeoJSON>>(new Map());
+  const loadGenRef = useRef(0);
 
   const [mapReady, setMapReady] = useState(false);
+  const [selectedSite, setSelectedSite] = useState<MapSitePin | null>(null);
   const [layerRows, setLayerRows] = useState<LayerRow[]>([]);
-  const [loadingAll, setLoadingAll] = useState(false);
-  const [loadProgress, setLoadProgress] = useState({ done: 0, total: 0 });
+  const [loadingLayers, setLoadingLayers] = useState(false);
+  const [layerError, setLayerError] = useState('');
+  const [featureSelection, setFeatureSelection] = useState<FeatureSelection | null>(null);
+  const [staff, setStaff] = useState<StaffPin[]>([]);
+  const [staffMeta, setStaffMeta] = useState<{ canView: boolean; canViewNames: boolean }>({
+    canView: false,
+    canViewNames: false,
+  });
+  const [selectedStaff, setSelectedStaff] = useState<StaffPin | null>(null);
 
-  const tasks = useMemo(() => {
-    const list: LoadTask[] = [];
-    let fileIdx = 0;
-    for (const site of sites) {
-      if (!site.canPreviewQfield || !site.qfieldProjects.length) continue;
-      for (const project of site.qfieldProjects) {
-        list.push({
-          site,
-          project,
-          fileColor: FILE_COLORS[fileIdx % FILE_COLORS.length],
-        });
-        fileIdx += 1;
-      }
-    }
-    return list;
-  }, [sites]);
+  const sitesWithCoords = sites.filter((s) => s.hasCoordinates);
+  const sitesList = sites.filter((s) => s.canPreviewQfield && s.qfieldProjects.length > 0);
+
+  const clearQfieldLayers = useCallback(() => {
+    qfieldLayersRef.current.forEach((l) => l.remove());
+    qfieldLayersRef.current.clear();
+  }, []);
+
+  const setLayerVisible = useCallback((id: string, visible: boolean) => {
+    setLayerRows((prev) => prev.map((r) => (r.id === id ? { ...r, visible } : r)));
+    const leafletLayer = qfieldLayersRef.current.get(id);
+    const map = mapInstanceRef.current;
+    if (!leafletLayer || !map) return;
+    if (visible) leafletLayer.addTo(map);
+    else leafletLayer.remove();
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -128,325 +149,478 @@ export function SitesMapClient({ sites }: { sites: MapSitePin[] }) {
         maxZoom: 19,
       }).addTo(map);
 
+      siteMarkersRef.current = L.layerGroup().addTo(map);
+      staffMarkersRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
+
+      setTimeout(() => map.invalidateSize(), 100);
       setMapReady(true);
     })();
 
     return () => {
       cancelled = true;
-      leafletLayersRef.current.forEach((l) => l.remove());
-      leafletLayersRef.current.clear();
+      clearQfieldLayers();
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
+      siteMarkersRef.current = null;
+      staffMarkersRef.current = null;
     };
-  }, []);
+  }, [clearQfieldLayers]);
 
-  const fitAllVisibleBounds = useCallback(async () => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-    const L = await import('leaflet');
-    const bounds = L.latLngBounds([]);
-    let has = false;
-    leafletLayersRef.current.forEach((layer, id) => {
-      const row = layerRows.find((r) => r.id === id);
-      if (row && !row.visible) return;
-      try {
-        const b = layer.getBounds();
-        if (b.isValid()) {
-          bounds.extend(b);
-          has = true;
-        }
-      } catch {
-        /* skip */
+  const loadSiteLayers = useCallback(
+    async (site: MapSitePin) => {
+      if (!mapReady || !mapInstanceRef.current || !site.canPreviewQfield) return;
+
+      const gen = ++loadGenRef.current;
+      setSelectedSite(site);
+      setFeatureSelection(null);
+      setSelectedStaff(null);
+      setLayerError('');
+      setLoadingLayers(true);
+      setLayerRows([]);
+      clearQfieldLayers();
+
+      const L = await import('leaflet');
+      const map = mapInstanceRef.current;
+      const bounds = L.latLngBounds([]);
+      let hasBounds = false;
+
+      if (site.hasCoordinates) {
+        bounds.extend([site.latitude, site.longitude]);
+        hasBounds = true;
       }
-    });
-    if (has) {
-      map.fitBounds(bounds, { padding: [32, 32], maxZoom: 16 });
-    }
-  }, [layerRows]);
 
-  const setLayerVisible = useCallback((id: string, visible: boolean) => {
-    setLayerRows((prev) => prev.map((r) => (r.id === id ? { ...r, visible } : r)));
-    const leafletLayer = leafletLayersRef.current.get(id);
-    const map = mapInstanceRef.current;
-    if (!leafletLayer || !map) return;
-    if (visible) {
-      leafletLayer.addTo(map);
-    } else {
-      leafletLayer.remove();
-    }
-  }, []);
+      const rows: LayerRow[] = [];
 
-  const loadAllLayers = useCallback(async () => {
-    if (!mapReady || !mapInstanceRef.current || !tasks.length) return;
+      for (let pi = 0; pi < site.qfieldProjects.length; pi++) {
+        if (loadGenRef.current !== gen) return;
+        const project = site.qfieldProjects[pi];
+        const fileColor = LAYER_STROKES[pi % LAYER_STROKES.length];
 
-    setLoadingAll(true);
-    setLoadProgress({ done: 0, total: tasks.length });
+        try {
+          const res = await fetch(previewUrl(site, project.id), { credentials: 'include' });
+          const data = await res.json();
 
-    const initialRows: LayerRow[] = [];
-    for (const { site, project, fileColor } of tasks) {
-      initialRows.push({
-        id: `${site.id}:${project.id}:pending`,
-        siteLabel: site.siteId,
-        projectTitle: project.title || project.fileName || project.id,
-        layerName: '…',
-        color: fileColor,
-        visible: true,
-        status: 'loading',
-        featureCount: 0,
-      });
-    }
-    setLayerRows(initialRows);
-
-    const L = await import('leaflet');
-    const map = mapInstanceRef.current;
-    leafletLayersRef.current.forEach((l) => l.remove());
-    leafletLayersRef.current.clear();
-
-    const allRows: LayerRow[] = [];
-    const bounds = L.latLngBounds([]);
-    let hasBounds = false;
-
-    for (let i = 0; i < tasks.length; i++) {
-      const { site, project, fileColor } = tasks[i];
-      setLoadProgress({ done: i, total: tasks.length });
-
-      try {
-        const res = await fetch(previewUrl(site, project.id), { credentials: 'include' });
-        const data = await res.json();
-
-        if (!data.success || !data.geojson?.features) {
-          allRows.push({
-            id: `${site.id}:${project.id}:error`,
-            siteLabel: site.siteId,
-            projectTitle: project.title || project.fileName || project.id,
-            layerName: '—',
-            color: fileColor,
-            visible: true,
-            status: 'error',
-            error: data.message || 'Could not load',
-            featureCount: 0,
-          });
-          continue;
-        }
-
-        const geojson = data.geojson as GeoJsonFeatureCollection;
-        const groups = groupFeaturesByLayer(geojson);
-
-        if (!geojson.features.length) {
-          allRows.push({
-            id: `${site.id}:${project.id}:empty`,
-            siteLabel: site.siteId,
-            projectTitle: project.title || project.fileName || project.id,
-            layerName: 'No geometries',
-            color: fileColor,
-            visible: false,
-            status: 'empty',
-            error: data.message ?? 'No vector layers in file',
-            featureCount: 0,
-          });
-          continue;
-        }
-
-        for (const [layerName, features] of groups) {
-          if (!features.length) continue;
-          const rowId = `${site.id}:${project.id}:${layerName}`;
-          const stroke = LAYER_STROKES[hashIndex(layerName + fileColor, LAYER_STROKES.length)];
-
-          const subCollection: GeoJsonFeatureCollection = {
-            type: 'FeatureCollection',
-            features,
-          };
-
-          const leafletLayer = L.geoJSON(subCollection, {
-            style: () => ({
-              color: stroke,
-              weight: 2,
-              fillColor: fileColor,
-              fillOpacity: 0.25,
-              opacity: 0.9,
-            }),
-            onEachFeature: (feature, layer) => {
-              const props = feature.properties as Record<string, unknown> | undefined;
-              const title = `${site.siteId} · ${project.title || project.fileName}`;
-              const body = [
-                `<strong>${title}</strong>`,
-                `<span style="opacity:0.85">Layer: ${layerName}</span>`,
-                site.location ? `<br/>${site.location}` : '',
-              ].join('');
-              layer.bindPopup(body);
-            },
-          });
-
-          leafletLayer.addTo(map);
-          leafletLayersRef.current.set(rowId, leafletLayer);
-
-          try {
-            const b = leafletLayer.getBounds();
-            if (b.isValid()) {
-              bounds.extend(b);
-              hasBounds = true;
-            }
-          } catch {
-            /* skip */
-          }
-
-          allRows.push({
-            id: rowId,
-            siteLabel: site.siteId,
-            projectTitle: project.title || project.fileName || project.id,
-            layerName,
-            color: stroke,
-            visible: true,
-            status: 'ready',
-            featureCount: features.length,
-          });
-        }
-
-        const apiLayers = Array.isArray(data.layers) ? data.layers : [];
-        for (const summary of apiLayers) {
-          const name = typeof summary.layer === 'string' ? summary.layer : '';
-          if (!name || allRows.some((r) => r.id.endsWith(`:${name}`) && r.projectTitle === (project.title || project.fileName))) {
+          if (!data.success) {
+            rows.push({
+              id: `${site.id}:${project.id}:err`,
+              layerName: '—',
+              projectTitle: project.title || project.fileName || project.id,
+              color: fileColor,
+              visible: false,
+              status: 'error',
+              error: data.message || 'Load failed',
+              featureCount: 0,
+            });
             continue;
           }
-          if (!groups.has(name)) {
-            allRows.push({
-              id: `${site.id}:${project.id}:${name}:meta`,
-              siteLabel: site.siteId,
+
+          const geojson = data.geojson as GeoJsonFeatureCollection | undefined;
+          if (!geojson?.features?.length) {
+            rows.push({
+              id: `${site.id}:${project.id}:empty`,
+              layerName: 'No geometries',
               projectTitle: project.title || project.fileName || project.id,
-              layerName: name,
               color: fileColor,
               visible: false,
               status: 'empty',
-              error: 'Listed in project but no features exported',
-              featureCount: summary.featureCount ?? 0,
+              error: data.message ?? 'No features in file',
+              featureCount: 0,
+            });
+            continue;
+          }
+
+          const groups = groupFeaturesByLayer(geojson);
+          const projectTitle = project.title || project.fileName || project.id;
+
+          for (const [layerName, features] of groups) {
+            if (!features.length) continue;
+            const rowId = `${site.id}:${project.id}:${layerName}`;
+            const stroke = LAYER_STROKES[hashIndex(layerName + project.id, LAYER_STROKES.length)];
+
+            const leafletLayer = L.geoJSON(
+              { type: 'FeatureCollection', features } as GeoJsonFeatureCollection,
+              {
+                style: (feature) => {
+                  const t = feature?.geometry?.type ?? '';
+                  if (t === 'LineString' || t === 'MultiLineString') {
+                    return { color: stroke, weight: 3, opacity: 0.95 };
+                  }
+                  if (t === 'Polygon' || t === 'MultiPolygon') {
+                    return {
+                      color: stroke,
+                      weight: 2,
+                      fillColor: fileColor,
+                      fillOpacity: 0.35,
+                      opacity: 0.9,
+                    };
+                  }
+                  return { color: stroke, weight: 2, fillOpacity: 0.5 };
+                },
+                pointToLayer: (_feature, latlng) =>
+                  L.circleMarker(latlng, {
+                    radius: 7,
+                    color: stroke,
+                    fillColor: fileColor,
+                    fillOpacity: 0.9,
+                    weight: 2,
+                  }),
+                onEachFeature: (feature, layer) => {
+                  layer.on('click', (e) => {
+                    import('leaflet').then((Lf) => Lf.DomEvent.stopPropagation(e));
+                    const props = { ...(feature.properties as Record<string, unknown>) };
+                    setFeatureSelection({
+                      layerName,
+                      projectTitle,
+                      geometryType: feature.geometry?.type ?? 'Unknown',
+                      properties: props,
+                    });
+                    setSelectedStaff(null);
+                    if ('setStyle' in layer && typeof (layer as import('leaflet').Path).setStyle === 'function') {
+                      (layer as import('leaflet').Path).setStyle({ weight: 4, color: '#ffffff' });
+                    }
+                  });
+                },
+              }
+            );
+
+            leafletLayer.addTo(map);
+            qfieldLayersRef.current.set(rowId, leafletLayer);
+
+            try {
+              const b = leafletLayer.getBounds();
+              if (b.isValid()) {
+                bounds.extend(b);
+                hasBounds = true;
+              }
+            } catch {
+              /* empty */
+            }
+
+            const apiBounds = data.bounds as
+              | { west: number; south: number; east: number; north: number }
+              | undefined;
+            if (apiBounds && Number.isFinite(apiBounds.south)) {
+              bounds.extend([
+                [apiBounds.south, apiBounds.west],
+                [apiBounds.north, apiBounds.east],
+              ]);
+              hasBounds = true;
+            }
+
+            rows.push({
+              id: rowId,
+              layerName,
+              projectTitle,
+              color: stroke,
+              visible: true,
+              status: 'ready',
+              featureCount: features.length,
             });
           }
+        } catch (err) {
+          rows.push({
+            id: `${site.id}:${project.id}:err`,
+            layerName: '—',
+            projectTitle: project.title || project.fileName || project.id,
+            color: fileColor,
+            visible: false,
+            status: 'error',
+            error: err instanceof Error ? err.message : 'Network error',
+            featureCount: 0,
+          });
         }
-      } catch {
-        allRows.push({
-          id: `${site.id}:${project.id}:error`,
-          siteLabel: site.siteId,
-          projectTitle: project.title || project.fileName || project.id,
-          layerName: '—',
-          color: fileColor,
-          visible: false,
-          status: 'error',
-          error: 'Network error',
-          featureCount: 0,
-        });
       }
+
+      if (loadGenRef.current !== gen) return;
+
+      setLayerRows(rows);
+      setLoadingLayers(false);
+
+      if (hasBounds && map) {
+        map.fitBounds(bounds, { padding: [48, 48], maxZoom: 17 });
+      }
+      map.invalidateSize();
+    },
+    [mapReady, clearQfieldLayers]
+  );
+
+  const refreshSiteMarkers = useCallback(async () => {
+    if (!mapReady || !siteMarkersRef.current) return;
+    const L = await import('leaflet');
+    const group = siteMarkersRef.current;
+    group.clearLayers();
+
+    const bounds: [number, number][] = [];
+    for (const site of sitesWithCoords) {
+      const latlng: [number, number] = [site.latitude, site.longitude];
+      bounds.push(latlng);
+      const isSelected = selectedSite?.id === site.id;
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="
+          transform: translate(-50%, -100%);
+          white-space: nowrap;
+          padding: 4px 10px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          border: 2px solid ${isSelected ? '#fff' : '#f59e0b'};
+          background: ${isSelected ? '#f59e0b' : 'rgba(15,20,25,0.92)'};
+          color: ${isSelected ? '#000' : '#fbbf24'};
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        ">${site.siteId}</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const marker = L.marker(latlng, { icon });
+      marker.on('click', () => {
+        loadSiteLayers(site);
+      });
+      marker.addTo(group);
     }
 
-    setLayerRows(allRows);
-    setLoadProgress({ done: tasks.length, total: tasks.length });
-    setLoadingAll(false);
-
-    if (hasBounds && map) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    if (bounds.length && mapInstanceRef.current && !selectedSite) {
+      mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
     }
-  }, [mapReady, tasks]);
+  }, [mapReady, sitesWithCoords, selectedSite, loadSiteLayers]);
 
   useEffect(() => {
-    if (mapReady && tasks.length) {
-      loadAllLayers();
-    } else if (mapReady) {
-      setLayerRows([]);
-    }
-  }, [mapReady, tasks, loadAllLayers]);
+    refreshSiteMarkers();
+  }, [refreshSiteMarkers]);
 
-  const readyCount = layerRows.filter((r) => r.status === 'ready').length;
-  const grouped = useMemo(() => {
-    const bySite = new Map<string, LayerRow[]>();
-    for (const row of layerRows) {
-      const key = row.siteLabel;
-      if (!bySite.has(key)) bySite.set(key, []);
-      bySite.get(key)!.push(row);
+  const fetchStaffLocations = useCallback(async () => {
+    if (!enableLiveLocations || !mapReady) return;
+    try {
+      const res = await fetch('/api/provisor-private-company/live-locations', {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!data.success) return;
+      setStaffMeta({ canView: !!data.canViewTeam, canViewNames: !!data.canViewNames });
+      if (data.canViewTeam && Array.isArray(data.locations)) {
+        setStaff(
+          data.locations.map((loc: StaffPin) => ({
+            requesterId: loc.requesterId,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            name: loc.name,
+            role: loc.role,
+            departmentName: loc.departmentName,
+            updatedAt: loc.updatedAt,
+          }))
+        );
+      } else {
+        setStaff([]);
+      }
+    } catch {
+      /* ignore */
     }
-    return [...bySite.entries()];
-  }, [layerRows]);
+  }, [enableLiveLocations, mapReady]);
+
+  useEffect(() => {
+    fetchStaffLocations();
+    if (!enableLiveLocations) return;
+    const t = setInterval(fetchStaffLocations, 20000);
+    return () => clearInterval(t);
+  }, [fetchStaffLocations, enableLiveLocations]);
+
+  const refreshStaffMarkers = useCallback(async () => {
+    if (!mapReady || !staffMarkersRef.current || !staffMeta.canView) return;
+    const L = await import('leaflet');
+    const group = staffMarkersRef.current;
+    group.clearLayers();
+
+    for (const person of staff) {
+      const latlng: [number, number] = [person.latitude, person.longitude];
+      const label = staffMeta.canViewNames ? person.name || person.requesterId.slice(0, 8) : 'Staff';
+      const marker = L.circleMarker(latlng, {
+        radius: 9,
+        color: '#22c55e',
+        fillColor: '#4ade80',
+        fillOpacity: 0.95,
+        weight: 2,
+      });
+      marker.bindTooltip(label, { permanent: false, direction: 'top' });
+      marker.on('click', (e) => {
+        import('leaflet').then((Lf) => Lf.DomEvent.stopPropagation(e));
+        setSelectedStaff(person);
+        setFeatureSelection(null);
+      });
+      marker.addTo(group);
+    }
+  }, [mapReady, staff, staffMeta]);
+
+  useEffect(() => {
+    refreshStaffMarkers();
+  }, [refreshStaffMarkers]);
+
+  const featureEntries = featureSelection
+    ? Object.entries(featureSelection.properties).filter(([k]) => !SKIP_PROPS.has(k))
+    : [];
 
   return (
-    <div className="grid lg:grid-cols-[1fr_300px] gap-4">
+    <div className="grid lg:grid-cols-[1fr_320px] gap-4">
       <div className="relative">
         <div ref={mapRef} className="h-[min(78vh,640px)] rounded-xl border border-white/10 z-0" />
-        {(loadingAll || loadProgress.total > 0) && (
-          <div className="absolute top-3 left-3 z-[1000] flex items-center gap-2 rounded-lg bg-black/75 border border-white/10 px-3 py-2 text-sm text-white">
-            {loadingAll && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
-            Loading QField layers {loadProgress.done}/{loadProgress.total}
-            {readyCount > 0 && !loadingAll ? ` · ${readyCount} on map` : ''}
+        {loadingLayers && (
+          <div className="absolute top-3 left-3 z-[1000] flex items-center gap-2 rounded-lg bg-black/80 border border-white/10 px-3 py-2 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+            Loading QField layers…
           </div>
         )}
       </div>
 
-      <aside className="rounded-xl border border-white/10 bg-[#0f1419] p-4 max-h-[min(78vh,640px)] overflow-y-auto">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h2 className="text-sm font-medium text-gray-300">QField layers</h2>
-          <button
-            type="button"
-            onClick={() => fitAllVisibleBounds()}
-            className="text-xs text-amber-400 hover:underline"
-          >
-            Fit all
-          </button>
-        </div>
+      <aside className="rounded-xl border border-white/10 bg-[#0f1419] p-4 max-h-[min(78vh,640px)] overflow-y-auto flex flex-col gap-4">
+        <section>
+          <h2 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-amber-400" />
+            Sites
+          </h2>
+          <p className="text-xs text-gray-500 mb-2">Tap a site name on the map or pick below to load QField layers.</p>
+          <ul className="space-y-1 max-h-36 overflow-y-auto">
+            {sitesList.map((site) => (
+              <li key={`${site.source}-${site.id}`}>
+                <button
+                  type="button"
+                  onClick={() => loadSiteLayers(site)}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm transition ${
+                    selectedSite?.id === site.id
+                      ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
+                      : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-transparent'
+                  }`}
+                >
+                  <span className="font-medium">{site.siteId}</span>
+                  <span className="block text-xs text-gray-500 truncate">{site.location || site.province}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-        {!tasks.length ? (
-          <p className="text-sm text-gray-500">No QField project files on your sites.</p>
-        ) : !layerRows.length && loadingAll ? (
-          <p className="text-sm text-gray-500">Reading project files…</p>
-        ) : (
-          <div className="space-y-4">
-            {grouped.map(([siteLabel, rows]) => (
-              <div key={siteLabel}>
-                <p className="text-xs font-semibold text-amber-400/90 uppercase tracking-wide mb-2">{siteLabel}</p>
-                <ul className="space-y-1.5">
-                  {rows.map((row) => (
-                    <li
-                      key={row.id}
-                      className={`flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm ${
-                        row.status === 'error' ? 'bg-red-500/10' : 'bg-white/5'
-                      }`}
-                    >
+        {selectedSite && (
+          <section>
+            <h2 className="text-sm font-medium text-amber-300 mb-1">{selectedSite.siteId}</h2>
+            <p className="text-xs text-gray-500">{selectedSite.location}</p>
+            <p className="text-xs text-gray-600">{selectedSite.province}</p>
+            {layerError && <p className="text-xs text-red-400 mt-2">{layerError}</p>}
+            {layerRows.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {layerRows.map((row) => (
+                  <li
+                    key={row.id}
+                    className="flex items-center gap-2 text-xs rounded px-2 py-1 bg-white/5"
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+                    <span className="flex-1 truncate text-gray-300">
+                      {row.layerName}
+                      {row.status === 'ready' ? ` (${row.featureCount})` : ''}
+                    </span>
+                    {row.status === 'ready' && (
                       <button
                         type="button"
-                        disabled={row.status !== 'ready'}
+                        className="text-gray-500 hover:text-white"
                         onClick={() => setLayerVisible(row.id, !row.visible)}
-                        className="mt-0.5 text-gray-400 hover:text-white disabled:opacity-30"
-                        aria-label={row.visible ? 'Hide layer' : 'Show layer'}
                       >
-                        {row.visible && row.status === 'ready' ? (
-                          <Eye className="w-4 h-4" />
-                        ) : (
-                          <EyeOff className="w-4 h-4" />
-                        )}
+                        {row.visible ? 'hide' : 'show'}
                       </button>
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0 mt-1"
-                        style={{ backgroundColor: row.color }}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white truncate">{row.layerName}</p>
-                        <p className="text-xs text-gray-500 truncate">{row.projectTitle}</p>
-                        {row.status === 'loading' && (
-                          <p className="text-xs text-gray-600">Loading…</p>
-                        )}
-                        {row.status === 'ready' && (
-                          <p className="text-xs text-gray-600">{row.featureCount} features</p>
-                        )}
-                        {row.error && <p className="text-xs text-red-400/90">{row.error}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+                    )}
+                    {row.error && <span className="text-red-400">{row.error}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!loadingLayers && layerRows.length === 0 && (
+              <p className="text-xs text-gray-500 mt-2">No layers loaded.</p>
+            )}
+          </section>
         )}
 
-        <p className="text-xs text-gray-600 mt-4 leading-relaxed">
-          All QField file layers load automatically. Colors distinguish layers inside each project file.
-        </p>
+        <section className="border-t border-white/10 pt-3">
+          <h2 className="text-sm font-medium text-gray-300 mb-2">Element details</h2>
+          {!featureSelection ? (
+            <p className="text-xs text-gray-500">Click any line, polygon, or point on the map to see attributes.</p>
+          ) : (
+            <div className="text-xs space-y-2">
+              <p className="text-gray-400">
+                <span className="text-gray-500">Layer:</span> {featureSelection.layerName}
+              </p>
+              <p className="text-gray-400">
+                <span className="text-gray-500">File:</span> {featureSelection.projectTitle}
+              </p>
+              <p className="text-gray-400">
+                <span className="text-gray-500">Geometry:</span> {featureSelection.geometryType}
+              </p>
+              <div className="max-h-48 overflow-y-auto rounded-lg bg-black/30 border border-white/10">
+                <table className="w-full">
+                  <tbody>
+                    {featureEntries.length === 0 ? (
+                      <tr>
+                        <td className="px-2 py-2 text-gray-500">No attributes</td>
+                      </tr>
+                    ) : (
+                      featureEntries.map(([k, v]) => (
+                        <tr key={k} className="border-t border-white/5 first:border-0">
+                          <td className="px-2 py-1.5 text-gray-500 align-top font-medium">{k}</td>
+                          <td className="px-2 py-1.5 text-gray-200 break-all">{formatPropertyValue(v)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {enableLiveLocations && (
+          <section className="border-t border-white/10 pt-3">
+            <h2 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" />
+              Staff live ({staff.length})
+            </h2>
+            {!staffMeta.canView ? (
+              <p className="text-xs text-gray-500">Live team map is for workspace owners and managers.</p>
+            ) : staff.length === 0 ? (
+              <p className="text-xs text-gray-500">No recent GPS pings (staff must open the mobile map).</p>
+            ) : (
+              <ul className="space-y-1 max-h-28 overflow-y-auto">
+                {staff.map((p) => (
+                  <li key={p.requesterId}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStaff(p);
+                        setFeatureSelection(null);
+                        mapInstanceRef.current?.setView([p.latitude, p.longitude], 15);
+                      }}
+                      className={`w-full text-left rounded px-2 py-1.5 text-xs ${
+                        selectedStaff?.requesterId === p.requesterId
+                          ? 'bg-emerald-500/20 text-emerald-200'
+                          : 'text-gray-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {staffMeta.canViewNames ? p.name || p.requesterId : 'Staff member'}
+                      {p.role ? ` · ${p.role}` : ''}
+                      <span className="block text-gray-600">
+                        {new Date(p.updatedAt).toLocaleTimeString()}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {selectedStaff && staffMeta.canViewNames && (
+              <div className="mt-2 text-xs text-gray-400 rounded bg-emerald-500/10 px-2 py-2 border border-emerald-500/20">
+                <p className="font-medium text-emerald-200">{selectedStaff.name}</p>
+                <p>{selectedStaff.role}</p>
+                {selectedStaff.departmentName && <p>{selectedStaff.departmentName}</p>}
+              </div>
+            )}
+          </section>
+        )}
       </aside>
     </div>
   );

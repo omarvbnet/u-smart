@@ -10,7 +10,14 @@ import { canViewSitesMap } from '@/lib/proviser-permissions';
 
 const SitesMapClient = dynamic(
   () => import('@/components/proviser/SitesMapClient').then((m) => m.SitesMapClient),
-  { ssr: false, loading: () => <div className="h-[480px] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-amber-400" /></div> }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[480px] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+      </div>
+    ),
+  }
 );
 
 function parseProjects(raw: unknown): MapSitePin['qfieldProjects'] {
@@ -23,10 +30,22 @@ function parseProjects(raw: unknown): MapSitePin['qfieldProjects'] {
     });
 }
 
+function hasValidCoords(lat: unknown, lng: unknown): boolean {
+  const la = Number(lat);
+  const ln = Number(lng);
+  return Number.isFinite(la) && Number.isFinite(ln) && Math.abs(la) <= 90 && Math.abs(ln) <= 180;
+}
+
 export default function ProviserSitesMapPage() {
   return (
     <ProviserPageGuard>
-      {({ user, membership }) => <SitesMapContent userRole={user.role ?? ''} membership={membership} />}
+      {({ user, membership }) => (
+        <SitesMapContent
+          userRole={user.role ?? ''}
+          membership={membership}
+          enableLiveLocations={membership.mode === 'private' || membership.mode === 'coordinator'}
+        />
+      )}
     </ProviserPageGuard>
   );
 }
@@ -34,11 +53,13 @@ export default function ProviserSitesMapPage() {
 function SitesMapContent({
   userRole,
   membership,
+  enableLiveLocations,
 }: {
   userRole: string;
   membership: { mode: string };
+  enableLiveLocations: boolean;
 }) {
-  const [pins, setPins] = useState<MapSitePin[]>([]);
+  const [sites, setSites] = useState<MapSitePin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -82,19 +103,19 @@ function SitesMapContent({
         ) => {
           const projects = parseProjects(row.qfieldProjects);
           if (!projects.length && !row.hasQfield) return;
-          const lat = row.latitude != null ? Number(row.latitude) : 33.3152;
-          const lng = row.longitude != null ? Number(row.longitude) : 44.3661;
+          const coords = hasValidCoords(row.latitude, row.longitude);
           out.push({
             id: row.id,
             source,
             siteId: row.siteCode ?? row.siteId ?? row.id,
             location: row.location ?? '',
             province: row.province ?? '',
-            latitude: lat,
-            longitude: lng,
-            hasQfield: true,
+            latitude: coords ? Number(row.latitude) : 33.3152,
+            longitude: coords ? Number(row.longitude) : 44.3661,
+            hasQfield: projects.length > 0,
             qfieldProjects: projects,
             canPreviewQfield: canPreview && projects.length > 0,
+            hasCoordinates: coords,
           });
         };
 
@@ -115,7 +136,7 @@ function SitesMapContent({
           }
         }
 
-        setPins(out);
+        setSites(out);
       } catch {
         setError('Failed to load sites');
       } finally {
@@ -124,23 +145,31 @@ function SitesMapContent({
     })();
   }, [userRole, membership.mode]);
 
+  const qfieldSites = sites.filter((s) => s.qfieldProjects.length > 0 && s.canPreviewQfield);
+
   return (
     <div>
-      <Link href="/proviser/sites" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-4">
+      <Link
+        href="/proviser/sites"
+        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-4"
+      >
         <ArrowLeft className="w-4 h-4" />
         Sites list
       </Link>
-      <h1 className="text-xl font-semibold mb-1">QField layers map</h1>
-      <p className="text-sm text-gray-500 mb-4">All project files and vector layers load on the map automatically.</p>
+      <h1 className="text-xl font-semibold mb-1">Sites &amp; QField map</h1>
+      <p className="text-sm text-gray-500 mb-4">
+        Tap a site label on the map to load its QField layers. Tap any drawn element for details. Green dots are live
+        staff (owners/managers).
+      </p>
       {error && <p className="text-red-400 mb-4">{error}</p>}
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
         </div>
-      ) : pins.filter((p) => p.qfieldProjects.length > 0).length === 0 ? (
-        <p className="text-gray-500">No sites with QField project files yet. Upload .qgz / .gpkg on a site first.</p>
+      ) : qfieldSites.length === 0 ? (
+        <p className="text-gray-500">No sites with QField project files yet.</p>
       ) : (
-        <SitesMapClient sites={pins.filter((p) => p.qfieldProjects.length > 0 && p.canPreviewQfield)} />
+        <SitesMapClient sites={qfieldSites} enableLiveLocations={enableLiveLocations} />
       )}
     </div>
   );
