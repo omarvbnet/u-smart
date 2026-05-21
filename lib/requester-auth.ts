@@ -41,12 +41,14 @@ export function verifyRequesterToken(token: string): RequesterPayload | null {
 
 export function getRequesterCookieOptions() {
   const isProd = process.env.NODE_ENV === 'production';
+  const domain = process.env.REQUESTER_COOKIE_DOMAIN?.trim() || undefined;
   return {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax' as const,
     maxAge: COOKIE_MAX_AGE,
     path: '/',
+    ...(domain ? { domain } : {}),
   };
 }
 
