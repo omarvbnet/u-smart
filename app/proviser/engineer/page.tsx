@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { ProviserShell } from '@/components/proviser/ProviserShell';
 import { TicketList, type TicketRow } from '@/components/proviser/TicketList';
 import { useProviserUser } from '@/components/proviser/use-proviser-user';
+import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
 import { PROVISER_SERVICE_SLUG, isEngineerRole } from '@/lib/proviser-web';
 
 type Tab = 'mine' | 'available';
@@ -13,6 +14,7 @@ type Tab = 'mine' | 'available';
 export default function ProviserEngineerPage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
+  const { membership } = useProviserWorkspace(user);
   const [tab, setTab] = useState<Tab>('mine');
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function ProviserEngineerPage() {
   }
 
   return (
-    <ProviserShell user={user} onLogout={logout}>
+    <ProviserShell user={user} membership={membership} onLogout={logout}>
       <h1 className="text-xl font-semibold mb-4">Engineer workspace</h1>
       <div className="flex gap-2 mb-4">
         {(['mine', 'available'] as Tab[]).map((t) => (

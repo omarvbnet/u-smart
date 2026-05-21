@@ -6,11 +6,13 @@ import { Loader2, PlusCircle } from 'lucide-react';
 import { ProviserShell } from '@/components/proviser/ProviserShell';
 import { TicketList, type TicketRow } from '@/components/proviser/TicketList';
 import { useProviserUser } from '@/components/proviser/use-proviser-user';
+import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
 import { PROVISER_SERVICE_SLUG, isEngineerRole } from '@/lib/proviser-web';
 
 export default function ProviserCompanyPage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
+  const { membership } = useProviserWorkspace(user);
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -101,7 +103,7 @@ export default function ProviserCompanyPage() {
   }
 
   return (
-    <ProviserShell user={user} onLogout={logout}>
+    <ProviserShell user={user} membership={membership} onLogout={logout}>
       <div className="flex items-center justify-between gap-4 mb-4">
         <h1 className="text-xl font-semibold">Company tickets</h1>
         <button

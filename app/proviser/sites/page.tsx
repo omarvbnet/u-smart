@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ProviserShell } from '@/components/proviser/ProviserShell';
 import { useProviserUser } from '@/components/proviser/use-proviser-user';
+import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
+import Link from 'next/link';
+import { Map } from 'lucide-react';
 
 type SiteRow = {
   id: string;
@@ -15,6 +18,7 @@ type SiteRow = {
 
 export default function ProviserSitesPage() {
   const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
+  const { membership } = useProviserWorkspace(user);
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,8 +43,17 @@ export default function ProviserSitesPage() {
   }
 
   return (
-    <ProviserShell user={user} onLogout={logout}>
-      <h1 className="text-xl font-semibold mb-4">Sites</h1>
+    <ProviserShell user={user} membership={membership} onLogout={logout}>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <h1 className="text-xl font-semibold">Sites</h1>
+        <Link
+          href="/proviser/sites/map"
+          className="inline-flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300"
+        >
+          <Map className="w-4 h-4" />
+          Open map
+        </Link>
+      </div>
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-amber-400" />

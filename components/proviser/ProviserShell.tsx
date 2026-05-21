@@ -2,31 +2,64 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, ClipboardList, LayoutDashboard, LogOut, MapPin, User } from 'lucide-react';
+import {
+  BarChart3,
+  Bell,
+  Building2,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  Map,
+  MapPin,
+  User,
+  Users,
+} from 'lucide-react';
 import type { ProviserUser } from '@/lib/proviser-web';
 import { isEngineerRole } from '@/lib/proviser-web';
+import type { ProviserMembership } from '@/lib/proviser-permissions';
+import { canViewSitesMap } from '@/lib/proviser-permissions';
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
 
 export function ProviserShell({
   user,
+  membership,
   children,
   onLogout,
 }: {
   user: ProviserUser;
+  membership?: ProviserMembership;
   children: React.ReactNode;
   onLogout: () => void;
 }) {
   const pathname = usePathname();
   const engineer = isEngineerRole(user.role);
   const base = engineer ? '/proviser/engineer' : '/proviser/company';
+  const m = membership;
+  const role = user.role ?? m?.role ?? '';
 
   const nav: NavItem[] = [
-    { href: base, label: engineer ? 'Tickets' : 'Tickets', icon: <ClipboardList className="w-4 h-4" /> },
+    { href: base, label: 'Tickets', icon: <ClipboardList className="w-4 h-4" /> },
     { href: '/proviser/sites', label: 'Sites', icon: <MapPin className="w-4 h-4" /> },
-    { href: '/proviser/notifications', label: 'Alerts', icon: <Bell className="w-4 h-4" /> },
-    { href: '/proviser/profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
   ];
+
+  if (canViewSitesMap(role, m?.mode ?? 'none')) {
+    nav.push({ href: '/proviser/sites/map', label: 'Map', icon: <Map className="w-4 h-4" /> });
+  }
+  if (m?.canManageStaff || m?.canManageDepartments) {
+    nav.push({ href: '/proviser/staff', label: 'Staff', icon: <Users className="w-4 h-4" /> });
+  }
+  if (m?.canManageDepartments || (m?.mode === 'private' && m.departmentId)) {
+    nav.push({ href: '/proviser/departments', label: 'Departments', icon: <Building2 className="w-4 h-4" /> });
+  }
+  if (m?.canViewPerformance) {
+    nav.push({ href: '/proviser/performance', label: 'Performance', icon: <BarChart3 className="w-4 h-4" /> });
+  }
+
+  nav.push(
+    { href: '/proviser/notifications', label: 'Alerts', icon: <Bell className="w-4 h-4" /> },
+    { href: '/proviser/profile', label: 'Profile', icon: <User className="w-4 h-4" /> }
+  );
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white flex flex-col">
@@ -36,9 +69,13 @@ export function ProviserShell({
             <LayoutDashboard className="w-5 h-5" />
             <span>Proviser</span>
           </Link>
-          <p className="hidden sm:block text-sm text-gray-400 truncate max-w-[200px]">
+          <p className="hidden sm:block text-sm text-gray-400 truncate max-w-[240px]">
             {user.name || user.username}
-            {user.role ? <span className="text-gray-500"> · {user.role}</span> : null}
+            {m?.departmentName ? (
+              <span className="text-gray-500"> · {m.departmentName}</span>
+            ) : user.role ? (
+              <span className="text-gray-500"> · {user.role}</span>
+            ) : null}
           </p>
           <button
             type="button"

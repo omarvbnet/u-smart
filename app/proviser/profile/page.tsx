@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ProviserShell } from '@/components/proviser/ProviserShell';
 import { useProviserUser } from '@/components/proviser/use-proviser-user';
+import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
 
 export default function ProviserProfilePage() {
   const { user, loading: authLoading, logout, refresh } = useProviserUser({ redirectToLogin: true });
+  const { membership } = useProviserWorkspace(user);
   const [passwordMsg, setPasswordMsg] = useState('');
   const [otpSending, setOtpSending] = useState(false);
   const [changing, setChanging] = useState(false);
@@ -66,7 +68,7 @@ export default function ProviserProfilePage() {
   }
 
   return (
-    <ProviserShell user={user} onLogout={logout}>
+    <ProviserShell user={user} membership={membership} onLogout={logout}>
       <h1 className="text-xl font-semibold mb-6">Profile</h1>
       <dl className="space-y-3 text-sm mb-8">
         <div className="flex justify-between border-b border-white/10 pb-2">

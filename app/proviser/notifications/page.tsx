@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { ProviserShell } from '@/components/proviser/ProviserShell';
 import { useProviserUser } from '@/components/proviser/use-proviser-user';
+import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
 
 type NotificationRow = {
   id: string;
@@ -17,6 +18,7 @@ type NotificationRow = {
 
 export default function ProviserNotificationsPage() {
   const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
+  const { membership } = useProviserWorkspace(user);
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +53,7 @@ export default function ProviserNotificationsPage() {
   }
 
   return (
-    <ProviserShell user={user} onLogout={logout}>
+    <ProviserShell user={user} membership={membership} onLogout={logout}>
       <h1 className="text-xl font-semibold mb-4">Notifications</h1>
       {loading ? (
         <div className="flex justify-center py-12">
