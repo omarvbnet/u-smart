@@ -8,6 +8,7 @@ import {
 } from '@/lib/private-company-cancellations';
 import { loadPlatformTicketPolicy } from '@/lib/platform-ticket-policy';
 import { prisma as _prisma } from '@/lib/prisma';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -56,6 +57,16 @@ export async function PATCH(req: NextRequest) {
   await prisma.privateCompany.update({
     where: { id: guard.companyId },
     data: { ticketCancellationReasons: reasons },
+  });
+
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'WORKSPACE_SETTINGS_CHANGED',
+    resourceType: 'workspace',
+    resourceId: guard.companyId,
+    summary: `Updated ticket cancellation reasons (${reasons.length})`,
+    departmentId: guard.actorDepartmentId ?? null,
   });
 
   return NextResponse.json({

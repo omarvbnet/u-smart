@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { warehouseGuard } from '@/lib/private-company-warehouse';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -55,6 +56,15 @@ export async function PATCH(req: NextRequest) {
   await prisma.privateCompany.update({
     where: { id: guard.companyId },
     data: { materialUseReasons: reasons },
+  });
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'WORKSPACE_SETTINGS_CHANGED',
+    resourceType: 'workspace',
+    resourceId: guard.companyId,
+    summary: `Updated material use reasons (${reasons.length})`,
+    departmentId: guard.actorDepartmentId,
   });
   return NextResponse.json({ success: true, reasons });
 }

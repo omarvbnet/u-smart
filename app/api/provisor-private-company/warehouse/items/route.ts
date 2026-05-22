@@ -4,7 +4,9 @@ import {
   logMovement,
   normalizeProvince,
   warehouseGuard,
+  isToolTaggedMaterial,
 } from '@/lib/private-company-warehouse';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -132,7 +134,7 @@ export async function POST(req: NextRequest) {
 
   const material = await prisma.privateCompanyMaterial.findFirst({
     where: { id: materialId, companyId: guard.companyId },
-    select: { id: true, tracking: true, name: true },
+    select: { id: true, tracking: true, name: true, category: true },
   });
   if (!material) {
     return NextResponse.json(
@@ -200,6 +202,18 @@ export async function POST(req: NextRequest) {
         console.error('stock item:', e);
       }
     }
+  }
+  if (created.length > 0) {
+    logPrivateCompanyWorkspaceActivity({
+      companyId: guard.companyId,
+      actorRequesterId: guard.requesterId,
+      action: 'TOOL_STOCKED',
+      resourceType: isToolTaggedMaterial(material.category, material.name) ? 'tool' : 'material',
+      resourceId: materialId,
+      summary: `Stocked ${created.length} unit(s) of "${material.name}" in ${province}`,
+      departmentId: guard.actorDepartmentId,
+      metadata: { quantity: created.length, province },
+    });
   }
   return NextResponse.json({
     success: created.length > 0,

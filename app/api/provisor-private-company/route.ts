@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyTicketsRegistrationRequest } from '@/lib/email';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -408,6 +409,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'No changes.' }, { status: 400 });
     }
     const updated = await prisma.privateCompany.update({ where: { id: ws.id }, data });
+    logPrivateCompanyWorkspaceActivity({
+      companyId: ws.id,
+      actorRequesterId: auth.payload.requesterId,
+      action: 'WORKSPACE_SETTINGS_CHANGED',
+      resourceType: 'workspace',
+      resourceId: ws.id,
+      summary: 'Updated workspace profile',
+      metadata: { fields: Object.keys(data) },
+    });
     return NextResponse.json({ success: true, workspace: updated });
   } catch (err) {
     console.error('PATCH /api/provisor-private-company:', err);

@@ -9,6 +9,7 @@ import {
   normalizeExpenseReasons,
   serializeExpenseSettings,
 } from '@/lib/private-company-expenses';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -246,6 +247,20 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Workspace not found.' }, { status: 404 });
   }
   const techniques = await fetchWorkspaceExpenseTechniques(guard.companyId);
+
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'WORKSPACE_SETTINGS_CHANGED',
+    resourceType: 'workspace',
+    resourceId: guard.companyId,
+    summary: 'Updated ticket expense settings',
+    departmentId: guard.actorDepartmentId ?? null,
+    metadata: {
+      companyFields: Object.keys(data),
+      techniquePatch: techniquePatchApplied,
+    },
+  });
 
   return NextResponse.json({
     success: true,

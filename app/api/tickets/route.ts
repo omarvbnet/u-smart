@@ -12,6 +12,7 @@ import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib
 import { hasPrivilege } from '@/lib/coordinator-access';
 import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 import {
   assignedStaffIdFromCompanyJson,
   maintenanceCrewIdsFromCompanyJson,
@@ -1400,6 +1401,19 @@ export async function POST(req: NextRequest) {
         ticketId: ticket.id,
         summary: `${siteName} - ${siteCoordinator}`,
       }).catch((e) => console.error('Ticket email notification:', e));
+    }
+
+    if (assignmentScope === 'PRIVATE_COMPANY_STAFF' && privateCompanyIdForTicket && payload?.requesterId) {
+      logPrivateCompanyWorkspaceActivity({
+        companyId: privateCompanyIdForTicket,
+        actorRequesterId: payload.requesterId,
+        action: 'TICKET_CREATED',
+        resourceType: 'ticket',
+        resourceId: ticket.id,
+        summary: `Created ticket ${siteName || ticket.id} (${technique})`,
+        departmentId: privateCompanyTargetDepartmentId ?? null,
+        metadata: { province, status: 'PENDING' },
+      });
     }
 
     return NextResponse.json({

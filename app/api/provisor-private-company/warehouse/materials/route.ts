@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma as _prisma } from '@/lib/prisma';
-import { warehouseGuard } from '@/lib/private-company-warehouse';
+import { warehouseGuard, isToolTaggedMaterial } from '@/lib/private-company-warehouse';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -111,6 +112,17 @@ export async function POST(req: NextRequest) {
         createdById: guard.requesterId,
       },
     });
+    const cat = typeof body?.category === 'string' ? body.category : null;
+    logPrivateCompanyWorkspaceActivity({
+      companyId: guard.companyId,
+      actorRequesterId: guard.requesterId,
+      action: 'MATERIAL_ADDED',
+      resourceType: isToolTaggedMaterial(cat, name) ? 'tool' : 'material',
+      resourceId: created.id,
+      summary: `Added catalog item "${name}"`,
+      departmentId: guard.actorDepartmentId,
+      metadata: { tracking },
+    });
     return NextResponse.json({ success: true, material: created });
   } catch (e: unknown) {
     if (typeof e === 'object' && e && (e as { code?: string }).code === 'P2002') {
@@ -144,7 +156,7 @@ export async function PATCH(req: NextRequest) {
   }
   const existing = await prisma.privateCompanyMaterial.findFirst({
     where: { id, companyId: guard.companyId },
-    select: { id: true },
+    select: { id: true, name: true, category: true },
   });
   if (!existing) {
     return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
@@ -167,6 +179,17 @@ export async function PATCH(req: NextRequest) {
   }
   try {
     const updated = await prisma.privateCompanyMaterial.update({ where: { id }, data });
+    const label = String(updated.name ?? existing.name ?? 'Material');
+    logPrivateCompanyWorkspaceActivity({
+      companyId: guard.companyId,
+      actorRequesterId: guard.requesterId,
+      action: 'MATERIAL_UPDATED',
+      resourceType: isToolTaggedMaterial(existing.category, label) ? 'tool' : 'material',
+      resourceId: id,
+      summary: `Updated catalog item "${label}"`,
+      departmentId: guard.actorDepartmentId,
+      metadata: { fields: Object.keys(data) },
+    });
     return NextResponse.json({ success: true, material: updated });
   } catch (e: unknown) {
     if (typeof e === 'object' && e && (e as { code?: string }).code === 'P2002') {
@@ -194,7 +217,7 @@ export async function DELETE(req: NextRequest) {
   }
   const m = await prisma.privateCompanyMaterial.findFirst({
     where: { id, companyId: guard.companyId },
-    select: { id: true, _count: { select: { items: true } } },
+    select: { id: true, name: true, category: true, _count: { select: { items: true } } },
   });
   if (!m) return NextResponse.json({ success: false, message: 'Not found.' }, { status: 404 });
   if (m._count.items > 0) {
@@ -207,5 +230,14 @@ export async function DELETE(req: NextRequest) {
     );
   }
   await prisma.privateCompanyMaterial.delete({ where: { id } });
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'MATERIAL_REMOVED',
+    resourceType: isToolTaggedMaterial(m.category, m.name) ? 'tool' : 'material',
+    resourceId: id,
+    summary: `Removed catalog item "${m.name ?? id}"`,
+    departmentId: guard.actorDepartmentId,
+  });
   return NextResponse.json({ success: true });
 }

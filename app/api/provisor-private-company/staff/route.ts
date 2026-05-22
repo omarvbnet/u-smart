@@ -10,6 +10,7 @@ import {
   MANAGER_CAN_GRANT_STAFF_ROLES,
   PRIVATE_COMPANY_STAFF_ROLES,
 } from '@/lib/private-company-context';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -371,6 +372,17 @@ export async function POST(req: NextRequest) {
     }).catch((e: unknown) => console.error('Private workspace staff welcome email:', e));
   }
 
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'STAFF_ADDED',
+    resourceType: 'staff',
+    resourceId: created.id,
+    summary: `Added staff ${created.name || created.username} (${role})`,
+    departmentId: created.privateCompanyDepartmentId,
+    metadata: { username: created.username, role },
+  });
+
   return NextResponse.json({
     success: true,
     user: created,
@@ -464,6 +476,15 @@ export async function PATCH(req: NextRequest) {
         isPasswordReset: true,
       }).catch((e: unknown) => console.error('Private workspace staff reset email:', e));
     }
+    logPrivateCompanyWorkspaceActivity({
+      companyId: guard.companyId,
+      actorRequesterId: guard.requesterId,
+      action: 'STAFF_PASSWORD_RESET',
+      resourceType: 'staff',
+      resourceId: id,
+      summary: `Reset password for ${updated.name || updated.username}`,
+      departmentId: updated.privateCompanyDepartmentId,
+    });
     return NextResponse.json({
       success: true,
       user: updated,
@@ -685,6 +706,16 @@ export async function PATCH(req: NextRequest) {
       maintenanceProximityRadiusOverrideM: true,
     },
   });
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'STAFF_UPDATED',
+    resourceType: 'staff',
+    resourceId: id,
+    summary: `Updated staff ${updated.name || updated.username}`,
+    departmentId: updated.privateCompanyDepartmentId,
+    metadata: { fields: Object.keys(data) },
+  });
   return NextResponse.json({ success: true, user: updated });
 }
 
@@ -704,7 +735,13 @@ export async function DELETE(req: NextRequest) {
   }
   const target = await prisma.ticketRequester.findFirst({
     where: { id, privateCompanyId: guard.companyId },
-    select: { id: true, role: true, privateCompanyDepartmentId: true },
+    select: {
+      id: true,
+      role: true,
+      name: true,
+      username: true,
+      privateCompanyDepartmentId: true,
+    },
   });
   if (!target) return NextResponse.json({ success: false, message: 'Staff not found.' }, { status: 404 });
   if (!guard.isOwner) {
@@ -741,5 +778,15 @@ export async function DELETE(req: NextRequest) {
       },
     });
   }
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'STAFF_REMOVED',
+    resourceType: 'staff',
+    resourceId: id,
+    summary: `${hard ? 'Deleted' : 'Removed'} staff ${target.name || target.username} (${target.role})`,
+    departmentId: target.privateCompanyDepartmentId,
+    metadata: { hard },
+  });
   return NextResponse.json({ success: true });
 }

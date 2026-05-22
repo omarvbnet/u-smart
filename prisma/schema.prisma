@@ -400,6 +400,7 @@ model TicketRequester {
   ticketExpensesSubmitted        PrivateCompanyTicketExpense[]       @relation("PrivateCompanyTicketExpenseStaff")
   ticketExpensesActivationRequested PrivateCompany[]                 @relation("PrivateCompanyTicketExpensesActivationRequester")
   ticketExpensesEnabledBy        PrivateCompany[]                    @relation("PrivateCompanyTicketExpensesEnabledBy")
+  privateCompanyWorkspaceLogsActed PrivateCompanyWorkspaceLog[]    @relation("PrivateCompanyWorkspaceLogActor")
 
   ticketApiKeyAccessRequests TicketApiKeyAccessRequest[] @relation("TicketApiKeyAccessRequester")
   ticketApiKeys              TicketApiKey[]              @relation("TicketApiKeyOwner")
@@ -1467,11 +1468,34 @@ model PrivateCompany {
   ticketExpensesEnabledBy                TicketRequester? @relation("PrivateCompanyTicketExpensesEnabledBy", fields: [ticketExpensesEnabledById], references: [id], onDelete: SetNull)
   ticketExpenses                         PrivateCompanyTicketExpense[] @relation("PrivateCompanyTicketExpenses")
   staffLiveLocations                     StaffLiveLocation[]           @relation("PrivateCompanyStaffLiveLocations")
+  workspaceLogs                        PrivateCompanyWorkspaceLog[]  @relation("PrivateCompanyWorkspaceLogs")
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
   @@index([status])
   @@map("private_companies")
+}
+
+/// Audit trail for private workspace management (staff, departments, materials, settings, tickets).
+model PrivateCompanyWorkspaceLog {
+  id               String                      @id @default(cuid())
+  companyId        String
+  company          PrivateCompany              @relation("PrivateCompanyWorkspaceLogs", fields: [companyId], references: [id], onDelete: Cascade)
+  actorRequesterId String
+  actor            TicketRequester             @relation("PrivateCompanyWorkspaceLogActor", fields: [actorRequesterId], references: [id], onDelete: Cascade)
+  action           String
+  resourceType     String
+  resourceId       String?
+  summary          String
+  departmentId     String?
+  department       PrivateCompanyDepartment?   @relation("PrivateCompanyWorkspaceLogDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  metadata         Json?
+  createdAt        DateTime                    @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([companyId, action])
+  @@index([departmentId])
+  @@map("private_company_workspace_logs")
 }
 
 /// Workspace site registry — visible to all staff; QField coords drive map pins.
@@ -1618,6 +1642,7 @@ model PrivateCompanyDepartment {
   techniques  PrivateCompanyTechnique[]
   workspaceTargetedTickets VisitorRequest[] @relation("WorkspaceTicketTargetDepartment")
   maintenanceCompletionReasons PrivateCompanyMaintenanceReason[]
+  workspaceLogs PrivateCompanyWorkspaceLog[] @relation("PrivateCompanyWorkspaceLogDepartment")
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 

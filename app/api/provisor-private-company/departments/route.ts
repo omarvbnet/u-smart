@@ -13,6 +13,7 @@ import { normalizeEngineerTicketScope } from '@/lib/engineer-ticket-scope';
 import {
   normalizeMaintenanceDispatchMode,
 } from '@/lib/private-company-maintenance-dispatch';
+import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -75,6 +76,7 @@ async function departmentSettingsGuard(req: NextRequest, body: Record<string, un
   if (isOwner) {
     return {
       ok: true as const,
+      requesterId: auth.payload.requesterId,
       companyId: m.effectiveCompanyId,
       isOwner: true as const,
       actorDepartmentId: null as string | null,
@@ -98,6 +100,7 @@ async function departmentSettingsGuard(req: NextRequest, body: Record<string, un
   }
   return {
     ok: true as const,
+    requesterId: auth.payload.requesterId,
     companyId: m.effectiveCompanyId,
     isOwner: false as const,
     actorDepartmentId: me?.privateCompanyDepartmentId ?? null,
@@ -205,6 +208,15 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error('Department technique sync (create):', e);
     }
+    logPrivateCompanyWorkspaceActivity({
+      companyId: guard.companyId,
+      actorRequesterId: guard.requesterId,
+      action: 'DEPARTMENT_ADDED',
+      resourceType: 'department',
+      resourceId: dept.id,
+      summary: `Added department "${name}"`,
+      departmentId: dept.id,
+    });
     return NextResponse.json({ success: true, department: dept });
   } catch (err) {
     const e = err as Error & { code?: string };
@@ -289,6 +301,19 @@ export async function PATCH(req: NextRequest) {
         console.error('Department technique sync (update):', e);
       }
     }
+    const deptLabel = String(updated.name ?? dept.name ?? 'Department');
+    logPrivateCompanyWorkspaceActivity({
+      companyId: guard.companyId,
+      actorRequesterId: guard.requesterId,
+      action: 'DEPARTMENT_SETTINGS_CHANGED',
+      resourceType: 'department',
+      resourceId: id,
+      summary: guard.fieldOnly
+        ? `Updated field settings for "${deptLabel}"`
+        : `Updated department "${deptLabel}"`,
+      departmentId: id,
+      metadata: { fieldOnly: guard.fieldOnly, fields: Object.keys(data) },
+    });
     return NextResponse.json({ success: true, department: updated });
   } catch (err) {
     const e = err as Error & { code?: string };
@@ -309,7 +334,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
   const dept = await prisma.privateCompanyDepartment.findFirst({
     where: { id, companyId: guard.companyId },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!dept) return NextResponse.json({ success: false, message: 'Department not found.' }, { status: 404 });
   try {
@@ -318,5 +343,14 @@ export async function DELETE(req: NextRequest) {
     console.error('Department technique delete:', e);
   }
   await prisma.privateCompanyDepartment.delete({ where: { id } });
+  logPrivateCompanyWorkspaceActivity({
+    companyId: guard.companyId,
+    actorRequesterId: guard.requesterId,
+    action: 'DEPARTMENT_REMOVED',
+    resourceType: 'department',
+    resourceId: id,
+    summary: `Removed department "${dept.name ?? id}"`,
+    departmentId: id,
+  });
   return NextResponse.json({ success: true });
 }

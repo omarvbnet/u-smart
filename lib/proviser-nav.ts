@@ -38,6 +38,7 @@ export function buildProviserNav(
 
   if (m.mode === 'private' && (m.isOwner || m.canManageStaff)) {
     items.push({ href: '/proviser/warehouse', label: 'Materials', icon: 'warehouse' });
+    items.push({ href: '/proviser/activity', label: 'Activity', icon: 'activity' });
   }
 
   if (m.canViewPerformance) {

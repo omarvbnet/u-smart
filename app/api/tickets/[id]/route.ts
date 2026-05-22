@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveChecklistItemSeverity } from '@/lib/checklist-item-severity';
 import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
+import { logPrivateCompanyTicketOpened } from '@/lib/private-company-workspace-log';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { viewerHasSharedSiteTicketRead, visitorRequestSiteLogicalId } from '@/lib/site-share-access';
 import { resolveInspectionChecklistTemplate, resolveTicketSiteCoordinates, embeddedTicketSiteCoords } from '@/lib/ticket-detail-enrichment';
@@ -740,6 +741,23 @@ export async function GET(
       } catch {
         /* expenses tables may be absent on legacy DB */
       }
+    }
+
+    if (
+      assignmentScopeVal === 'PRIVATE_COMPANY_STAFF' &&
+      privateCompanyIdVal &&
+      payload?.requesterId
+    ) {
+      void logPrivateCompanyTicketOpened({
+        companyId: privateCompanyIdVal,
+        actorRequesterId: payload.requesterId,
+        ticketId: row.id,
+        summary: `Opened ticket ${siteName || row.id}`,
+        departmentId:
+          (row as { privateCompanyTargetDepartmentId?: string | null })
+            .privateCompanyTargetDepartmentId ?? null,
+        metadata: { status, technique: row.technique },
+      });
     }
 
     return NextResponse.json({

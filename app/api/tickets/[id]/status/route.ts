@@ -4,8 +4,43 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyRequesterI18n } from '@/lib/localized-requester-notification';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { validateManualOnSiteProximity } from '@/lib/workspace-site-arrival';
+import {
+  parseTicketCompanyJson,
+  ticketFieldStaffInvolvesRequester,
+} from '@/lib/private-company-kpi';
+import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 
 const prisma = _prisma as any;
+
+const FIELD_STAFF_ROLES = new Set([
+  'ENGINEER',
+  'TECHNICIAN',
+  'WORKER',
+  'MANAGER',
+  'COORDINATOR',
+  'QUALITY_ENGINEER',
+  'SUPERVISION_ENGINEER',
+]);
+
+function isPrivateCompanyStaffTicket(row: {
+  assignmentScope: string | null;
+  privateCompanyId: string | null;
+}): boolean {
+  const scope = row.assignmentScope ?? null;
+  return (
+    !!row.privateCompanyId &&
+    (scope === 'PRIVATE_COMPANY_STAFF' || scope === null)
+  );
+}
+
+function canFieldStaffUpdateStatus(
+  requesterId: string,
+  roleUpper: string,
+  parsed: Record<string, unknown>
+): boolean {
+  if (!FIELD_STAFF_ROLES.has(roleUpper)) return false;
+  return ticketFieldStaffInvolvesRequester(parsed, requesterId);
+}
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['ON_SITE'],
@@ -95,19 +130,28 @@ export async function PATCH(
     let requesterRole = 'COMPANY';
     let staffDeptId: string | null = null;
     let staffRadiusOverride: number | null | undefined;
+    let staffPrivateCompanyId: string | null = null;
     try {
       const reqRow = await prisma.ticketRequester.findUnique({
         where: { id: auth.payload.requesterId },
         select: {
           role: true,
+          privateCompanyId: true,
           privateCompanyDepartmentId: true,
           maintenanceProximityRadiusOverrideM: true,
         },
       });
-      requesterRole = reqRow?.role ?? 'COMPANY';
+      requesterRole = String(reqRow?.role ?? 'COMPANY').toUpperCase();
+      staffPrivateCompanyId = reqRow?.privateCompanyId ?? null;
       staffDeptId = reqRow?.privateCompanyDepartmentId ?? null;
       staffRadiusOverride = reqRow?.maintenanceProximityRadiusOverrideM;
     } catch { /* fallback */ }
+
+    const membership = await getPrivateCompanyMembership(auth.payload.requesterId);
+    const actorWorkspaceId =
+      membership.ownedCompanyId && membership.ownedCompanyStatus === 'APPROVED'
+        ? membership.ownedCompanyId
+        : staffPrivateCompanyId ?? membership.effectiveCompanyId;
 
     const ticketSelect = {
       id: true,
@@ -121,42 +165,49 @@ export async function PATCH(
       siteName: true,
     };
 
-    let row: any;
-    if (requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN') {
-      row = await prisma.visitorRequest.findUnique({
-        where: { id },
-        select: ticketSelect,
-      });
-    } else {
-      row = await prisma.visitorRequest.findFirst({
-        where: { id, requesterId: auth.payload.requesterId },
-        select: ticketSelect,
-      });
-    }
+    const row = await prisma.visitorRequest.findUnique({
+      where: { id },
+      select: ticketSelect,
+    });
 
     if (!row) {
       return NextResponse.json({ success: false, message: 'Ticket not found' }, { status: 404 });
     }
 
+    const parsed = parseTicketCompanyJson(row.company);
     let currentStatus = row.status ?? 'PENDING';
-    let parsed: Record<string, unknown> = {};
-    if (typeof row.company === 'string') {
-      try {
-        parsed = JSON.parse(row.company) as Record<string, unknown>;
-        if (parsed._ticket && typeof parsed.status === 'string') {
-          currentStatus = parsed.status;
-        }
-      } catch { /* fallback */ }
+    if (parsed._ticket && typeof parsed.status === 'string') {
+      currentStatus = parsed.status;
     }
 
-    if (requesterRole === 'ENGINEER' || requesterRole === 'TECHNICIAN') {
-      const assignedId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
-      if (assignedId !== auth.payload.requesterId) {
+    const isWorkspaceTicket = isPrivateCompanyStaffTicket({
+      assignmentScope: row.assignmentScope ?? null,
+      privateCompanyId: row.privateCompanyId ?? null,
+    });
+
+    let mayUpdate = false;
+    if (isWorkspaceTicket) {
+      if (!actorWorkspaceId || actorWorkspaceId !== row.privateCompanyId) {
         return NextResponse.json(
-          { success: false, message: 'Only the assigned technician/engineer can update this ticket' },
-          { status: 403 }
+          { success: false, message: 'Ticket not found' },
+          { status: 404 }
         );
       }
+      mayUpdate = canFieldStaffUpdateStatus(auth.payload.requesterId, requesterRole, parsed);
+    } else if (FIELD_STAFF_ROLES.has(requesterRole)) {
+      mayUpdate = canFieldStaffUpdateStatus(auth.payload.requesterId, requesterRole, parsed);
+    } else if (row.requesterId === auth.payload.requesterId) {
+      mayUpdate = true;
+    }
+
+    if (!mayUpdate) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Only the assigned lead or crew on this ticket can update its status.',
+        },
+        { status: 403 }
+      );
     }
 
     const assignedId =
