@@ -153,17 +153,23 @@ export function SitesMapClient({
       const hideType = reg.cableTypeKey ? hiddenCableTypeKeys.has(reg.cableTypeKey) : false;
       const hideId = reg.cableIdKey ? hiddenCableIdKeys.has(reg.cableIdKey) : false;
       const hide = hideType || hideId;
-      const gj = reg.geoJson;
-      if (hide) {
-        if (gj.hasLayer(reg.leafletLayer)) gj.removeLayer(reg.leafletLayer);
-      } else if (!gj.hasLayer(reg.leafletLayer)) {
-        gj.addLayer(reg.leafletLayer);
+      try {
+        const gj = reg.geoJson;
+        if (hide) {
+          if (gj.hasLayer(reg.leafletLayer)) gj.removeLayer(reg.leafletLayer);
+        } else if (!gj.hasLayer(reg.leafletLayer)) {
+          gj.addLayer(reg.leafletLayer);
+        }
+      } catch {
+        /* layer may have been removed with site */
       }
     }
   }, [hiddenCableTypeKeys, hiddenCableIdKeys]);
 
   useEffect(() => {
-    applyCableVisibility();
+    if (featureRegistrationsRef.current.length > 0) {
+      applyCableVisibility();
+    }
   }, [applyCableVisibility]);
 
   const registerFeatureLayer = useCallback((entry: RegisteredMapFeature) => {
@@ -309,69 +315,85 @@ export function SitesMapClient({
             const category = classifyLayerCategory(layerName);
             const swatch = swatchColorForLayer(layerName);
 
-            const taggedFeatures = features.map((f, idx) => {
-              const webId = assignWebFeatureId(f, layerName, idx);
-              const props = { ...(f.properties as Record<string, unknown>), __webId: webId };
-              const tagged = { ...f, properties: props } as GeoJSON.Feature;
-              allFeaturesRef.current.push(toMapFeatureRecord(tagged, layerName, webId));
-              return tagged;
-            });
-
-            const { group: leafletLayer, geoLayer } = addQfieldGeoJsonToMap(L, map, taggedFeatures, {
-              layerName,
-              projectTitle,
-              onFeatureLayer: registerFeatureLayer,
-              onFeatureClick: (info) => {
-                const webId = info.webId || String(info.properties.__webId ?? '');
-                const tapDetail = buildFeatureTapDetail(allFeaturesRef.current, webId);
-                if (!tapDetail) return;
-                setFeatureSelection({
-                  layerName: info.layerName,
-                  projectTitle: info.projectTitle,
-                  geometryType: info.geometryType,
-                  category: info.category,
-                  properties: info.properties,
-                  tapDetail,
-                });
-                setSelectedStaff(null);
-              },
-            });
-
-            qfieldLayersRef.current.set(rowId, leafletLayer);
-
             try {
-              const b = geoLayer.getBounds();
-              if (b.isValid()) {
-                bounds.extend(b);
+              const taggedFeatures = features.map((f, idx) => {
+                const webId = assignWebFeatureId(f, layerName, idx);
+                const props = { ...(f.properties as Record<string, unknown>), __webId: webId };
+                const tagged = { ...f, properties: props } as GeoJSON.Feature;
+                allFeaturesRef.current.push(toMapFeatureRecord(tagged, layerName, webId));
+                return tagged;
+              });
+
+              const { group: leafletLayer, geoLayer } = addQfieldGeoJsonToMap(L, map, taggedFeatures, {
+                layerName,
+                projectTitle,
+                onFeatureLayer: registerFeatureLayer,
+                onFeatureClick: (info) => {
+                  const webId = info.webId || String(info.properties.__webId ?? '');
+                  const tapDetail = buildFeatureTapDetail(allFeaturesRef.current, webId);
+                  if (!tapDetail) return;
+                  setFeatureSelection({
+                    layerName: info.layerName,
+                    projectTitle: info.projectTitle,
+                    geometryType: info.geometryType,
+                    category: info.category,
+                    properties: info.properties,
+                    tapDetail,
+                  });
+                  setSelectedStaff(null);
+                },
+              });
+
+              qfieldLayersRef.current.set(rowId, leafletLayer);
+
+              try {
+                const b = geoLayer.getBounds();
+                if (b.isValid()) {
+                  bounds.extend(b);
+                  hasBounds = true;
+                }
+              } catch {
+                /* empty */
+              }
+
+              const apiBounds = data.bounds as
+                | { west: number; south: number; east: number; north: number }
+                | undefined;
+              if (apiBounds && Number.isFinite(apiBounds.south)) {
+                bounds.extend([
+                  [apiBounds.south, apiBounds.west],
+                  [apiBounds.north, apiBounds.east],
+                ]);
                 hasBounds = true;
               }
-            } catch {
-              /* empty */
-            }
 
-            const apiBounds = data.bounds as
-              | { west: number; south: number; east: number; north: number }
-              | undefined;
-            if (apiBounds && Number.isFinite(apiBounds.south)) {
-              bounds.extend([
-                [apiBounds.south, apiBounds.west],
-                [apiBounds.north, apiBounds.east],
-              ]);
-              hasBounds = true;
+              rows.push({
+                id: rowId,
+                layerName: friendlyLayerTitle(layerName),
+                projectTitle,
+                category,
+                color: swatch,
+                visible: true,
+                status: 'ready',
+                featureCount: features.length,
+              });
+            } catch (layerErr) {
+              console.error(`QField layer "${layerName}":`, layerErr);
+              rows.push({
+                id: rowId,
+                layerName: friendlyLayerTitle(layerName),
+                projectTitle,
+                category,
+                color: '#E53935',
+                visible: false,
+                status: 'error',
+                error: layerErr instanceof Error ? layerErr.message : 'Layer failed',
+                featureCount: 0,
+              });
             }
-
-            rows.push({
-              id: rowId,
-              layerName: friendlyLayerTitle(layerName),
-              projectTitle,
-              category,
-              color: swatch,
-              visible: true,
-              status: 'ready',
-              featureCount: features.length,
-            });
           }
         } catch (err) {
+          console.error('QField layer load error:', err);
           rows.push({
             id: `${site.id}:${project.id}:err`,
             layerName: '—',
@@ -393,7 +415,7 @@ export function SitesMapClient({
       setHiddenCableTypeKeys(new Set());
       setHiddenCableIdKeys(new Set());
       setLoadingLayers(false);
-      requestAnimationFrame(() => applyCableVisibility());
+      applyCableVisibility();
 
       if (hasBounds && map) {
         map.fitBounds(bounds, { padding: [48, 48], maxZoom: 17 });

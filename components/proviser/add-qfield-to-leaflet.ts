@@ -36,16 +36,15 @@ export type RegisteredMapFeature = {
   cableIdKey?: string;
 };
 
+type PendingRegistration = Omit<RegisteredMapFeature, 'geoJson'>;
+
 /** Wider invisible stroke so fiber lines are easier to click. */
 function expandCableHitZones(features: GeoJSON.Feature[]): GeoJSON.Feature[] {
   const out: GeoJSON.Feature[] = [];
   for (const f of features) {
     const layer = String((f.properties as Record<string, unknown>)?.layer ?? '');
     const t = f.geometry?.type;
-    if (
-      isCableLayer(layer) &&
-      (t === 'LineString' || t === 'MultiLineString')
-    ) {
+    if (isCableLayer(layer) && (t === 'LineString' || t === 'MultiLineString')) {
       out.push({
         ...f,
         properties: { ...(f.properties as object), __hitZone: true },
@@ -69,6 +68,7 @@ export function addQfieldGeoJsonToMap(
 ): { group: LayerGroup; geoLayer: import('leaflet').GeoJSON } {
   const group = L.layerGroup();
   const expanded = expandCableHitZones(expandCableGlowFeatures(features));
+  const pendingRegistrations: PendingRegistration[] = [];
 
   const geoLayer = L.geoJSON(
     { type: 'FeatureCollection', features: expanded } as GeoJSON.FeatureCollection,
@@ -142,11 +142,10 @@ export function addQfieldGeoJsonToMap(
         const webId = String(props.__webId ?? props.__glowSourceWebId ?? '');
 
         if (props.__glow) {
-          if (opts.onFeatureLayer && webId) {
-            opts.onFeatureLayer({
+          if (webId) {
+            pendingRegistrations.push({
               webId,
               leafletLayer: layer,
-              geoJson: geoLayer,
               isGlow: true,
               isHitZone: false,
               cableTypeKey: isCable ? cableTypeToggleKey(props, layerName) : undefined,
@@ -203,11 +202,10 @@ export function addQfieldGeoJsonToMap(
           pick();
         });
 
-        if (opts.onFeatureLayer && webId) {
-          opts.onFeatureLayer({
+        if (webId) {
+          pendingRegistrations.push({
             webId,
             leafletLayer: layer,
-            geoJson: geoLayer,
             isGlow: false,
             isHitZone,
             cableTypeKey: isCable ? cableTypeToggleKey(props, layerName) : undefined,
@@ -217,6 +215,13 @@ export function addQfieldGeoJsonToMap(
       },
     }
   );
+
+  // Register after geoLayer exists — referencing geoLayer inside onEachFeature throws TDZ.
+  if (opts.onFeatureLayer) {
+    for (const pending of pendingRegistrations) {
+      opts.onFeatureLayer({ ...pending, geoJson: geoLayer });
+    }
+  }
 
   geoLayer.addTo(group);
   group.addTo(map);
