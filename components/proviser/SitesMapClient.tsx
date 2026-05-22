@@ -9,6 +9,14 @@ import {
   friendlyLayerTitle,
   type LayerCategory,
 } from '@/lib/qfield-map-symbology';
+import type { CablesByType } from '@/lib/qfield-map-tap-detail';
+import {
+  assignWebFeatureId,
+  buildFeatureTapDetail,
+  toMapFeatureRecord,
+  type FeatureTapDetail,
+  type MapFeatureRecord,
+} from '@/lib/qfield-map-tap-detail';
 
 export type MapSitePin = {
   id: string;
@@ -54,6 +62,7 @@ type FeatureSelection = {
   geometryType: string;
   category: LayerCategory;
   properties: Record<string, unknown>;
+  tapDetail: FeatureTapDetail;
 };
 
 function previewUrl(site: MapSitePin, projectId: string) {
@@ -97,6 +106,7 @@ export function SitesMapClient({
   const siteMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
   const staffMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
   const qfieldLayersRef = useRef<Map<string, import('leaflet').LayerGroup>>(new Map());
+  const allFeaturesRef = useRef<MapFeatureRecord[]>([]);
   const loadGenRef = useRef(0);
 
   const [mapReady, setMapReady] = useState(false);
@@ -118,6 +128,7 @@ export function SitesMapClient({
   const clearQfieldLayers = useCallback(() => {
     qfieldLayersRef.current.forEach((l) => l.remove());
     qfieldLayersRef.current.clear();
+    allFeaturesRef.current = [];
   }, []);
 
   const setLayerVisible = useCallback((id: string, visible: boolean) => {
@@ -180,6 +191,7 @@ export function SitesMapClient({
       setLoadingLayers(true);
       setLayerRows([]);
       clearQfieldLayers();
+      allFeaturesRef.current = [];
 
       const L = await import('leaflet');
       const map = mapInstanceRef.current;
@@ -240,16 +252,30 @@ export function SitesMapClient({
             const category = classifyLayerCategory(layerName);
             const swatch = swatchColorForLayer(layerName);
 
-            const { group: leafletLayer, geoLayer } = addQfieldGeoJsonToMap(L, map, features, {
+            const taggedFeatures = features.map((f, idx) => {
+              const webId = assignWebFeatureId(f, layerName, idx);
+              const props = { ...(f.properties as Record<string, unknown>), __webId: webId };
+              const tagged = { ...f, properties: props } as GeoJSON.Feature;
+              allFeaturesRef.current.push(toMapFeatureRecord(tagged, layerName, webId));
+              return tagged;
+            });
+
+            const { group: leafletLayer, geoLayer } = addQfieldGeoJsonToMap(L, map, taggedFeatures, {
               layerName,
               projectTitle,
               onFeatureClick: (info) => {
+                const tapDetail = buildFeatureTapDetail(
+                  allFeaturesRef.current,
+                  info.webId || String(info.properties.__webId ?? '')
+                );
+                if (!tapDetail) return;
                 setFeatureSelection({
                   layerName: info.layerName,
                   projectTitle: info.projectTitle,
                   geometryType: info.geometryType,
                   category: info.category,
                   properties: info.properties,
+                  tapDetail,
                 });
                 setSelectedStaff(null);
               },
@@ -430,7 +456,7 @@ export function SitesMapClient({
   }, [refreshStaffMarkers]);
 
   const featureEntries = featureSelection
-    ? Object.entries(featureSelection.properties).filter(([k]) => !SKIP_PROPS.has(k))
+    ? Object.entries(featureSelection.tapDetail.primaryProps).filter(([k]) => !SKIP_PROPS.has(k))
     : [];
 
   const legendItems = useMemo(
@@ -543,41 +569,14 @@ export function SitesMapClient({
         <section className="border-t border-white/10 pt-3">
           <h2 className="text-sm font-medium text-gray-300 mb-2">Element details</h2>
           {!featureSelection ? (
-            <p className="text-xs text-gray-500">Click fiber cable, FAT, FDT hole, closure, or parcel on the map.</p>
+            <p className="text-xs text-gray-500">
+              Hover for fiber type. Click a route, fiber cable, FAT, handhole, or FDT hole.
+            </p>
           ) : (
-            <div className="text-xs space-y-2">
-              <p className="text-gray-400">
-                <span className="text-gray-500">Type:</span>{' '}
-                {LAYER_CATEGORY_LABELS[featureSelection.category] ?? featureSelection.category}
-              </p>
-              <p className="text-gray-400">
-                <span className="text-gray-500">Layer:</span> {featureSelection.layerName}
-              </p>
-              <p className="text-gray-400">
-                <span className="text-gray-500">File:</span> {featureSelection.projectTitle}
-              </p>
-              <p className="text-gray-400">
-                <span className="text-gray-500">Geometry:</span> {featureSelection.geometryType}
-              </p>
-              <div className="max-h-48 overflow-y-auto rounded-lg bg-black/30 border border-white/10">
-                <table className="w-full">
-                  <tbody>
-                    {featureEntries.length === 0 ? (
-                      <tr>
-                        <td className="px-2 py-2 text-gray-500">No attributes</td>
-                      </tr>
-                    ) : (
-                      featureEntries.map(([k, v]) => (
-                        <tr key={k} className="border-t border-white/5 first:border-0">
-                          <td className="px-2 py-1.5 text-gray-500 align-top font-medium">{k}</td>
-                          <td className="px-2 py-1.5 text-gray-200 break-all">{formatPropertyValue(v)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <FeatureDetailPanel
+              selection={featureSelection}
+              featureEntries={featureEntries}
+            />
           )}
         </section>
 
@@ -628,6 +627,133 @@ export function SitesMapClient({
           </section>
         )}
       </aside>
+    </div>
+  );
+}
+
+function CablesByTypeBlock({ title, data }: { title: string; data: CablesByType }) {
+  const keys = Object.keys(data);
+  if (!keys.length) return null;
+  return (
+    <div className="rounded-lg bg-black/30 border border-white/10 p-2">
+      <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1.5">{title}</p>
+      <ul className="space-y-2">
+        {keys.map((type) => (
+          <li key={type}>
+            <p className="text-amber-200/90 font-semibold">{type}</p>
+            {data[type].length > 0 ? (
+              <p className="text-gray-300 mt-0.5 break-all">{data[type].join(', ')}</p>
+            ) : (
+              <p className="text-gray-600">No fiber IDs in layer data</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SiteInfoFields({ data }: { data: Record<string, string> }) {
+  const keys = Object.keys(data);
+  if (!keys.length) return null;
+  return (
+    <div className="rounded-lg bg-black/30 border border-white/10 p-2">
+      <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1.5">Ducts & site info</p>
+      <ul className="space-y-1">
+        {keys.map((k) => (
+          <li key={k} className="flex gap-2">
+            <span className="text-gray-500 shrink-0">{k}:</span>
+            <span className="text-gray-200 break-all">{data[k]}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FeatureDetailPanel({
+  selection,
+  featureEntries,
+}: {
+  selection: FeatureSelection;
+  featureEntries: [string, unknown][];
+}) {
+  const d = selection.tapDetail;
+  return (
+    <div className="text-xs space-y-2">
+      <p className="text-sm font-semibold text-white">{d.title}</p>
+      <p className="text-gray-400">
+        <span className="text-gray-500">Type:</span>{' '}
+        {LAYER_CATEGORY_LABELS[selection.category] ?? selection.category}
+      </p>
+      <p className="text-gray-400">
+        <span className="text-gray-500">Layer:</span> {selection.layerName}
+      </p>
+      <p className="text-gray-400">
+        <span className="text-gray-500">File:</span> {selection.projectTitle}
+      </p>
+
+      {d.isRoute && d.routeId && (
+        <p className="text-gray-300">
+          <span className="text-gray-500">Route ID:</span> {d.routeId}
+        </p>
+      )}
+      {d.fatId && (
+        <p className="text-gray-300">
+          <span className="text-gray-500">FAT ID:</span> {d.fatId}
+        </p>
+      )}
+      {d.handholeId && (
+        <p className="text-gray-300">
+          <span className="text-gray-500">Handhole ID:</span> {d.handholeId}
+        </p>
+      )}
+      {d.holeId && (
+        <p className="text-gray-300">
+          <span className="text-gray-500">Hole ID:</span> {d.holeId}
+        </p>
+      )}
+
+      {d.isRoute && d.routeSiteInfo && <SiteInfoFields data={d.routeSiteInfo} />}
+      {!d.isRoute && d.ductsAndSiteInfo && <SiteInfoFields data={d.ductsAndSiteInfo} />}
+
+      {d.isRoute && d.routeCablesByType && (
+        <CablesByTypeBlock title="Fibers on route (type · IDs)" data={d.routeCablesByType} />
+      )}
+      {!d.isRoute && d.cablesByType && Object.keys(d.cablesByType).length > 0 && (
+        <CablesByTypeBlock title="Fiber types · IDs" data={d.cablesByType} />
+      )}
+
+      {d.handholesAtFat?.map((hh) => (
+        <div key={hh.handholeId} className="rounded-lg border border-white/10 p-2 space-y-1">
+          <p className="font-medium text-gray-200">Handhole {hh.handholeId}</p>
+          {hh.holeId && (
+            <p className="text-gray-400">
+              <span className="text-gray-500">Hole:</span> {hh.holeId}
+            </p>
+          )}
+          <CablesByTypeBlock title="Cables at handhole" data={hh.cablesByType} />
+        </div>
+      ))}
+
+      <div className="max-h-40 overflow-y-auto rounded-lg bg-black/30 border border-white/10">
+        <table className="w-full">
+          <tbody>
+            {featureEntries.length === 0 ? (
+              <tr>
+                <td className="px-2 py-2 text-gray-500">No extra attributes</td>
+              </tr>
+            ) : (
+              featureEntries.map(([k, v]) => (
+                <tr key={k} className="border-t border-white/5 first:border-0">
+                  <td className="px-2 py-1.5 text-gray-500 align-top font-medium">{k}</td>
+                  <td className="px-2 py-1.5 text-gray-200 break-all">{formatPropertyValue(v)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

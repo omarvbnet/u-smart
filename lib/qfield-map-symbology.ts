@@ -158,7 +158,15 @@ export function mapLabelForFeature(props: Record<string, unknown>, layerName?: s
     return propValue(props, ['closure_id', 'odf_id', 'odf_no', 'name', 'label']);
   }
   if (n.includes('handhole') || n === 'hh') {
-    return propValue(props, ['handhole_id', 'hh_id', 'id', 'name']);
+    return propValue(props, [
+      'handhole_id',
+      'handhole_no',
+      'hh_id',
+      'hh_no',
+      'hhid',
+      'id',
+      'name',
+    ]);
   }
   if (isCableLayer(layerName ?? String(props.layer ?? ''))) {
     return propValue(props, ['cable_id', 'cable_no', 'fiber_id', 'name', 'label', 'code']);

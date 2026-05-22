@@ -36,6 +36,35 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
+.proviser-map-label--permanent {
+  pointer-events: none;
+}
+
+.proviser-map-point-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.proviser-map-point-label-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.proviser-map-point-id {
+  font-size: 9px;
+  font-weight: 800;
+  color: #000;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 /* Improve touch targets and tap responsiveness on mobile */
 @media (max-width: 640px) {
   button, a {

@@ -5,12 +5,16 @@ import {
   expandCableGlowFeatures,
   isCableLayer,
   lineStyleForLayer,
-  mapLabelForFeature,
   pointIconHtml,
   pointKindForLayer,
   polygonStyleForLayer,
   type LayerCategory,
 } from '@/lib/qfield-map-symbology';
+import {
+  hoverTooltipForFeature,
+  permanentMapLabel,
+  shouldShowPermanentMapLabel,
+} from '@/lib/qfield-map-tap-detail';
 
 export type FeaturePickHandler = (info: {
   layerName: string;
@@ -18,6 +22,7 @@ export type FeaturePickHandler = (info: {
   geometryType: string;
   properties: Record<string, unknown>;
   category: LayerCategory;
+  webId: string;
 }) => void;
 
 export function addQfieldGeoJsonToMap(
@@ -74,12 +79,16 @@ export function addQfieldGeoJsonToMap(
         const props = (feature.properties ?? {}) as Record<string, unknown>;
         const layer = String(props.layer ?? opts.layerName);
         const kind = pointKindForLayer(layer);
-        const html = pointIconHtml(kind);
+        const permLabel = permanentMapLabel(props, layer);
+        let html = pointIconHtml(kind);
+        if (permLabel && shouldShowPermanentMapLabel(layer)) {
+          html = `<div class="proviser-map-point-label-wrap">${html}<span class="proviser-map-point-id">${escapeHtml(permLabel)}</span></div>`;
+        }
         const icon = L.divIcon({
-          className: '',
+          className: 'proviser-map-point-icon',
           html,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12],
+          iconSize: permLabel ? [56, 36] : [24, 24],
+          iconAnchor: permLabel ? [28, 18] : [12, 12],
         });
         return L.marker(latlng, { icon });
       },
@@ -88,12 +97,33 @@ export function addQfieldGeoJsonToMap(
         if (props.__glow) return;
 
         const layerName = String(props.layer ?? opts.layerName);
-        const label = mapLabelForFeature(props, layerName);
-        if (label && 'bindTooltip' in layer) {
-          (layer as import('leaflet').Layer).bindTooltip(label, {
+        const geomType = feature.geometry?.type ?? 'Unknown';
+        const webId = String(props.__webId ?? '');
+        const hover = hoverTooltipForFeature(props, layerName, geomType);
+
+        if (hover && 'bindTooltip' in layer) {
+          const leafletLayer = layer as import('leaflet').Layer;
+          leafletLayer.bindTooltip(hover, {
             permanent: false,
+            sticky: true,
             direction: 'top',
             className: 'proviser-map-label',
+          });
+        }
+
+        const perm = permanentMapLabel(props, layerName);
+        if (
+          perm &&
+          shouldShowPermanentMapLabel(layerName) &&
+          'bindTooltip' in layer &&
+          (geomType === 'LineString' ||
+            geomType === 'MultiLineString' ||
+            geomType === 'Polygon')
+        ) {
+          (layer as import('leaflet').Layer).bindTooltip(perm, {
+            permanent: true,
+            direction: 'center',
+            className: 'proviser-map-label proviser-map-label--permanent',
           });
         }
 
@@ -102,9 +132,10 @@ export function addQfieldGeoJsonToMap(
           opts.onFeatureClick({
             layerName,
             projectTitle: opts.projectTitle,
-            geometryType: feature.geometry?.type ?? 'Unknown',
+            geometryType: geomType,
             properties: props,
             category: classifyLayerCategory(layerName),
+            webId,
           });
         });
       },
@@ -114,6 +145,14 @@ export function addQfieldGeoJsonToMap(
   geoLayer.addTo(group);
   group.addTo(map);
   return { group, geoLayer };
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 /** Legend swatch color for a GIS layer name. */
