@@ -807,8 +807,8 @@ function FeatureDetailPanel({
   selection: FeatureSelection;
   featureEntries: [string, unknown][];
 }) {
-  const d = selection.tapDetail;
-  const isCable = selection.category === 'fiber_cable' || !!d.cablesByType;
+  const detail = selection.tapDetail;
+  const isCable = selection.category === 'fiber_cable';
   const fiberType = isCable
     ? cableDisplayType(selection.properties, selection.layerName)
     : null;
@@ -827,15 +827,15 @@ function FeatureDetailPanel({
           ) : (
             <p className="text-gray-500">No cable ID in layer attributes</p>
           )}
-          {d.fatId && (
+          {detail.fatId && (
             <p className="text-gray-400">
-              <span className="text-gray-500">Linked FAT:</span> {d.fatId}
+              <span className="text-gray-500">Linked FAT:</span> {detail.fatId}
             </p>
           )}
         </div>
       )}
 
-      <p className="text-sm font-semibold text-white">{d.title}</p>
+      <p className="text-sm font-semibold text-white">{detail.title}</p>
       <p className="text-gray-400">
         <span className="text-gray-500">Type:</span>{' '}
         {LAYER_CATEGORY_LABELS[selection.category] ?? selection.category}
@@ -847,38 +847,42 @@ function FeatureDetailPanel({
         <span className="text-gray-500">File:</span> {selection.projectTitle}
       </p>
 
-      {d.isRoute && d.routeId && (
+      {detail.isRoute && detail.routeId && (
         <p className="text-gray-300">
-          <span className="text-gray-500">Route ID:</span> {d.routeId}
+          <span className="text-gray-500">Route ID:</span> {detail.routeId}
         </p>
       )}
-      {d.fatId && (
+      {detail.fatId && !isCable && (
         <p className="text-gray-300">
-          <span className="text-gray-500">FAT ID:</span> {d.fatId}
+          <span className="text-gray-500">FAT ID:</span> {detail.fatId}
         </p>
       )}
-      {d.handholeId && (
+      {detail.handholeId && (
         <p className="text-gray-300">
-          <span className="text-gray-500">Handhole ID:</span> {d.handholeId}
+          <span className="text-gray-500">Handhole ID:</span> {detail.handholeId}
         </p>
       )}
-      {d.holeId && (
+      {detail.holeId && (
         <p className="text-gray-300">
-          <span className="text-gray-500">Hole ID:</span> {d.holeId}
+          <span className="text-gray-500">Hole ID:</span> {detail.holeId}
         </p>
       )}
 
-      {d.isRoute && d.routeSiteInfo && <SiteInfoFields data={d.routeSiteInfo} />}
-      {!d.isRoute && d.ductsAndSiteInfo && <SiteInfoFields data={d.ductsAndSiteInfo} />}
-
-      {d.isRoute && d.routeCablesByType && (
-        <CablesByTypeBlock title="Fibers on route (type · IDs)" data={d.routeCablesByType} />
+      {detail.isRoute && detail.routeSiteInfo && (
+        <SiteInfoFields data={detail.routeSiteInfo} />
       )}
-      {!d.isRoute && d.cablesByType && Object.keys(d.cablesByType).length > 0 && (
-        <CablesByTypeBlock title="Fiber types · IDs" data={d.cablesByType} />
+      {!detail.isRoute && detail.ductsAndSiteInfo && (
+        <SiteInfoFields data={detail.ductsAndSiteInfo} />
       )}
 
-      {d.handholesAtFat?.map((hh) => (
+      {detail.isRoute && detail.routeCablesByType && (
+        <CablesByTypeBlock title="Fibers on route (type · IDs)" data={detail.routeCablesByType} />
+      )}
+      {!detail.isRoute && detail.cablesByType && Object.keys(detail.cablesByType).length > 0 && (
+        <CablesByTypeBlock title="Fiber types · IDs" data={detail.cablesByType} />
+      )}
+
+      {detail.handholesAtFat?.map((hh) => (
         <div key={hh.handholeId} className="rounded-lg border border-white/10 p-2 space-y-1">
           <p className="font-medium text-gray-200">Handhole {hh.handholeId}</p>
           {hh.holeId && (
