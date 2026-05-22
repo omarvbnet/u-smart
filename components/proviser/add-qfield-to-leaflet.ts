@@ -11,6 +11,7 @@ import {
   type LayerCategory,
 } from '@/lib/qfield-map-symbology';
 import {
+  cableTypeToggleKey,
   hoverTooltipForFeature,
   permanentMapLabel,
   shouldShowPermanentMapLabel,
@@ -25,6 +26,36 @@ export type FeaturePickHandler = (info: {
   webId: string;
 }) => void;
 
+export type RegisteredMapFeature = {
+  webId: string;
+  leafletLayer: import('leaflet').Layer;
+  geoJson: import('leaflet').GeoJSON;
+  isGlow: boolean;
+  isHitZone: boolean;
+  cableTypeKey?: string;
+  cableIdKey?: string;
+};
+
+/** Wider invisible stroke so fiber lines are easier to click. */
+function expandCableHitZones(features: GeoJSON.Feature[]): GeoJSON.Feature[] {
+  const out: GeoJSON.Feature[] = [];
+  for (const f of features) {
+    const layer = String((f.properties as Record<string, unknown>)?.layer ?? '');
+    const t = f.geometry?.type;
+    if (
+      isCableLayer(layer) &&
+      (t === 'LineString' || t === 'MultiLineString')
+    ) {
+      out.push({
+        ...f,
+        properties: { ...(f.properties as object), __hitZone: true },
+      });
+    }
+    out.push(f);
+  }
+  return out;
+}
+
 export function addQfieldGeoJsonToMap(
   L: typeof import('leaflet'),
   map: LeafletMap,
@@ -33,10 +64,11 @@ export function addQfieldGeoJsonToMap(
     layerName: string;
     projectTitle: string;
     onFeatureClick: FeaturePickHandler;
+    onFeatureLayer?: (entry: RegisteredMapFeature) => void;
   }
 ): { group: LayerGroup; geoLayer: import('leaflet').GeoJSON } {
   const group = L.layerGroup();
-  const expanded = expandCableGlowFeatures(features);
+  const expanded = expandCableHitZones(expandCableGlowFeatures(features));
 
   const geoLayer = L.geoJSON(
     { type: 'FeatureCollection', features: expanded } as GeoJSON.FeatureCollection,
@@ -45,6 +77,7 @@ export function addQfieldGeoJsonToMap(
         const props = (feature?.properties ?? {}) as Record<string, unknown>;
         const layer = String(props.layer ?? opts.layerName);
         const isGlow = props.__glow === true;
+        const isHitZone = props.__hitZone === true;
         const t = feature?.geometry?.type ?? '';
 
         if (t === 'Polygon' || t === 'MultiPolygon') {
@@ -63,6 +96,16 @@ export function addQfieldGeoJsonToMap(
             color: ls.glowColor,
             weight: ls.glowWeight,
             opacity: 0.35,
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          };
+        }
+        if (isHitZone) {
+          return {
+            color: ls.color,
+            weight: 14,
+            opacity: 0,
             lineCap: 'round',
             lineJoin: 'round',
           };
@@ -94,41 +137,29 @@ export function addQfieldGeoJsonToMap(
       },
       onEachFeature: (feature, layer) => {
         const props = { ...(feature.properties as Record<string, unknown>) };
-        if (props.__glow) return;
-
         const layerName = String(props.layer ?? opts.layerName);
+        const isCable = isCableLayer(layerName);
+        const webId = String(props.__webId ?? props.__glowSourceWebId ?? '');
+
+        if (props.__glow) {
+          if (opts.onFeatureLayer && webId) {
+            opts.onFeatureLayer({
+              webId,
+              leafletLayer: layer,
+              geoJson: geoLayer,
+              isGlow: true,
+              isHitZone: false,
+              cableTypeKey: isCable ? cableTypeToggleKey(props, layerName) : undefined,
+              cableIdKey: isCable ? `cid:${webId}` : undefined,
+            });
+          }
+          return;
+        }
+
         const geomType = feature.geometry?.type ?? 'Unknown';
-        const webId = String(props.__webId ?? '');
-        const hover = hoverTooltipForFeature(props, layerName, geomType);
+        const isHitZone = props.__hitZone === true;
 
-        if (hover && 'bindTooltip' in layer) {
-          const leafletLayer = layer as import('leaflet').Layer;
-          leafletLayer.bindTooltip(hover, {
-            permanent: false,
-            sticky: true,
-            direction: 'top',
-            className: 'proviser-map-label',
-          });
-        }
-
-        const perm = permanentMapLabel(props, layerName);
-        if (
-          perm &&
-          shouldShowPermanentMapLabel(layerName) &&
-          'bindTooltip' in layer &&
-          (geomType === 'LineString' ||
-            geomType === 'MultiLineString' ||
-            geomType === 'Polygon')
-        ) {
-          (layer as import('leaflet').Layer).bindTooltip(perm, {
-            permanent: true,
-            direction: 'center',
-            className: 'proviser-map-label proviser-map-label--permanent',
-          });
-        }
-
-        layer.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
+        const pick = () => {
           opts.onFeatureClick({
             layerName,
             projectTitle: opts.projectTitle,
@@ -137,7 +168,52 @@ export function addQfieldGeoJsonToMap(
             category: classifyLayerCategory(layerName),
             webId,
           });
+        };
+
+        if (!isHitZone) {
+          const hover = hoverTooltipForFeature(props, layerName, geomType);
+          if (hover && 'bindTooltip' in layer) {
+            (layer as import('leaflet').Layer).bindTooltip(hover, {
+              permanent: false,
+              sticky: true,
+              direction: 'top',
+              className: 'proviser-map-label',
+            });
+          }
+
+          const perm = permanentMapLabel(props, layerName);
+          if (
+            perm &&
+            shouldShowPermanentMapLabel(layerName) &&
+            'bindTooltip' in layer &&
+            (geomType === 'LineString' ||
+              geomType === 'MultiLineString' ||
+              geomType === 'Polygon')
+          ) {
+            (layer as import('leaflet').Layer).bindTooltip(perm, {
+              permanent: true,
+              direction: 'center',
+              className: 'proviser-map-label proviser-map-label--permanent',
+            });
+          }
+        }
+
+        layer.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          pick();
         });
+
+        if (opts.onFeatureLayer && webId) {
+          opts.onFeatureLayer({
+            webId,
+            leafletLayer: layer,
+            geoJson: geoLayer,
+            isGlow: false,
+            isHitZone,
+            cableTypeKey: isCable ? cableTypeToggleKey(props, layerName) : undefined,
+            cableIdKey: isCable ? `cid:${webId}` : undefined,
+          });
+        }
       },
     }
   );

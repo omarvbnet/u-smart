@@ -174,19 +174,28 @@ export function mapLabelForFeature(props: Record<string, unknown>, layerName?: s
   return propValue(props, ['name', 'label', 'id', 'code']);
 }
 
-/** Duplicate cable lines for glow underlay in GeoJSON. */
+/** Duplicate cable lines for glow underlay (drawn first; real line on top for clicks). */
 export function expandCableGlowFeatures(features: GeoJSON.Feature[]): GeoJSON.Feature[] {
   const out: GeoJSON.Feature[] = [];
   for (const f of features) {
-    out.push(f);
     const layer = String((f.properties as Record<string, unknown>)?.layer ?? '');
     const t = f.geometry?.type;
-    if (!isCableLayer(layer)) continue;
-    if (t !== 'LineString' && t !== 'MultiLineString') continue;
-    out.push({
-      ...f,
-      properties: { ...(f.properties as object), __glow: true },
-    });
+    const props = f.properties as Record<string, unknown> | undefined;
+    const webId = props?.__webId;
+    if (
+      isCableLayer(layer) &&
+      (t === 'LineString' || t === 'MultiLineString')
+    ) {
+      out.push({
+        ...f,
+        properties: {
+          ...(f.properties as object),
+          __glow: true,
+          __glowSourceWebId: webId,
+        },
+      });
+    }
+    out.push(f);
   }
   return out;
 }

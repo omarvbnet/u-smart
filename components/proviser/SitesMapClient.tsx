@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MapPin, Users } from 'lucide-react';
-import { addQfieldGeoJsonToMap, swatchColorForLayer } from '@/components/proviser/add-qfield-to-leaflet';
+import {
+  addQfieldGeoJsonToMap,
+  swatchColorForLayer,
+  type RegisteredMapFeature,
+} from '@/components/proviser/add-qfield-to-leaflet';
 import {
   LAYER_CATEGORY_LABELS,
   classifyLayerCategory,
@@ -12,8 +16,12 @@ import {
 import type { CablesByType } from '@/lib/qfield-map-tap-detail';
 import {
   assignWebFeatureId,
+  buildCableMapToggles,
   buildFeatureTapDetail,
+  cableDisplayType,
+  cableIdFromProperties,
   toMapFeatureRecord,
+  type CableMapToggle,
   type FeatureTapDetail,
   type MapFeatureRecord,
 } from '@/lib/qfield-map-tap-detail';
@@ -107,6 +115,7 @@ export function SitesMapClient({
   const staffMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
   const qfieldLayersRef = useRef<Map<string, import('leaflet').LayerGroup>>(new Map());
   const allFeaturesRef = useRef<MapFeatureRecord[]>([]);
+  const featureRegistrationsRef = useRef<RegisteredMapFeature[]>([]);
   const loadGenRef = useRef(0);
 
   const [mapReady, setMapReady] = useState(false);
@@ -121,6 +130,9 @@ export function SitesMapClient({
     canViewNames: false,
   });
   const [selectedStaff, setSelectedStaff] = useState<StaffPin | null>(null);
+  const [cableToggles, setCableToggles] = useState<CableMapToggle[]>([]);
+  const [hiddenCableTypeKeys, setHiddenCableTypeKeys] = useState<Set<string>>(new Set());
+  const [hiddenCableIdKeys, setHiddenCableIdKeys] = useState<Set<string>>(new Set());
 
   const sitesWithCoords = sites.filter((s) => s.hasCoordinates);
   const sitesList = sites.filter((s) => s.canPreviewQfield && s.qfieldProjects.length > 0);
@@ -129,6 +141,51 @@ export function SitesMapClient({
     qfieldLayersRef.current.forEach((l) => l.remove());
     qfieldLayersRef.current.clear();
     allFeaturesRef.current = [];
+    featureRegistrationsRef.current = [];
+    setCableToggles([]);
+    setHiddenCableTypeKeys(new Set());
+    setHiddenCableIdKeys(new Set());
+  }, []);
+
+  const applyCableVisibility = useCallback(() => {
+    for (const reg of featureRegistrationsRef.current) {
+      if (!reg.cableTypeKey && !reg.cableIdKey) continue;
+      const hideType = reg.cableTypeKey ? hiddenCableTypeKeys.has(reg.cableTypeKey) : false;
+      const hideId = reg.cableIdKey ? hiddenCableIdKeys.has(reg.cableIdKey) : false;
+      const hide = hideType || hideId;
+      const gj = reg.geoJson;
+      if (hide) {
+        if (gj.hasLayer(reg.leafletLayer)) gj.removeLayer(reg.leafletLayer);
+      } else if (!gj.hasLayer(reg.leafletLayer)) {
+        gj.addLayer(reg.leafletLayer);
+      }
+    }
+  }, [hiddenCableTypeKeys, hiddenCableIdKeys]);
+
+  useEffect(() => {
+    applyCableVisibility();
+  }, [applyCableVisibility]);
+
+  const registerFeatureLayer = useCallback((entry: RegisteredMapFeature) => {
+    featureRegistrationsRef.current.push(entry);
+  }, []);
+
+  const toggleCableFilter = useCallback((toggle: CableMapToggle) => {
+    if (toggle.isTypeGroup) {
+      setHiddenCableTypeKeys((prev) => {
+        const next = new Set(prev);
+        if (next.has(toggle.key)) next.delete(toggle.key);
+        else next.add(toggle.key);
+        return next;
+      });
+    } else {
+      setHiddenCableIdKeys((prev) => {
+        const next = new Set(prev);
+        if (next.has(toggle.key)) next.delete(toggle.key);
+        else next.add(toggle.key);
+        return next;
+      });
+    }
   }, []);
 
   const setLayerVisible = useCallback((id: string, visible: boolean) => {
@@ -263,11 +320,10 @@ export function SitesMapClient({
             const { group: leafletLayer, geoLayer } = addQfieldGeoJsonToMap(L, map, taggedFeatures, {
               layerName,
               projectTitle,
+              onFeatureLayer: registerFeatureLayer,
               onFeatureClick: (info) => {
-                const tapDetail = buildFeatureTapDetail(
-                  allFeaturesRef.current,
-                  info.webId || String(info.properties.__webId ?? '')
-                );
+                const webId = info.webId || String(info.properties.__webId ?? '');
+                const tapDetail = buildFeatureTapDetail(allFeaturesRef.current, webId);
                 if (!tapDetail) return;
                 setFeatureSelection({
                   layerName: info.layerName,
@@ -333,14 +389,18 @@ export function SitesMapClient({
       if (loadGenRef.current !== gen) return;
 
       setLayerRows(rows);
+      setCableToggles(buildCableMapToggles(allFeaturesRef.current));
+      setHiddenCableTypeKeys(new Set());
+      setHiddenCableIdKeys(new Set());
       setLoadingLayers(false);
+      requestAnimationFrame(() => applyCableVisibility());
 
       if (hasBounds && map) {
         map.fitBounds(bounds, { padding: [48, 48], maxZoom: 17 });
       }
       map.invalidateSize();
     },
-    [mapReady, clearQfieldLayers]
+    [mapReady, clearQfieldLayers, registerFeatureLayer, applyCableVisibility]
   );
 
   const refreshSiteMarkers = useCallback(async () => {
@@ -554,6 +614,43 @@ export function SitesMapClient({
           </section>
         )}
 
+        {cableToggles.length > 0 && (
+          <section className="border-t border-white/10 pt-3">
+            <h2 className="text-sm font-medium text-gray-300 mb-2">Fiber cable types</h2>
+            <p className="text-[10px] text-gray-500 mb-2">Toggle types on/off (same as mobile QField map).</p>
+            <div className="flex flex-wrap gap-1.5">
+              {cableToggles
+                .filter((t) => t.isTypeGroup)
+                .map((t) => (
+                  <CableFilterChip
+                    key={t.key}
+                    toggle={t}
+                    selected={!hiddenCableTypeKeys.has(t.key)}
+                    onToggle={() => toggleCableFilter(t)}
+                  />
+                ))}
+            </div>
+            {cableToggles.some((t) => !t.isTypeGroup) && (
+              <>
+                <h3 className="text-xs font-medium text-gray-400 mt-3 mb-1.5">Cable IDs</h3>
+                <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+                  {cableToggles
+                    .filter((t) => !t.isTypeGroup)
+                    .map((t) => (
+                      <CableFilterChip
+                        key={t.key}
+                        toggle={t}
+                        selected={!hiddenCableIdKeys.has(t.key)}
+                        onToggle={() => toggleCableFilter(t)}
+                        compact
+                      />
+                    ))}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
         <section className="border-t border-white/10 pt-3">
           <h2 className="text-sm font-medium text-gray-300 mb-2">Legend (QField style)</h2>
           <ul className="grid grid-cols-2 gap-1.5 text-[10px] text-gray-400 mb-3">
@@ -631,6 +728,38 @@ export function SitesMapClient({
   );
 }
 
+function CableFilterChip({
+  toggle,
+  selected,
+  onToggle,
+  compact = false,
+}: {
+  toggle: CableMapToggle;
+  selected: boolean;
+  onToggle: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1 rounded-full border transition ${
+        compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'
+      } ${
+        selected
+          ? 'border-white/30 bg-white/10 text-gray-100'
+          : 'border-white/10 bg-black/40 text-gray-600 line-through'
+      }`}
+    >
+      <span
+        className="w-2 h-2 rounded-full shrink-0"
+        style={{ backgroundColor: toggle.color }}
+      />
+      {toggle.isTypeGroup ? `${toggle.label} (${toggle.count})` : toggle.label}
+    </button>
+  );
+}
+
 function CablesByTypeBlock({ title, data }: { title: string; data: CablesByType }) {
   const keys = Object.keys(data);
   if (!keys.length) return null;
@@ -679,8 +808,33 @@ function FeatureDetailPanel({
   featureEntries: [string, unknown][];
 }) {
   const d = selection.tapDetail;
+  const isCable = selection.category === 'fiber_cable' || !!d.cablesByType;
+  const fiberType = isCable
+    ? cableDisplayType(selection.properties, selection.layerName)
+    : null;
+  const fiberId = isCable ? cableIdFromProperties(selection.properties) : null;
+
   return (
     <div className="text-xs space-y-2">
+      {isCable && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 space-y-1">
+          <p className="text-[10px] uppercase tracking-wide text-amber-200/80">Fiber cable</p>
+          <p className="text-sm font-semibold text-amber-100">{fiberType}</p>
+          {fiberId ? (
+            <p className="text-gray-200">
+              <span className="text-gray-500">Fiber / cable ID:</span> {fiberId}
+            </p>
+          ) : (
+            <p className="text-gray-500">No cable ID in layer attributes</p>
+          )}
+          {d.fatId && (
+            <p className="text-gray-400">
+              <span className="text-gray-500">Linked FAT:</span> {d.fatId}
+            </p>
+          )}
+        </div>
+      )}
+
       <p className="text-sm font-semibold text-white">{d.title}</p>
       <p className="text-gray-400">
         <span className="text-gray-500">Type:</span>{' '}

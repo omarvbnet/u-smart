@@ -144,8 +144,17 @@ export function isRouteFeature(rec: MapFeatureRecord): boolean {
 
 export function isCableFeatureRecord(rec: MapFeatureRecord): boolean {
   if (isCableLayer(rec.layerName)) return true;
+  if (classifyLayerCategory(rec.layerName) === 'fiber_cable') return true;
   const n = normalizeLayerName(rec.layerName);
   if (n.includes('ftth')) return true;
+  const geom = rec.geometryType;
+  if (
+    (geom === 'LineString' || geom === 'MultiLineString') &&
+    propValue(rec.properties, ['cable_type', 'cabletype', 'fiber_count', 'cable_id', 'fiber_id']) !=
+      null
+  ) {
+    return true;
+  }
   return (
     propValue(rec.properties, ['cable_type', 'cabletype', 'fiber_count']) != null
   );
@@ -644,6 +653,96 @@ export function toMapFeatureRecord(
   };
 }
 
+export type CableMapToggle = {
+  key: string;
+  label: string;
+  color: string;
+  isTypeGroup: boolean;
+  count: number;
+};
+
+export function cableTypeToggleKey(
+  props: Record<string, unknown>,
+  layerName: string
+): string {
+  return `ctype:${cableDisplayType(props, layerName)}`;
+}
+
+export function cableIdToggleKey(webId: string): string {
+  return `cid:${webId}`;
+}
+
+/** Toggle chips for cable types and individual cable IDs (matches mobile map). */
+export function buildCableMapToggles(features: MapFeatureRecord[]): CableMapToggle[] {
+  const types = new Map<string, { label: string; color: string; count: number }>();
+  const ids: CableMapToggle[] = [];
+
+  for (const f of features) {
+    if (!isCableFeatureRecord(f)) continue;
+    const typeLabel = cableDisplayType(f.properties, f.layerName);
+    const typeKey = `ctype:${typeLabel}`;
+    const prev = types.get(typeKey);
+    types.set(typeKey, {
+      label: typeLabel,
+      color: cableTypeColorForLabel(typeLabel),
+      count: (prev?.count ?? 0) + 1,
+    });
+
+    const cid = cableIdFromProperties(f.properties);
+    if (cid) {
+      ids.push({
+        key: cableIdToggleKey(f.id),
+        label: cid,
+        color: cableTypeColorForLabel(typeLabel),
+        isTypeGroup: false,
+        count: 1,
+      });
+    }
+  }
+
+  const out: CableMapToggle[] = [
+    ...[...types.entries()]
+      .sort((a, b) => a[1].label.localeCompare(b[1].label))
+      .map(([key, v]) => ({
+        key,
+        label: v.label,
+        color: v.color,
+        isTypeGroup: true,
+        count: v.count,
+      })),
+    ...ids.sort((a, b) => a.label.localeCompare(b.label)),
+  ];
+  return out;
+}
+
+function cableTypeColorForLabel(label: string): string {
+  const n = label.trim().toLowerCase().replace(/\s+/g, '');
+  if (n.includes('12f') || n === '12') return '#E53935';
+  if (n.includes('24f') || n === '24') return '#1E88E5';
+  if (n.includes('36f') || n === '36') return '#8E24AA';
+  if (n.includes('48f') || n === '48') return '#FF8F00';
+  if (n.includes('pulling')) return '#D32F2F';
+  if (n.includes('foc')) return '#C62828';
+  return '#E53935';
+}
+
+export function buildCableFeatureTapDetail(selected: MapFeatureRecord): FeatureTapDetail {
+  const type = cableDisplayType(selected.properties, selected.layerName);
+  const cid = cableIdFromProperties(selected.properties);
+  const linkedFat = fatIdFromProperties(selected.properties);
+  const primary = displayPropsForFeature(selected);
+  return {
+    category: 'fiber_cable',
+    layerName: selected.layerName,
+    geometryType: selected.geometryType,
+    title: cid ? `${type} · ${cid}` : type,
+    isRoute: false,
+    fatId: linkedFat ?? undefined,
+    cablesByType: groupCablesByType([selected]),
+    primaryProps: primary,
+  };
+}
+
 export function buildFeatureTapDetail(
   allFeatures: MapFeatureRecord[],
   webId: string
@@ -655,27 +754,17 @@ export function buildFeatureTapDetail(
     return buildRouteDetail(selected, allFeatures);
   }
 
+  // Cables before FAT/handhole — many cable rows carry fat_id / hh_id foreign keys.
+  if (isCableFeatureRecord(selected)) {
+    return buildCableFeatureTapDetail(selected);
+  }
+
   if (
     isFatLayer(selected.layerName) ||
     isHandholeLayer(selected.layerName) ||
-    isHoleLayer(selected.layerName) ||
-    fatIdFromProperties(selected.properties)
+    isHoleLayer(selected.layerName)
   ) {
     return buildFatOrHandholeDetail(selected, allFeatures);
-  }
-
-  if (isCableFeatureRecord(selected)) {
-    const type = cableDisplayType(selected.properties, selected.layerName);
-    const cid = cableIdFromProperties(selected.properties);
-    return {
-      category: 'fiber_cable',
-      layerName: selected.layerName,
-      geometryType: selected.geometryType,
-      title: cid ? `${type} · ${cid}` : type,
-      isRoute: false,
-      cablesByType: groupCablesByType([selected]),
-      primaryProps: displayPropsForFeature(selected),
-    };
   }
 
   return {
