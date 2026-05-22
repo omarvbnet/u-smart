@@ -31,7 +31,16 @@ export async function uploadFile(options: {
       addRandomSuffix: true,
       contentType: file.type || undefined,
     });
+    if (!blob?.url) {
+      throw new Error('File upload succeeded but no URL was returned.');
+    }
     return { url: blob.url };
+  }
+
+  if (process.env.VERCEL === '1' || process.env.VERCEL === 'true') {
+    throw new Error(
+      'File storage is not configured on the server (missing BLOB_READ_WRITE_TOKEN).'
+    );
   }
 
   const localFolder = path.join(process.cwd(), 'public', 'uploads', folder);

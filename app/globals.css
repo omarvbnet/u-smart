@@ -25,6 +25,17 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Proviser QField map — FAT / cable ID tooltips */
+.proviser-map-label {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(0, 0, 0, 0.35) !important;
+  color: #000 !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 2px 6px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
 /* Improve touch targets and tap responsiveness on mobile */
 @media (max-width: 640px) {
   button, a {

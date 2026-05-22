@@ -1,7 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MapPin, Users } from 'lucide-react';
+import { addQfieldGeoJsonToMap, swatchColorForLayer } from '@/components/proviser/add-qfield-to-leaflet';
+import {
+  LAYER_CATEGORY_LABELS,
+  classifyLayerCategory,
+  friendlyLayerTitle,
+  type LayerCategory,
+} from '@/lib/qfield-map-symbology';
 
 export type MapSitePin = {
   id: string;
@@ -23,6 +30,7 @@ type LayerRow = {
   id: string;
   layerName: string;
   projectTitle: string;
+  category: LayerCategory;
   color: string;
   visible: boolean;
   status: 'loading' | 'ready' | 'error' | 'empty';
@@ -44,10 +52,9 @@ type FeatureSelection = {
   layerName: string;
   projectTitle: string;
   geometryType: string;
+  category: LayerCategory;
   properties: Record<string, unknown>;
 };
-
-const LAYER_STROKES = ['#fbbf24', '#22d3ee', '#c4b5fd', '#86efac', '#fda4af', '#fde047', '#93c5fd', '#f59e0b'];
 
 function previewUrl(site: MapSitePin, projectId: string) {
   const base =
@@ -55,12 +62,6 @@ function previewUrl(site: MapSitePin, projectId: string) {
       ? `/api/provisor-private-company/sites/${site.id}/qfield-map-preview`
       : `/api/sites/${site.id}/qfield-map-preview`;
   return `${base}?projectId=${encodeURIComponent(projectId)}`;
-}
-
-function hashIndex(s: string, mod: number): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % mod;
 }
 
 function groupFeaturesByLayer(geojson: GeoJsonFeatureCollection): Map<string, GeoJSON.Feature[]> {
@@ -95,7 +96,7 @@ export function SitesMapClient({
   const mapInstanceRef = useRef<import('leaflet').Map | null>(null);
   const siteMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
   const staffMarkersRef = useRef<import('leaflet').LayerGroup | null>(null);
-  const qfieldLayersRef = useRef<Map<string, import('leaflet').GeoJSON>>(new Map());
+  const qfieldLayersRef = useRef<Map<string, import('leaflet').LayerGroup>>(new Map());
   const loadGenRef = useRef(0);
 
   const [mapReady, setMapReady] = useState(false);
@@ -195,8 +196,6 @@ export function SitesMapClient({
       for (let pi = 0; pi < site.qfieldProjects.length; pi++) {
         if (loadGenRef.current !== gen) return;
         const project = site.qfieldProjects[pi];
-        const fileColor = LAYER_STROKES[pi % LAYER_STROKES.length];
-
         try {
           const res = await fetch(previewUrl(site, project.id), { credentials: 'include' });
           const data = await res.json();
@@ -206,10 +205,11 @@ export function SitesMapClient({
               id: `${site.id}:${project.id}:err`,
               layerName: '—',
               projectTitle: project.title || project.fileName || project.id,
-              color: fileColor,
+              color: '#E53935',
               visible: false,
               status: 'error',
               error: data.message || 'Load failed',
+              category: 'other',
               featureCount: 0,
             });
             continue;
@@ -221,10 +221,11 @@ export function SitesMapClient({
               id: `${site.id}:${project.id}:empty`,
               layerName: 'No geometries',
               projectTitle: project.title || project.fileName || project.id,
-              color: fileColor,
+              color: '#888',
               visible: false,
               status: 'empty',
               error: data.message ?? 'No features in file',
+              category: 'other',
               featureCount: 0,
             });
             continue;
@@ -236,59 +237,28 @@ export function SitesMapClient({
           for (const [layerName, features] of groups) {
             if (!features.length) continue;
             const rowId = `${site.id}:${project.id}:${layerName}`;
-            const stroke = LAYER_STROKES[hashIndex(layerName + project.id, LAYER_STROKES.length)];
+            const category = classifyLayerCategory(layerName);
+            const swatch = swatchColorForLayer(layerName);
 
-            const leafletLayer = L.geoJSON(
-              { type: 'FeatureCollection', features } as GeoJsonFeatureCollection,
-              {
-                style: (feature) => {
-                  const t = feature?.geometry?.type ?? '';
-                  if (t === 'LineString' || t === 'MultiLineString') {
-                    return { color: stroke, weight: 3, opacity: 0.95 };
-                  }
-                  if (t === 'Polygon' || t === 'MultiPolygon') {
-                    return {
-                      color: stroke,
-                      weight: 2,
-                      fillColor: fileColor,
-                      fillOpacity: 0.35,
-                      opacity: 0.9,
-                    };
-                  }
-                  return { color: stroke, weight: 2, fillOpacity: 0.5 };
-                },
-                pointToLayer: (_feature, latlng) =>
-                  L.circleMarker(latlng, {
-                    radius: 7,
-                    color: stroke,
-                    fillColor: fileColor,
-                    fillOpacity: 0.9,
-                    weight: 2,
-                  }),
-                onEachFeature: (feature, layer) => {
-                  layer.on('click', (e) => {
-                    import('leaflet').then((Lf) => Lf.DomEvent.stopPropagation(e));
-                    const props = { ...(feature.properties as Record<string, unknown>) };
-                    setFeatureSelection({
-                      layerName,
-                      projectTitle,
-                      geometryType: feature.geometry?.type ?? 'Unknown',
-                      properties: props,
-                    });
-                    setSelectedStaff(null);
-                    if ('setStyle' in layer && typeof (layer as import('leaflet').Path).setStyle === 'function') {
-                      (layer as import('leaflet').Path).setStyle({ weight: 4, color: '#ffffff' });
-                    }
-                  });
-                },
-              }
-            );
+            const { group: leafletLayer, geoLayer } = addQfieldGeoJsonToMap(L, map, features, {
+              layerName,
+              projectTitle,
+              onFeatureClick: (info) => {
+                setFeatureSelection({
+                  layerName: info.layerName,
+                  projectTitle: info.projectTitle,
+                  geometryType: info.geometryType,
+                  category: info.category,
+                  properties: info.properties,
+                });
+                setSelectedStaff(null);
+              },
+            });
 
-            leafletLayer.addTo(map);
             qfieldLayersRef.current.set(rowId, leafletLayer);
 
             try {
-              const b = leafletLayer.getBounds();
+              const b = geoLayer.getBounds();
               if (b.isValid()) {
                 bounds.extend(b);
                 hasBounds = true;
@@ -310,9 +280,10 @@ export function SitesMapClient({
 
             rows.push({
               id: rowId,
-              layerName,
+              layerName: friendlyLayerTitle(layerName),
               projectTitle,
-              color: stroke,
+              category,
+              color: swatch,
               visible: true,
               status: 'ready',
               featureCount: features.length,
@@ -323,10 +294,11 @@ export function SitesMapClient({
             id: `${site.id}:${project.id}:err`,
             layerName: '—',
             projectTitle: project.title || project.fileName || project.id,
-            color: fileColor,
+            color: '#E53935',
             visible: false,
             status: 'error',
             error: err instanceof Error ? err.message : 'Network error',
+            category: 'other',
             featureCount: 0,
           });
         }
@@ -461,6 +433,23 @@ export function SitesMapClient({
     ? Object.entries(featureSelection.properties).filter(([k]) => !SKIP_PROPS.has(k))
     : [];
 
+  const legendItems = useMemo(
+    () =>
+      (
+        [
+          'fiber_cable',
+          'fdt_holes',
+          'fat',
+          'closure',
+          'fdt',
+          'handhole',
+          'pole',
+          'region',
+        ] as LayerCategory[]
+      ).map((cat) => ({ cat, label: LAYER_CATEGORY_LABELS[cat] })),
+    []
+  );
+
   return (
     <div className="grid lg:grid-cols-[1fr_320px] gap-4">
       <div className="relative">
@@ -513,9 +502,10 @@ export function SitesMapClient({
                     key={row.id}
                     className="flex items-center gap-2 text-xs rounded px-2 py-1 bg-white/5"
                   >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+                    <span className="w-2 h-2 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: row.color }} />
                     <span className="flex-1 truncate text-gray-300">
                       {row.layerName}
+                      <span className="text-gray-600"> · {LAYER_CATEGORY_LABELS[row.category]}</span>
                       {row.status === 'ready' ? ` (${row.featureCount})` : ''}
                     </span>
                     {row.status === 'ready' && (
@@ -539,11 +529,27 @@ export function SitesMapClient({
         )}
 
         <section className="border-t border-white/10 pt-3">
+          <h2 className="text-sm font-medium text-gray-300 mb-2">Legend (QField style)</h2>
+          <ul className="grid grid-cols-2 gap-1.5 text-[10px] text-gray-400 mb-3">
+            {legendItems.map(({ cat, label }) => (
+              <li key={cat} className="flex items-center gap-1.5">
+                <LegendSwatch category={cat} />
+                {label}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="border-t border-white/10 pt-3">
           <h2 className="text-sm font-medium text-gray-300 mb-2">Element details</h2>
           {!featureSelection ? (
-            <p className="text-xs text-gray-500">Click any line, polygon, or point on the map to see attributes.</p>
+            <p className="text-xs text-gray-500">Click fiber cable, FAT, FDT hole, closure, or parcel on the map.</p>
           ) : (
             <div className="text-xs space-y-2">
+              <p className="text-gray-400">
+                <span className="text-gray-500">Type:</span>{' '}
+                {LAYER_CATEGORY_LABELS[featureSelection.category] ?? featureSelection.category}
+              </p>
               <p className="text-gray-400">
                 <span className="text-gray-500">Layer:</span> {featureSelection.layerName}
               </p>
@@ -624,4 +630,27 @@ export function SitesMapClient({
       </aside>
     </div>
   );
+}
+
+function LegendSwatch({ category }: { category: LayerCategory }) {
+  if (category === 'fiber_cable') {
+    return (
+      <span className="inline-block w-5 h-1 rounded-full bg-[#E53935] shadow-[0_0_6px_rgba(229,57,53,0.6)]" />
+    );
+  }
+  if (category === 'fdt_holes' || category === 'fat' || category === 'handhole') {
+    return <span className="inline-block w-3 h-3 border-2 border-[#E53935] bg-white" />;
+  }
+  if (category === 'closure') {
+    return <span className="inline-block w-3 h-3 rounded-full bg-[#E53935]" />;
+  }
+  if (category === 'pole') {
+    return (
+      <span className="inline-block w-0 h-0 border-l-[5px] border-r-[5px] border-b-[8px] border-l-transparent border-r-transparent border-b-[#43A047]" />
+    );
+  }
+  if (category === 'region') {
+    return <span className="inline-block w-4 h-3 bg-[#C8E6C9] border border-black/50 opacity-80" />;
+  }
+  return <span className="inline-block w-3 h-3 bg-gray-500 rounded-sm" />;
 }
