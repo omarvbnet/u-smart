@@ -3,7 +3,19 @@ import {
   maintenanceCrewIdsFromCompanyJson,
   parseTicketCompanyJson,
 } from '@/lib/private-company-kpi';
+import { isWorkspaceTicketLeader } from '@/lib/private-company-ticket-visibility';
 import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
+
+function isWorkspaceScopedTicket(ticket: {
+  assignmentScope: string | null;
+  privateCompanyId: string | null;
+}): boolean {
+  const scope = ticket.assignmentScope ?? null;
+  return (
+    !!ticket.privateCompanyId &&
+    (scope === 'PRIVATE_COMPANY_STAFF' || scope === null)
+  );
+}
 
 /**
  * Who may add QField revisions / edit project metadata on a ticket.
@@ -45,6 +57,15 @@ export async function canManageTicketQFieldProjects(prisma: any, ticketId: strin
   const owned = me.privateCompanyOwned?.status === 'APPROVED' ? me.privateCompanyOwned.id ?? null : null;
   const workspaceId = owned ?? me.privateCompanyId ?? null;
 
+  if (isWorkspaceScopedTicket(ticket) && workspaceId && workspaceId === ticket.privateCompanyId) {
+    if (owned && owned === ticket.privateCompanyId) {
+      return true;
+    }
+    if (isWorkspaceTicketLeader(role, owned)) {
+      return true;
+    }
+  }
+
   if (role === 'TECHNICIAN') {
     if (!ticket.privateCompanyId) return false;
     return assertTechnicianMaintenanceTicketDetailAccess(prisma, requesterId, workspaceId, ticket);
@@ -52,8 +73,7 @@ export async function canManageTicketQFieldProjects(prisma: any, ticketId: strin
 
   if (
     (role === 'ENGINEER' || role === 'MANAGER' || role === 'COORDINATOR') &&
-    ticket.assignmentScope === 'PRIVATE_COMPANY_STAFF' &&
-    ticket.privateCompanyId &&
+    isWorkspaceScopedTicket(ticket) &&
     workspaceId === ticket.privateCompanyId
   ) {
     const target = ticket.privateCompanyTargetDepartmentId ?? null;
