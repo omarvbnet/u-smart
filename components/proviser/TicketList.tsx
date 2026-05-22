@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { StatusBadge } from '@/components/proviser/proviser-ui';
 
 export type TicketRow = {
   id: string;
@@ -9,14 +10,6 @@ export type TicketRow = {
   technique: string;
   status: string;
   createdAt: string;
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-amber-500/20 text-amber-300',
-  ON_SITE: 'bg-blue-500/20 text-blue-300',
-  IN_PROGRESS: 'bg-cyan-500/20 text-cyan-300',
-  COMPLETED: 'bg-emerald-500/20 text-emerald-300',
-  CANCELLED: 'bg-gray-500/20 text-gray-400',
 };
 
 export function TicketList({
@@ -46,7 +39,7 @@ export function TicketList({
         <li key={t.id}>
           <Link
             href={`/proviser/tickets/${t.id}`}
-            className="block rounded-xl border border-white/10 bg-[#0f1419] px-4 py-3 hover:border-amber-500/40 transition"
+            className="block rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#141a22]/80 to-[#0f1419] px-4 py-3.5 hover:border-amber-500/35 transition shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -56,13 +49,7 @@ export function TicketList({
                 </p>
                 <p className="text-xs text-gray-600 mt-1 font-mono">{t.id}</p>
               </div>
-              <span
-                className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${
-                  STATUS_COLORS[t.status] ?? 'bg-white/10 text-gray-300'
-                }`}
-              >
-                {t.status}
-              </span>
+              <StatusBadge status={t.status} />
             </div>
           </Link>
         </li>

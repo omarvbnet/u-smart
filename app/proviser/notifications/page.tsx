@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
-import { ProviserShell } from '@/components/proviser/ProviserShell';
-import { useProviserUser } from '@/components/proviser/use-proviser-user';
-import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
+import { ProviserPageGuard } from '@/components/proviser/ProviserPageGuard';
+import { PageHeader, Card, CardBody, EmptyState } from '@/components/proviser/proviser-ui';
 
 type NotificationRow = {
   id: string;
@@ -17,13 +16,18 @@ type NotificationRow = {
 };
 
 export default function ProviserNotificationsPage() {
-  const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
-  const { membership } = useProviserWorkspace(user);
+  return (
+    <ProviserPageGuard>
+      {() => <NotificationsContent />}
+    </ProviserPageGuard>
+  );
+}
+
+function NotificationsContent() {
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
     fetch('/api/notifications?for=requester', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
@@ -32,63 +36,50 @@ export default function ProviserNotificationsPage() {
         }
       })
       .finally(() => setLoading(false));
-  }, [user]);
-
-  const markRead = async (id: string) => {
-    await fetch(`/api/notifications/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ read: true }),
-    });
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  };
-
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
-      </div>
-    );
-  }
+  }, []);
 
   return (
-    <ProviserShell user={user} membership={membership} onLogout={logout}>
-      <h1 className="text-xl font-semibold mb-4">Notifications</h1>
+    <>
+      <PageHeader title="Alerts" subtitle="Workspace and ticket notifications." />
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
         </div>
       ) : !items.length ? (
-        <p className="text-gray-500 text-center py-12">No notifications.</p>
+        <EmptyState message="No notifications." />
       ) : (
         <ul className="space-y-2">
           {items.map((n) => (
-            <li
-              key={n.id}
-              className={`rounded-xl border px-4 py-3 ${
-                n.read ? 'border-white/5 bg-[#0f1419]/50' : 'border-amber-500/30 bg-[#0f1419]'
-              }`}
-            >
-              <p className="font-medium text-white">{n.title}</p>
-              <p className="text-sm text-gray-400 mt-1">{n.message}</p>
-              <p className="text-xs text-gray-600 mt-2">{new Date(n.createdAt).toLocaleString()}</p>
-              <div className="flex gap-3 mt-2">
-                {n.ticketId && (
-                  <Link href={`/proviser/tickets/${n.ticketId}`} className="text-sm text-amber-400 hover:underline">
-                    View ticket
-                  </Link>
-                )}
-                {!n.read && (
-                  <button type="button" onClick={() => markRead(n.id)} className="text-sm text-gray-400 hover:text-white">
-                    Mark read
-                  </button>
-                )}
-              </div>
+            <li key={n.id}>
+              <Card className={!n.read ? 'border-amber-500/20' : ''}>
+                <CardBody className="py-3">
+                  <div className="flex justify-between gap-2">
+                    <p className="font-medium text-white">{n.title}</p>
+                    {!n.read && (
+                      <span className="text-[10px] uppercase text-amber-400">New</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-400 mt-1">{n.message}</p>
+                  <p className="text-xs text-slate-600 mt-2">
+                    {new Date(n.createdAt).toLocaleString()}
+                    {n.ticketId && (
+                      <>
+                        {' · '}
+                        <Link
+                          href={`/proviser/tickets/${n.ticketId}`}
+                          className="text-amber-400 hover:underline"
+                        >
+                          View ticket
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                </CardBody>
+              </Card>
             </li>
           ))}
         </ul>
       )}
-    </ProviserShell>
+    </>
   );
 }

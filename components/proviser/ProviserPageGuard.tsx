@@ -1,49 +1,65 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
-import { useProviserUser } from '@/components/proviser/use-proviser-user';
-import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
-import { ProviserShell } from '@/components/proviser/ProviserShell';
+import type { ProviserMembership } from '@/lib/proviser-permissions';
+import type { ProviserUser } from '@/lib/proviser-web';
+import { useProviserAuth } from '@/components/proviser/ProviserAuthProvider';
+import type { PrivateDepartment } from '@/components/proviser/use-proviser-workspace';
+import { Card, CardBody } from '@/components/proviser/proviser-ui';
+
+export type ProviserPageContext = {
+  user: ProviserUser;
+  membership: ProviserMembership;
+  departments: PrivateDepartment[];
+  refresh: () => Promise<void>;
+};
 
 export function ProviserPageGuard({
   children,
   requireManagement,
   requirePerformance,
+  requirePrivateWorkspace,
 }: {
-  children: (ctx: ReturnType<typeof useProviserWorkspace> & { user: NonNullable<ReturnType<typeof useProviserUser>['user']> }) => React.ReactNode;
+  children: (ctx: ProviserPageContext) => React.ReactNode;
   requireManagement?: boolean;
   requirePerformance?: boolean;
+  requirePrivateWorkspace?: boolean;
 }) {
-  const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
-  const ws = useProviserWorkspace(user);
+  const { user, membership, departments, refresh } = useProviserAuth();
 
-  if (authLoading || !user || ws.loading) {
+  if (!user) return null;
+
+  if (requireManagement && !membership.canManageStaff && !membership.canManageDepartments) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
-      </div>
+      <Card>
+        <CardBody>
+          <p className="text-slate-400">You do not have permission to manage team settings.</p>
+        </CardBody>
+      </Card>
     );
   }
 
-  if (requireManagement && !ws.membership.canManageStaff && !ws.membership.canManageDepartments) {
+  if (requirePerformance && !membership.canViewPerformance) {
     return (
-      <ProviserShell user={user} membership={ws.membership} onLogout={logout}>
-        <p className="text-gray-400">You do not have permission to manage team settings.</p>
-      </ProviserShell>
+      <Card>
+        <CardBody>
+          <p className="text-slate-400">Performance reports are only available to owners and managers.</p>
+        </CardBody>
+      </Card>
     );
   }
 
-  if (requirePerformance && !ws.membership.canViewPerformance) {
+  if (
+    requirePrivateWorkspace &&
+    membership.mode !== 'private'
+  ) {
     return (
-      <ProviserShell user={user} membership={ws.membership} onLogout={logout}>
-        <p className="text-gray-400">Performance reports are only available to owners and managers.</p>
-      </ProviserShell>
+      <Card>
+        <CardBody>
+          <p className="text-slate-400">This section requires an approved private company workspace.</p>
+        </CardBody>
+      </Card>
     );
   }
 
-  return (
-    <ProviserShell user={user} membership={ws.membership} onLogout={logout}>
-      {children({ ...ws, user })}
-    </ProviserShell>
-  );
+  return children({ user, membership, departments, refresh });
 }

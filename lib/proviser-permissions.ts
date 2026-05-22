@@ -13,16 +13,33 @@ export type ProviserMembership = {
   canManageStaff: boolean;
   canViewPerformance: boolean;
   performanceScope: 'workspace' | 'department' | null;
+  /** Owner / coordinator owner: full company data */
+  canViewCompanyWide: boolean;
+  /** Manager / coordinator with department: scoped data only */
+  isDepartmentScoped: boolean;
+  scopeDepartmentId: string | null;
 };
 
 const MANAGER_ROLES = new Set(['MANAGER', 'COORDINATOR']);
 const COORDINATOR_OWNER_ROLES = new Set(['COMPANY_OWNER', 'ADMIN', 'COMPANY']);
-const COORDINATOR_STAFF_MANAGER_ROLES = new Set(['COMPANY_OWNER', 'ADMIN', 'MANAGER', 'COORDINATOR', 'COMPANY']);
+const COORDINATOR_STAFF_MANAGER_ROLES = new Set([
+  'COMPANY_OWNER',
+  'ADMIN',
+  'MANAGER',
+  'COORDINATOR',
+  'COMPANY',
+]);
 
 export function buildMembership(
   user: ProviserUser | null,
   ws: {
-    membership?: { isOwner?: boolean; role?: string; departmentId?: string | null; departmentName?: string | null; status?: string };
+    membership?: {
+      isOwner?: boolean;
+      role?: string;
+      departmentId?: string | null;
+      departmentName?: string | null;
+      status?: string;
+    };
     workspace?: { status?: string } | null;
   } | null,
   coordinatorRole?: string | null
@@ -36,6 +53,7 @@ export function buildMembership(
   if (ws?.workspace && workspaceStatus === 'APPROVED') {
     const canManageStaff = isOwner || MANAGER_ROLES.has(role);
     const canViewPerformance = isOwner || MANAGER_ROLES.has(role);
+    const isDepartmentScoped = !isOwner && MANAGER_ROLES.has(role) && !!departmentId;
     return {
       mode: 'private',
       isOwner,
@@ -46,13 +64,17 @@ export function buildMembership(
       canManageDepartments: isOwner,
       canManageStaff,
       canViewPerformance,
-      performanceScope: isOwner ? 'workspace' : MANAGER_ROLES.has(role) && departmentId ? 'department' : null,
+      performanceScope: isOwner ? 'workspace' : isDepartmentScoped ? 'department' : null,
+      canViewCompanyWide: isOwner,
+      isDepartmentScoped,
+      scopeDepartmentId: isDepartmentScoped ? departmentId : null,
     };
   }
 
   if (COORDINATOR_STAFF_MANAGER_ROLES.has(role) || COORDINATOR_OWNER_ROLES.has(role)) {
     const coordOwner = COORDINATOR_OWNER_ROLES.has(role);
     const coordManager = role === 'MANAGER' || coordOwner;
+    const isDepartmentScoped = coordManager && !coordOwner;
     return {
       mode: 'coordinator',
       isOwner: coordOwner,
@@ -63,7 +85,10 @@ export function buildMembership(
       canManageDepartments: false,
       canManageStaff: COORDINATOR_STAFF_MANAGER_ROLES.has(role),
       canViewPerformance: coordManager || MANAGER_ROLES.has(role),
-      performanceScope: coordOwner || role === 'MANAGER' ? 'workspace' : MANAGER_ROLES.has(role) ? 'department' : null,
+      performanceScope: coordOwner || role === 'MANAGER' ? 'workspace' : null,
+      canViewCompanyWide: coordOwner,
+      isDepartmentScoped,
+      scopeDepartmentId: null,
     };
   }
 
@@ -78,11 +103,30 @@ export function buildMembership(
     canManageStaff: false,
     canViewPerformance: false,
     performanceScope: null,
+    canViewCompanyWide: false,
+    isDepartmentScoped: !!departmentId,
+    scopeDepartmentId: departmentId,
   };
 }
 
 export function canViewSitesMap(role: string, mode: ProviserWorkspaceMode): boolean {
   const r = role.toUpperCase();
   if (mode === 'private' || mode === 'coordinator') return true;
-  return ['COMPANY', 'PERSONAL', 'MANAGER', 'COORDINATOR', 'ENGINEER', 'QUALITY_ENGINEER', 'SUPERVISION_ENGINEER', 'TECHNICIAN', 'WORKER'].includes(r);
+  return [
+    'COMPANY',
+    'PERSONAL',
+    'MANAGER',
+    'COORDINATOR',
+    'ENGINEER',
+    'QUALITY_ENGINEER',
+    'SUPERVISION_ENGINEER',
+    'TECHNICIAN',
+    'WORKER',
+  ].includes(r);
+}
+
+/** Query param for department-scoped API calls from the web app */
+export function departmentQueryParam(m: ProviserMembership): string {
+  if (m.canViewCompanyWide || !m.scopeDepartmentId) return '';
+  return `&departmentId=${encodeURIComponent(m.scopeDepartmentId)}`;
 }

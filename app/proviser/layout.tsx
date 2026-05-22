@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getProviserWebOrigin } from '@/lib/proviser-host';
+import { ProviserRootLayout } from '@/components/proviser/ProviserRootLayout';
 
 export const metadata: Metadata = {
   title: {
@@ -12,5 +13,5 @@ export const metadata: Metadata = {
 };
 
 export default function ProviserLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <ProviserRootLayout>{children}</ProviserRootLayout>;
 }

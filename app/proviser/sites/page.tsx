@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { ProviserShell } from '@/components/proviser/ProviserShell';
-import { useProviserUser } from '@/components/proviser/use-proviser-user';
-import { useProviserWorkspace } from '@/components/proviser/use-proviser-workspace';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Map } from 'lucide-react';
+import { Loader2, Map } from 'lucide-react';
+import { ProviserPageGuard } from '@/components/proviser/ProviserPageGuard';
+import { PageHeader, SearchInput, ScopeBanner, Card, CardBody, EmptyState } from '@/components/proviser/proviser-ui';
+import type { ProviserMembership } from '@/lib/proviser-permissions';
 
 type SiteRow = {
   id: string;
@@ -14,66 +13,131 @@ type SiteRow = {
   location: string;
   province: string;
   ticketCount?: number;
+  hasQfield?: boolean;
 };
 
-export default function ProviserSitesPage() {
-  const { user, loading: authLoading, logout } = useProviserUser({ redirectToLogin: true });
-  const { membership } = useProviserWorkspace(user);
+function SitesContent({ membership }: { membership: ProviserMembership }) {
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [provinceFilter, setProvinceFilter] = useState('');
 
   useEffect(() => {
-    if (!user) return;
-    fetch('/api/sites', { credentials: 'include' })
+    const url =
+      membership.mode === 'private'
+        ? '/api/provisor-private-company/sites'
+        : '/api/sites';
+    fetch(url, { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.sites)) {
-          setSites(data.sites);
+        if (!data.success) {
+          setSites([]);
+          return;
         }
+        const list = data.sites ?? [];
+        setSites(
+          list.map((s: Record<string, unknown>) => ({
+            id: String(s.id),
+            siteId: String(s.siteId ?? s.site_id ?? ''),
+            location: String(s.location ?? ''),
+            province: String(s.province ?? ''),
+            ticketCount: typeof s.ticketCount === 'number' ? s.ticketCount : undefined,
+            hasQfield: Boolean(
+              s.hasQfield ??
+                (Array.isArray(s.qfieldProjects) && s.qfieldProjects.length > 0)
+            ),
+          }))
+        );
       })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [membership.mode]);
 
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
-      </div>
-    );
-  }
+  const provinces = useMemo(() => {
+    const set = new Set(sites.map((s) => s.province).filter(Boolean));
+    return [...set].sort();
+  }, [sites]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sites.filter((s) => {
+      if (provinceFilter && s.province !== provinceFilter) return false;
+      if (!q) return true;
+      return (
+        s.siteId.toLowerCase().includes(q) ||
+        s.location.toLowerCase().includes(q) ||
+        s.province.toLowerCase().includes(q)
+      );
+    });
+  }, [sites, search, provinceFilter]);
 
   return (
-    <ProviserShell user={user} membership={membership} onLogout={logout}>
-      <div className="flex items-center justify-between gap-4 mb-4">
-        <h1 className="text-xl font-semibold">Sites</h1>
-        <Link
-          href="/proviser/sites/map"
-          className="inline-flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300"
-        >
-          <Map className="w-4 h-4" />
-          Open map
-        </Link>
+    <>
+      <PageHeader
+        title="Sites"
+        subtitle="Search sites by name, location, or province."
+        actions={
+          <Link
+            href="/proviser/sites/map"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-500/30 text-amber-300 text-sm font-medium hover:bg-amber-500/10"
+          >
+            <Map className="w-4 h-4" />
+            Open map
+          </Link>
+        }
+      />
+      <ScopeBanner membership={membership} />
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search sites…" />
+        {provinces.length > 0 && (
+          <select
+            value={provinceFilter}
+            onChange={(e) => setProvinceFilter(e.target.value)}
+            className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white sm:max-w-[200px]"
+          >
+            <option value="">All provinces</option>
+            {provinces.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
+
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
         </div>
-      ) : !sites.length ? (
-        <p className="text-gray-500 text-center py-12">No sites. Create sites from the mobile app or company tools.</p>
+      ) : !filtered.length ? (
+        <EmptyState message="No sites match your search." />
       ) : (
-        <ul className="space-y-2">
-          {sites.map((s) => (
-            <li key={s.id} className="rounded-xl border border-white/10 bg-[#0f1419] px-4 py-3">
-              <p className="font-medium">{s.siteId}</p>
-              <p className="text-sm text-gray-400">{s.location}</p>
-              <p className="text-xs text-gray-600 mt-1">
-                {s.province}
-                {s.ticketCount != null ? ` · ${s.ticketCount} tickets` : ''}
-              </p>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {filtered.map((s) => (
+            <li key={s.id}>
+              <Card className="h-full hover:border-amber-500/25 transition">
+                <CardBody>
+                  <p className="font-semibold text-white">{s.siteId}</p>
+                  <p className="text-sm text-slate-400 mt-1">{s.location || '—'}</p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {s.province}
+                    {s.ticketCount != null ? ` · ${s.ticketCount} tickets` : ''}
+                    {s.hasQfield ? ' · QField' : ''}
+                  </p>
+                </CardBody>
+              </Card>
             </li>
           ))}
         </ul>
       )}
-    </ProviserShell>
+    </>
+  );
+}
+
+export default function ProviserSitesPage() {
+  return (
+    <ProviserPageGuard>
+      {({ membership }) => <SitesContent membership={membership} />}
+    </ProviserPageGuard>
   );
 }
