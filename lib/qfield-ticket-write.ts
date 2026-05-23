@@ -3,10 +3,11 @@ import {
   maintenanceCrewIdsFromCompanyJson,
   parseTicketCompanyJson,
 } from '@/lib/private-company-kpi';
+import { PRIVATE_COMPANY_STAFF_ROLES } from '@/lib/private-company-context';
 import { isWorkspaceTicketLeader } from '@/lib/private-company-ticket-visibility';
 import { assertTechnicianMaintenanceTicketDetailAccess } from '@/lib/technician-maintenance-ticket-access';
 
-function isWorkspaceScopedTicket(ticket: {
+export function isWorkspaceScopedTicket(ticket: {
   assignmentScope: string | null;
   privateCompanyId: string | null;
 }): boolean {
@@ -88,4 +89,53 @@ export async function canManageTicketQFieldProjects(prisma: any, ticketId: strin
   }
 
   return false;
+}
+
+function workspaceIdForRequester(me: {
+  privateCompanyId: string | null;
+  privateCompanyOwned: { id: string; status: string } | null;
+}): string | null {
+  const owned =
+    me.privateCompanyOwned?.status === 'APPROVED' ? me.privateCompanyOwned.id ?? null : null;
+  return owned ?? me.privateCompanyId ?? null;
+}
+
+/**
+ * Read-only QField map preview / view button: any active private-workspace staff role
+ * on tickets scoped to that workspace (owner, manager, coordinator, engineer, technician,
+ * worker, warehouse keeper).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function canPreviewTicketQFieldProjects(
+  prisma: any,
+  ticketId: string,
+  requesterId: string
+): Promise<boolean> {
+  if (await canManageTicketQFieldProjects(prisma, ticketId, requesterId)) return true;
+
+  const ticket = await prisma.visitorRequest.findFirst({
+    where: { id: ticketId },
+    select: {
+      requesterId: true,
+      privateCompanyId: true,
+      assignmentScope: true,
+    },
+  });
+  if (!ticket) return false;
+  if (ticket.requesterId === requesterId) return true;
+  if (!isWorkspaceScopedTicket(ticket) || !ticket.privateCompanyId) return false;
+
+  const me = await prisma.ticketRequester.findUnique({
+    where: { id: requesterId },
+    select: {
+      role: true,
+      privateCompanyId: true,
+      privateCompanyOwned: { select: { id: true, status: true } },
+    },
+  });
+  if (!me) return false;
+  const role = String(me.role ?? '').toUpperCase();
+  if (!(PRIVATE_COMPANY_STAFF_ROLES as readonly string[]).includes(role)) return false;
+  const wsId = workspaceIdForRequester(me);
+  return !!wsId && wsId === ticket.privateCompanyId;
 }

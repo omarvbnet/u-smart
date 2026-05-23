@@ -181,17 +181,34 @@
     "subtitle": "How we collect, use, and protect your data across our smart automation and energy management platforms.",
     "secureByDesign": "Secure by design",
     "lastUpdatedLabel": "Last Updated:",
-    "lastUpdatedValue": "April 2026",
+    "lastUpdatedValue": "May 2026",
     "companyName": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems LLC",
     "backToHomepage": "Back to homepage",
     "intro": "Smart Cities For Intelligent Systems, Trading and Installation of Renewable Energy Systems Limited Liability Company (\"we,\" \"us,\" or \"our\") operates the website usmart-iot.com and our associated mobile applications. We are committed to protecting your privacy and ensuring that your personal data is handled in a safe and responsible manner.",
     "sections": {
       "collect": {
         "title": "1. Information We Collect",
-        "body": "We may collect personal information that you provide directly to us, such as your name, email address, and contact details, specifically when you register an account or use our smart automation and energy management services."
+        "body": "We may collect personal information that you provide directly to us, such as your name, email address, and contact details, specifically when you register an account or use our smart automation and energy management services. Our mobile app Proviser / U-SMART QC also collects location data as described in Section 2 below."
+      },
+      "location": {
+        "title": "2. Location Data",
+        "body": "When you use the Proviser mobile app linked to your company workspace account, we may collect your device's geographic location (GPS or approximate location) and transmit it securely to our servers at usmart-iot.com to power field-location features. We do not sell your location data or use it for targeted advertising.",
+        "whenLead": "When we collect location:",
+        "whenPoints": [
+          "While you use the app (foreground): when you open a ticket detail screen, a site map, QField map preview, confirm arrival on site (\"On site\"), or view team positions on the map.",
+          "In the background (optional): if you grant \"location in the background\" on your device, the app may continue to estimate your proximity to registered work sites while you are signed in, to support automatic site-arrival detection and ticket workflow updates. You can revoke this permission in device settings at any time."
+        ],
+        "whyLead": "Why we need location data:",
+        "whyPoints": [
+          "To locate and display engineering sites and field projects (including QField/GIS map layers in Proviser).",
+          "To verify you are within the work-site radius before marking a ticket as \"On site\" or starting field work.",
+          "To update ticket status and field workflows (quality, maintenance, supervision) based on your actual position.",
+          "To show your live position to authorized team members on the map (workspace managers/coordinators) while map features are in use."
+        ],
+        "control": "You stay in control: you may deny or revoke location permission in Android or iOS settings; some features (maps, on-site confirmation, QField on map) may then not work. To ask questions or request deletion of stored location data, contact us at contact@usmart-iot.com."
       },
       "usage": {
-        "title": "2. How We Use Your Information",
+        "title": "3. How We Use Your Information",
         "lead": "We use the collected data to:",
         "points": [
           "Provide, operate, and maintain our smart systems and services.",
@@ -200,19 +217,19 @@
         ]
       },
       "security": {
-        "title": "3. Data Security",
+        "title": "4. Data Security",
         "body": "We implement industry-standard security measures to protect your information from unauthorized access, alteration, or disclosure. While we strive to use commercially acceptable means to protect your personal data, no method of transmission over the internet or method of electronic storage is 100% secure."
       },
       "sharing": {
-        "title": "4. Data Sharing",
+        "title": "5. Data Sharing",
         "body": "We do not sell or share your personal data with third parties, except as required by law or to provide the core functionality of our services."
       },
       "deletion": {
-        "title": "5. Data Deletion Requests",
+        "title": "6. Data Deletion Requests",
         "body": "Users have the right to request the deletion of their personal data by contacting us at contact@usmart-iot.com."
       },
       "contact": {
-        "title": "6. Contact Us",
+        "title": "7. Contact Us",
         "lead": "If you have any questions about this Privacy Policy, please contact us at:",
         "emailLabel": "Email:",
         "addressLabel": "Address:",

@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 export const metadata = {
   title: "Privacy Policy | U-SMART",
   description:
-    "Learn how Smart Cities For Intelligent Systems handles and protects your personal data across our smart automation and energy management platforms.",
+    "Privacy policy for U-SMART and Proviser, including how we collect and use location data (foreground and optional background) for field maps, QField, and site workflows.",
 };
 
 type Props = {
@@ -86,6 +86,34 @@ export default async function PrivacyPolicyPage({ params }: Props) {
             </h2>
             <p className="mt-3 text-sm sm:text-base text-gray-300 leading-relaxed">
               {t("sections.collect.body")}
+            </p>
+          </section>
+
+          <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.04] p-5 sm:p-7">
+            <h2 className="text-lg sm:text-xl font-semibold text-white">
+              {t("sections.location.title")}
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-gray-300 leading-relaxed">
+              {t("sections.location.body")}
+            </p>
+            <p className="mt-3 text-sm sm:text-base text-gray-300 leading-relaxed">
+              {t("sections.location.whenLead")}
+            </p>
+            <ul className="mt-2 space-y-2 text-sm sm:text-base text-gray-300 leading-relaxed list-disc list-inside sm:list-outside sm:ml-5">
+              <li>{t("sections.location.whenPoints.0")}</li>
+              <li>{t("sections.location.whenPoints.1")}</li>
+            </ul>
+            <p className="mt-3 text-sm sm:text-base text-gray-300 leading-relaxed">
+              {t("sections.location.whyLead")}
+            </p>
+            <ul className="mt-2 space-y-2 text-sm sm:text-base text-gray-300 leading-relaxed list-disc list-inside sm:list-outside sm:ml-5">
+              <li>{t("sections.location.whyPoints.0")}</li>
+              <li>{t("sections.location.whyPoints.1")}</li>
+              <li>{t("sections.location.whyPoints.2")}</li>
+              <li>{t("sections.location.whyPoints.3")}</li>
+            </ul>
+            <p className="mt-3 text-sm sm:text-base text-gray-300 leading-relaxed">
+              {t("sections.location.control")}
             </p>
           </section>
 

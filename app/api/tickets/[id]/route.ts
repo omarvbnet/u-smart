@@ -31,7 +31,13 @@ import {
   MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY,
 } from '@/lib/maintenance-requester-confirmation';
 import { parseQFieldProjectsFromCompanyJson, type QFieldProjectStored } from '@/lib/qfield-projects';
+import { PRIVATE_COMPANY_STAFF_ROLES } from '@/lib/private-company-context';
 import { isWorkspaceTicketLeader } from '@/lib/private-company-ticket-visibility';
+import {
+  canManageTicketQFieldProjects,
+  canPreviewTicketQFieldProjects,
+  isWorkspaceScopedTicket,
+} from '@/lib/qfield-ticket-write';
 import {
   loadMaintenanceReasonsForTicket,
   readMaintenanceCompletionReasonFromCompany,
@@ -238,7 +244,7 @@ export async function GET(
       where: { id: payload.requesterId },
       select: { role: true },
     });
-    requesterRole = reqRow?.role ?? 'COMPANY';
+    requesterRole = String(reqRow?.role ?? 'COMPANY').toUpperCase();
   } catch { /* fallback to COMPANY */ }
 
   try {
@@ -269,7 +275,12 @@ export async function GET(
       requesterRole === 'SUPERVISION_ENGINEER' ||
       requesterRole === 'MANAGER' ||
       requesterRole === 'COORDINATOR';
+    const isWorkspaceStaffRole = (PRIVATE_COMPANY_STAFF_ROLES as readonly string[]).includes(
+      requesterRole
+    );
     if (engineerWorkspaceId && isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId)) {
+      whereClause = { id, privateCompanyId: engineerWorkspaceId };
+    } else if (engineerWorkspaceId && isWorkspaceStaffRole) {
       whereClause = { id, privateCompanyId: engineerWorkspaceId };
     } else if (isQcPoolEngineer) {
       whereClause = {
@@ -353,7 +364,17 @@ export async function GET(
       });
     }
 
-    if (row && requesterRole === 'TECHNICIAN') {
+    const workspaceStaffTicketAccess =
+      !!row &&
+      !!engineerWorkspaceId &&
+      isWorkspaceStaffRole &&
+      isWorkspaceScopedTicket({
+        assignmentScope: (row as { assignmentScope?: string | null }).assignmentScope ?? null,
+        privateCompanyId: (row as { privateCompanyId?: string | null }).privateCompanyId ?? null,
+      }) &&
+      (row as { privateCompanyId?: string | null }).privateCompanyId === engineerWorkspaceId;
+
+    if (row && requesterRole === 'TECHNICIAN' && !workspaceStaffTicketAccess) {
       const detailOk = await assertTechnicianMaintenanceTicketDetailAccess(
         prisma,
         payload.requesterId,
@@ -363,7 +384,12 @@ export async function GET(
       if (!detailOk) row = null;
     }
 
-    if (row && isWorkspaceEngineerRole(requesterRole) && !isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId)) {
+    if (
+      row &&
+      isWorkspaceEngineerRole(requesterRole) &&
+      !isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId) &&
+      !workspaceStaffTicketAccess
+    ) {
       const engineerOk = await assertEngineerWorkspaceTicketDetailAccess(
         prisma,
         payload.requesterId,
@@ -760,6 +786,11 @@ export async function GET(
       });
     }
 
+    const [canViewQField, canManageQField] = await Promise.all([
+      canPreviewTicketQFieldProjects(prisma, row.id, payload.requesterId),
+      canManageTicketQFieldProjects(prisma, row.id, payload.requesterId),
+    ]);
+
     return NextResponse.json({
       success: true,
       ticket: {
@@ -769,6 +800,8 @@ export async function GET(
         slaHours,
         technique: row.technique,
         status,
+        canViewQField,
+        canManageQField,
         assignmentScope: (row as { assignmentScope?: string | null }).assignmentScope ?? null,
         privateCompanyId: (row as { privateCompanyId?: string | null }).privateCompanyId ?? null,
         privateCompanyTargetDepartmentId:
