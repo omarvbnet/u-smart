@@ -31,6 +31,8 @@ import '../widgets/workspace_field_staff_analytics_panel.dart';
 import '../widgets/available_tickets_pool_tab.dart';
 import '../providers/private_company_provider.dart';
 import '../utils/account_deletion_ui.dart';
+import '../widgets/profile_avatar.dart';
+import '../widgets/profile_more_section.dart';
 import 'private_company_hub_screen.dart';
 import '../widgets/site_list_card.dart';
 import '../widgets/workspace_site_detail_sheet.dart';
@@ -1381,39 +1383,7 @@ class _EngineerProfileTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           children: [
             const SizedBox(height: 20),
-            Center(
-              child: Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6C63FF).withAlpha(60),
-                      blurRadius: 30,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    (user.name ?? user.username)
-                        .substring(0, 1)
-                        .toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            const Center(child: ProfileAvatar(size: 96)),
             const SizedBox(height: 18),
             Center(
               child: Text(
@@ -1543,6 +1513,8 @@ class _EngineerProfileTab extends StatelessWidget {
             const SizedBox(height: 12),
             _updatePasswordRow(context, l10n),
             const SizedBox(height: 20),
+            const ProfileMoreSection(),
+            const SizedBox(height: 4),
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),

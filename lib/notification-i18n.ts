@@ -42,7 +42,8 @@ export type NotificationCopyKey =
   | 'maintenance_rejected_by_requester'
   | 'ticket_withdrawal_requested'
   | 'ticket_withdrawal_accepted'
-  | 'ticket_withdrawal_rejected';
+  | 'ticket_withdrawal_rejected'
+  | 'issue_report_status';
 
 export type NotificationCopyPayload = {
   key: NotificationCopyKey;
@@ -1003,6 +1004,24 @@ const TEMPLATES: Record<
     ku: (v) => ({
       title: 'کارمەند نزیکی شوێن',
       body: `${v.staffName} لە ${v.distanceM}م لە شوێنی ${v.siteCode} (${v.siteLocation}).`,
+    }),
+  },
+  issue_report_status: {
+    en: (v) => ({
+      title: 'Report update',
+      body: `Your report "${v.title}" is now ${(v.status || '').toLowerCase().replace(/_/g, ' ')}.`,
+    }),
+    ar: (v) => ({
+      title: 'تحديث على البلاغ',
+      body: `بلاغك "${v.title}" أصبح ${v.statusAr || v.status}.`,
+    }),
+    tr: (v) => ({
+      title: 'Rapor güncellemesi',
+      body: `"${v.title}" raporunuz artık ${v.statusTr || (v.status || '').toLowerCase()}.`,
+    }),
+    ku: (v) => ({
+      title: 'نوێکردنەوەی ڕاپۆرت',
+      body: `ڕاپۆرتەکەت "${v.title}" بووە بە ${v.statusKu || v.status}.`,
     }),
   },
   qfield_map_comment: {

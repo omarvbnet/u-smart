@@ -25,6 +25,9 @@ import {
   Sun,
   Scale,
   KeyRound,
+  BugPlay,
+  ListChecks,
+  Tags,
 } from 'lucide-react';
 
 const links = [
@@ -47,6 +50,9 @@ const links = [
   { href: '/admin/checklists', label: 'Checklists', icon: CheckSquare },
   { href: '/admin/provisor-techniques', label: 'QC techniques', icon: ClipboardCheck },
   { href: '/admin/ticket-policy', label: 'Ticket cancel / resubmit', icon: TicketCheck },
+  { href: '/admin/platform-reasons', label: 'Maintenance / expense reasons', icon: Tags },
+  { href: '/admin/issue-reports', label: 'Issue reports', icon: BugPlay, badgeType: 'pending_issue_reports' as const },
+  { href: '/admin/issue-report-types', label: 'Issue report types', icon: ListChecks },
   { href: '/admin/engineers', label: 'Provisor Engineers', icon: HardHat },
   { href: '/admin/teams', label: 'Teams', icon: UsersRound },
   { href: '/admin/employees', label: 'Employees', icon: UserCog },

@@ -66,8 +66,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const assignedId = typeof parsed.assignedEngineerId === 'string' ? parsed.assignedEngineerId : null;
     const crewIds = maintenanceCrewIdsFromCompanyJson(parsed);
-    const fieldActor =
-      assignedId === auth.payload.requesterId || crewIds.includes(auth.payload.requesterId);
+    const isLead = assignedId === auth.payload.requesterId;
+    const isCrewMember = !isLead && crewIds.includes(auth.payload.requesterId);
+    const fieldActor = isLead || isCrewMember;
     const assignedCoordinatorId =
       ticket.assigneeCoordinatorUserId ??
       (typeof parsed.assigneeCoordinatorUserId === 'string' ? parsed.assigneeCoordinatorUserId : null);
@@ -83,6 +84,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         { success: false, message: 'Only the assigned lead or ticket crew can complete this ticket' },
         { status: 403 }
       );
+    }
+
+    // Department crew policy: if the actor is a crew member (not the lead) the
+    // ticket's target department can require completion to come from the lead only.
+    if (!coordinatorContext && isCrewMember && ticket.privateCompanyTargetDepartmentId) {
+      try {
+        const dept = await prisma.privateCompanyDepartment.findUnique({
+          where: { id: ticket.privateCompanyTargetDepartmentId },
+          select: { crewCanCloseTickets: true },
+        });
+        if (dept && dept.crewCanCloseTickets === false) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'Your department allows only the assigned lead on the main ticket to close it.',
+            },
+            { status: 403 }
+          );
+        }
+      } catch {
+        /* default permissive on lookup error */
+      }
     }
 
     if (ticket.status === 'COMPLETED') {

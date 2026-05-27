@@ -9,6 +9,8 @@ import '../l10n/app_localizations.dart';
 import '../models/ticket.dart';
 import '../widgets/ticket_card.dart';
 import '../widgets/update_password_sheet.dart';
+import '../widgets/profile_avatar.dart';
+import '../widgets/profile_more_section.dart';
 import '../widgets/stats_card.dart';
 import 'ticket_detail_screen.dart';
 import 'create_ticket_screen.dart';
@@ -891,39 +893,7 @@ class _ProfileTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           children: [
             const SizedBox(height: 20),
-            Center(
-              child: Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6C63FF), Color(0xFF00D4AA)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6C63FF).withAlpha(60),
-                      blurRadius: 30,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    (user.name ?? user.username)
-                        .substring(0, 1)
-                        .toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            const Center(child: ProfileAvatar(size: 96)),
             const SizedBox(height: 18),
             Center(
               child: Text(
@@ -977,7 +947,9 @@ class _ProfileTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _updatePasswordRow(context),
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
+            const ProfileMoreSection(),
+            const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),

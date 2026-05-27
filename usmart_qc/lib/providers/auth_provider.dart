@@ -196,6 +196,14 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Update only the cached photoUrl after a successful upload, without a full refetch.
+  void applyPhotoUrl(String? url) {
+    final current = _user;
+    if (current == null) return;
+    _user = current.copyWith(photoUrl: url);
+    notifyListeners();
+  }
+
   /// Apply JWT from POST /api/auth/requester-change-password then reload profile.
   Future<void> applyPasswordChangeResponse(Map<String, dynamic> res) async {
     final t = res['token'];

@@ -1035,6 +1035,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     bool technicianAvailabilityPoolEnabled = true,
     String maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
     String engineerTicketScope = 'BOTH',
+    bool? crewCanLogExpenses,
+    bool? crewCanCloseTickets,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -1052,6 +1054,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
         'technicianAvailabilityPoolEnabled': technicianAvailabilityPoolEnabled,
         'maintenanceDispatchMode': mode,
         'engineerTicketScope': _normalizeEngineerTicketScope(engineerTicketScope),
+        if (crewCanLogExpenses != null) 'crewCanLogExpenses': crewCanLogExpenses,
+        if (crewCanCloseTickets != null) 'crewCanCloseTickets': crewCanCloseTickets,
       });
       if (res['success'] == true) {
         await refresh();
@@ -1082,6 +1086,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     bool? technicianAvailabilityPoolEnabled,
     String? maintenanceDispatchMode,
     String? engineerTicketScope,
+    bool? crewCanLogExpenses,
+    bool? crewCanCloseTickets,
   }) async {
     _submitting = true;
     notifyListeners();
@@ -1109,6 +1115,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
                   : 'DIRECT_TECHNICIAN',
         if (engineerTicketScope != null)
           'engineerTicketScope': _normalizeEngineerTicketScope(engineerTicketScope),
+        if (crewCanLogExpenses != null) 'crewCanLogExpenses': crewCanLogExpenses,
+        if (crewCanCloseTickets != null) 'crewCanCloseTickets': crewCanCloseTickets,
       });
       if (res['success'] == true) {
         await refresh();

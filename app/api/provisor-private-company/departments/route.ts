@@ -132,6 +132,8 @@ export async function GET(req: NextRequest) {
       technicianAvailabilityPoolEnabled: true,
       maintenanceDispatchMode: true,
       engineerTicketScope: true,
+      crewCanLogExpenses: true,
+      crewCanCloseTickets: true,
       members: {
         select: {
           id: true,
@@ -183,6 +185,10 @@ export async function POST(req: NextRequest) {
     body?.engineerTicketScope !== undefined
       ? normalizeEngineerTicketScope(body.engineerTicketScope)
       : undefined;
+  const crewCanLogExpenses =
+    body?.crewCanLogExpenses === undefined ? undefined : body.crewCanLogExpenses === true;
+  const crewCanCloseTickets =
+    body?.crewCanCloseTickets === undefined ? undefined : body.crewCanCloseTickets === true;
   try {
     const dept = await prisma.privateCompanyDepartment.create({
       data: {
@@ -196,6 +202,8 @@ export async function POST(req: NextRequest) {
         ...(engineerPool !== undefined ? { engineerAvailabilityPoolEnabled: engineerPool } : {}),
         ...(technicianPool !== undefined ? { technicianAvailabilityPoolEnabled: technicianPool } : {}),
         ...(engineerScope !== undefined ? { engineerTicketScope: engineerScope } : {}),
+        ...(crewCanLogExpenses !== undefined ? { crewCanLogExpenses } : {}),
+        ...(crewCanCloseTickets !== undefined ? { crewCanCloseTickets } : {}),
       },
     });
     try {
@@ -266,6 +274,12 @@ export async function PATCH(req: NextRequest) {
     }
     if (body?.engineerTicketScope !== undefined) {
       data.engineerTicketScope = normalizeEngineerTicketScope(body.engineerTicketScope);
+    }
+    if (body?.crewCanLogExpenses !== undefined) {
+      data.crewCanLogExpenses = body.crewCanLogExpenses === true;
+    }
+    if (body?.crewCanCloseTickets !== undefined) {
+      data.crewCanCloseTickets = body.crewCanCloseTickets === true;
     }
   }
   if (body?.maintenanceProximityJoinEnabled !== undefined) {

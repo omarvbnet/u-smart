@@ -355,6 +355,8 @@ model TicketRequester {
   phonePushToken          String?
   phonePlatform           String?
   preferredLocale         String? // en | ar | tr | ku (Provisor UI language)
+  /// User-managed profile photo URL (uploaded via /api/profile/photo).
+  photoUrl                String?
   /// Set when user requests account deletion; purged after 7 days without login.
   deletionRequestedAt     DateTime?
   createdAt               DateTime         @default(now())
@@ -404,6 +406,8 @@ model TicketRequester {
 
   ticketApiKeyAccessRequests TicketApiKeyAccessRequest[] @relation("TicketApiKeyAccessRequester")
   ticketApiKeys              TicketApiKey[]              @relation("TicketApiKeyOwner")
+  issueReportsSubmitted      IssueReport[]               @relation("IssueReportRequester")
+  issueReportsHandled        IssueReport[]               @relation("IssueReportHandledBy")
 
   @@map("ticket_requesters")
 }
@@ -808,6 +812,89 @@ model ProvisorPlatformSettings {
   updatedAt                 DateTime @updatedAt
 
   @@map("provisor_platform_settings")
+}
+
+/// Platform-managed reason entries that admin can configure per requester role
+/// (INDIVIDUAL = PERSONAL, COMPANY) and per kind (MAINTENANCE | EXPENSE).
+/// Field staff on tickets created by individual / company accounts pick from
+/// these (active only). KPIs aggregate per reason.
+enum PlatformReasonKind {
+  MAINTENANCE
+  EXPENSE
+}
+
+enum PlatformReasonAudience {
+  INDIVIDUAL
+  COMPANY
+  BOTH
+}
+
+model PlatformReason {
+  id          String                 @id @default(cuid())
+  kind        PlatformReasonKind
+  audience    PlatformReasonAudience @default(BOTH)
+  label       String
+  description String?
+  sortOrder   Int                    @default(0)
+  active      Boolean                @default(true)
+  /// Optional usage counter maintained when reason is picked on a ticket — used for KPIs.
+  usageCount  Int                    @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([kind, audience, label])
+  @@index([kind, active])
+  @@index([audience])
+  @@map("platform_reasons")
+}
+
+/// In-app issue / bug reports. Admin manages reportable types (IssueReportType)
+/// and reviews submissions. Status changes notify the requester.
+enum IssueReportStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+model IssueReportType {
+  id          String         @id @default(cuid())
+  slug        String         @unique // stable key for client
+  label       String
+  description String?
+  sortOrder   Int            @default(0)
+  active      Boolean        @default(true)
+  reports     IssueReport[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("issue_report_types")
+}
+
+model IssueReport {
+  id              String             @id @default(cuid())
+  requesterId     String
+  requester       TicketRequester    @relation("IssueReportRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  typeId          String?
+  type            IssueReportType?   @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  /// Free-text fallback when type was deleted / unknown.
+  typeLabel       String?
+  title           String
+  description     String
+  attachmentUrls  String[]           @default([])
+  status          IssueReportStatus  @default(PENDING)
+  adminNote       String?
+  handledById     String?
+  handledBy       TicketRequester?   @relation("IssueReportHandledBy", fields: [handledById], references: [id], onDelete: SetNull)
+  handledAt       DateTime?
+  appVersion      String?
+  platform        String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([requesterId, createdAt])
+  @@index([status, createdAt])
+  @@map("issue_reports")
 }
 
 // Training requests (from Explore Training page)
@@ -1638,6 +1725,12 @@ model PrivateCompanyDepartment {
   maintenanceDispatchMode           String  @default("DIRECT_TECHNICIAN")
   /// QC_ONLY | MAINTENANCE_ONLY | BOTH — which ticket kinds engineers in this department may claim from the pool.
   engineerTicketScope               String  @default("BOTH")
+  /// When true, maintenance crew members (non-lead) on the same ticket may log expenses themselves.
+  /// When false, only the assigned lead can log expenses.
+  crewCanLogExpenses                Boolean @default(false)
+  /// When true, maintenance crew members (non-lead) on the same ticket may submit completion / close the ticket.
+  /// When false, only the assigned lead can close it.
+  crewCanCloseTickets               Boolean @default(false)
   members     TicketRequester[] @relation("PrivateCompanyDepartmentMember")
   techniques  PrivateCompanyTechnique[]
   workspaceTargetedTickets VisitorRequest[] @relation("WorkspaceTicketTargetDepartment")

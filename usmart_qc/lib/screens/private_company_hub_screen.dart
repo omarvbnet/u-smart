@@ -1609,6 +1609,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
   bool _technicianAvailabilityPool = true;
   String _maintDispatchMode = 'DIRECT_TECHNICIAN';
   String _engineerTicketScope = 'BOTH';
+  bool _crewCanLogExpenses = false;
+  bool _crewCanCloseTickets = false;
 
   static const _iconOptions = <String, IconData>{
     'engineering': Icons.engineering_rounded,
@@ -1648,6 +1650,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
     _technicianAvailabilityPool = widget.existing?.technicianAvailabilityPoolEnabled ?? true;
     _maintDispatchMode = widget.existing?.maintenanceDispatchMode ?? 'DIRECT_TECHNICIAN';
     _engineerTicketScope = widget.existing?.engineerTicketScope ?? 'BOTH';
+    _crewCanLogExpenses = widget.existing?.crewCanLogExpenses ?? false;
+    _crewCanCloseTickets = widget.existing?.crewCanCloseTickets ?? false;
   }
 
   @override
@@ -1673,6 +1677,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
         maintenanceDispatchMode: _maintDispatchMode,
         engineerTicketScope: _engineerTicketScope,
+        crewCanLogExpenses: _crewCanLogExpenses,
+        crewCanCloseTickets: _crewCanCloseTickets,
       );
     } else {
       final r = int.tryParse(_proxRadius.text.trim());
@@ -1690,6 +1696,8 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
         technicianAvailabilityPoolEnabled: _technicianAvailabilityPool,
         maintenanceDispatchMode: _maintDispatchMode,
         engineerTicketScope: _engineerTicketScope,
+        crewCanLogExpenses: _crewCanLogExpenses,
+        crewCanCloseTickets: _crewCanCloseTickets,
       );
     }
     if (ok && mounted) Navigator.pop(context);
@@ -1979,6 +1987,45 @@ class _DepartmentEditorSheetState extends State<_DepartmentEditorSheet> {
                     hint: '500',
                     icon: Icons.radar_rounded,
                     keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 20),
+                  _SectionTitle(l10n.t('department_settings_crew_section')),
+                  const SizedBox(height: 6),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      l10n.t('department_settings_crew_expenses'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      l10n.t('department_settings_crew_expenses_hint'),
+                      style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                    ),
+                    value: _crewCanLogExpenses,
+                    activeThumbColor: const Color(0xFF00D4AA),
+                    onChanged: (v) => setState(() => _crewCanLogExpenses = v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      l10n.t('department_settings_crew_close'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      l10n.t('department_settings_crew_close_hint'),
+                      style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 11),
+                    ),
+                    value: _crewCanCloseTickets,
+                    activeThumbColor: const Color(0xFF00D4AA),
+                    onChanged: (v) => setState(() => _crewCanCloseTickets = v),
                   ),
                 ],
                 const SizedBox(height: 22),

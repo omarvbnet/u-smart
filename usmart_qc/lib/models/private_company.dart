@@ -83,6 +83,8 @@ class PrivateCompanyDepartment {
     this.technicianAvailabilityPoolEnabled = true,
     this.maintenanceDispatchMode = 'DIRECT_TECHNICIAN',
     this.engineerTicketScope = 'BOTH',
+    this.crewCanLogExpenses = false,
+    this.crewCanCloseTickets = false,
   });
 
   final String id;
@@ -103,6 +105,10 @@ class PrivateCompanyDepartment {
   final String maintenanceDispatchMode;
   /// `QC_ONLY` | `MAINTENANCE_ONLY` | `BOTH` — default for engineers in this department.
   final String engineerTicketScope;
+  /// When false, crew (non-lead) members on the same maintenance ticket cannot log expenses.
+  final bool crewCanLogExpenses;
+  /// When false, crew (non-lead) members on the same maintenance ticket cannot close it.
+  final bool crewCanCloseTickets;
 
   Color get colorValue {
     final raw = color;
@@ -148,6 +154,8 @@ class PrivateCompanyDepartment {
           json['maintenanceDispatchMode'] as String?),
       engineerTicketScope: _normalizeEngineerTicketScope(
           json['engineerTicketScope'] as String?),
+      crewCanLogExpenses: json['crewCanLogExpenses'] == true,
+      crewCanCloseTickets: json['crewCanCloseTickets'] == true,
     );
   }
 

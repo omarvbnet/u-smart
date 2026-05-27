@@ -14,6 +14,7 @@ class User {
   final String? companyId;
   final String? linkedCoordinatorCompanyId;
   final bool mustChangePassword;
+  final String? photoUrl;
 
   User({
     required this.id,
@@ -31,7 +32,27 @@ class User {
     this.companyId,
     this.linkedCoordinatorCompanyId,
     this.mustChangePassword = false,
+    this.photoUrl,
   });
+
+  User copyWith({String? photoUrl}) => User(
+        id: id,
+        username: username,
+        name: name,
+        phone: phone,
+        company: company,
+        companyCertificationUrl: companyCertificationUrl,
+        status: status,
+        hasUpdatedCredentials: hasUpdatedCredentials,
+        serviceSlug: serviceSlug,
+        role: role,
+        province: province,
+        provinceFilterActive: provinceFilterActive,
+        companyId: companyId,
+        linkedCoordinatorCompanyId: linkedCoordinatorCompanyId,
+        mustChangePassword: mustChangePassword,
+        photoUrl: photoUrl ?? this.photoUrl,
+      );
 
   /// Workspace field role is ENGINEER; legacy coordinator aliases still accepted.
   bool get isEngineer =>
@@ -78,6 +99,9 @@ class User {
           : (json['linkedCoordinatorCompanyId'] as String?),
       linkedCoordinatorCompanyId: json['linkedCoordinatorCompanyId'] as String?,
       mustChangePassword: json['mustChangePassword'] == true,
+      photoUrl: (json['photoUrl'] is String && (json['photoUrl'] as String).trim().isNotEmpty)
+          ? json['photoUrl'] as String
+          : null,
     );
   }
 }

@@ -259,6 +259,33 @@ export async function canStaffSubmitExpenseOnTicket(
       status: 403,
     };
   }
+
+  // Crew-vs-lead policy: department setting `crewCanLogExpenses` decides whether
+  // non-lead crew members can submit expenses themselves, or only the lead can.
+  const leadId = assignedStaffIdFromCompanyJson(parsed);
+  const isLead = leadId != null && leadId === requesterId;
+  if (!isLead) {
+    const crewIds = maintenanceCrewIdsFromCompanyJson(parsed);
+    const isCrewMember = crewIds.includes(requesterId);
+    if (isCrewMember && ticket.privateCompanyTargetDepartmentId) {
+      try {
+        const dept = await prisma.privateCompanyDepartment.findUnique({
+          where: { id: ticket.privateCompanyTargetDepartmentId },
+          select: { crewCanLogExpenses: true },
+        });
+        if (dept && dept.crewCanLogExpenses === false) {
+          return {
+            ok: false,
+            message:
+              'Your department allows only the assigned lead on the main ticket to log expenses.',
+            status: 403,
+          };
+        }
+      } catch {
+        /* default permissive on lookup error */
+      }
+    }
+  }
   return { ok: true, allowedReasons: eff.reasons };
 }
 
