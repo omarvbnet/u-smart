@@ -2,39 +2,30 @@
   "crons": [],
   "functions": {
     "app/api/upload/ticket-qfield/route.ts": {
-      "memory": 3008,
       "maxDuration": 60
     },
     "app/api/upload/ticket-attachment/route.ts": {
-      "memory": 1769,
       "maxDuration": 60
     },
     "app/api/upload/ticket-image/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/upload/registration-evidence/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/upload/resume/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/upload/product-image/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/upload/company-certificate/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/upload/certification/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/profile/photo/route.ts": {
-      "memory": 1024,
       "maxDuration": 60
     }
   }
