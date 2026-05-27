@@ -26,7 +26,15 @@ export async function uploadFile(options: {
 
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { put } = await import('@vercel/blob');
-    const blob = await put(pathname, file, {
+    // Stream the file body directly to Blob storage rather than buffering the
+    // entire payload twice in function memory. `file.stream()` exposes a
+    // standard ReadableStream which @vercel/blob's `put` accepts natively and
+    // forwards as chunked transfer-encoding. This is essential for large
+    // QField / GeoPackage uploads where loading the whole file into memory
+    // would push the serverless function over its allocation.
+    const body: ReadableStream<Uint8Array> | File =
+      typeof file.stream === 'function' ? file.stream() : file;
+    const blob = await put(pathname, body, {
       access: 'public',
       addRandomSuffix: true,
       contentType: file.type || undefined,
