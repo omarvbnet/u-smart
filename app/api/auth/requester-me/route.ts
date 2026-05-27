@@ -118,8 +118,13 @@ export async function GET(req: NextRequest) {
   let specialization: string | null = null;
   let verificationStatus: string = 'PENDING';
   let photoUrl: string | null = null;
+  let contactEmail: string | null = null;
+  let privateCompanyId: string | null = null;
+  let privateCompanyOwnedId: string | null = null;
   try {
-    const extended = await (prisma.ticketRequester as any).findUnique({
+    const extended = await (prisma.ticketRequester as unknown as {
+      findUnique: (args: { where: { id: string }; select: Record<string, unknown> }) => Promise<Record<string, unknown> | null>;
+    }).findUnique({
       where: { id: payload.requesterId },
       select: {
         companyCertificationUrl: true,
@@ -132,21 +137,30 @@ export async function GET(req: NextRequest) {
         specialization: true,
         verificationStatus: true,
         photoUrl: true,
+        contactEmail: true,
+        privateCompanyId: true,
+        privateCompanyOwned: { select: { id: true } },
       },
     });
     if (extended) {
-      companyCertificationUrl = extended.companyCertificationUrl ?? null;
-      status = extended.status ?? 'ACTIVE';
+      companyCertificationUrl = (extended.companyCertificationUrl as string | null) ?? null;
+      status = (extended.status as string | null) ?? 'ACTIVE';
       hasUpdatedCredentials = extended.hasUpdatedCredentials === true;
       mustChangePassword = extended.mustChangePassword === true;
-      preferredLocale = extended.preferredLocale ?? null;
-      province = extended.province ?? null;
-      provinceFilterActive = extended.provinceFilterActive ?? true;
-      specialization = extended.specialization ?? null;
-      verificationStatus = extended.verificationStatus ?? 'PENDING';
-      photoUrl = typeof extended.photoUrl === 'string' && extended.photoUrl.trim().length > 0
-        ? extended.photoUrl
+      preferredLocale = (extended.preferredLocale as string | null) ?? null;
+      province = (extended.province as string | null) ?? null;
+      provinceFilterActive = (extended.provinceFilterActive as boolean | null) ?? true;
+      specialization = (extended.specialization as string | null) ?? null;
+      verificationStatus = (extended.verificationStatus as string | null) ?? 'PENDING';
+      photoUrl = typeof extended.photoUrl === 'string' && (extended.photoUrl as string).trim().length > 0
+        ? (extended.photoUrl as string)
         : null;
+      contactEmail = typeof extended.contactEmail === 'string' && (extended.contactEmail as string).trim().length > 0
+        ? (extended.contactEmail as string)
+        : null;
+      privateCompanyId = (extended.privateCompanyId as string | null) ?? null;
+      const owned = extended.privateCompanyOwned as { id: string } | null | undefined;
+      privateCompanyOwnedId = owned?.id ?? null;
     }
   } catch {
     /* use defaults */
@@ -162,6 +176,13 @@ export async function GET(req: NextRequest) {
       role,
     });
   }
+  // Eligibility for editing the contact-email tile in the Flutter profile
+  // screen: COMPANY requesters and anyone tied to a private-company workspace
+  // (member or owner). All other roles see the tile read-only / hidden.
+  const isCompany = String(role).toUpperCase() === 'COMPANY';
+  const inPrivateCompany = Boolean(privateCompanyId || privateCompanyOwnedId);
+  const canEditContactEmail = isCompany || inPrivateCompany;
+
   return NextResponse.json({
     success: true,
     user: {
@@ -183,6 +204,9 @@ export async function GET(req: NextRequest) {
       specialization,
       verificationStatus,
       photoUrl,
+      contactEmail,
+      canEditContactEmail,
+      privateCompanyId: privateCompanyId ?? null,
       ...(linkedCoordinatorCompanyId ? { linkedCoordinatorCompanyId } : {}),
     },
   });

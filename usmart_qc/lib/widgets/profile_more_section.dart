@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../screens/about_screen.dart';
 import '../screens/issue_reports_screen.dart';
+import 'profile_contact_email_tile.dart';
 
 /// Extra tiles attached to every dashboard profile tab (engineer, company,
 /// dashboard) for the v1.0.4 update:
@@ -16,7 +17,7 @@ import '../screens/issue_reports_screen.dart';
 class ProfileMoreSection extends StatelessWidget {
   const ProfileMoreSection({super.key});
 
-  static const String supportWhatsAppPhone = '+9647519999900';
+  static const String supportWhatsAppPhone = '+9647760777659';
 
   Future<void> _openWhatsApp(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
@@ -51,6 +52,9 @@ class ProfileMoreSection extends StatelessWidget {
             ),
           ),
         ),
+        // Contact email — only renders when the server (or fallback role
+        // logic) marks the user as eligible (COMPANY / private workspace).
+        const ProfileContactEmailTile(),
         _tile(
           context,
           icon: Icons.chat_rounded,

@@ -1394,9 +1394,20 @@ export async function POST(req: NextRequest) {
     }
 
     const requesterEmail = (requester as { email?: string | null })?.email;
-    if (requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {
+    const requesterContactEmail = (requester as { contactEmail?: string | null })?.contactEmail;
+    // Send the new-ticket confirmation to both the identity email and the
+    // optional public contact email (if the requester set one on the
+    // profile screen).
+    const newTicketRecipients = Array.from(
+      new Set(
+        [requesterEmail, requesterContactEmail]
+          .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          .map((v) => v.trim().toLowerCase())
+      )
+    );
+    for (const emailAddr of newTicketRecipients) {
       sendTicketNotificationEmail({
-        to: requesterEmail.trim(),
+        to: emailAddr,
         type: 'new_ticket',
         ticketId: ticket.id,
         summary: `${siteName} - ${siteCoordinator}`,

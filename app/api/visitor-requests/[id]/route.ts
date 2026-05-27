@@ -341,9 +341,19 @@ export async function PATCH(
             : { key: 'visitor_status', vars: { statusKey: String(statusToApply) } },
           data: { ticketId: id, type: 'status_changed' },
         });
-        const requesterEmail = (updated.requester as { email?: string | null })?.email;
-        if (status && requesterEmail && typeof requesterEmail === 'string' && requesterEmail.trim()) {
-          const emailAddr = requesterEmail.trim();
+        const requesterRow = updated.requester as { email?: string | null; contactEmail?: string | null } | null;
+        const requesterEmail = requesterRow?.email;
+        const requesterContactEmail = requesterRow?.contactEmail;
+        // Build de-duplicated recipient list. Falls back to a single address
+        // for older accounts that have no contactEmail.
+        const emailRecipients = Array.from(
+          new Set(
+            [requesterEmail, requesterContactEmail]
+              .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+              .map((v) => v.trim().toLowerCase())
+          )
+        );
+        if (status && emailRecipients.length > 0) {
           if (status === 'COMPLETED') {
             let parsed: Record<string, unknown> = {};
             try {
@@ -364,14 +374,20 @@ export async function PATCH(
               maintenanceDescription: (updated as { maintenanceDescription?: string }).maintenanceDescription ?? null,
               designSpecifications: (parsed.designSpecifications as string) ?? null,
             };
-            sendTicketCompletedEmail(emailAddr, completedData).catch((e) => console.error('Ticket completed email:', e));
+            for (const emailAddr of emailRecipients) {
+              sendTicketCompletedEmail(emailAddr, completedData).catch((e) =>
+                console.error('Ticket completed email:', e)
+              );
+            }
           } else {
-            sendTicketNotificationEmail({
-              to: emailAddr,
-              type: 'status_changed',
-              ticketId: id,
-              status: status as string,
-            }).catch((e) => console.error('Ticket status email:', e));
+            for (const emailAddr of emailRecipients) {
+              sendTicketNotificationEmail({
+                to: emailAddr,
+                type: 'status_changed',
+                ticketId: id,
+                status: status as string,
+              }).catch((e) => console.error('Ticket status email:', e));
+            }
           }
         }
       }

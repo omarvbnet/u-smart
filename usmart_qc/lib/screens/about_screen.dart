@@ -8,9 +8,9 @@ import '../l10n/app_localizations.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const String supportEmail = 'support@usmart-iot.com';
-  static const String websiteUrl = 'https://proviser.usmart-iot.com';
-  static const String appVersion = '1.0.4+5';
+  static const String supportEmail = 'contact@usmart-iot.com';
+  static const String websiteUrl = 'https://usmart-iot.com';
+  static const String appVersion = '1.0.5+6';
 
   Future<void> _open(String url) async {
     final uri = Uri.parse(url);

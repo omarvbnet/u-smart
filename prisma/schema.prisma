@@ -357,6 +357,11 @@ model TicketRequester {
   preferredLocale         String? // en | ar | tr | ku (Provisor UI language)
   /// User-managed profile photo URL (uploaded via /api/profile/photo).
   photoUrl                String?
+  /// Optional public/business contact email surfaced on the profile screen
+  /// for COMPANY and private-company-workspace members. Distinct from the
+  /// auth/identity `email` field above (which is unique and used for login);
+  /// `contactEmail` is informational and CC'd on ticket notifications.
+  contactEmail            String?
   /// Set when user requests account deletion; purged after 7 days without login.
   deletionRequestedAt     DateTime?
   createdAt               DateTime         @default(now())

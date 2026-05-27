@@ -204,6 +204,21 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update only the cached contactEmail after a successful PATCH/DELETE on
+  /// /api/profile/contact-email, without a full refetch. Pass null/empty to
+  /// clear.
+  void applyContactEmail(String? email) {
+    final current = _user;
+    if (current == null) return;
+    final trimmed = email?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      _user = current.copyWith(clearContactEmail: true);
+    } else {
+      _user = current.copyWith(contactEmail: trimmed);
+    }
+    notifyListeners();
+  }
+
   /// Apply JWT from POST /api/auth/requester-change-password then reload profile.
   Future<void> applyPasswordChangeResponse(Map<String, dynamic> res) async {
     final t = res['token'];
