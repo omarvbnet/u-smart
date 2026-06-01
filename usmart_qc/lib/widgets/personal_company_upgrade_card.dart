@@ -154,6 +154,9 @@ class _PersonalCompanyUpgradeCardState extends State<PersonalCompanyUpgradeCard>
     final l10n = AppLocalizations.of(context);
     final auth = context.watch<AuthProvider>();
     if (!auth.isPersonal) return const SizedBox.shrink();
+    // Requesting a company account requires an email on file; the
+    // ProfileEmailTile prompts the user to add and verify one first.
+    if (auth.user?.hasEmail != true) return const SizedBox.shrink();
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.only(bottom: 12),

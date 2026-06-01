@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import '../config/api_config.dart';
 import '../models/site.dart';
 import '../models/ticket.dart';
+import '../utils/location_permissions.dart';
 import 'api_service.dart';
 import 'notification_service.dart';
 
@@ -26,16 +27,9 @@ class GeofenceService {
   }
 
   Future<bool> _ensurePermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return false;
-
-    LocationPermission perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied) return false;
-    }
-    if (perm == LocationPermission.deniedForever) return false;
-    return true;
+    // Geofencing relies on background location, so escalate to "Always" (with a
+    // one-time rationale) instead of only requesting while-in-use access.
+    return LocationPermissions.ensureBackground();
   }
 
   Future<void> start() async {

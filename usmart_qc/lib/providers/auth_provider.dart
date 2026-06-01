@@ -219,6 +219,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update the cached auth email after a successful verification on
+  /// /api/profile/email/verify, without a full refetch. This unlocks the
+  /// PERSONAL -> COMPANY upgrade request.
+  void applyEmail(String? email) {
+    final current = _user;
+    if (current == null) return;
+    final trimmed = email?.trim();
+    if (trimmed == null || trimmed.isEmpty) return;
+    _user = current.copyWith(email: trimmed);
+    notifyListeners();
+  }
+
   /// Apply JWT from POST /api/auth/requester-change-password then reload profile.
   Future<void> applyPasswordChangeResponse(Map<String, dynamic> res) async {
     final t = res['token'];

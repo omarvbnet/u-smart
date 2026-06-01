@@ -32,6 +32,7 @@ type TicketDetail = {
   siteCoordinator: string | null;
   slaHours: number | null;
   technique: string;
+  isMaintenance?: boolean;
   status: string;
   createdAt: string;
   completedAt: string | null;
@@ -172,7 +173,17 @@ export default function PublicTicketPage() {
     );
   }
 
-  const isQCTicket = QUALITY_CONTROL_TECH_KEYS.includes(ticket.technique as typeof QUALITY_CONTROL_TECH_KEYS[number]);
+  // Prefer the server's authoritative classification (handles private-company
+  // department techniques like `pc_dept_qc_*` / `pc_dept_m_*`). Fall back to the
+  // legacy technique whitelist for older API payloads that omit `isMaintenance`.
+  const isMaintenanceTicket =
+    typeof ticket.isMaintenance === 'boolean'
+      ? ticket.isMaintenance
+      : ENTERPRISE_TECH_KEYS.includes(ticket.technique as typeof ENTERPRISE_TECH_KEYS[number]);
+  const isQCTicket =
+    typeof ticket.isMaintenance === 'boolean'
+      ? !ticket.isMaintenance
+      : QUALITY_CONTROL_TECH_KEYS.includes(ticket.technique as typeof QUALITY_CONTROL_TECH_KEYS[number]);
   const hasInspectionData =
     isQCTicket &&
     (ticket.inspectionResult ||
@@ -180,6 +191,9 @@ export default function PublicTicketPage() {
       (ticket.inspectionChecklist && ticket.inspectionChecklist.length > 0) ||
       ticket.designSpecifications ||
       (ticket.attachmentUrls && ticket.attachmentUrls.length > 0));
+  const hasEvidenceImages =
+    (ticket.beforeImageUrls && ticket.beforeImageUrls.length > 0) ||
+    (ticket.finishingImageUrls && ticket.finishingImageUrls.length > 0);
 
   const timelineEntries = ticket.statusTimeline?.length
     ? ticket.statusTimeline
@@ -413,7 +427,7 @@ export default function PublicTicketPage() {
               </section>
             )}
 
-            {!isQCTicket && (
+            {isMaintenanceTicket && (
               <MaintenanceEvidenceGallery
                 beforeImageUrls={ticket.beforeImageUrls}
                 finishingImageUrls={ticket.finishingImageUrls}
@@ -423,7 +437,18 @@ export default function PublicTicketPage() {
               />
             )}
 
-            {!isQCTicket && ticket.maintenanceAwaitingRequesterSince && !ticket.maintenanceRequesterConfirmedAt && (
+            {isQCTicket && hasEvidenceImages && (
+              <MaintenanceEvidenceGallery
+                beforeImageUrls={ticket.beforeImageUrls}
+                finishingImageUrls={ticket.finishingImageUrls}
+                beforeTitle="Before images"
+                afterTitle="After images"
+                emptyHint=""
+                heading="Inspection evidence"
+              />
+            )}
+
+            {isMaintenanceTicket && ticket.maintenanceAwaitingRequesterSince && !ticket.maintenanceRequesterConfirmedAt && (
               <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
                 <p className="text-sm text-amber-200 font-medium">Awaiting requester confirmation</p>
                 <p className="text-xs text-amber-200/80 mt-1">
@@ -432,7 +457,7 @@ export default function PublicTicketPage() {
               </section>
             )}
 
-            {!isQCTicket && ticket.maintenanceRequesterConfirmedAt && (
+            {isMaintenanceTicket && ticket.maintenanceRequesterConfirmedAt && (
               <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
                 <p className="text-sm text-emerald-300 font-medium">Requester confirmed completion</p>
                 <p className="text-xs text-emerald-200/80 mt-1">

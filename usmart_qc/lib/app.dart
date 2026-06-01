@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'l10n/app_localizations.dart';
 import 'l10n/app_localizations_delegate.dart';
+import 'utils/location_permissions.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'screens/login_screen.dart';
@@ -24,6 +25,7 @@ class ProvisrApp extends StatelessWidget {
           child: MaterialApp(
             title: 'Provisor',
             debugShowCheckedModeBanner: false,
+            navigatorKey: LocationPermissions.navigatorKey,
             locale: locale,
             supportedLocales: AppLocalizations.supportedLocales,
             localizationsDelegates: const [

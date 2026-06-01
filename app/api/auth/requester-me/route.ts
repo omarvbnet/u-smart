@@ -183,6 +183,15 @@ export async function GET(req: NextRequest) {
   const inPrivateCompany = Boolean(privateCompanyId || privateCompanyOwnedId);
   const canEditContactEmail = isCompany || inPrivateCompany;
 
+  // Auth/identity email (distinct from contactEmail). Exposed so PERSONAL users
+  // can see whether they have a verified email and add one to unlock the
+  // company-account upgrade request.
+  const authEmailRaw = (requester as { email?: string | null }).email ?? null;
+  const authEmail =
+    typeof authEmailRaw === 'string' && authEmailRaw.includes('@')
+      ? authEmailRaw
+      : null;
+
   return NextResponse.json({
     success: true,
     user: {
@@ -204,6 +213,8 @@ export async function GET(req: NextRequest) {
       specialization,
       verificationStatus,
       photoUrl,
+      email: authEmail,
+      hasEmail: authEmail != null,
       contactEmail,
       canEditContactEmail,
       privateCompanyId: privateCompanyId ?? null,

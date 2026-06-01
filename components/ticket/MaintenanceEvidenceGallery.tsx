@@ -20,6 +20,7 @@ type Props = {
   beforeTitle?: string;
   afterTitle?: string;
   emptyHint?: string;
+  heading?: string;
 };
 
 export function MaintenanceEvidenceGallery({
@@ -28,6 +29,7 @@ export function MaintenanceEvidenceGallery({
   beforeTitle = 'Before images',
   afterTitle = 'After images',
   emptyHint = 'No maintenance photos uploaded yet.',
+  heading = 'Maintenance evidence',
 }: Props) {
   const before = beforeImageUrls.filter((u) => u?.trim());
   const after = finishingImageUrls.filter((u) => u?.trim());
@@ -38,7 +40,7 @@ export function MaintenanceEvidenceGallery({
       <section>
         <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
           <ImageIcon className="w-4 h-4" />
-          Maintenance evidence
+          {heading}
         </h2>
         <EmptyState hint={emptyHint} />
       </section>
@@ -49,7 +51,7 @@ export function MaintenanceEvidenceGallery({
     <section className="space-y-6">
       <h2 className="text-sm font-semibold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
         <ImageIcon className="w-4 h-4" />
-        Maintenance evidence
+        {heading}
       </h2>
       {before.length > 0 && (
         <ImageGrid title={beforeTitle} urls={before} origin={origin} altPrefix="Before" />

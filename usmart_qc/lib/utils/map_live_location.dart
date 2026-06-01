@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/team_live_location.dart';
+import 'location_permissions.dart';
 
 /// Tracks device GPS and builds flutter_map layers for a live blue-dot overlay.
 class MapLiveLocation {
@@ -22,13 +23,9 @@ class MapLiveLocation {
   bool get hasPosition => _position != null;
 
   static Future<bool> ensurePermission() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return false;
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
-    return perm == LocationPermission.always ||
-        perm == LocationPermission.whileInUse;
+    // Live workspace location is shared periodically (incl. while backgrounded),
+    // so escalate to background/"Always" access with a one-time rationale.
+    return LocationPermissions.ensureBackground();
   }
 
   void _applyPosition(Position pos) {

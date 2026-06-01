@@ -25,6 +25,11 @@ class User {
   /// Workspace membership id (if any) — used as a fallback eligibility hint
   /// when older servers don't return [canEditContactEmail].
   final String? privateCompanyId;
+  /// Auth/identity email (distinct from [contactEmail]). When set, PERSONAL
+  /// accounts can request an upgrade to a company account.
+  final String? email;
+  /// Whether the account has a verified auth email on file.
+  final bool hasEmail;
 
   User({
     required this.id,
@@ -46,12 +51,15 @@ class User {
     this.contactEmail,
     this.canEditContactEmail = false,
     this.privateCompanyId,
+    this.email,
+    this.hasEmail = false,
   });
 
   User copyWith({
     String? photoUrl,
     String? contactEmail,
     bool clearContactEmail = false,
+    String? email,
   }) =>
       User(
         id: id,
@@ -73,6 +81,8 @@ class User {
         contactEmail: clearContactEmail ? null : (contactEmail ?? this.contactEmail),
         canEditContactEmail: canEditContactEmail,
         privateCompanyId: privateCompanyId,
+        email: email ?? this.email,
+        hasEmail: (email ?? this.email) != null ? true : hasEmail,
       );
 
   /// Workspace field role is ENGINEER; legacy coordinator aliases still accepted.
@@ -137,6 +147,11 @@ class User {
               (json['privateCompanyId'] as String).isNotEmpty)
           ? json['privateCompanyId'] as String
           : null,
+      email: (json['email'] is String && (json['email'] as String).trim().isNotEmpty)
+          ? (json['email'] as String).trim()
+          : null,
+      hasEmail: json['hasEmail'] == true ||
+          (json['email'] is String && (json['email'] as String).trim().isNotEmpty),
     );
   }
 }

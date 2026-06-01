@@ -636,7 +636,6 @@ const Map<String, String> _en = {
   'add_file': 'File',
   'requester_attachments': 'Requester Attachments',
   'site_attachments': 'Site Attachments',
-  'ticket_type_maintenance': 'Maintenance',
   'ticket_type_inspection': 'Quality Inspection',
   'st_title': 'Site tickets',
   'st_site_info': 'Site info',
@@ -802,7 +801,7 @@ const Map<String, String> _en = {
       'Provisor collects information you provide when creating an account, submitting tickets, or using inspection and maintenance features. This may include your name, email, phone number, company details, location data (when you choose to share it), and files you upload.',
   'privacy_section_2_title': '2. How We Use Your Information',
   'privacy_section_2_body':
-      'We use your information to operate the app, process tickets, coordinate inspections, send relevant notifications, and improve our services. Location data is used only for geofencing features (e.g., marking tickets when you arrive at a site) when you grant permission.',
+      'We use your information to operate the app, process tickets, coordinate inspections, send relevant notifications, and improve our services. With your permission, location data — including in the background — is used for geofencing (e.g., automatically updating tickets when you arrive at a site) and to share your live location with your workspace while you are an active field member.',
   'privacy_section_3_title': '3. Data Sharing',
   'privacy_section_3_body':
       'We do not sell your personal data. Your information may be shared with administrators and team members within your organization as needed for quality control and inspection workflows.',
@@ -814,10 +813,14 @@ const Map<String, String> _en = {
       'You can update your profile, revoke location access, and sign out at any time. By using Provisor, you agree to this Privacy Policy and our Terms of Service.',
   'privacy_section_6_title': 'Location data: what, why and when',
   'privacy_section_6_body':
-      'What we collect: when you grant permission, Provisor accesses your device GPS location. '
-      'Why we use it: to attach accurate site coordinates to tickets, to pick a site location on the map, to verify on-site arrival and proximity for maintenance jobs (geofencing), and to show your live location to your workspace while you are actively working a ticket. '
-      'When we use it: only while you are signed in and performing these actions — for example creating or working on a ticket, picking a location on the map, or when site-arrival/proximity features are enabled. We do not track your location in the background when these features are not in use. '
-      'Your control: location is always optional and permission-based. You can deny or revoke location access in your device settings at any time; some location-dependent features will simply be unavailable.',
+      'What we collect: when you grant permission, Provisor accesses your device GPS location, including while the app is in the background. '
+      'Why we use it: to attach accurate site coordinates to tickets, to pick a site location on the map, to detect when you arrive at or leave work sites (geofencing) and verify on-site proximity for maintenance jobs, and to share your live location with your workspace while you are an active field member. '
+      'Background use: with your permission ("Always" / background access), Provisor continues to use your location while the app is closed or running in the background, so site-arrival detection and live workspace location keep working without the app open. We only do this while you are signed in, and we do not sell your location data. '
+      'Your control: location is always optional and permission-based. You can choose "While Using the App" instead of background access, or deny or revoke location access at any time in your device settings; location-dependent features such as automatic site-arrival detection will simply be limited or unavailable.',
+  'bg_loc_title': 'Allow background location',
+  'bg_loc_body':
+      'Provisor uses your location in the background to automatically detect when you arrive at or leave work sites, and to share your live location with your workspace while you are an active field member. On the next screen, please choose "Always" / "Allow all the time" to keep these features working when the app is closed. You can change this anytime in Settings.',
+  'bg_loc_continue': 'Continue',
   'reg_request_title': 'Request for Registration',
   'reg_evidence_required': 'Identification evidence is required',
   'reg_submit_failed': 'Failed to submit request',
@@ -1248,6 +1251,24 @@ const Map<String, String> _en = {
   'profile_contact_email_saved': 'Contact email updated.',
   'profile_contact_email_removed': 'Contact email removed.',
   'profile_contact_email_save_failed': 'Could not update contact email. Try again.',
+  'profile_email_title': 'Account email',
+  'profile_email_add_hint':
+      'Add and verify an email to request an upgrade to a company account.',
+  'profile_email_verified': 'Verified',
+  'profile_email_label': 'Email address',
+  'profile_email_send_code': 'Send code',
+  'profile_email_code_label': 'Verification code',
+  'profile_email_verify': 'Verify',
+  'profile_email_change': 'Use a different email',
+  'profile_email_code_sent': 'We sent a 6-digit code to {{email}}',
+  'profile_email_invalid': 'Enter a valid email address',
+  'profile_email_code_required': 'Enter the 6-digit code',
+  'profile_email_code_invalid': 'Invalid or expired code. Please try again.',
+  'profile_email_taken': 'This email is already in use by another account.',
+  'profile_email_verified_msg':
+      'Email verified. You can now request a company account.',
+  'profile_email_error': 'Something went wrong. Please try again.',
+  'pc_plan_best_value': 'Best value',
   'profile_contact_whatsapp': 'Contact us on WhatsApp',
   'profile_contact_whatsapp_hint': 'Open a conversation with the Proviser support team.',
   'profile_about': 'About Proviser',
@@ -1812,7 +1833,6 @@ const Map<String, String> _ar = {
   'add_file': 'ملف',
   'requester_attachments': 'مرفقات مقدم الطلب',
   'site_attachments': 'مرفقات الموقع',
-  'ticket_type_maintenance': 'صيانة',
   'ticket_type_inspection': 'فحص الجودة',
   'st_title': 'تذاكر الموقع',
   'st_site_info': 'معلومات الموقع',
@@ -1970,7 +1990,8 @@ const Map<String, String> _ar = {
   'privacy_section_1_body':
       'يجمع Provisor المعلومات التي تقدمها عند إنشاء حساب أو إرسال تذاكر.',
   'privacy_section_2_title': '2. كيفية استخدام معلوماتك',
-  'privacy_section_2_body': 'نستخدم معلوماتك لتشغيل التطبيق ومعالجة التذاكر.',
+  'privacy_section_2_body':
+      'نستخدم معلوماتك لتشغيل التطبيق ومعالجة التذاكر وتنسيق عمليات الفحص. عند منحك الإذن، تُستخدم بيانات الموقع — بما في ذلك في الخلفية — لميزات التسييج الجغرافي (مثل تحديث التذاكر تلقائيًا عند وصولك إلى الموقع) ولمشاركة موقعك المباشر مع مساحة عملك أثناء كونك عضوًا ميدانيًا نشطًا.',
   'privacy_section_3_title': '3. مشاركة البيانات',
   'privacy_section_3_body': 'نحن لا نبيع بياناتك الشخصية.',
   'privacy_section_4_title': '4. الأمان',
@@ -1979,10 +2000,14 @@ const Map<String, String> _ar = {
   'privacy_section_5_body': 'يمكنك تحديث ملفك وتسجيل الخروج في أي وقت.',
   'privacy_section_6_title': 'بيانات الموقع: ماذا ولماذا ومتى',
   'privacy_section_6_body':
-      'ما الذي نجمعه: عند منحك الإذن، يصل تطبيق Provisor إلى موقع جهازك عبر نظام تحديد المواقع GPS. '
-      'لماذا نستخدمه: لإرفاق إحداثيات دقيقة للموقع بالتذاكر، ولاختيار موقع على الخريطة، وللتحقق من الوصول إلى الموقع والقرب منه لمهام الصيانة (التسييج الجغرافي)، ولعرض موقعك المباشر لمساحة عملك أثناء عملك الفعلي على تذكرة. '
-      'متى نستخدمه: فقط أثناء تسجيل دخولك وقيامك بهذه الإجراءات — مثل إنشاء تذكرة أو العمل عليها، أو اختيار موقع على الخريطة، أو عند تفعيل ميزات الوصول/القرب من الموقع. لا نتتبع موقعك في الخلفية عند عدم استخدام هذه الميزات. '
-      'تحكمك: الموقع اختياري دائمًا ويعتمد على الإذن. يمكنك رفض إذن الموقع أو إلغاؤه من إعدادات جهازك في أي وقت، وعندها لن تتوفر بعض الميزات المعتمدة على الموقع.',
+      'ما الذي نجمعه: عند منحك الإذن، يصل تطبيق Provisor إلى موقع جهازك عبر نظام تحديد المواقع GPS، بما في ذلك أثناء عمل التطبيق في الخلفية. '
+      'لماذا نستخدمه: لإرفاق إحداثيات دقيقة للموقع بالتذاكر، ولاختيار موقع على الخريطة، ولاكتشاف وصولك إلى مواقع العمل أو مغادرتها (التسييج الجغرافي) والتحقق من القرب لمهام الصيانة، ولمشاركة موقعك المباشر مع مساحة عملك أثناء كونك عضوًا ميدانيًا نشطًا. '
+      'الاستخدام في الخلفية: بإذنك (الوصول "دائمًا" / في الخلفية)، يواصل Provisor استخدام موقعك أثناء إغلاق التطبيق أو تشغيله في الخلفية، حتى يستمر اكتشاف الوصول إلى الموقع وعرض الموقع المباشر دون فتح التطبيق. نقوم بذلك فقط أثناء تسجيل دخولك، ولا نبيع بيانات موقعك. '
+      'تحكمك: الموقع اختياري دائمًا ويعتمد على الإذن. يمكنك اختيار "أثناء استخدام التطبيق" بدلًا من الوصول في الخلفية، أو رفض إذن الموقع أو إلغاؤه من إعدادات جهازك في أي وقت، وعندها ستكون الميزات المعتمدة على الموقع مثل الاكتشاف التلقائي للوصول محدودة أو غير متوفرة.',
+  'bg_loc_title': 'السماح بالموقع في الخلفية',
+  'bg_loc_body':
+      'يستخدم Provisor موقعك في الخلفية لاكتشاف وصولك إلى مواقع العمل أو مغادرتها تلقائيًا، ولمشاركة موقعك المباشر مع مساحة عملك أثناء كونك عضوًا ميدانيًا نشطًا. في الشاشة التالية، يُرجى اختيار "دائمًا" / "السماح طوال الوقت" لإبقاء هذه الميزات تعمل عند إغلاق التطبيق. يمكنك تغيير ذلك في أي وقت من الإعدادات.',
+  'bg_loc_continue': 'متابعة',
   'reg_request_title': 'طلب التسجيل',
   'reg_evidence_required': 'إثبات الهوية مطلوب',
   'reg_submit_failed': 'فشل إرسال الطلب',
@@ -2444,6 +2469,24 @@ const Map<String, String> _ar = {
   'profile_contact_email_removed': 'تمت إزالة البريد الإلكتروني للتواصل.',
   'profile_contact_email_save_failed':
       'تعذّر تحديث البريد الإلكتروني. حاول مرة أخرى.',
+  'profile_email_title': 'بريد الحساب الإلكتروني',
+  'profile_email_add_hint':
+      'أضف بريدًا إلكترونيًا وفعّله لطلب الترقية إلى حساب شركة.',
+  'profile_email_verified': 'مُفعّل',
+  'profile_email_label': 'عنوان البريد الإلكتروني',
+  'profile_email_send_code': 'إرسال الرمز',
+  'profile_email_code_label': 'رمز التحقق',
+  'profile_email_verify': 'تحقق',
+  'profile_email_change': 'استخدام بريد إلكتروني آخر',
+  'profile_email_code_sent': 'أرسلنا رمزًا من 6 أرقام إلى {{email}}',
+  'profile_email_invalid': 'أدخل عنوان بريد إلكتروني صالحًا',
+  'profile_email_code_required': 'أدخل الرمز المكوّن من 6 أرقام',
+  'profile_email_code_invalid': 'رمز غير صالح أو منتهي الصلاحية. حاول مرة أخرى.',
+  'profile_email_taken': 'هذا البريد الإلكتروني مستخدم بالفعل من قبل حساب آخر.',
+  'profile_email_verified_msg':
+      'تم التحقق من البريد الإلكتروني. يمكنك الآن طلب حساب شركة.',
+  'profile_email_error': 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
+  'pc_plan_best_value': 'أفضل قيمة',
   'profile_contact_whatsapp': 'تواصل معنا عبر واتساب',
   'profile_contact_whatsapp_hint': 'ابدأ محادثة مع فريق دعم Proviser.',
   'profile_about': 'حول Proviser',
@@ -3019,7 +3062,6 @@ const Map<String, String> _ku = {
   'add_file': 'فایل',
   'requester_attachments': 'هاوپێچەکانی داواکار',
   'site_attachments': 'هاوپێچەکانی شوێن',
-  'ticket_type_maintenance': 'چاککردنەوە',
   'ticket_type_inspection': 'پشکنینی جۆری',
   'st_title': 'بلیتەکانی شوێن',
   'st_site_info': 'زانیاری شوێن',
@@ -3185,7 +3227,7 @@ const Map<String, String> _ku = {
       'Provisor زانیاری کۆدەکاتەوە کە دەیخەیتەڕوو کاتێک ئەکاونت دروست دەکەیت.',
   'privacy_section_2_title': '2. چۆن زانیاریەکەت بەکار دەهێنین',
   'privacy_section_2_body':
-      'زانیاریەکەت بەکار دەهێنین بۆ ڕێکخستنی تیکێتەکان و پشکنینەکان.',
+      'زانیاریەکەت بەکار دەهێنین بۆ ڕێکخستنی تیکێتەکان و پشکنینەکان. کاتێک ڕێگەمان دەدەیت، داتای شوێن — بە پاشبنەماشەوە — بەکاردێت بۆ تایبەتمەندییەکانی جیۆفێنسینگ (وەک نوێکردنەوەی خۆکاری بلیتەکان کاتێک دەگەیتە شوێن) و بۆ هاوبەشکردنی شوێنی ڕاستەوخۆت لەگەڵ شوێنی کارەکەت کاتێک ئەندامێکی چالاکی مەیدانی.',
   'privacy_section_3_title': '3. هاوبەشکردنی زانیاری',
   'privacy_section_3_body': 'زانیاری کەسی نافروشین.',
   'privacy_section_4_title': '4. پاراستن',
@@ -3196,10 +3238,14 @@ const Map<String, String> _ku = {
       'دەتوانیت پرۆفایلەکەت نوێ بکەیتەوە و چوونەدەرەوە لە هەر کاتێکدا.',
   'privacy_section_6_title': 'زانیاری شوێن: چی، بۆچی و کەی',
   'privacy_section_6_body':
-      'چی کۆدەکەینەوە: کاتێک ڕێگەمان دەدەیت، Provisor دەگاتە شوێنی ئامێرەکەت لە ڕێگەی GPS. '
-      'بۆچی بەکاری دەهێنین: بۆ هاوپێچکردنی هاوردەی وردی شوێن بە بلیتەکانەوە، هەڵبژاردنی شوێن لەسەر نەخشە، پشتڕاستکردنەوەی گەیشتن و نزیکی بۆ کارەکانی چاککردنەوە (جیۆفێنسینگ)، و پیشاندانی شوێنی ڕاستەوخۆت بۆ شوێنی کارەکەت کاتێک بە چالاکی لەسەر بلیتێک کار دەکەیت. '
-      'کەی بەکاری دەهێنین: تەنها کاتێک چوویتە ژوورەوە و ئەم کارانە ئەنجام دەدەیت — وەک دروستکردن یان کارکردن لەسەر بلیت، هەڵبژاردنی شوێن لەسەر نەخشە، یان کاتێک تایبەتمەندییەکانی گەیشتن/نزیکی چالاککراون. لە پاشبنەمادا شوێنت ناپێوین کاتێک ئەم تایبەتمەندییانە بەکارنایەن. '
-      'کۆنترۆڵی تۆ: شوێن هەمیشە ئیختیارییە و پشت بە ڕێگەپێدان دەبەستێت. دەتوانیت لە هەر کاتێکدا ڕێگەی شوێن ڕەت بکەیتەوە یان هەڵیبوەشێنیتەوە لە ڕێکخستنەکانی ئامێرەکەت.',
+      'چی کۆدەکەینەوە: کاتێک ڕێگەمان دەدەیت، Provisor دەگاتە شوێنی ئامێرەکەت لە ڕێگەی GPS، بە پاشبنەماشەوە کاتێک ئەپەکە لە پاشبنەمادایە. '
+      'بۆچی بەکاری دەهێنین: بۆ هاوپێچکردنی هاوردەی وردی شوێن بە بلیتەکانەوە، هەڵبژاردنی شوێن لەسەر نەخشە، دۆزینەوەی گەیشتن یان جێهێشتنی شوێنەکانی کار (جیۆفێنسینگ) و پشتڕاستکردنەوەی نزیکی بۆ کارەکانی چاککردنەوە، و هاوبەشکردنی شوێنی ڕاستەوخۆت لەگەڵ شوێنی کارەکەت کاتێک ئەندامێکی چالاکی مەیدانی. '
+      'بەکارهێنان لە پاشبنەما: بە ڕێگەپێدانت (دەستگەیشتنی "هەمیشە" / پاشبنەما)، Provisor بەردەوام دەبێت لە بەکارهێنانی شوێنت کاتێک ئەپەکە داخراوە یان لە پاشبنەمادا کاردەکات، بۆ ئەوەی دۆزینەوەی گەیشتن و شوێنی ڕاستەوخۆ بەردەوام بێت بەبێ کردنەوەی ئەپ. تەنها کاتێک چوویتە ژوورەوە ئەمە دەکەین، و داتای شوێنت نافرۆشین. '
+      'کۆنترۆڵی تۆ: شوێن هەمیشە ئیختیارییە و پشت بە ڕێگەپێدان دەبەستێت. دەتوانیت "کاتی بەکارهێنانی ئەپ" هەڵبژێریت لەباتی دەستگەیشتنی پاشبنەما، یان لە هەر کاتێکدا ڕێگەی شوێن ڕەت بکەیتەوە یان هەڵیبوەشێنیتەوە لە ڕێکخستنەکانی ئامێرەکەت؛ ئەو تایبەتمەندییانەی پشت بە شوێن دەبەستن وەک دۆزینەوەی خۆکاری گەیشتن سنووردار یان بەردەست نابن.',
+  'bg_loc_title': 'ڕێگەدان بە شوێن لە پاشبنەما',
+  'bg_loc_body':
+      'Provisor شوێنت لە پاشبنەمادا بەکاردێنێت بۆ دۆزینەوەی خۆکاری گەیشتن یان جێهێشتنی شوێنەکانی کار، و هاوبەشکردنی شوێنی ڕاستەوخۆت لەگەڵ شوێنی کارەکەت کاتێک ئەندامێکی چالاکی مەیدانی. لە شاشەی داهاتوودا، تکایە "هەمیشە" / "ڕێگەدان بە هەموو کات" هەڵبژێرە بۆ ئەوەی ئەم تایبەتمەندییانە کاربکەن کاتێک ئەپەکە داخراوە. دەتوانیت لە هەر کاتێکدا لە ڕێکخستنەکان بیگۆڕیت.',
+  'bg_loc_continue': 'بەردەوامبوون',
   'reg_request_title': 'داوای تۆمارکردن',
   'reg_evidence_required': 'بەڵگەی ناسنامە پێویستە',
   'reg_submit_failed': 'ناردنی داواکە سەرکەوتوو نەبوو',
@@ -3661,6 +3707,24 @@ const Map<String, String> _ku = {
   'profile_contact_email_removed': 'ئیمەیڵی پەیوەندی سڕایەوە.',
   'profile_contact_email_save_failed':
       'نەتوانرا ئیمەیڵ نوێ بکرێتەوە. دووبارە هەوڵبدە.',
+  'profile_email_title': 'ئیمەیڵی هەژمار',
+  'profile_email_add_hint':
+      'ئیمەیڵێک زیاد بکە و پشتڕاستی بکەرەوە بۆ داواکردنی بەرزکردنەوە بۆ هەژماری کۆمپانیا.',
+  'profile_email_verified': 'پشتڕاستکراوە',
+  'profile_email_label': 'ناونیشانی ئیمەیڵ',
+  'profile_email_send_code': 'ناردنی کۆد',
+  'profile_email_code_label': 'کۆدی پشتڕاستکردنەوە',
+  'profile_email_verify': 'پشتڕاستکردنەوە',
+  'profile_email_change': 'ئیمەیڵێکی جیاواز بەکاربهێنە',
+  'profile_email_code_sent': 'کۆدێکی ٦ ژمارەییمان نارد بۆ {{email}}',
+  'profile_email_invalid': 'ناونیشانێکی ئیمەیڵی دروست بنووسە',
+  'profile_email_code_required': 'کۆدی ٦ ژمارەیی بنووسە',
+  'profile_email_code_invalid': 'کۆد نادروستە یان بەسەرچووە. دووبارە هەوڵبدە.',
+  'profile_email_taken': 'ئەم ئیمەیڵە پێشتر لەلایەن هەژمارێکی تردا بەکارهاتووە.',
+  'profile_email_verified_msg':
+      'ئیمەیڵ پشتڕاستکرایەوە. ئێستا دەتوانیت داوای هەژماری کۆمپانیا بکەیت.',
+  'profile_email_error': 'هەڵەیەک ڕوویدا. تکایە دووبارە هەوڵبدە.',
+  'pc_plan_best_value': 'باشترین نرخ',
   'profile_contact_whatsapp': 'پەیوەندی لە ڕێگەی واتساپ',
   'profile_contact_whatsapp_hint': 'گفتوگۆ لەگەڵ تیمی پشتیوانی Proviser دەستپێبکە.',
   'profile_about': 'دەربارەی Proviser',
@@ -4238,7 +4302,6 @@ const Map<String, String> _tr = {
   'add_file': 'Dosya',
   'requester_attachments': 'Talep Eden Ekleri',
   'site_attachments': 'Saha Ekleri',
-  'ticket_type_maintenance': 'Bakım',
   'ticket_type_inspection': 'Kalite Denetimi',
   'st_title': 'Saha biletleri',
   'st_site_info': 'Saha bilgisi',
@@ -4405,7 +4468,7 @@ const Map<String, String> _tr = {
       'Provisor, hesap oluştururken veya bilet gönderirken sağladığınız bilgileri toplar.',
   'privacy_section_2_title': '2. Bilgilerinizi Nasıl Kullanıyoruz',
   'privacy_section_2_body':
-      'Bilgilerinizi uygulamayı çalıştırmak ve biletleri işlemek için kullanıyoruz.',
+      'Bilgilerinizi uygulamayı çalıştırmak, biletleri işlemek ve denetimleri koordine etmek için kullanıyoruz. İzin verdiğinizde konum verileri — arka planda dahil — coğrafi sınırlama özellikleri (ör. sahaya vardığınızda biletleri otomatik güncelleme) ve aktif bir saha üyesiyken canlı konumunuzu çalışma alanınızla paylaşmak için kullanılır.',
   'privacy_section_3_title': '3. Veri Paylaşımı',
   'privacy_section_3_body': 'Kişisel verilerinizi satmıyoruz.',
   'privacy_section_4_title': '4. Güvenlik',
@@ -4416,10 +4479,14 @@ const Map<String, String> _tr = {
       'Profilinizi güncelleyebilir ve istediğiniz zaman çıkış yapabilirsiniz.',
   'privacy_section_6_title': 'Konum verisi: ne, neden ve ne zaman',
   'privacy_section_6_body':
-      'Ne topluyoruz: izin verdiğinizde Provisor, cihazınızın GPS konumuna erişir. '
-      'Neden kullanıyoruz: biletlere doğru saha koordinatları eklemek, haritadan saha konumu seçmek, bakım işleri için sahaya varışı ve yakınlığı doğrulamak (coğrafi sınırlama) ve bir bilet üzerinde aktif olarak çalışırken canlı konumunuzu çalışma alanınıza göstermek için. '
-      'Ne zaman kullanıyoruz: yalnızca oturum açtığınızda ve bu işlemleri yaparken — örneğin bir bilet oluştururken veya üzerinde çalışırken, haritadan konum seçerken ya da sahaya varış/yakınlık özellikleri etkinken. Bu özellikler kullanılmadığında konumunuzu arka planda izlemeyiz. '
-      'Kontrol sizde: konum her zaman isteğe bağlıdır ve izne dayalıdır. Cihaz ayarlarınızdan konum erişimini istediğiniz zaman reddedebilir veya iptal edebilirsiniz; bu durumda konuma bağlı bazı özellikler kullanılamaz.',
+      'Ne topluyoruz: izin verdiğinizde Provisor, uygulama arka plandayken dahil olmak üzere cihazınızın GPS konumuna erişir. '
+      'Neden kullanıyoruz: biletlere doğru saha koordinatları eklemek, haritadan saha konumu seçmek, çalışma sahalarına varışınızı veya ayrılışınızı algılamak (coğrafi sınırlama) ve bakım işleri için yakınlığı doğrulamak, ayrıca aktif bir saha üyesiyken canlı konumunuzu çalışma alanınızla paylaşmak için. '
+      'Arka planda kullanım: izninizle ("Her Zaman" / arka plan erişimi), Provisor uygulama kapalıyken veya arka planda çalışırken konumunuzu kullanmaya devam eder; böylece sahaya varış algılama ve canlı konum, uygulama açık olmadan çalışmaya devam eder. Bunu yalnızca oturum açtığınızda yaparız ve konum verilerinizi satmayız. '
+      'Kontrol sizde: konum her zaman isteğe bağlıdır ve izne dayalıdır. Arka plan erişimi yerine "Uygulamayı Kullanırken" seçeneğini seçebilir veya cihaz ayarlarınızdan konum erişimini istediğiniz zaman reddedebilir ya da iptal edebilirsiniz; bu durumda otomatik sahaya varış algılama gibi konuma bağlı özellikler sınırlı olur veya kullanılamaz.',
+  'bg_loc_title': 'Arka planda konuma izin ver',
+  'bg_loc_body':
+      'Provisor, çalışma sahalarına varışınızı veya ayrılışınızı otomatik algılamak ve aktif bir saha üyesiyken canlı konumunuzu çalışma alanınızla paylaşmak için konumunuzu arka planda kullanır. Sonraki ekranda, uygulama kapalıyken bu özelliklerin çalışmaya devam etmesi için lütfen "Her Zaman" / "Her zaman izin ver" seçeneğini seçin. Bunu istediğiniz zaman Ayarlar\'dan değiştirebilirsiniz.',
+  'bg_loc_continue': 'Devam',
   'reg_request_title': 'Kayıt Talebi',
   'reg_evidence_required': 'Kimlik kanıtı gerekli',
   'reg_submit_failed': 'Talep gönderilemedi',
@@ -4883,6 +4950,25 @@ const Map<String, String> _tr = {
   'profile_contact_email_removed': 'İletişim e-postası kaldırıldı.',
   'profile_contact_email_save_failed':
       'İletişim e-postası güncellenemedi. Tekrar deneyin.',
+  'profile_email_title': 'Hesap e-postası',
+  'profile_email_add_hint':
+      'Şirket hesabına yükseltme talep etmek için bir e-posta ekleyip doğrulayın.',
+  'profile_email_verified': 'Doğrulandı',
+  'profile_email_label': 'E-posta adresi',
+  'profile_email_send_code': 'Kod gönder',
+  'profile_email_code_label': 'Doğrulama kodu',
+  'profile_email_verify': 'Doğrula',
+  'profile_email_change': 'Farklı bir e-posta kullan',
+  'profile_email_code_sent': '{{email}} adresine 6 haneli bir kod gönderdik',
+  'profile_email_invalid': 'Geçerli bir e-posta adresi girin',
+  'profile_email_code_required': '6 haneli kodu girin',
+  'profile_email_code_invalid':
+      'Geçersiz veya süresi dolmuş kod. Lütfen tekrar deneyin.',
+  'profile_email_taken': 'Bu e-posta zaten başka bir hesap tarafından kullanılıyor.',
+  'profile_email_verified_msg':
+      'E-posta doğrulandı. Artık bir şirket hesabı talep edebilirsiniz.',
+  'profile_email_error': 'Bir şeyler ters gitti. Lütfen tekrar deneyin.',
+  'pc_plan_best_value': 'En iyi değer',
   'profile_contact_whatsapp': 'WhatsApp ile iletişime geçin',
   'profile_contact_whatsapp_hint': 'Proviser destek ekibi ile sohbet başlatın.',
   'profile_about': 'Proviser hakkında',

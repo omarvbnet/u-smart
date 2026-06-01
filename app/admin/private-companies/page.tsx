@@ -68,6 +68,23 @@ const PLAN_LABELS: Record<TicketPlan, string> = {
   YEARLY_UNLIMITED: 'Yearly unlimited',
 };
 
+// Indicative IQD budget per plan (100 tickets x 1000 IQD, 1000 tickets x 750 IQD).
+// Yearly unlimited is negotiated, so it has no fixed amount.
+const PLAN_BUDGET_IQD: Record<TicketPlan, number | null> = {
+  PACK_100: 100_000,
+  PACK_1000: 750_000,
+  YEARLY_UNLIMITED: null,
+};
+
+function formatIqd(amount: number): string {
+  return `${new Intl.NumberFormat('en-US').format(amount)} IQD`;
+}
+
+function planBudgetLabel(plan: TicketPlan): string {
+  const amount = PLAN_BUDGET_IQD[plan];
+  return amount == null ? 'Negotiated' : formatIqd(amount);
+}
+
 type EligibleUser = {
   id: string;
   username: string;
@@ -522,7 +539,12 @@ function TicketsPanel({
               className="flex items-center justify-between gap-2 rounded-md bg-white border border-amber-100 px-2 py-1.5"
             >
               <div className="min-w-0">
-                <div className="text-xs font-medium text-gray-900">{PLAN_LABELS[p.planType]}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-gray-900">{PLAN_LABELS[p.planType]}</span>
+                  <span className="shrink-0 inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-100">
+                    {planBudgetLabel(p.planType)}
+                  </span>
+                </div>
                 <div className="text-[11px] text-gray-500 font-mono truncate">{p.contactPhone}</div>
               </div>
               <button
@@ -656,6 +678,10 @@ function GenerateCodeModal({
                 <option value="PACK_1000">1000 tickets (750 IQD/ticket)</option>
                 <option value="YEARLY_UNLIMITED">Yearly unlimited (negotiated)</option>
               </select>
+              <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
+                <span className="text-xs font-medium text-emerald-800">Budget</span>
+                <span className="text-sm font-bold text-emerald-700">{planBudgetLabel(planType)}</span>
+              </div>
             </div>
 
             {planType === 'YEARLY_UNLIMITED' && (

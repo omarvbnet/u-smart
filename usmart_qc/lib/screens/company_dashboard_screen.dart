@@ -40,6 +40,7 @@ import '../widgets/workspace_site_detail_sheet.dart';
 import '../utils/site_qfield_map.dart';
 import '../widgets/dashboard_sites_tab.dart';
 import '../widgets/personal_company_upgrade_card.dart';
+import '../widgets/profile_email_tile.dart';
 import '../widgets/ticket_api_access_card.dart';
 import '../utils/account_deletion_ui.dart';
 import '../utils/requester_role_labels.dart';
@@ -2211,6 +2212,7 @@ class _ProfileTab extends StatelessWidget {
               const Color(0xFFFBBF24),
             ),
             const SizedBox(height: 12),
+            const ProfileEmailTile(),
             const PersonalCompanyUpgradeCard(),
             const TicketApiAccessCard(),
             _languageRow(context, l10n, localeProv),

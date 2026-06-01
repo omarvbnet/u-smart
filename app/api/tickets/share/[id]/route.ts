@@ -8,6 +8,7 @@ import {
   readMaintenanceAwaitingSince,
   MAINTENANCE_REQUESTER_CONFIRMED_AT_KEY,
 } from '@/lib/maintenance-requester-confirmation';
+import { getMaintenanceSlugs, techniqueIsMaintenance } from '@/lib/site-ticket-meta';
 
 const prisma = _prisma as any;
 
@@ -184,6 +185,18 @@ export async function GET(
         ? logs.map((e: TimelineEntry) => ({ status: e.status, createdAt: e.createdAt }))
         : [{ status: status as string, createdAt: row.createdAt }];
 
+    // Authoritative maintenance vs quality-inspection classification so the
+    // public page renders the right section. Covers the global "maintenance"
+    // slug, enterprise maintenance techniques, and private-company department
+    // maintenance (`pc_dept_m_*`); everything else is treated as inspection/QC.
+    let isMaintenance = false;
+    try {
+      const maintenanceSlugs = await getMaintenanceSlugs(null);
+      isMaintenance = techniqueIsMaintenance(row.technique, maintenanceSlugs);
+    } catch {
+      isMaintenance = techniqueIsMaintenance(row.technique, []);
+    }
+
     const maintenanceDescription = (row as any).maintenanceDescription ?? null;
     const { beforeImageUrls, finishingImageUrls } = resolveMaintenanceImageUrlsFromTicketRow({
       beforeImageUrls: (row as { beforeImageUrls?: unknown }).beforeImageUrls,
@@ -246,6 +259,7 @@ export async function GET(
         siteCoordinator,
         slaHours,
         technique: row.technique,
+        isMaintenance,
         status,
         createdAt: row.createdAt,
         completedAt,
