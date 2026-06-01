@@ -84,6 +84,8 @@ export async function GET(
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
     let inspectionChecklist: Array<{ id: string; label: string; checked: boolean; result?: string; comment?: string }> = [];
+    let checklistName: string | null = null;
+    let checklistTemplateId: string | null = null;
     let ncrReason: string | null = null;
     let ncrImageUrls: string[] = [];
     let ncrResubmissions: Array<{ at: string; by: string; action: string; comment?: string | null; imageUrls?: string[] }> = [];
@@ -114,6 +116,15 @@ export async function GET(
               weight: resolveChecklistItemSeverity(c as Record<string, unknown>),
             }))
           : [];
+        const checklistResp = parsed.checklistResponse as { checklistName?: string; checklistId?: string } | undefined;
+        if (checklistResp && typeof checklistResp.checklistName === 'string') {
+          checklistName = checklistResp.checklistName;
+        }
+        if (typeof parsed.checklistTemplateId === 'string' && parsed.checklistTemplateId.trim()) {
+          checklistTemplateId = parsed.checklistTemplateId.trim();
+        } else if (checklistResp && typeof checklistResp.checklistId === 'string') {
+          checklistTemplateId = checklistResp.checklistId;
+        }
         ncrReason = (parsed.ncrReason as string) ?? null;
         ncrImageUrls = Array.isArray(parsed.ncrImageUrls) ? parsed.ncrImageUrls.filter((u: unknown) => typeof u === 'string') : [];
         ncrResubmissions = Array.isArray(parsed.ncrResubmissions)
@@ -125,6 +136,23 @@ export async function GET(
       assignedEngineerName = typeof (parsed as { assignedEngineerName?: string }).assignedEngineerName === 'string' ? (parsed as { assignedEngineerName: string }).assignedEngineerName : null;
     } catch {
       /* ignore */
+    }
+
+    // Resolve the selected checklist's display name when it wasn't captured at
+    // completion (e.g. in-progress autosaved selections only have the template id).
+    if (!checklistName && checklistTemplateId) {
+      try {
+        const tpl =
+          (await prisma.inspectionChecklist
+            .findUnique({ where: { id: checklistTemplateId }, select: { name: true } })
+            .catch(() => null)) ||
+          (await prisma.privateCompanyChecklist
+            ?.findUnique?.({ where: { id: checklistTemplateId }, select: { name: true } })
+            ?.catch?.(() => null));
+        if (tpl && typeof tpl.name === 'string') checklistName = tpl.name;
+      } catch {
+        /* best-effort */
+      }
     }
 
     type TimelineEntry = { status: string; createdAt: Date | string };
@@ -211,6 +239,8 @@ export async function GET(
         inspectionResult,
         inspectionComments,
         inspectionChecklist,
+        checklistName,
+        checklistTemplateId,
         ncrReason,
         ncrImageUrls,
         ncrResubmissions,

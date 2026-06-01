@@ -67,6 +67,8 @@ class ApiConfig {
       '/api/tickets/$ticketId/evidence';
   static String ticketComplete(String ticketId) =>
       '/api/tickets/$ticketId/complete';
+  static String ticketProgress(String ticketId) =>
+      '/api/tickets/$ticketId/progress';
   static String ticketMaintenanceConfirmCompletion(String ticketId) =>
       '/api/tickets/$ticketId/maintenance-confirm-completion';
   static String ticketMaintenanceRejectCompletion(String ticketId) =>
@@ -121,6 +123,8 @@ class ApiConfig {
 
   // ── Private Company workspace (mobile-first feature) ─────────────────────
   static const String privateCompany = '/api/provisor-private-company';
+  static const String privateCompanyBilling =
+      '/api/provisor-private-company/billing';
   static const String privateCompanyDepartments = '/api/provisor-private-company/departments';
   static const String privateCompanyStaff = '/api/provisor-private-company/staff';
   static const String privateCompanyChecklists = '/api/provisor-private-company/checklists';

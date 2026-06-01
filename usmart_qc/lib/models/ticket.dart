@@ -1,6 +1,22 @@
 import 'maintenance_completion_reason.dart';
 import 'private_company_expense.dart';
 import 'qfield_project.dart';
+import 'site_design_document.dart';
+
+/// An assigned crew member with contact details, shown on the ticket.
+class TicketCrewMember {
+  const TicketCrewMember({required this.id, this.name, this.phone});
+
+  final String id;
+  final String? name;
+  final String? phone;
+
+  factory TicketCrewMember.fromJson(Map<String, dynamic> json) => TicketCrewMember(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String?,
+        phone: json['phone'] as String?,
+      );
+}
 
 class ChecklistHistoryEntry {
   final String at;
@@ -116,6 +132,8 @@ class Ticket {
   final String? completedAt;
   final String? designSpecifications;
   final List<String> attachmentUrls;
+  /// Site-originated attachments (design docs) with names/types, shown individually.
+  final List<SiteDesignDocument> siteAttachments;
   /// QField / QGIS mobile project packages (company JSON `qfieldProjects`).
   final List<QFieldProject> qfieldProjects;
   final String? inspectionResult;
@@ -126,6 +144,10 @@ class Ticket {
   final List<StatusLogEntry> statusTimeline;
   final String? assignedEngineerId;
   final String? assignedEngineerName;
+  /// Phone of the assigned lead (for call/copy on the ticket).
+  final String? assignedEngineerPhone;
+  /// Assigned crew members with names + phones.
+  final List<TicketCrewMember> maintenanceCrew;
   final String? assignedAt;
   final List<Map<String, dynamic>>? inspectionChecklist;
   /// Previous inspection records (e.g. before NCR-approved re-inspection)
@@ -221,6 +243,7 @@ class Ticket {
     this.completedAt,
     this.designSpecifications,
     this.attachmentUrls = const [],
+    this.siteAttachments = const [],
     this.qfieldProjects = const [],
     this.inspectionResult,
     this.inspectionComments,
@@ -230,6 +253,8 @@ class Ticket {
     this.statusTimeline = const [],
     this.assignedEngineerId,
     this.assignedEngineerName,
+    this.assignedEngineerPhone,
+    this.maintenanceCrew = const [],
     this.assignedAt,
     this.inspectionChecklist,
     this.checklistHistory = const [],
@@ -358,6 +383,11 @@ class Ticket {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      siteAttachments: (json['siteAttachments'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map((e) => SiteDesignDocument.fromJson(e))
+              .toList() ??
+          const [],
       qfieldProjects: () {
         final raw = json['qfieldProjects'];
         if (raw is! List) return <QFieldProject>[];
@@ -384,6 +414,12 @@ class Ticket {
           [],
       assignedEngineerId: json['assignedEngineerId'] as String?,
       assignedEngineerName: json['assignedEngineerName'] as String?,
+      assignedEngineerPhone: json['assignedEngineerPhone'] as String?,
+      maintenanceCrew: (json['maintenanceCrew'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map((e) => TicketCrewMember.fromJson(e))
+              .toList() ??
+          const [],
       assignedAt: json['assignedAt'] as String?,
       inspectionChecklist: json['inspectionChecklist'] is List
           ? (json['inspectionChecklist'] as List)

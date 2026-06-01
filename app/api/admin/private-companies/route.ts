@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma as _prisma } from '@/lib/prisma';
 import { checkEmailUnique, checkPhoneUnique } from '@/lib/check-unique-email-phone';
+import { computeWorkspaceBilling } from '@/lib/private-company-billing';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -59,13 +60,34 @@ export async function GET(req: NextRequest) {
         approvedAt: true,
         createdAt: true,
         updatedAt: true,
+        freeTicketsLimit: true,
+        ticketsUsed: true,
+        ticketCreditsTotal: true,
+        unlimitedUntil: true,
         owner: {
           select: { id: true, name: true, username: true, email: true, phone: true, company: true, province: true },
         },
         _count: { select: { departments: true, staff: true, checklists: true } },
+        planRequests: {
+          where: { status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            planType: true,
+            contactPhone: true,
+            status: true,
+            note: true,
+            createdAt: true,
+          },
+        },
       },
     });
-    return NextResponse.json({ success: true, companies: rows });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const companies = (rows as any[]).map((c) => ({
+      ...c,
+      billing: computeWorkspaceBilling(c),
+    }));
+    return NextResponse.json({ success: true, companies });
   } catch (err) {
     console.error('GET /api/admin/private-companies:', err);
     return NextResponse.json({ success: false, message: 'Failed to fetch private companies' }, { status: 500 });

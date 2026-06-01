@@ -13,9 +13,31 @@ import {
   ClipboardDocumentListIcon,
   TrashIcon,
   MagnifyingGlassIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline';
 
 type Status = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+
+type TicketPlan = 'PACK_100' | 'PACK_1000' | 'YEARLY_UNLIMITED';
+
+type WorkspaceBilling = {
+  freeLimit: number;
+  used: number;
+  creditsTotal: number;
+  unlimitedUntil: string | null;
+  unlimited: boolean;
+  allowance: number | null;
+  remaining: number | null;
+};
+
+type PlanRequest = {
+  id: string;
+  planType: TicketPlan;
+  contactPhone: string;
+  status: string;
+  note: string | null;
+  createdAt: string;
+};
 
 type PrivateCompany = {
   id: string;
@@ -36,6 +58,14 @@ type PrivateCompany = {
     province: string | null;
   } | null;
   _count: { departments: number; staff: number; checklists: number };
+  billing?: WorkspaceBilling;
+  planRequests?: PlanRequest[];
+};
+
+const PLAN_LABELS: Record<TicketPlan, string> = {
+  PACK_100: '100 tickets',
+  PACK_1000: '1000 tickets',
+  YEARLY_UNLIMITED: 'Yearly unlimited',
 };
 
 type EligibleUser = {
@@ -96,6 +126,7 @@ export default function AdminPrivateCompaniesPage() {
   const [statusFilter, setStatusFilter] = useState<Status | 'ALL'>('ALL');
   const [createOpen, setCreateOpen] = useState(false);
   const [checklistsFor, setChecklistsFor] = useState<PrivateCompany | null>(null);
+  const [codesFor, setCodesFor] = useState<{ company: PrivateCompany; planRequest?: PlanRequest } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -291,6 +322,11 @@ export default function AdminPrivateCompaniesPage() {
                 <Stat label="Checklists" value={c._count.checklists} color="text-amber-600" />
               </div>
 
+              <TicketsPanel
+                company={c}
+                onGenerate={(planRequest) => setCodesFor({ company: c, planRequest })}
+              />
+
               <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 mb-3">
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                   <Field label="Owner" value={c.owner?.name ?? c.owner?.username ?? '—'} />
@@ -391,6 +427,282 @@ export default function AdminPrivateCompaniesPage() {
           onChange={() => void load()}
         />
       )}
+      {codesFor && (
+        <GenerateCodeModal
+          company={codesFor.company}
+          planRequest={codesFor.planRequest}
+          onClose={() => setCodesFor(null)}
+          onGenerated={(msg) => {
+            setOkMsg(msg);
+            setCodesFor(null);
+            void load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Per-workspace tickets / billing panel ──────────────────────────────── */
+
+function TicketsPanel({
+  company,
+  onGenerate,
+}: {
+  company: PrivateCompany;
+  onGenerate: (planRequest?: PlanRequest) => void;
+}) {
+  const billing = company.billing;
+  const pending = company.planRequests ?? [];
+  const remainingLabel = billing
+    ? billing.unlimited
+      ? 'Unlimited'
+      : `${billing.remaining ?? 0}`
+    : '—';
+  const allowanceLabel = billing
+    ? billing.unlimited
+      ? '∞'
+      : `${billing.allowance ?? 0}`
+    : '—';
+  const expiry = billing?.unlimitedUntil ? new Date(billing.unlimitedUntil) : null;
+
+  return (
+    <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-600">
+          <TicketIcon className="w-4 h-4 text-blue-600" />
+          Tickets
+        </div>
+        {company.status === 'APPROVED' && (
+          <button
+            type="button"
+            onClick={() => onGenerate()}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Generate code
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <div className="text-base font-bold text-gray-900">{billing?.used ?? '—'}</div>
+          <div className="text-[10px] uppercase tracking-wide text-gray-500">Used</div>
+        </div>
+        <div>
+          <div className="text-base font-bold text-gray-900">{allowanceLabel}</div>
+          <div className="text-[10px] uppercase tracking-wide text-gray-500">Allowance</div>
+        </div>
+        <div>
+          <div
+            className={`text-base font-bold ${
+              billing && !billing.unlimited && (billing.remaining ?? 0) === 0
+                ? 'text-red-600'
+                : 'text-emerald-600'
+            }`}
+          >
+            {remainingLabel}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-gray-500">Remaining</div>
+        </div>
+      </div>
+      {expiry && (
+        <div className="mt-2 text-[11px] text-gray-500">
+          Unlimited until {expiry.toLocaleDateString()}
+        </div>
+      )}
+      {pending.length > 0 && (
+        <div className="mt-3 border-t border-gray-200 pt-2 space-y-1.5">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+            Pending plan requests
+          </div>
+          {pending.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between gap-2 rounded-md bg-white border border-amber-100 px-2 py-1.5"
+            >
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-gray-900">{PLAN_LABELS[p.planType]}</div>
+                <div className="text-[11px] text-gray-500 font-mono truncate">{p.contactPhone}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onGenerate(p)}
+                className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+              >
+                <CheckIcon className="w-3.5 h-3.5" />
+                Issue code
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Generate activation code modal ─────────────────────────────────────── */
+
+function GenerateCodeModal({
+  company,
+  planRequest,
+  onClose,
+  onGenerated,
+}: {
+  company: PrivateCompany;
+  planRequest?: PlanRequest;
+  onClose: () => void;
+  onGenerated: (msg: string) => void;
+}) {
+  const [planType, setPlanType] = useState<TicketPlan>(planRequest?.planType ?? 'PACK_100');
+  const [unlimitedUntil, setUnlimitedUntil] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+  const [generated, setGenerated] = useState<{ code: string; planType: TicketPlan } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const submit = async () => {
+    setErr('');
+    if (planType === 'YEARLY_UNLIMITED' && !unlimitedUntil) {
+      setErr('Pick an expiry date for the yearly unlimited plan.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/private-companies/${company.id}/activation-codes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planType,
+          unlimitedUntil:
+            planType === 'YEARLY_UNLIMITED'
+              ? new Date(`${unlimitedUntil}T23:59:59`).toISOString()
+              : undefined,
+          planRequestId: planRequest?.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.code) {
+        setGenerated({ code: data.code.code, planType });
+      } else {
+        setErr(data.message ?? 'Failed to generate code.');
+      }
+    } catch {
+      setErr('Network error.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TicketIcon className="w-5 h-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Generate activation code</h3>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+
+        {generated ? (
+          <div className="p-6 space-y-4">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="text-sm font-semibold text-emerald-800 mb-1">
+                Code for {company.name} ({PLAN_LABELS[generated.planType]})
+              </div>
+              <p className="text-xs text-emerald-700 mb-3">
+                Send this code to the requester. It only works for this company.
+              </p>
+              <div className="bg-white rounded-lg p-3 font-mono text-lg text-center tracking-widest text-gray-900">
+                {generated.code}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(generated.code);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+              >
+                {copied ? 'Copied!' : 'Copy code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onGenerated(`Activation code generated for ${company.name}.`)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Plan
+              </label>
+              <select
+                value={planType}
+                onChange={(e) => setPlanType(e.target.value as TicketPlan)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              >
+                <option value="PACK_100">100 tickets (1000 IQD/ticket)</option>
+                <option value="PACK_1000">1000 tickets (750 IQD/ticket)</option>
+                <option value="YEARLY_UNLIMITED">Yearly unlimited (negotiated)</option>
+              </select>
+            </div>
+
+            {planType === 'YEARLY_UNLIMITED' && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                  Unlimited until *
+                </label>
+                <input
+                  type="date"
+                  value={unlimitedUntil}
+                  onChange={(e) => setUnlimitedUntil(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            )}
+
+            {planRequest && (
+              <div className="text-xs text-gray-500">
+                Fulfilling request from <span className="font-mono">{planRequest.contactPhone}</span>.
+              </div>
+            )}
+
+            {err && (
+              <div className="p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">{err}</div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={submit}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2"
+              >
+                {submitting && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
+                Generate
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

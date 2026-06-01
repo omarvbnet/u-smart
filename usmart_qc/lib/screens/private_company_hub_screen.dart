@@ -18,12 +18,62 @@ import '../providers/private_company_warehouse_provider.dart';
 import '../providers/conflicts_provider.dart';
 import 'conflicts_screen.dart';
 import 'workspace_checklist_detail_screen.dart';
+import 'workspace_plans_screen.dart';
 import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
 import '../widgets/workspace_expenses_analytics_panel.dart';
 import '../widgets/department_maintenance_reasons_sheet.dart';
 import '../widgets/workspace_maintenance_reasons_tabs.dart';
+
+/// Tappable badge that shows remaining workspace tickets (or "unlimited") and
+/// opens the plans/activation screen. Turns red when the quota is exhausted.
+class _TicketsRemainingChip extends StatelessWidget {
+  const _TicketsRemainingChip({required this.billing});
+  final WorkspaceBilling billing;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final reached = billing.quotaReached;
+    final unlimited = billing.unlimited;
+    final color = reached
+        ? const Color(0xFFFF4757)
+        : unlimited
+            ? const Color(0xFF00D4AA)
+            : const Color(0xFF6C63FF);
+    final label = unlimited
+        ? l10n.t('pc_plans_unlimited')
+        : '${billing.remaining ?? 0} ${l10n.t('pc_plans_tickets_short')}';
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const WorkspacePlansScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withAlpha(35),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              unlimited ? Icons.all_inclusive_rounded : Icons.confirmation_number_outlined,
+              size: 12,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// Drag handle + title with an explicit close control for modal bottom sheets.
 Widget _modalSheetTitleRow(BuildContext context, String title) {
@@ -900,7 +950,10 @@ class _WorkspaceHeader extends StatelessWidget {
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -924,8 +977,7 @@ class _WorkspaceHeader extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (pc.isOwner) ...[
-                      const SizedBox(width: 6),
+                    if (pc.isOwner)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
@@ -941,7 +993,8 @@ class _WorkspaceHeader extends StatelessWidget {
                               letterSpacing: 1.2),
                         ),
                       ),
-                    ],
+                    if (pc.canManageBilling && pc.billing != null)
+                      _TicketsRemainingChip(billing: pc.billing!),
                   ],
                 ),
               ],

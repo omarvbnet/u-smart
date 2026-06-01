@@ -18,6 +18,7 @@ import '../models/private_company.dart';
 import '../models/private_company_warehouse.dart';
 import '../models/comment.dart';
 import '../models/evidence.dart';
+import '../models/site_design_document.dart';
 import '../models/inspection_checklist.dart';
 import '../providers/auth_provider.dart';
 import '../providers/conflicts_provider.dart';
@@ -26,6 +27,7 @@ import '../providers/private_company_warehouse_provider.dart';
 import '../providers/sites_provider.dart';
 import '../providers/tickets_provider.dart';
 import '../providers/provisor_techniques_provider.dart';
+import '../services/ticket_draft_store.dart';
 import '../utils/technique_display.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/workspace_ticket_expenses_section.dart';
@@ -63,6 +65,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _loadingArchivedChecklists = false;
   String? _attachTemplateChoice;
   bool _uploading = false;
+  bool _uploadingBefore = false;
+  bool _uploadingAfter = false;
   bool _completingMaintenance = false;
   bool _confirmingMaintenance = false;
   bool _maintenanceCrewBusy = false;
@@ -76,6 +80,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   List<String> _maintenanceAfterUrls = [];
   String? _selectedMaintenanceCompletionReasonId;
   bool _savingCompletionReason = false;
+
+  /// Autosave of in-progress checklist selections + draft photos (debounced).
+  Timer? _autosaveTimer;
+  String? _draftChecklistTemplateId;
+  List<Map<String, dynamic>> _draftChecklistItems = [];
+
+  /// Checklist selections restored from the on-device draft (offline fallback).
+  /// Takes precedence over the server snapshot when the server has none.
+  List<Map<String, dynamic>>? _restoredChecklistItems;
 
   Map<String, dynamic>? _ticketMaterialsSummary;
   Timer? _siteArrivalTimer;
@@ -162,8 +175,44 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   @override
   void dispose() {
     _siteArrivalTimer?.cancel();
+    _autosaveTimer?.cancel();
     _cancellationReasonCtrl.dispose();
     super.dispose();
+  }
+
+  /// A small tag declaring whether this is a maintenance or quality-inspection ticket.
+  Widget _ticketTypeTag(Ticket t, AppLocalizations l10n) {
+    final isMaint = t.isMaintenance;
+    final color = isMaint ? const Color(0xFFFB923C) : const Color(0xFF6C63FF);
+    final icon = isMaint ? Icons.build_rounded : Icons.fact_check_rounded;
+    final label = l10n.t(isMaint ? 'ticket_type_maintenance' : 'ticket_type_inspection');
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withAlpha(28),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withAlpha(70)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String? _targetDepartmentLabel(Ticket t) {
@@ -263,7 +312,106 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       _syncSiteArrivalWatcher();
       context.read<SitesProvider>().fetchSites();
       Future.microtask(() => _loadTicketWarehouseSummary());
+      if (t != null) Future.microtask(() => _restoreLocalDraftIfNeeded(t));
     }
+  }
+
+  /// On-device fallback: if the staff left mid-work (no server snapshot yet),
+  /// re-apply locally cached checklist selections / draft photos and push them
+  /// back to the server so the work is preserved everywhere.
+  Future<void> _restoreLocalDraftIfNeeded(Ticket t) async {
+    final uid = context.read<AuthProvider>().user?.id;
+    final onTicket = uid != null &&
+        (uid == t.assignedEngineerId || t.maintenanceCrewIds.contains(uid));
+    if (!onTicket || t.isTerminal) return;
+
+    final draft = await TicketDraftStore.load(t.id);
+    if (draft == null || draft.isEmpty || !mounted) return;
+
+    final serverHasChecklist = (t.inspectionChecklist ?? const []).isNotEmpty;
+    final serverHasBefore = t.beforeImageUrls.isNotEmpty;
+    final serverHasAfter = t.finishingImageUrls.isNotEmpty;
+
+    var changed = false;
+    final saveArgs = <String, dynamic>{};
+
+    if (!serverHasChecklist && draft.checklistItems.isNotEmpty) {
+      setState(() {
+        _restoredChecklistItems = draft.checklistItems;
+        _draftChecklistItems = draft.checklistItems;
+        _draftChecklistTemplateId =
+            draft.checklistTemplateId ?? t.checklistTemplateId;
+      });
+      saveArgs['checklistItems'] = draft.checklistItems;
+      if (_draftChecklistTemplateId != null) {
+        saveArgs['checklistTemplateId'] = _draftChecklistTemplateId;
+      }
+      changed = true;
+    }
+
+    if (t.isMaintenance && t.isInProgress) {
+      if (!serverHasBefore && draft.beforeImageUrls.isNotEmpty) {
+        setState(() => _maintenanceBeforeUrls = List.from(draft.beforeImageUrls));
+        saveArgs['beforeImageUrls'] = draft.beforeImageUrls;
+        changed = true;
+      }
+      if (!serverHasAfter && draft.finishingImageUrls.isNotEmpty) {
+        setState(() => _maintenanceAfterUrls = List.from(draft.finishingImageUrls));
+        saveArgs['finishingImageUrls'] = draft.finishingImageUrls;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await context.read<TicketsProvider>().saveTicketProgress(
+            t.id,
+            checklistTemplateId: saveArgs['checklistTemplateId'] as String?,
+            checklistItems:
+                saveArgs['checklistItems'] as List<Map<String, dynamic>>?,
+            beforeImageUrls: saveArgs['beforeImageUrls'] as List<String>?,
+            finishingImageUrls: saveArgs['finishingImageUrls'] as List<String>?,
+          );
+    }
+  }
+
+  /// Called by the checklist widget when a selection changes. Caches locally
+  /// immediately and debounces a server autosave so work survives app exit.
+  void _onChecklistChanged(String? templateId, List<Map<String, dynamic>> items) {
+    _draftChecklistTemplateId = templateId ?? _draftChecklistTemplateId;
+    _draftChecklistItems = items;
+    _persistDraft();
+    _scheduleProgressAutosave();
+  }
+
+  /// Cache the current draft (checklist + photos) on-device immediately.
+  Future<void> _persistDraft() async {
+    await TicketDraftStore.save(
+      widget.ticketId,
+      TicketDraft(
+        checklistTemplateId: _draftChecklistTemplateId,
+        checklistItems: _draftChecklistItems,
+        beforeImageUrls: _maintenanceBeforeUrls,
+        finishingImageUrls: _maintenanceAfterUrls,
+      ),
+    );
+  }
+
+  /// Debounced push of the current draft to the server progress endpoint.
+  void _scheduleProgressAutosave() {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      context.read<TicketsProvider>().saveTicketProgress(
+            widget.ticketId,
+            checklistTemplateId: _draftChecklistTemplateId,
+            checklistItems:
+                _draftChecklistItems.isNotEmpty ? _draftChecklistItems : null,
+            beforeImageUrls:
+                _maintenanceBeforeUrls.isNotEmpty ? _maintenanceBeforeUrls : null,
+            finishingImageUrls:
+                _maintenanceAfterUrls.isNotEmpty ? _maintenanceAfterUrls : null,
+          );
+    });
   }
 
   Future<void> _loadTicketWarehouseSummary() async {
@@ -1496,7 +1644,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      if (ok.success) await _load();
+      if (ok.success) {
+        await TicketDraftStore.clear(widget.ticketId);
+        await _load();
+      }
     }
   }
 
@@ -1670,6 +1821,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               ),
             ],
           ),
+        const SizedBox(height: 8),
+        _ticketTypeTag(t, l10n),
         if (t.isAssigned) ...[
           const SizedBox(height: 6),
           Row(
@@ -2409,6 +2562,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ]),
       ],
 
+      ..._assignedStaffSection(t, l10n),
+
       if (_effectiveInspectionResult(t) != null) ...[
         const SizedBox(height: 16),
         _glassSection(l10n.t('inspection_result'), [
@@ -2766,6 +2921,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               loading: _loadingChecklists,
               onComplete: _completeWithChecklist,
               initialTemplateId: t.checklistTemplateId,
+              initialItems: _restoredChecklistItems ?? t.inspectionChecklist,
+              onItemChanged: _onChecklistChanged,
             ),
           ),
         ],
@@ -2836,7 +2993,22 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ]),
       ],
       if (!t.isMaintenance) ..._buildQFieldSection(t, l10n),
-      if (t.attachmentUrls.isNotEmpty) ...[
+      if (t.siteAttachments.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _glassSection(l10n.t('site_attachments'), [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Column(
+              children: t.siteAttachments
+                  .map((doc) => _buildSiteAttachmentRow(doc, l10n))
+                  .toList(),
+            ),
+          ),
+        ]),
+      ],
+      // Other (manually-added) attachments, excluding those already shown as
+      // individual site attachments above.
+      if (_otherAttachmentUrls(t).isNotEmpty) ...[
         const SizedBox(height: 16),
         _glassSection(l10n.t('requester_attachments'), [
           Padding(
@@ -2844,7 +3016,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: t.attachmentUrls
+              children: _otherAttachmentUrls(t)
                   .map((url) => _buildAttachmentThumbnail(url, l10n))
                   .toList(),
             ),
@@ -3945,16 +4117,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                 .read<TicketsProvider>()
                                 .setMaintenanceCompletionReason(widget.ticketId, v);
                             if (mounted) {
+                              // Keep the selection in local state only; avoid a
+                              // full _load() which visibly reloads the screen.
                               setState(() => _savingCompletionReason = false);
                               if (!ok) {
+                                setState(() =>
+                                    _selectedMaintenanceCompletionReasonId = null);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(l10n.t('complete_failed')),
                                     backgroundColor: const Color(0xFFFF4757),
                                   ),
                                 );
-                              } else {
-                                await _load();
                               }
                             }
                           },
@@ -4028,6 +4202,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   Widget _maintImageRow(String label, List<String> urls, bool isBefore, int min, int max, {bool locked = false}) {
     final count = urls.length;
     final valid = count >= min && count <= max;
+    final uploadingHere = isBefore ? _uploadingBefore : _uploadingAfter;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4051,7 +4226,24 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             scrollDirection: Axis.horizontal,
             children: [
               ...urls.asMap().entries.map((e) => _maintThumb(e.value, isBefore, e.key, locked: locked)),
-              if (count < max && !_uploading && !locked)
+              if (uploadingHere)
+                Container(
+                  width: 80,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(8),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withAlpha(20)),
+                  ),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+                    ),
+                  ),
+                ),
+              if (count < max && !uploadingHere && !locked)
                 GestureDetector(
                   onTap: () => _pickAndAddMaintenanceImage(isBefore),
                   child: Container(
@@ -4106,6 +4298,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     _maintenanceAfterUrls.removeAt(index);
                   }
                 });
+                _persistDraft();
+                _scheduleProgressAutosave();
               },
               child: Container(
                 padding: const EdgeInsets.all(4),
@@ -4119,7 +4313,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   Future<void> _pickAndAddMaintenanceImage(bool isBefore) async {
-    setState(() => _uploading = true);
+    setState(() {
+      if (isBefore) {
+        _uploadingBefore = true;
+      } else {
+        _uploadingAfter = true;
+      }
+    });
     try {
       final XFile? file = await _picker.pickImage(
         source: ImageSource.camera,
@@ -4141,13 +4341,24 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             if (_maintenanceAfterUrls.length < 6) _maintenanceAfterUrls.add(url);
           }
         });
+        // Persist locally + autosave to the server so photos survive app exit.
+        _persistDraft();
+        _scheduleProgressAutosave();
       } else if (mounted) {
         _showUploadError(AppLocalizations.of(context).t('upload_failed'));
       }
     } catch (e) {
       if (mounted) _showUploadError(AppLocalizations.of(context).t('upload_failed'));
     }
-    if (mounted) setState(() => _uploading = false);
+    if (mounted) {
+      setState(() {
+        if (isBefore) {
+          _uploadingBefore = false;
+        } else {
+          _uploadingAfter = false;
+        }
+      });
+    }
   }
 
   Future<void> _completeMaintenance(AppLocalizations l10n) async {
@@ -4162,6 +4373,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       );
       if (!mounted) return;
       if (r.success) {
+        await TicketDraftStore.clear(widget.ticketId);
         final msg = r.awaitingRequesterConfirmation
             ? l10n.t('maint_sent_for_confirmation')
             : l10n.t('ticket_completed');
@@ -4957,6 +5169,138 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
+  /// Section listing the assigned lead + crew with their phone numbers.
+  List<Widget> _assignedStaffSection(Ticket t, AppLocalizations l10n) {
+    final hasLead = (t.assignedEngineerName != null &&
+            t.assignedEngineerName!.trim().isNotEmpty) ||
+        (t.assignedEngineerPhone != null &&
+            t.assignedEngineerPhone!.trim().isNotEmpty);
+    final crew = t.maintenanceCrew
+        .where((m) => (m.name != null && m.name!.trim().isNotEmpty) ||
+            (m.phone != null && m.phone!.trim().isNotEmpty))
+        .toList();
+    if (!hasLead && crew.isEmpty) return const [];
+    return [
+      const SizedBox(height: 16),
+      _glassSection(l10n.t('assigned_staff'), [
+        if (hasLead)
+          _staffPhoneRow(
+            l10n.t('assigned_lead'),
+            t.assignedEngineerName,
+            t.assignedEngineerPhone,
+            l10n,
+          ),
+        ...crew.map((m) => _staffPhoneRow(
+              l10n.t('crew_member'),
+              m.name,
+              m.phone,
+              l10n,
+            )),
+      ]),
+    ];
+  }
+
+  /// One staff row: role label, name, and a phone with call + copy actions.
+  Widget _staffPhoneRow(
+      String roleLabel, String? name, String? phone, AppLocalizations l10n) {
+    final hasPhone = phone != null && phone.trim().isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            roleLabel,
+            style: TextStyle(color: Colors.white.withAlpha(80), fontSize: 11),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  (name != null && name.trim().isNotEmpty)
+                      ? name
+                      : (hasPhone ? phone : '-'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (hasPhone) ...[
+                InkWell(
+                  onTap: () => _callPhone(phone),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4AA).withAlpha(30),
+                      borderRadius: BorderRadius.circular(10),
+                      border:
+                          Border.all(color: const Color(0xFF00D4AA).withAlpha(60)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.phone_rounded,
+                            color: Color(0xFF00D4AA), size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          l10n.t('call'),
+                          style: const TextStyle(
+                            color: Color(0xFF00D4AA),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: phone));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.t('phone_copied')),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.copy_rounded,
+                        color: Colors.white.withAlpha(160), size: 16),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (hasPhone)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                phone,
+                style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _callPhone(String phone) async {
     final cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
     final uri = Uri.parse('tel:$cleaned');
@@ -5632,6 +5976,79 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Attachment URLs that aren't already shown as individual site attachments.
+  List<String> _otherAttachmentUrls(Ticket t) {
+    if (t.siteAttachments.isEmpty) return t.attachmentUrls;
+    final siteUrls = t.siteAttachments.map((d) => d.url).toSet();
+    return t.attachmentUrls.where((u) => !siteUrls.contains(u)).toList();
+  }
+
+  /// One site-originated attachment shown individually with its name + open action.
+  Widget _buildSiteAttachmentRow(SiteDesignDocument doc, AppLocalizations l10n) {
+    final icon = doc.isPdf ? Icons.picture_as_pdf_rounded : Icons.description_rounded;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AttachmentViewerScreen(
+              url: doc.url,
+              label: doc.displayName,
+            ),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A2E),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF6C63FF).withAlpha(50)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: const Color(0xFF6C63FF)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      doc.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (doc.title != null &&
+                        doc.title!.trim().isNotEmpty &&
+                        doc.fileName.isNotEmpty &&
+                        doc.title!.trim() != doc.fileName)
+                      Text(
+                        doc.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(120),
+                          fontSize: 11,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.open_in_new_rounded,
+                  size: 18, color: Colors.white.withAlpha(140)),
+            ],
+          ),
+        ),
       ),
     );
   }

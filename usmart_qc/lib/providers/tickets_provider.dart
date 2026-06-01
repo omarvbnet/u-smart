@@ -545,6 +545,10 @@ class TicketsProvider extends ChangeNotifier {
 
   String? lastTicketCreateMessage;
 
+  /// Server error code from the last [createTicket] failure (e.g.
+  /// `WORKSPACE_QUOTA_REACHED`), so the UI can route to the plans screen.
+  String? lastTicketCreateErrorCode;
+
   Future<bool> createTicket({
     required String siteName,
     required String siteCoordinator,
@@ -555,6 +559,9 @@ class TicketsProvider extends ChangeNotifier {
     double? siteLongitude,
     String? designSpecifications,
     List<String>? attachmentUrls,
+    /// Structured site-originated attachments (design docs) with names/types,
+    /// shown individually on the ticket. Distinct from plain [attachmentUrls].
+    List<Map<String, dynamic>>? siteAttachments,
     String? maintenanceReason,
     List<String>? beforeImageUrls,
     /// Required when logged in as coordinator company owner / coordinator / admin (API enforces checklist + category).
@@ -569,6 +576,7 @@ class TicketsProvider extends ChangeNotifier {
     List<Map<String, dynamic>>? qfieldProjects,
   }) async {
     lastTicketCreateMessage = null;
+    lastTicketCreateErrorCode = null;
     try {
       final body = <String, dynamic>{
         'siteName': siteName,
@@ -589,6 +597,9 @@ class TicketsProvider extends ChangeNotifier {
       }
       if (attachmentUrls != null && attachmentUrls.isNotEmpty) {
         body['attachmentUrls'] = attachmentUrls;
+      }
+      if (siteAttachments != null && siteAttachments.isNotEmpty) {
+        body['siteAttachments'] = siteAttachments;
       }
       if (qfieldProjects != null && qfieldProjects.isNotEmpty) {
         body['qfieldProjects'] = qfieldProjects;
@@ -631,6 +642,10 @@ class TicketsProvider extends ChangeNotifier {
       final msg = data['message'];
       if (msg is String && msg.isNotEmpty) {
         lastTicketCreateMessage = msg;
+      }
+      final code = data['error'];
+      if (code is String && code.isNotEmpty) {
+        lastTicketCreateErrorCode = code;
       }
     } catch (_) {}
     return false;
@@ -983,6 +998,30 @@ class TicketsProvider extends ChangeNotifier {
         ApiConfig.ticketChecklistTemplate(ticketId),
         body: {'checklistTemplateId': checklistTemplateId},
       );
+      return data['success'] == true;
+    } catch (_) {}
+    return false;
+  }
+
+  /// Autosave in-progress field work (checklist selections / draft photos)
+  /// WITHOUT completing the ticket. Used to preserve work across screen exits.
+  Future<bool> saveTicketProgress(
+    String ticketId, {
+    String? checklistTemplateId,
+    List<Map<String, dynamic>>? checklistItems,
+    List<String>? beforeImageUrls,
+    List<String>? finishingImageUrls,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (checklistTemplateId != null && checklistTemplateId.isNotEmpty) {
+        body['checklistTemplateId'] = checklistTemplateId;
+      }
+      if (checklistItems != null) body['checklistItems'] = checklistItems;
+      if (beforeImageUrls != null) body['beforeImageUrls'] = beforeImageUrls;
+      if (finishingImageUrls != null) body['finishingImageUrls'] = finishingImageUrls;
+      if (body.isEmpty) return true;
+      final data = await _api.patch(ApiConfig.ticketProgress(ticketId), body: body);
       return data['success'] == true;
     } catch (_) {}
     return false;

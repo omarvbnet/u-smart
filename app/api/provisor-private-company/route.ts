@@ -3,9 +3,50 @@ import { prisma as _prisma } from '@/lib/prisma';
 import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { notifyTicketsRegistrationRequest } from '@/lib/email';
 import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
+import { computeWorkspaceBilling } from '@/lib/private-company-billing';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
+
+/**
+ * Load the workspace billing snapshot + latest plan request for the client.
+ * Guarded so a legacy DB missing the billing columns never breaks workspace load.
+ */
+async function loadWorkspaceBilling(companyId: string): Promise<{
+  billing: ReturnType<typeof computeWorkspaceBilling>;
+  planRequest: {
+    id: string;
+    planType: string;
+    status: string;
+    contactPhone: string;
+    createdAt: Date;
+  } | null;
+}> {
+  try {
+    const row = await prisma.privateCompany.findUnique({
+      where: { id: companyId },
+      select: {
+        freeTicketsLimit: true,
+        ticketsUsed: true,
+        ticketCreditsTotal: true,
+        unlimitedUntil: true,
+      },
+    });
+    let planRequest = null;
+    try {
+      planRequest = await prisma.privateCompanyPlanRequest.findFirst({
+        where: { companyId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, planType: true, status: true, contactPhone: true, createdAt: true },
+      });
+    } catch {
+      /* plan-request table may be absent on legacy DBs */
+    }
+    return { billing: computeWorkspaceBilling(row), planRequest };
+  } catch {
+    return { billing: computeWorkspaceBilling(null), planRequest: null };
+  }
+}
 
 /**
  * GET /api/provisor-private-company
@@ -113,6 +154,7 @@ export async function GET(req: NextRequest) {
     // Owner branch: include the full workspace
     if (requester.privateCompanyOwned) {
       const ws = requester.privateCompanyOwned;
+      const { billing, planRequest } = await loadWorkspaceBilling(ws.id);
       return NextResponse.json({
         success: true,
         membership: {
@@ -122,6 +164,8 @@ export async function GET(req: NextRequest) {
           role: String(requester.role ?? '').toUpperCase() || 'COMPANY',
         },
         workspace: ws,
+        billing,
+        planRequest,
       });
     }
 
@@ -213,6 +257,7 @@ export async function GET(req: NextRequest) {
         const hit = (ws.departments as Array<{ id: string; name: string }>).find((d) => d.id === myDepartmentId);
         departmentName = hit?.name ?? null;
       }
+      const { billing, planRequest } = await loadWorkspaceBilling(requester.privateCompanyId);
       return NextResponse.json({
         success: true,
         membership: {
@@ -225,6 +270,8 @@ export async function GET(req: NextRequest) {
           specialization: requester.specialization ?? null,
         },
         workspace: ws,
+        billing,
+        planRequest,
       });
     }
 

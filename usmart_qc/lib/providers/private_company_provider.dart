@@ -16,6 +16,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   PrivateCompanyMembership _membership = PrivateCompanyMembership();
   PrivateCompanyWorkspace? _workspace;
+  WorkspaceBilling? _billing;
+  WorkspacePlanRequest? _latestPlanRequest;
   PrivateCompanyKpiSnapshot? _kpiSnapshot;
   bool _kpiLoading = false;
   ExpenseAnalyticsSnapshot? _expenseAnalytics;
@@ -34,6 +36,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   PrivateCompanyMembership get membership => _membership;
   PrivateCompanyWorkspace? get workspace => _workspace;
+  WorkspaceBilling? get billing => _billing;
+  WorkspacePlanRequest? get latestPlanRequest => _latestPlanRequest;
   PrivateCompanyKpiSnapshot? get kpiSnapshot => _kpiSnapshot;
   bool get kpiLoading => _kpiLoading;
   ExpenseAnalyticsSnapshot? get expenseAnalytics => _expenseAnalytics;
@@ -185,6 +189,18 @@ class PrivateCompanyProvider extends ChangeNotifier {
 
   /// Only the workspace owner can create / edit / delete departments.
   bool get canManageDepartments => isOwner;
+
+  /// Owner or MANAGER: may request ticket plans and redeem activation codes,
+  /// and see remaining-ticket details.
+  bool get canManageBilling {
+    if (isOwner) return true;
+    if (!isStaff) return false;
+    return _resolvedRole == 'MANAGER';
+  }
+
+  /// Convenience: the workspace has exhausted its free + purchased tickets
+  /// and no unlimited plan is active.
+  bool get ticketQuotaReached => _billing?.quotaReached ?? false;
 
   /// Owner (all departments) or manager/coordinator with an assigned department.
   bool get canManageMaintenanceReasons {
@@ -505,6 +521,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
       final data = await _api.getSafe(ApiConfig.privateCompany);
       if (data == null || data['success'] != true) {
         _workspace = null;
+        _billing = null;
+        _latestPlanRequest = null;
         _membership = PrivateCompanyMembership();
         _kpiSnapshot = null;
         return;
@@ -517,9 +535,19 @@ class PrivateCompanyProvider extends ChangeNotifier {
       _workspace = ws is Map<String, dynamic>
           ? PrivateCompanyWorkspace.fromJson(ws)
           : null;
+      final billing = data['billing'];
+      _billing = billing is Map<String, dynamic>
+          ? WorkspaceBilling.fromJson(billing)
+          : null;
+      final planReq = data['planRequest'];
+      _latestPlanRequest = planReq is Map<String, dynamic>
+          ? WorkspacePlanRequest.fromJson(planReq)
+          : null;
       _refreshMyStaffEntry();
     } catch (e) {
       _workspace = null;
+      _billing = null;
+      _latestPlanRequest = null;
       _membership = PrivateCompanyMembership();
       _kpiSnapshot = null;
     } finally {
@@ -552,6 +580,73 @@ class PrivateCompanyProvider extends ChangeNotifier {
       return false;
     } catch (_) {
       _setError('Network error while submitting request.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  // ─── Ticket plans / activation codes ─────────────────────────────────────
+
+  /// Owner / manager: submit a ticket plan purchase request to the admin.
+  /// [phone] defaults to the workspace contact when empty (server falls back).
+  Future<bool> requestTicketPlan({
+    required WorkspaceTicketPlan plan,
+    String? phone,
+  }) async {
+    if (!canManageBilling) return false;
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyBilling, body: {
+        'action': 'request',
+        'planType': plan.apiValue,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      });
+      if (res['success'] == true) {
+        await refresh();
+        _setSuccess(res['message']?.toString() ??
+            'Your plan request was sent to the admin.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'Failed to send plan request.');
+      return false;
+    } catch (_) {
+      _setError('Network error while sending the plan request.');
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  /// Owner / manager: redeem an admin-issued activation code. On success the
+  /// workspace billing is refreshed and tickets can be created again.
+  Future<bool> redeemActivationCode(String code) async {
+    if (!canManageBilling) return false;
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) {
+      _setError('Enter an activation code.');
+      return false;
+    }
+    _submitting = true;
+    notifyListeners();
+    try {
+      final res = await _api.post(ApiConfig.privateCompanyBilling, body: {
+        'action': 'redeem',
+        'code': trimmed,
+      });
+      if (res['success'] == true) {
+        await refresh();
+        _setSuccess(res['message']?.toString() ??
+            'Activation code applied. You can create tickets again.');
+        return true;
+      }
+      _setError(res['message']?.toString() ?? 'This activation code is not valid.');
+      return false;
+    } catch (_) {
+      _setError('Network error while applying the code.');
       return false;
     } finally {
       _submitting = false;
@@ -1581,6 +1676,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
   void reset() {
     _membership = PrivateCompanyMembership();
     _workspace = null;
+    _billing = null;
+    _latestPlanRequest = null;
     _myStaffEntry = null;
     _error = null;
     _lastSuccess = null;

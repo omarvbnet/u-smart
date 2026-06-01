@@ -1041,3 +1041,102 @@ export async function sendPrivateWorkspaceCredentialsEmail(args: {
 
   return sendEmail({ to, subject, html, text });
 }
+
+/**
+ * Sends a workspace owner the activation code for a ticket plan they purchased.
+ * Used by the admin "generate activation code" flow.
+ */
+export async function sendActivationCodeEmail(args: {
+  to: string;
+  recipientName: string | null;
+  companyName: string;
+  code: string;
+  planLabel: string;
+  ticketCredits: number;
+  unlimitedUntil: Date | string | null;
+}): Promise<boolean> {
+  const to = args.to.trim();
+  if (!to || !to.includes('@')) return false;
+
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const siteUrl = raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+  const logoUrl = process.env.NEXT_PUBLIC_EMAIL_LOGO_URL?.trim();
+  const name = args.recipientName?.trim() || 'there';
+  const subject = 'Provisor — your ticket plan activation code';
+
+  const until = args.unlimitedUntil ? new Date(args.unlimitedUntil) : null;
+  const benefit = until && !Number.isNaN(until.getTime())
+    ? `Unlimited tickets until ${until.toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}`
+    : `${args.ticketCredits.toLocaleString()} additional tickets`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:28px 32px;text-align:center;">
+            ${
+              logoUrl
+                ? `<img src="${escapeHtml(logoUrl)}" alt="U-SMART Provisor" width="180" style="display:block;margin:0 auto;max-width:100%;height:auto;" />
+            <div style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Ticket plans</div>`
+                : `<div style="font-size:26px;font-weight:800;color:#f59e0b;letter-spacing:0.5px;">U-SMART</div>
+            <div style="margin-top:6px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Ticket plans</div>`
+            }
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 32px 24px;">
+            <p style="margin:0 0 12px;font-size:18px;font-weight:600;color:#0f172a;">Hello ${escapeHtml(name)},</p>
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#475569;">Your ticket plan for <strong>${escapeHtml(args.companyName)}</strong> is ready. Enter the activation code below in the Provisor app to unlock your tickets.</p>
+            <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Plan</p>
+            <p style="margin:0 0 6px;font-size:15px;color:#0f172a;font-weight:600;">${escapeHtml(args.planLabel)}</p>
+            <p style="margin:0 0 20px;font-size:14px;color:#475569;">${escapeHtml(benefit)}</p>
+            <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Activation code</p>
+            <div style="margin:0 0 4px;padding:18px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:12px;text-align:center;font-size:24px;font-weight:800;letter-spacing:3px;color:#0f172a;font-family:Consolas,monospace;">${escapeHtml(args.code)}</div>
+            <div style="margin-top:22px;padding:14px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#1e3a8a;">How to activate</p>
+              <ol style="margin:0;padding-left:18px;color:#1e40af;font-size:13px;line-height:1.55;">
+                <li>Open the <strong>Provisor</strong> app and go to <strong>Ticket Plans</strong>.</li>
+                <li>Enter the activation code above and tap <strong>Activate</strong>.</li>
+              </ol>
+            </div>
+            <div style="margin-top:18px;padding:14px 16px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;">
+              <p style="margin:0;font-size:13px;color:#7c2d12;line-height:1.55;">This code only works for <strong>${escapeHtml(args.companyName)}</strong> and can be used once. Please keep it private.</p>
+            </div>
+            <p style="margin:16px 0 0;font-size:13px;color:#64748b;">If you did not request this, you can safely ignore this email.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+            <a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:12px 22px;background:#f59e0b;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">Visit website</a>
+            <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} U-SMART · Provisor</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const text = [
+    `Hello ${name},`,
+    '',
+    `Your ticket plan for ${args.companyName} is ready.`,
+    `Plan: ${args.planLabel} (${benefit})`,
+    '',
+    `Activation code: ${args.code}`,
+    '',
+    'How to activate: open the Provisor app, go to Ticket Plans, enter the code and tap Activate.',
+    `This code only works for ${args.companyName} and can be used once.`,
+    '',
+    `Website: ${siteUrl}`,
+    '',
+    '© U-SMART Provisor',
+  ].join('\n');
+
+  return sendEmail({ to, subject, html, text });
+}

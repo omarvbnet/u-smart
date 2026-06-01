@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:latlong2/latlong.dart';
 import '../config/api_config.dart';
 import '../constants/iraq_provinces.dart';
 import '../l10n/app_localizations.dart';
@@ -12,6 +13,8 @@ import '../providers/private_company_provider.dart';
 import '../utils/workspace_department_technique.dart';
 import '../utils/qfield_file_picker.dart';
 import 'attachment_viewer_screen.dart';
+import 'site_map_picker_screen.dart';
+import 'workspace_plans_screen.dart';
 
 /// Maintenance types. Values must match backend MAINTENANCE_TECHNIQUES.
 const _maintenanceTypeIds = ['fiber_route', 'fiber_site', 'electrical', 'telecom', 'ftth'];
@@ -41,11 +44,14 @@ class _CreateMaintenanceTicketScreenState
   final _slaCtrl = TextEditingController(text: '24');
   final _reasonCtrl = TextEditingController();
   final _designSpecsCtrl = TextEditingController();
+  final _coordsCtrl = TextEditingController();
   String _maintenanceType = 'fiber_route';
   bool _submitting = false;
   bool _uploading = false;
   /// Optional design / specification / explanation files (not before-maintenance site evidence).
   final List<String> _specAttachmentUrls = [];
+  /// Structured site design documents (with names/types) for individual display.
+  final List<Map<String, dynamic>> _siteAttachments = [];
   final List<Map<String, String>> _qfieldDrafts = [];
   /// Same semantics as [CreateTicketScreen]: private workspace vs global pool.
   String _assignmentScope = 'PRIVATE_COMPANY';
@@ -61,6 +67,10 @@ class _CreateMaintenanceTicketScreenState
     _coordinatorCtrl.text = s.location;
     final p = s.province.trim();
     if (p.isNotEmpty) _selectedProvince = p;
+    if (s.hasCoordinates) {
+      _coordsCtrl.text =
+          '${s.latitude!.toStringAsFixed(6)}, ${s.longitude!.toStringAsFixed(6)}';
+    }
     _qfieldDrafts.clear();
     for (final proj in s.qfieldProjects) {
       final url = proj.currentUrl.trim();
@@ -77,6 +87,9 @@ class _CreateMaintenanceTicketScreenState
       if (url.isEmpty) continue;
       if (!_specAttachmentUrls.contains(url)) {
         _specAttachmentUrls.add(url);
+      }
+      if (!_siteAttachments.any((a) => a['url'] == url)) {
+        _siteAttachments.add(d.toPayload());
       }
     }
   }
@@ -111,6 +124,118 @@ class _CreateMaintenanceTicketScreenState
       final inWs = pc.isApproved && (pc.isOwner || pc.isStaff);
       if (inWs) setState(() => _assignmentScope = 'PRIVATE_COMPANY');
     });
+  }
+
+  Future<void> _openMapPicker() async {
+    double? ilat;
+    double? ilng;
+    final parts = _coordsCtrl.text
+        .split(RegExp(r'[,\s;]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.length >= 2) {
+      ilat = double.tryParse(parts[0]);
+      ilng = double.tryParse(parts[1]);
+    }
+    final result = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (context) => SiteMapPickerScreen(
+          initialLat: ilat,
+          initialLng: ilng,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _coordsCtrl.text =
+            '${result.latitude.toStringAsFixed(6)}, ${result.longitude.toStringAsFixed(6)}';
+      });
+    }
+  }
+
+  Widget _buildSiteCoordinatesSection(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.t('ticket_site_coordinates').toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withAlpha(80),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.t('ticket_site_coordinates_hint'),
+          style: TextStyle(
+            color: Colors.white.withAlpha(120),
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _coordsCtrl,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: l10n.t('site_coordinates_hint'),
+                  hintStyle: const TextStyle(color: Color(0xFF4B5563)),
+                  prefixIcon: const Icon(Icons.gps_fixed, color: Color(0xFF6C63FF), size: 20),
+                  filled: true,
+                  fillColor: const Color(0xFF12122A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: Colors.white.withAlpha(10)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Material(
+              color: const Color(0xFF6C63FF).withAlpha(28),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: _openMapPicker,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_rounded, color: Color(0xFF8B83FF), size: 22),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.t('ticket_pick_on_map'),
+                        style: const TextStyle(
+                          color: Color(0xFF8B83FF),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   void _refreshLinkedSiteFromProvider(SitesProvider sites) {
@@ -184,6 +309,39 @@ class _CreateMaintenanceTicketScreenState
       return;
     }
 
+    double? coordLat;
+    double? coordLng;
+    final coordText = _coordsCtrl.text.trim();
+    if (coordText.isNotEmpty) {
+      final parts = coordText
+          .split(RegExp(r'[,\s;]+'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (parts.length >= 2) {
+        coordLat = double.tryParse(parts[0]);
+        coordLng = double.tryParse(parts[1]);
+      }
+      if (coordLat == null || coordLng == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.t('ticket_coords_invalid')),
+            backgroundColor: const Color(0xFFFF4757),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        return;
+      }
+    }
+    // Fall back to the linked site's stored coordinates when none entered.
+    if (coordLat == null || coordLng == null) {
+      if (_linkedSite?.hasCoordinates == true) {
+        coordLat = _linkedSite!.latitude;
+        coordLng = _linkedSite!.longitude;
+      }
+    }
+
     final pc = context.read<PrivateCompanyProvider>();
     final inWorkspace = pc.isApproved && (pc.isOwner || pc.isStaff);
     final String? scopeForApi = inWorkspace
@@ -218,19 +376,20 @@ class _CreateMaintenanceTicketScreenState
       technique = departmentMaintenanceTechniqueSlug(targetDeptId);
     }
     final designSpecs = _designSpecsCtrl.text.trim();
-    final linked = _linkedSite;
     final success = await provider.createTicket(
       siteName: siteName,
       siteCoordinator: coordinator,
       technique: technique,
       slaHours: sla,
       province: province,
-      siteLatitude: linked?.hasCoordinates == true ? linked!.latitude : null,
-      siteLongitude: linked?.hasCoordinates == true ? linked!.longitude : null,
+      siteLatitude: coordLat,
+      siteLongitude: coordLng,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       maintenanceReason: reason,
       attachmentUrls:
           _specAttachmentUrls.isEmpty ? null : List.from(_specAttachmentUrls),
+      siteAttachments:
+          _siteAttachments.isEmpty ? null : List.from(_siteAttachments),
       qfieldProjects: () {
         if (_qfieldDrafts.isEmpty) return null;
         return _qfieldDrafts
@@ -262,10 +421,25 @@ class _CreateMaintenanceTicketScreenState
         ),
       );
       Navigator.of(context).pop();
+    } else if (provider.lastTicketCreateErrorCode == 'WORKSPACE_QUOTA_REACHED') {
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.lastTicketCreateMessage ?? l10n.t('pc_plans_quota_reached'),
+          ),
+          backgroundColor: const Color(0xFFFF7675),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const WorkspacePlansScreen()),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(provider.error ?? l10n.t('ticket_failed')),
+          content: Text(provider.lastTicketCreateMessage ?? provider.error ?? l10n.t('ticket_failed')),
           backgroundColor: const Color(0xFFFF4757),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -505,6 +679,7 @@ class _CreateMaintenanceTicketScreenState
     _slaCtrl.dispose();
     _reasonCtrl.dispose();
     _designSpecsCtrl.dispose();
+    _coordsCtrl.dispose();
     super.dispose();
   }
 
@@ -603,6 +778,8 @@ class _CreateMaintenanceTicketScreenState
             hint: l10n.t('site_coordinator_hint'),
             icon: Icons.person_outline_rounded,
           ),
+          const SizedBox(height: 16),
+          _buildSiteCoordinatesSection(l10n),
           const SizedBox(height: 16),
           if (!routeByDept) ...[
             Text(

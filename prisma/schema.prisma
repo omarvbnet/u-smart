@@ -1561,11 +1561,86 @@ model PrivateCompany {
   ticketExpenses                         PrivateCompanyTicketExpense[] @relation("PrivateCompanyTicketExpenses")
   staffLiveLocations                     StaffLiveLocation[]           @relation("PrivateCompanyStaffLiveLocations")
   workspaceLogs                        PrivateCompanyWorkspaceLog[]  @relation("PrivateCompanyWorkspaceLogs")
+  // ── Ticket quota / billing (mobile workspace) ─────────────────────────────
+  /// Free tickets a workspace can create before a plan is required.
+  freeTicketsLimit Int                        @default(30)
+  /// Total tickets created by members of this workspace (counted at creation).
+  ticketsUsed      Int                        @default(0)
+  /// Additive purchased ticket credits from redeemed activation codes (stacks on top of the free tier).
+  ticketCreditsTotal Int                      @default(0)
+  /// When set and in the future, the workspace has unlimited ticket creation (yearly plan; admin-set expiry).
+  unlimitedUntil   DateTime?
+  planRequests     PrivateCompanyPlanRequest[]    @relation("PrivateCompanyPlanRequests")
+  activationCodes  PrivateCompanyActivationCode[] @relation("PrivateCompanyActivationCodes")
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
   @@index([status])
   @@map("private_companies")
+}
+
+/// Ticket plans a workspace can purchase. PACK_* add fixed ticket credits;
+/// YEARLY_UNLIMITED grants unlimited tickets until an admin-set expiry date.
+enum PrivateCompanyTicketPlan {
+  PACK_100
+  PACK_1000
+  YEARLY_UNLIMITED
+}
+
+enum PrivateCompanyPlanRequestStatus {
+  PENDING
+  FULFILLED
+  REJECTED
+}
+
+enum PrivateCompanyActivationCodeStatus {
+  ACTIVE
+  REDEEMED
+  REVOKED
+}
+
+/// Owner/manager request to purchase a ticket plan. Admin reviews it and issues an activation code.
+model PrivateCompanyPlanRequest {
+  id            String                          @id @default(cuid())
+  companyId     String
+  company       PrivateCompany                  @relation("PrivateCompanyPlanRequests", fields: [companyId], references: [id], onDelete: Cascade)
+  /// TicketRequester id of the owner/manager who submitted the request.
+  requestedById String
+  planType      PrivateCompanyTicketPlan
+  contactPhone  String
+  status        PrivateCompanyPlanRequestStatus @default(PENDING)
+  note          String?
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
+
+  @@index([companyId, status])
+  @@map("private_company_plan_requests")
+}
+
+/// Admin-issued activation code, scoped to a single company. Redeeming applies the plan
+/// (adds ticket credits and/or sets the unlimited expiry) to that workspace only.
+model PrivateCompanyActivationCode {
+  id                    String                             @id @default(cuid())
+  companyId             String
+  company               PrivateCompany                     @relation("PrivateCompanyActivationCodes", fields: [companyId], references: [id], onDelete: Cascade)
+  code                  String                             @unique
+  planType              PrivateCompanyTicketPlan
+  /// Ticket credits granted on redemption (100 / 1000; 0 for unlimited plans).
+  ticketCredits         Int                                @default(0)
+  /// Unlimited-until date applied on redemption (yearly plan; null for packs).
+  unlimitedUntil        DateTime?
+  status                PrivateCompanyActivationCodeStatus @default(ACTIVE)
+  /// Optional link back to the plan request this code fulfills.
+  planRequestId         String?
+  /// admin User id (web admin) that generated the code.
+  createdByAdminId      String?
+  redeemedByRequesterId String?
+  redeemedAt            DateTime?
+  createdAt             DateTime                           @default(now())
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@map("private_company_activation_codes")
 }
 
 /// Audit trail for private workspace management (staff, departments, materials, settings, tickets).

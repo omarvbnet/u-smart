@@ -41,6 +41,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
               _section(l10n.t('privacy_section_4_title'), l10n.t('privacy_section_4_body')),
               const SizedBox(height: 24),
               _section(l10n.t('privacy_section_5_title'), l10n.t('privacy_section_5_body')),
+              const SizedBox(height: 24),
+              _section(l10n.t('privacy_section_6_title'), l10n.t('privacy_section_6_body')),
               const SizedBox(height: 32),
             ],
           ),

@@ -47,6 +47,8 @@ type TicketDetail = {
   inspectionResult?: string | null;
   inspectionComments?: string | null;
   inspectionChecklist?: Array<{ id: string; label: string; checked: boolean; comment?: string; weight?: string }>;
+  checklistName?: string | null;
+  checklistTemplateId?: string | null;
   assignedEngineerId?: string | null;
   assignedEngineerName?: string | null;
   comments?: Array<{
@@ -376,7 +378,10 @@ export default function PublicTicketPage() {
                   )}
                   {ticket.inspectionChecklist && ticket.inspectionChecklist.length > 0 && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-2">Checklist</p>
+                      <p className="text-xs text-gray-500 mb-1">Selected checklist</p>
+                      {ticket.checklistName && (
+                        <p className="text-sm font-semibold text-amber-300 mb-2">{ticket.checklistName}</p>
+                      )}
                       <div className="overflow-x-auto rounded-lg border border-amber-500/20">
                         <div className="grid grid-cols-12 gap-2 px-2 py-1.5 bg-amber-500/20 text-xs font-medium text-amber-800">
                           <span className="col-span-5">Item</span>

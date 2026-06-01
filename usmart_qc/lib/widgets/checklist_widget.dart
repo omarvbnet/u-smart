@@ -37,6 +37,10 @@ class ChecklistWidget extends StatefulWidget {
   final void Function(Map<String, dynamic> response) onComplete;
   /// When set, auto-select this template once [templates] are loaded (e.g. ticket’s attached checklist).
   final String? initialTemplateId;
+  /// Previously-saved selections to restore (id → { result, checked, comment }).
+  final List<Map<String, dynamic>>? initialItems;
+  /// Fired whenever the staff changes a selection so the screen can autosave.
+  final void Function(String? checklistTemplateId, List<Map<String, dynamic>> items)? onItemChanged;
 
   const ChecklistWidget({
     super.key,
@@ -44,6 +48,8 @@ class ChecklistWidget extends StatefulWidget {
     required this.loading,
     required this.onComplete,
     this.initialTemplateId,
+    this.initialItems,
+    this.onItemChanged,
   });
 
   @override
@@ -90,7 +96,42 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
       _items = checklist.items
           .map((i) => ChecklistResponseItem(id: i.id, label: i.label, weight: i.weight))
           .toList();
+      _restorePriorSelections();
     });
+    _notifyChanged();
+  }
+
+  /// Re-apply previously saved item results/comments (from server or local draft).
+  void _restorePriorSelections() {
+    final prior = widget.initialItems;
+    if (prior == null || prior.isEmpty) return;
+    final byId = <String, Map<String, dynamic>>{};
+    for (final m in prior) {
+      final id = (m['id'] ?? '').toString();
+      if (id.isNotEmpty) byId[id] = m;
+    }
+    for (final item in _items) {
+      final saved = byId[item.id];
+      if (saved == null) continue;
+      final result = saved['result']?.toString();
+      if (result == 'accepted' || result == 'rejected') {
+        item.result = result;
+        item.checked = result == 'accepted';
+      } else if (saved['checked'] == true) {
+        item.checked = true;
+        item.result = 'accepted';
+      }
+      final comment = saved['comment']?.toString();
+      if (comment != null && comment.isNotEmpty) item.comment = comment;
+    }
+  }
+
+  /// Notify the parent (for autosave) with the current selections.
+  void _notifyChanged() {
+    widget.onItemChanged?.call(
+      _selected?.id,
+      _items.map((i) => i.toJson()).toList(),
+    );
   }
 
   void _submit() {
@@ -358,10 +399,13 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
-                      onTap: () => setState(() {
-                        _items[idx].result = 'accepted';
-                        _items[idx].checked = true;
-                      }),
+                      onTap: () {
+                        setState(() {
+                          _items[idx].result = 'accepted';
+                          _items[idx].checked = true;
+                        });
+                        _notifyChanged();
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -398,10 +442,13 @@ class _ChecklistWidgetState extends State<ChecklistWidget> {
                     ),
                     const SizedBox(width: 6),
                     GestureDetector(
-                      onTap: () => setState(() {
-                        _items[idx].result = 'rejected';
-                        _items[idx].checked = false;
-                      }),
+                      onTap: () {
+                        setState(() {
+                          _items[idx].result = 'rejected';
+                          _items[idx].checked = false;
+                        });
+                        _notifyChanged();
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),

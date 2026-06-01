@@ -1,5 +1,107 @@
 import 'package:flutter/material.dart';
 
+/// Ticket plan tiers a workspace can buy.
+enum WorkspaceTicketPlan { pack100, pack1000, yearlyUnlimited }
+
+extension WorkspaceTicketPlanX on WorkspaceTicketPlan {
+  /// Server enum value.
+  String get apiValue {
+    switch (this) {
+      case WorkspaceTicketPlan.pack100:
+        return 'PACK_100';
+      case WorkspaceTicketPlan.pack1000:
+        return 'PACK_1000';
+      case WorkspaceTicketPlan.yearlyUnlimited:
+        return 'YEARLY_UNLIMITED';
+    }
+  }
+}
+
+WorkspaceTicketPlan? workspaceTicketPlanFromString(dynamic raw) {
+  switch ((raw ?? '').toString().toUpperCase()) {
+    case 'PACK_100':
+      return WorkspaceTicketPlan.pack100;
+    case 'PACK_1000':
+      return WorkspaceTicketPlan.pack1000;
+    case 'YEARLY_UNLIMITED':
+      return WorkspaceTicketPlan.yearlyUnlimited;
+    default:
+      return null;
+  }
+}
+
+/// Ticket quota snapshot for a workspace (free tier + purchased credits / unlimited).
+class WorkspaceBilling {
+  WorkspaceBilling({
+    required this.freeLimit,
+    required this.used,
+    required this.creditsTotal,
+    required this.unlimited,
+    this.unlimitedUntil,
+    this.allowance,
+    this.remaining,
+  });
+
+  final int freeLimit;
+  final int used;
+  final int creditsTotal;
+  final bool unlimited;
+  final DateTime? unlimitedUntil;
+
+  /// Free + purchased credits. Null when unlimited.
+  final int? allowance;
+
+  /// Tickets left before creation is blocked. Null when unlimited.
+  final int? remaining;
+
+  bool get quotaReached => !unlimited && (remaining ?? 0) <= 0;
+
+  factory WorkspaceBilling.fromJson(Map<String, dynamic> json) {
+    return WorkspaceBilling(
+      freeLimit: (json['freeLimit'] as num?)?.toInt() ?? 30,
+      used: (json['used'] as num?)?.toInt() ?? 0,
+      creditsTotal: (json['creditsTotal'] as num?)?.toInt() ?? 0,
+      unlimited: json['unlimited'] == true,
+      unlimitedUntil: json['unlimitedUntil'] != null
+          ? DateTime.tryParse(json['unlimitedUntil'].toString())
+          : null,
+      allowance: (json['allowance'] as num?)?.toInt(),
+      remaining: (json['remaining'] as num?)?.toInt(),
+    );
+  }
+}
+
+/// Latest ticket plan request submitted by the workspace (for status display).
+class WorkspacePlanRequest {
+  WorkspacePlanRequest({
+    required this.id,
+    required this.planType,
+    required this.status,
+    required this.contactPhone,
+    this.createdAt,
+  });
+
+  final String id;
+  final WorkspaceTicketPlan? planType;
+  final String status;
+  final String contactPhone;
+  final DateTime? createdAt;
+
+  bool get isPending => status.toUpperCase() == 'PENDING';
+
+  factory WorkspacePlanRequest.fromJson(Map<String, dynamic> json) {
+    return WorkspacePlanRequest(
+      id: json['id'] as String? ?? '',
+      planType: workspaceTicketPlanFromString(json['planType']),
+      status: (json['status'] as String? ?? 'PENDING').toUpperCase(),
+      contactPhone: json['contactPhone'] as String? ?? '',
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+    );
+  }
+}
+
 /// Status of the private company workspace request.
 enum PrivateCompanyStatus { pending, approved, rejected, suspended, unknown }
 

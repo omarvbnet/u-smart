@@ -15,6 +15,7 @@ import '../utils/workspace_department_technique.dart';
 import '../utils/qfield_file_picker.dart';
 import 'attachment_viewer_screen.dart';
 import 'site_map_picker_screen.dart';
+import 'workspace_plans_screen.dart';
 
 const _qcTechniqueKeys = ['tech_inspection', 'tech_supervision', 'tech_building', 'tech_hse', 'tech_investigation', 'tech_tracking'];
 const _qcTechniqueIds = ['inspection', 'supervision', 'building', 'hse', 'investigation', 'tracking'];
@@ -40,6 +41,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   bool _submitting = false;
   bool _uploading = false;
   final List<String> _attachmentUrls = [];
+  /// Structured site design documents (with names/types) for individual display.
+  final List<Map<String, dynamic>> _siteAttachments = [];
   final List<Map<String, String>> _qfieldDrafts = [];
   String? _selectedChecklistId;
   /// 'PRIVATE_COMPANY' = restrict to my workspace staff, 'GLOBAL' = open to all engineers
@@ -77,6 +80,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       if (url.isEmpty) continue;
       if (!_attachmentUrls.contains(url)) {
         _attachmentUrls.add(url);
+      }
+      if (!_siteAttachments.any((a) => a['url'] == url)) {
+        _siteAttachments.add(d.toPayload());
       }
     }
   }
@@ -230,6 +236,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       siteLongitude: coordLng,
       designSpecifications: designSpecs.isEmpty ? null : designSpecs,
       attachmentUrls: _attachmentUrls.isEmpty ? null : List.from(_attachmentUrls),
+      siteAttachments:
+          _siteAttachments.isEmpty ? null : List.from(_siteAttachments),
       qfieldProjects: () {
         if (_qfieldDrafts.isEmpty) return null;
         return _qfieldDrafts
@@ -263,10 +271,25 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           ),
         );
         Navigator.of(context).pop();
+      } else if (provider.lastTicketCreateErrorCode == 'WORKSPACE_QUOTA_REACHED') {
+        setState(() => _submitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              provider.lastTicketCreateMessage ?? l10n.t('pc_plans_quota_reached'),
+            ),
+            backgroundColor: const Color(0xFFFF7675),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const WorkspacePlansScreen()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.t('ticket_failed')),
+            content: Text(provider.lastTicketCreateMessage ?? l10n.t('ticket_failed')),
             backgroundColor: const Color(0xFFFF4757),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

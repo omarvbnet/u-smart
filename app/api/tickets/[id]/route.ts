@@ -489,6 +489,7 @@ export async function GET(
     let completedAt: string | null = row.completedAt ? String(row.completedAt) : null;
     let designSpecifications: string | null = null;
     let attachmentUrls: string[] = [];
+    let siteAttachments: Array<{ url: string; fileName: string; title?: string; mimeType?: string }> = [];
     let qfieldProjects: QFieldProjectStored[] = [];
     let inspectionResult: string | null = null;
     let inspectionComments: string | null = null;
@@ -505,6 +506,8 @@ export async function GET(
     let conflictResolvedAt: string | null = null;
     let assignedEngineerId: string | null = null;
     let assignedEngineerName: string | null = null;
+    let assignedEngineerPhone: string | null = null;
+    let maintenanceCrew: Array<{ id: string; name: string | null; phone: string | null }> = [];
     let assignedAt: string | null = null;
     let maintenanceCrewIds: string[] = [];
     let embeddedChecklistTemplateId: string | null = null;
@@ -539,6 +542,16 @@ export async function GET(
         if (parsed.completedAt) completedAt = String(parsed.completedAt);
         designSpecifications = (parsed.designSpecifications as string) ?? null;
         attachmentUrls = Array.isArray(parsed.attachmentUrls) ? parsed.attachmentUrls.filter((u: unknown) => typeof u === 'string') : [];
+        siteAttachments = Array.isArray(parsed.siteAttachments)
+          ? parsed.siteAttachments
+              .filter((a: unknown) => a && typeof a === 'object' && typeof (a as { url?: unknown }).url === 'string')
+              .map((a: Record<string, unknown>) => ({
+                url: String(a.url),
+                fileName: typeof a.fileName === 'string' ? a.fileName : '',
+                title: typeof a.title === 'string' ? a.title : undefined,
+                mimeType: typeof a.mimeType === 'string' ? a.mimeType : undefined,
+              }))
+          : [];
         inspectionResult = (parsed.inspectionResult as string) ?? null;
         inspectionComments = (parsed.inspectionComments as string) ?? null;
         inspectionChecklist = Array.isArray(parsed.inspectionChecklist)
@@ -617,6 +630,48 @@ export async function GET(
     }
     if (String((row as { status?: string }).status ?? '').toUpperCase() === 'CANCELLED') {
       status = 'CANCELLED';
+    }
+
+    // Resolve phone numbers for the assigned lead + crew so field staff can be
+    // contacted from the ticket. Staff may be workspace requesters or coordinator
+    // company users, so look them up in both tables.
+    try {
+      const assigneeCoordinatorId =
+        (row as { assigneeCoordinatorUserId?: string | null }).assigneeCoordinatorUserId ?? null;
+      const idSet = new Set<string>();
+      if (assignedEngineerId) idSet.add(assignedEngineerId);
+      if (assigneeCoordinatorId) idSet.add(assigneeCoordinatorId);
+      for (const cid of maintenanceCrewIds) idSet.add(cid);
+      const ids = [...idSet].filter(Boolean);
+      if (ids.length > 0) {
+        const directory = new Map<string, { name: string | null; phone: string | null }>();
+        const [requesters, coordUsers] = await Promise.all([
+          prisma.ticketRequester
+            .findMany({ where: { id: { in: ids } }, select: { id: true, name: true, username: true, phone: true } })
+            .catch(() => []),
+          prisma.coordinatorUser
+            .findMany({ where: { id: { in: ids } }, select: { id: true, name: true, username: true, phone: true } })
+            .catch(() => []),
+        ]);
+        for (const u of [...requesters, ...coordUsers] as Array<{ id: string; name: string | null; username: string | null; phone: string | null }>) {
+          if (!directory.has(u.id)) {
+            directory.set(u.id, { name: u.name || u.username || null, phone: u.phone ?? null });
+          }
+        }
+        const leadId = assignedEngineerId || assigneeCoordinatorId;
+        if (leadId && directory.has(leadId)) {
+          const lead = directory.get(leadId)!;
+          assignedEngineerPhone = lead.phone;
+          if (!assignedEngineerName) assignedEngineerName = lead.name;
+        }
+        maintenanceCrew = maintenanceCrewIds.map((cid) => ({
+          id: cid,
+          name: directory.get(cid)?.name ?? null,
+          phone: directory.get(cid)?.phone ?? null,
+        }));
+      }
+    } catch {
+      /* phone resolution is best-effort */
     }
 
     const statusTimeline = buildEnrichedStatusTimeline({
@@ -822,6 +877,7 @@ export async function GET(
         assignedTeam,
         designSpecifications,
         attachmentUrls,
+        siteAttachments,
         qfieldProjects,
         company: companyName,
         inspectionResult,
@@ -832,6 +888,8 @@ export async function GET(
         ncrResubmissions,
         assignedEngineerId,
         assignedEngineerName,
+        assignedEngineerPhone,
+        maintenanceCrew,
         assignedAt,
         maintenanceCrewIds,
         checklistHistory,

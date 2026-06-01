@@ -51,6 +51,10 @@ import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-row
 import { normalizeQFieldProjectsFromCreateBody, qfieldProjectsToJsonValue } from '@/lib/qfield-projects';
 import { extractTicketApiKeyFromRequest, resolveTicketApiKey } from '@/lib/ticket-api-key-auth';
 import { workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
+import {
+  computeWorkspaceBilling,
+  workspaceTicketQuotaReached,
+} from '@/lib/private-company-billing';
 
 // Cast so TS sees generated delegates (ticketRequester, visitorRequest, notification) after prisma generate
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -822,6 +826,17 @@ export async function POST(req: NextRequest) {
 
     const designSpecifications = typeof body.designSpecifications === 'string' ? body.designSpecifications.trim() : '';
     const attachmentUrls = Array.isArray(body.attachmentUrls) ? body.attachmentUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
+    // Structured site-originated attachments (design docs) with file names / types.
+    const siteAttachments = Array.isArray(body.siteAttachments)
+      ? body.siteAttachments
+          .filter((a: unknown) => a && typeof a === 'object' && typeof (a as { url?: unknown }).url === 'string' && String((a as { url: string }).url).trim())
+          .map((a: Record<string, unknown>) => ({
+            url: String(a.url),
+            fileName: typeof a.fileName === 'string' ? a.fileName : '',
+            title: typeof a.title === 'string' ? a.title : undefined,
+            mimeType: typeof a.mimeType === 'string' ? a.mimeType : undefined,
+          }))
+      : [];
     const maintenanceReason = typeof body.maintenanceReason === 'string' ? body.maintenanceReason.trim() : '';
     const beforeImageUrls = Array.isArray(body.beforeImageUrls) ? body.beforeImageUrls.filter((u: unknown) => typeof u === 'string' && u.trim()) : [];
 
@@ -1003,6 +1018,7 @@ export async function POST(req: NextRequest) {
       company: company || null,
       designSpecifications: designSpecifications || null,
       attachmentUrls: attachmentUrls.length > 0 ? attachmentUrls : null,
+      siteAttachments: siteAttachments.length > 0 ? siteAttachments : null,
     };
     if (embedSiteLat !== undefined && embedSiteLng !== undefined) {
       companyPayloadObj.siteLatitude = embedSiteLat;
@@ -1136,6 +1152,49 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Private-company workspace ticket quota (free tier + activation-code plans) ──
+    // Any ticket created by a member of an approved workspace consumes the
+    // workspace quota. Once the free tier + purchased credits are exhausted
+    // (and no unlimited plan is active) creation is blocked with 402.
+    let workspaceBillingCompanyId: string | null = null;
+    let workspaceBillingUnlimited = false;
+    if (!coordinatorContext && creatorPrivateWorkspaceId) {
+      try {
+        const wsRow = await prisma.privateCompany.findUnique({
+          where: { id: creatorPrivateWorkspaceId },
+          select: {
+            id: true,
+            freeTicketsLimit: true,
+            ticketsUsed: true,
+            ticketCreditsTotal: true,
+            unlimitedUntil: true,
+          },
+        });
+        if (wsRow) {
+          const billing = computeWorkspaceBilling(wsRow);
+          workspaceBillingCompanyId = wsRow.id;
+          workspaceBillingUnlimited = billing.unlimited;
+          if (workspaceTicketQuotaReached(wsRow)) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: 'WORKSPACE_QUOTA_REACHED',
+                message:
+                  'Your workspace has used all of its tickets. Activate a ticket plan to keep creating tickets.',
+                remaining: billing.remaining ?? 0,
+                allowance: billing.allowance ?? 0,
+                used: billing.used,
+              },
+              { status: 402 }
+            );
+          }
+        }
+      } catch (_) {
+        // Legacy DB without billing columns: skip the quota gate gracefully.
+        workspaceBillingCompanyId = null;
+      }
+    }
+
     let ticket;
     try {
       ticket = await prisma.visitorRequest.create({ data: ticketData });
@@ -1211,6 +1270,19 @@ export async function POST(req: NextRequest) {
             },
           });
         }
+      }
+    }
+
+    // Count this ticket against the workspace quota (free-tier / pack credits).
+    // Unlimited (yearly) tickets are not counted so usage stays meaningful after expiry.
+    if (workspaceBillingCompanyId && !workspaceBillingUnlimited) {
+      try {
+        await prisma.privateCompany.update({
+          where: { id: workspaceBillingCompanyId },
+          data: { ticketsUsed: { increment: 1 } },
+        });
+      } catch (e) {
+        console.warn('POST /api/tickets: workspace ticketsUsed increment skipped', e);
       }
     }
 
