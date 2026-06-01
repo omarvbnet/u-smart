@@ -35,6 +35,19 @@ class AuthProvider extends ChangeNotifier {
   bool get canJoinWorkspaceTicketCrew => _user?.canJoinWorkspaceTicketCrew ?? false;
   bool get mustChangePassword => _user?.mustChangePassword ?? false;
 
+  /// Provisor field staff use the field dashboard (where the QC/maintenance
+  /// ticket pool and urgent assignments live): global QC-service engineers, and
+  /// global maintenance technicians that aren't tied to a private workspace.
+  /// Private-company technicians keep the workspace dashboard.
+  bool get usesFieldDashboard {
+    if (isEngineer) return true;
+    final u = _user;
+    if (u == null) return false;
+    return isTechnician &&
+        u.privateCompanyId == null &&
+        u.serviceSlug == 'quality-control-supervision';
+  }
+
   /// JWT + `/me` include `companyId` for coordinator-platform users (owner, coordinator, admin, technician, …).
   bool get hasCoordinatorCompany {
     final id = _user?.companyId;

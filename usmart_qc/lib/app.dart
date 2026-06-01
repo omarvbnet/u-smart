@@ -55,9 +55,9 @@ class ProvisrApp extends StatelessWidget {
             home: auth.loading
           ? const SplashScreen()
           : auth.isLoggedIn
-              ? (auth.isEngineer
-                  ? const EngineerDashboardScreen()
-                  : const CompanyDashboardScreen()) // COMPANY, PERSONAL, TECHNICIAN, WORKER
+              ? (auth.usesFieldDashboard
+                  ? const EngineerDashboardScreen() // QC engineers + global maintenance technicians
+                  : const CompanyDashboardScreen()) // COMPANY, PERSONAL, workspace TECHNICIAN, WORKER
               : const LoginScreen(),
           ),
         );

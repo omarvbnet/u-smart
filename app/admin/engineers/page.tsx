@@ -29,6 +29,7 @@ type Engineer = {
   province: string | null;
   provinceFilterActive: boolean;
   status: string;
+  role: string;
   createdAt: string;
   activeTickets: number;
   completedTickets: number;
@@ -49,6 +50,7 @@ export default function AdminEngineersPage() {
   const [formPassword, setFormPassword] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formProvince, setFormProvince] = useState('');
+  const [formRole, setFormRole] = useState<'ENGINEER' | 'TECHNICIAN'>('ENGINEER');
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -101,6 +103,7 @@ export default function AdminEngineersPage() {
           name: formName.trim() || null,
           phone: formPhone.trim(),
           province: formProvince || null,
+          role: formRole,
         }),
       });
       const data = await res.json();
@@ -113,6 +116,7 @@ export default function AdminEngineersPage() {
         setFormPassword('');
         setFormPhone('');
         setFormProvince('');
+        setFormRole('ENGINEER');
       } else {
         setFormError(data.message || 'Failed to create engineer');
       }
@@ -244,8 +248,8 @@ export default function AdminEngineersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Provisor Engineers</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage QC engineers for the Provisor mobile app</p>
+          <h1 className="text-2xl font-bold text-gray-900">Provisor Engineers & Technicians</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage QC engineers and maintenance technicians for the Provisor mobile app</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -263,7 +267,7 @@ export default function AdminEngineersPage() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm font-medium"
           >
             <PlusIcon className="w-4 h-4" />
-            New Engineer
+            New Staff
           </button>
         </div>
       </div>
@@ -281,10 +285,40 @@ export default function AdminEngineersPage() {
       {showForm && (
         <div className="mb-6 p-5 bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Create New Engineer</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Create New {formRole === 'TECHNICIAN' ? 'Technician' : 'Engineer'}
+            </h2>
             <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
               <XMarkIcon className="w-5 h-5" />
             </button>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setFormRole('ENGINEER')}
+                className={`px-4 py-2 text-sm font-medium ${
+                  formRole === 'ENGINEER' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                QC Engineer
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormRole('TECHNICIAN')}
+                className={`px-4 py-2 text-sm font-medium border-l border-gray-300 ${
+                  formRole === 'TECHNICIAN' ? 'bg-teal-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Maintenance Technician
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {formRole === 'TECHNICIAN'
+                ? 'Technicians can take and complete maintenance tickets.'
+                : 'Engineers handle quality-control & supervision inspections.'}
+            </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -355,7 +389,7 @@ export default function AdminEngineersPage() {
               ) : (
                 <PlusIcon className="w-4 h-4" />
               )}
-              Create Engineer
+              Create {formRole === 'TECHNICIAN' ? 'Technician' : 'Engineer'}
             </button>
           </div>
         </div>
@@ -370,7 +404,7 @@ export default function AdminEngineersPage() {
                 <PlayIcon className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Engineer Created!</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Staff Created!</h3>
                 <p className="text-sm text-gray-500">Save these credentials securely</p>
               </div>
             </div>
@@ -425,7 +459,8 @@ export default function AdminEngineersPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Engineer</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Staff</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Role</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Province</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
@@ -455,6 +490,18 @@ export default function AdminEngineersPage() {
                         <p className="text-xs text-gray-500">@{e.username}</p>
                       </div>
                     )}
+                  </td>
+                  {/* Role */}
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        e.role === 'TECHNICIAN'
+                          ? 'bg-teal-100 text-teal-800'
+                          : 'bg-indigo-100 text-indigo-800'
+                      }`}
+                    >
+                      {e.role === 'TECHNICIAN' ? 'Technician' : 'Engineer'}
+                    </span>
                   </td>
                   {/* Phone */}
                   <td className="px-4 py-3">

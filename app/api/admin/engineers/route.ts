@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const engineers = await prisma.ticketRequester.findMany({
-      where: { role: 'ENGINEER', serviceSlug: 'quality-control-supervision' },
+      where: { role: { in: ['ENGINEER', 'TECHNICIAN'] }, serviceSlug: 'quality-control-supervision' },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
         province: true,
         provinceFilterActive: true,
         status: true,
+        role: true,
         createdAt: true,
         _count: { select: { tickets: true } },
       },
@@ -80,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      engineers: engineers.map((e: { id: string; username: string; name: string | null; phone: string; province?: string | null; provinceFilterActive?: boolean; status?: string; createdAt: Date; _count: { tickets: number } }) => ({
+      engineers: engineers.map((e: { id: string; username: string; name: string | null; phone: string; province?: string | null; provinceFilterActive?: boolean; status?: string; role?: string; createdAt: Date; _count: { tickets: number } }) => ({
         id: e.id,
         username: e.username,
         name: e.name,
@@ -88,6 +89,7 @@ export async function GET(req: NextRequest) {
         province: e.province ?? null,
         provinceFilterActive: e.provinceFilterActive ?? true,
         status: e.status ?? 'ACTIVE',
+        role: e.role ?? 'ENGINEER',
         createdAt: e.createdAt,
         activeTickets: activeCountMap[e.id] ?? 0,
         completedTickets: completedCountMap[e.id] ?? 0,
@@ -117,6 +119,8 @@ export async function POST(req: NextRequest) {
     const name = typeof body.name === 'string' ? body.name.trim() || null : null;
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const province = typeof body.province === 'string' ? body.province.trim() || null : null;
+    const roleRaw = typeof body.role === 'string' ? body.role.trim().toUpperCase() : 'ENGINEER';
+    const role = roleRaw === 'TECHNICIAN' ? 'TECHNICIAN' : 'ENGINEER';
 
     if (!username || !password) {
       return NextResponse.json({ success: false, message: 'Username and password are required' }, { status: 400 });
@@ -146,7 +150,7 @@ export async function POST(req: NextRequest) {
         province,
         provinceFilterActive: !!province,
         serviceSlug: 'quality-control-supervision',
-        role: 'ENGINEER',
+        role,
         verificationStatus: 'APPROVED',
         verifiedAt: new Date(),
       },
@@ -158,6 +162,7 @@ export async function POST(req: NextRequest) {
         province: true,
         provinceFilterActive: true,
         status: true,
+        role: true,
         createdAt: true,
       },
     });
@@ -169,6 +174,7 @@ export async function POST(req: NextRequest) {
         province: engineer.province ?? null,
         provinceFilterActive: engineer.provinceFilterActive ?? true,
         status: engineer.status ?? 'ACTIVE',
+        role: engineer.role ?? 'ENGINEER',
         activeTickets: 0,
         completedTickets: 0,
         totalAssigned: 0,
