@@ -11,6 +11,7 @@ import 'workspace_site_form_sheet.dart';
 import '../screens/create_maintenance_ticket_screen.dart';
 import '../screens/create_ticket_screen.dart';
 import '../screens/site_form_screen.dart';
+import '../screens/site_tickets_screen.dart';
 import '../utils/site_qfield_map.dart';
 import '../widgets/site_share_dialog.dart';
 import 'site_bulk_import_menu.dart';
@@ -233,16 +234,9 @@ class _DashboardSitesTabState extends State<DashboardSitesTab>
   }
 
   void _openSite(BuildContext context, Site site) {
-    if (site.isWorkspace && site.workspaceSiteId != null) {
-      showWorkspaceSiteDetailSheet(context, site.workspaceSiteId!);
-      return;
-    }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => SiteFormScreen(
-          site: site,
-          readOnly: !site.canEdit,
-        ),
+        builder: (_) => SiteTicketsScreen(site: site),
       ),
     ).then((_) => _reloadSites(context.read<SitesProvider>()));
   }

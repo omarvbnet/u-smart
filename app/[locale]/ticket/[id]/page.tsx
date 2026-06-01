@@ -51,6 +51,7 @@ type TicketDetail = {
   checklistTemplateId?: string | null;
   assignedEngineerId?: string | null;
   assignedEngineerName?: string | null;
+  assignedEngineerPhone?: string | null;
   comments?: Array<{
     id: string;
     authorName: string;
@@ -279,8 +280,14 @@ export default function PublicTicketPage() {
                     <dt className="text-gray-500 shrink-0 flex items-center gap-1.5"><User className="w-4 h-4 text-cyan-400" /> Assigned engineer</dt>
                     <dd className="text-white">
                       <span className="font-medium">{ticket.assignedEngineerName ?? '—'}</span>
-                      {ticket.assignedEngineerId && (
-                        <span className="ml-1.5 text-gray-400 font-mono text-xs">(ID: {ticket.assignedEngineerId})</span>
+                      {ticket.assignedEngineerPhone && (
+                        <a
+                          href={`tel:${ticket.assignedEngineerPhone}`}
+                          className="ml-2 inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 underline decoration-dotted"
+                          dir="ltr"
+                        >
+                          {ticket.assignedEngineerPhone}
+                        </a>
                       )}
                     </dd>
                   </div>

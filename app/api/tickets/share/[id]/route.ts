@@ -138,6 +138,29 @@ export async function GET(
       /* ignore */
     }
 
+    // Resolve the assigned lead's phone so the shared page can show a contact.
+    // Staff may live in either the requester or coordinator-user directory.
+    let assignedEngineerPhone: string | null = null;
+    if (assignedEngineerId) {
+      try {
+        const [reqUser, coordUser] = await Promise.all([
+          prisma.ticketRequester
+            .findUnique({ where: { id: assignedEngineerId }, select: { name: true, username: true, phone: true } })
+            .catch(() => null),
+          prisma.coordinatorUser
+            ?.findUnique?.({ where: { id: assignedEngineerId }, select: { name: true, username: true, phone: true } })
+            ?.catch?.(() => null),
+        ]);
+        const u = reqUser || coordUser;
+        if (u) {
+          assignedEngineerPhone = u.phone ?? null;
+          if (!assignedEngineerName) assignedEngineerName = u.name || u.username || null;
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+
     // Resolve the selected checklist's display name when it wasn't captured at
     // completion (e.g. in-progress autosaved selections only have the template id).
     if (!checklistName && checklistTemplateId) {
@@ -246,6 +269,7 @@ export async function GET(
         ncrResubmissions,
         assignedEngineerId,
         assignedEngineerName,
+        assignedEngineerPhone,
         comments,
       },
     });
