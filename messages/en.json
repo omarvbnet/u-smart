@@ -188,11 +188,11 @@
     "sections": {
       "collect": {
         "title": "1. Information We Collect",
-        "body": "We may collect personal information that you provide directly to us, such as your name, email address, and contact details, specifically when you register an account or use our smart automation and energy management services. Our mobile app Proviser / U-SMART QC also collects location data as described in Section 2 below."
+        "body": "We may collect personal information that you provide directly to us, such as your name, email address, and contact details, specifically when you register an account or use our smart automation and energy management services. Our mobile app Provisor / U-SMART QC also collects location data as described in Section 2 below."
       },
       "location": {
         "title": "2. Location Data",
-        "body": "When you use the Proviser mobile app linked to your company workspace account, we may collect your device's geographic location (GPS or approximate location) and transmit it securely to our servers at usmart-iot.com to power field-location features. We do not sell your location data or use it for targeted advertising.",
+        "body": "When you use the Provisor mobile app linked to your company workspace account, we may collect your device's geographic location (GPS or approximate location) and transmit it securely to our servers at usmart-iot.com to power field-location features. We do not sell your location data or use it for targeted advertising.",
         "whenLead": "When we collect location:",
         "whenPoints": [
           "While you use the app (foreground): when you open a ticket detail screen, a site map, QField map preview, confirm arrival on site (\"On site\"), or view team positions on the map.",
@@ -200,7 +200,7 @@
         ],
         "whyLead": "Why we need location data:",
         "whyPoints": [
-          "To locate and display engineering sites and field projects (including QField/GIS map layers in Proviser).",
+          "To locate and display engineering sites and field projects (including QField/GIS map layers in Provisor).",
           "To verify you are within the work-site radius before marking a ticket as \"On site\" or starting field work.",
           "To update ticket status and field workflows (quality, maintenance, supervision) based on your actual position.",
           "To show your live position to authorized team members on the map (workspace managers/coordinators) while map features are in use."

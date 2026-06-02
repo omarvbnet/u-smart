@@ -84,6 +84,25 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, count: 0 });
       }
     }
+    if (type === 'pending_upgrade_requests') {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = prisma as any;
+        let individual = 0;
+        let privateCount = 0;
+        if (p.registrationRequest?.count) {
+          individual = await p.registrationRequest.count({
+            where: { requesterId: { not: null }, role: 'COMPANY', status: 'PENDING' },
+          });
+        }
+        if (p.privateCompany?.count) {
+          privateCount = await p.privateCompany.count({ where: { status: 'PENDING' } });
+        }
+        return NextResponse.json({ success: true, count: individual + privateCount });
+      } catch {
+        return NextResponse.json({ success: true, count: 0 });
+      }
+    }
     if (type === 'pending_conflicts') {
       try {
         // Open conflicts = visitor_request rows whose JSON `company` field contains a conflictReported flag

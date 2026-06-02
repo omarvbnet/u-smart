@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { prisma as _prisma } from '@/lib/prisma';
+import { sendPrivateWorkspaceApprovedEmail } from '@/lib/email';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -106,6 +107,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   } catch (e) {
     console.error('Notify owner (private-company status):', e);
+  }
+
+  // Email the owner when the workspace upgrade is approved/reactivated.
+  if ((action === 'approve' || action === 'reactivate') && company.ownerRequesterId) {
+    try {
+      const owner = await prisma.ticketRequester.findUnique({
+        where: { id: company.ownerRequesterId },
+        select: { name: true, email: true, contactEmail: true },
+      });
+      const ownerEmail = (owner?.email || owner?.contactEmail || '').trim();
+      if (ownerEmail && ownerEmail.includes('@')) {
+        sendPrivateWorkspaceApprovedEmail({
+          to: ownerEmail,
+          recipientName: owner?.name ?? null,
+          workspaceName: company.name,
+        }).catch((e) => console.error('Private workspace approval email failed:', e));
+      }
+    } catch (e) {
+      console.error('Private workspace approval email lookup failed:', e);
+    }
   }
 
   return NextResponse.json({ success: true, company: updated });

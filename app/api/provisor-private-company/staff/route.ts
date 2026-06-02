@@ -555,6 +555,34 @@ export async function PATCH(req: NextRequest) {
     if (['ACTIVE', 'SUSPENDED', 'BLOCKED'].includes(s)) data.status = s;
   }
   if (typeof body?.name === 'string' && body.name.trim()) data.name = body.name.trim();
+  if (typeof body?.email === 'string') {
+    const e = body.email.trim().toLowerCase();
+    if (e === '') {
+      data.email = null;
+    } else if (!e.includes('@')) {
+      return NextResponse.json({ success: false, message: 'Enter a valid email address.' }, { status: 400 });
+    } else {
+      const existing = await prisma.ticketRequester.findFirst({
+        where: { email: e, NOT: { id } },
+        select: { id: true },
+      });
+      if (existing) {
+        return NextResponse.json({ success: false, message: 'Email is already in use.' }, { status: 409 });
+      }
+      data.email = e;
+    }
+  }
+  if (typeof body?.phone === 'string' && body.phone.trim()) {
+    const ph = body.phone.trim();
+    const existing = await prisma.ticketRequester.findFirst({
+      where: { phone: ph, NOT: { id } },
+      select: { id: true },
+    });
+    if (existing) {
+      return NextResponse.json({ success: false, message: 'Phone number is already in use.' }, { status: 409 });
+    }
+    data.phone = ph;
+  }
   if (body?.province !== undefined) {
     const p = normalizeProvinceOrNull(body.province);
     if (!p) {

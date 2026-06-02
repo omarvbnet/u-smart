@@ -552,28 +552,26 @@ export async function POST(req: NextRequest) {
     }
 
     if (payload && !coordinatorContext && requesterRole === 'PERSONAL') {
+      // Individuals can create tickets directly (free-text site) OR from a saved site —
+      // adding a site beforehand is NOT required. When the entered site name matches a
+      // saved dashboard site, inherit its province; otherwise the ad-hoc site is allowed
+      // (it is upserted after creation when coordinates are provided).
       const siteDelegate = (prisma as any).site;
-      if (!siteDelegate?.findFirst) {
-        return NextResponse.json(
-          { success: false, message: 'Sites are not available right now. Please try again later.' },
-          { status: 503 }
-        );
-      }
-      const personalSite = await siteDelegate.findFirst({
-        where: {
-          requesterId: payload.requesterId,
-          siteId: siteName,
-        },
-        select: { siteId: true, province: true },
-      });
-      if (!personalSite) {
-        return NextResponse.json(
-          { success: false, message: 'Personal accounts can create tickets only for sites added in your dashboard.' },
-          { status: 403 }
-        );
-      }
-      if (!province || province === 'N/A') {
-        province = personalSite.province || province;
+      if (siteDelegate?.findFirst) {
+        try {
+          const personalSite = await siteDelegate.findFirst({
+            where: {
+              requesterId: payload.requesterId,
+              siteId: siteName,
+            },
+            select: { siteId: true, province: true },
+          });
+          if (personalSite && (!province || province === 'N/A')) {
+            province = personalSite.province || province;
+          }
+        } catch {
+          /* ignore lookup failure — ad-hoc site creation is allowed */
+        }
       }
     }
 
@@ -1852,9 +1850,37 @@ export async function GET(req: NextRequest) {
         company: { contains: payload.requesterId },
         AND: [privateCompanyTicketScope],
       };
+    } else if (
+      requesterRole === 'MANAGER' &&
+      !ownedPrivateCompanyId &&
+      privateCompanyId &&
+      requesterDepartmentId
+    ) {
+      // Department MANAGER (not the workspace owner): their ticket list + analytics are
+      // scoped to their own department only — tickets targeted at that department, or
+      // created by a member of that department.
+      let deptMemberIds: string[] = [];
+      try {
+        const deptMembers = await prisma.ticketRequester.findMany({
+          where: { privateCompanyId, privateCompanyDepartmentId: requesterDepartmentId },
+          select: { id: true },
+        });
+        deptMemberIds = (deptMembers as Array<{ id: string }>).map((m) => m.id);
+      } catch (_) {
+        deptMemberIds = [];
+      }
+      if (!deptMemberIds.includes(payload.requesterId)) deptMemberIds.push(payload.requesterId);
+      where = {
+        serviceSlug: filterServiceSlug,
+        privateCompanyId,
+        OR: [
+          { privateCompanyTargetDepartmentId: requesterDepartmentId },
+          { requesterId: { in: deptMemberIds } },
+        ],
+      };
     } else {
-      // COMPANY / MANAGER / COORDINATOR / etc.: own requester tickets plus coordinator-company
-      // tickets when linked (same owner). Private-company members ALL share the same view.
+      // COMPANY / owner / COORDINATOR / etc.: own requester tickets plus coordinator-company
+      // tickets when linked (same owner). Private-company owners see ALL workspace tickets.
       const linkedCompanyId =
         requesterRole === 'COMPANY'
           ? await getLinkedCoordinatorCompanyId(prisma, {

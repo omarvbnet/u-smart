@@ -4,7 +4,7 @@ import { getRequesterFromRequest } from '@/lib/get-requester-token';
 import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 import { getSharedSiteTicketOrClauses } from '@/lib/site-share-access';
-import { isWorkspaceTicketLeader, workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
+import { workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
 
 export async function GET(req: NextRequest) {
   try {
@@ -102,6 +102,7 @@ export async function GET(req: NextRequest) {
         username: true,
         email: true,
         privateCompanyId: true,
+        privateCompanyDepartmentId: true,
         privateCompanyOwned: { select: { id: true, status: true } },
       },
     });
@@ -145,6 +146,8 @@ export async function GET(req: NextRequest) {
         : null;
     const staffPrivateCompanyId =
       (requester as { privateCompanyId?: string | null }).privateCompanyId ?? null;
+    const requesterDepartmentId =
+      (requester as { privateCompanyDepartmentId?: string | null }).privateCompanyDepartmentId ?? null;
     const privateCompanyId = ownedPrivateCompanyId ?? staffPrivateCompanyId;
 
     let privateCompanyMemberIds: string[] = [];
@@ -165,8 +168,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const useWorkspaceWideStats =
-      privateCompanyId && isWorkspaceTicketLeader(requesterRole, ownedPrivateCompanyId);
+    // Owner of an APPROVED workspace → whole-company analytics. A department MANAGER
+    // (not the owner) → analytics scoped to their own department only.
+    const isWorkspaceOwner = !!ownedPrivateCompanyId;
+    const isDepartmentManager =
+      !isWorkspaceOwner &&
+      requesterRole === 'MANAGER' &&
+      !!privateCompanyId &&
+      !!requesterDepartmentId;
+    const useWorkspaceWideStats = !!privateCompanyId && isWorkspaceOwner;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let where: any;
@@ -182,6 +192,26 @@ export async function GET(req: NextRequest) {
           ownedPrivateCompanyId,
           linkedCoordinatorCompanyId: linkedCompanyId,
         }),
+      };
+    } else if (isDepartmentManager) {
+      let deptMemberIds: string[] = [];
+      try {
+        const deptMembers = await prisma.ticketRequester.findMany({
+          where: { privateCompanyId, privateCompanyDepartmentId: requesterDepartmentId },
+          select: { id: true },
+        });
+        deptMemberIds = (deptMembers as Array<{ id: string }>).map((m) => m.id);
+      } catch {
+        deptMemberIds = [];
+      }
+      if (!deptMemberIds.includes(payload.requesterId)) deptMemberIds.push(payload.requesterId);
+      where = {
+        serviceSlug: filterServiceSlug,
+        privateCompanyId,
+        OR: [
+          { privateCompanyTargetDepartmentId: requesterDepartmentId },
+          { requesterId: { in: deptMemberIds } },
+        ],
       };
     } else if (linkedCompanyId) {
       where = {

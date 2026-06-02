@@ -28,6 +28,7 @@ import {
   BugPlay,
   ListChecks,
   Tags,
+  ArrowUpCircle,
 } from 'lucide-react';
 
 const links = [
@@ -59,6 +60,7 @@ const links = [
   { href: '/admin/company-requests', label: 'Company Req.', icon: Building2 },
   { href: '/admin/ticket-api-key-requests', label: 'Ticket API keys', icon: KeyRound },
   { href: '/admin/registration-requests', label: 'Registration Req.', icon: UserCircle },
+  { href: '/admin/upgrade-requests', label: 'Upgrade Requests', icon: ArrowUpCircle, badgeType: 'pending_upgrade_requests' as const },
   { href: '/admin/companies', label: 'Companies', icon: Building },
   { href: '/admin/coordinator-companies', label: 'Coordinator Companies', icon: Building2 },
   { href: '/admin/private-companies', label: 'Private workspaces', icon: Building, badgeType: 'pending_private_company' as const },
@@ -77,11 +79,12 @@ export default function AdminNav() {
   const [productPendingCount, setProductPendingCount] = useState(0);
   const [privateCompanyPendingCount, setPrivateCompanyPendingCount] = useState(0);
   const [conflictsPendingCount, setConflictsPendingCount] = useState(0);
+  const [upgradePendingCount, setUpgradePendingCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [visitorRes, cleanEnergyRes, enterpriseRes, qcRes, trainingRes, productRes, privateRes, conflictsRes] = await Promise.all([
+        const [visitorRes, cleanEnergyRes, enterpriseRes, qcRes, trainingRes, productRes, privateRes, conflictsRes, upgradeRes] = await Promise.all([
           fetch('/api/notifications/count?type=pending_visitor_tickets'),
           fetch('/api/notifications/count?type=pending_clean_energy_tickets'),
           fetch('/api/notifications/count?type=pending_tickets'),
@@ -90,6 +93,7 @@ export default function AdminNav() {
           fetch('/api/notifications/count?type=pending_product_requests'),
           fetch('/api/notifications/count?type=pending_private_companies'),
           fetch('/api/notifications/count?type=pending_conflicts'),
+          fetch('/api/notifications/count?type=pending_upgrade_requests'),
         ]);
         const visitorData = await visitorRes.json();
         const cleanEnergyData = await cleanEnergyRes.json();
@@ -99,6 +103,7 @@ export default function AdminNav() {
         const productData = await productRes.json();
         const privateData = await privateRes.json().catch(() => ({}));
         const conflictsData = await conflictsRes.json().catch(() => ({}));
+        const upgradeData = await upgradeRes.json().catch(() => ({}));
         if (visitorData.success && typeof visitorData.count === 'number') setVisitorPendingCount(visitorData.count);
         if (cleanEnergyData.success && typeof cleanEnergyData.count === 'number') setCleanEnergyPendingCount(cleanEnergyData.count);
         if (enterpriseData.success && typeof enterpriseData.count === 'number') setEnterprisePendingCount(enterpriseData.count);
@@ -107,6 +112,7 @@ export default function AdminNav() {
         if (productData.success && typeof productData.count === 'number') setProductPendingCount(productData.count);
         if (privateData?.success && typeof privateData.count === 'number') setPrivateCompanyPendingCount(privateData.count);
         if (conflictsData?.success && typeof conflictsData.count === 'number') setConflictsPendingCount(conflictsData.count);
+        if (upgradeData?.success && typeof upgradeData.count === 'number') setUpgradePendingCount(upgradeData.count);
       } catch {
         /* ignore */
       }
@@ -131,6 +137,7 @@ export default function AdminNav() {
           (href === '/admin/training-requests' && badgeType === 'pending_training' && trainingPendingCount > 0) ||
           (href === '/admin/product-requests' && badgeType === 'pending_product' && productPendingCount > 0) ||
           (href === '/admin/private-companies' && badgeType === 'pending_private_company' && privateCompanyPendingCount > 0) ||
+          (href === '/admin/upgrade-requests' && badgeType === 'pending_upgrade_requests' && upgradePendingCount > 0) ||
           (href === '/admin/conflicts' && badgeType === 'pending_conflicts' && conflictsPendingCount > 0);
         const badgeCount =
           href === '/admin/visitor-requests' ? visitorPendingCount :
@@ -140,6 +147,7 @@ export default function AdminNav() {
           href === '/admin/training-requests' ? trainingPendingCount :
           href === '/admin/product-requests' ? productPendingCount :
           href === '/admin/private-companies' ? privateCompanyPendingCount :
+          href === '/admin/upgrade-requests' ? upgradePendingCount :
           href === '/admin/conflicts' ? conflictsPendingCount : 0;
         return (
           <Link

@@ -21,6 +21,7 @@ import 'workspace_checklist_detail_screen.dart';
 import 'workspace_plans_screen.dart';
 import '../l10n/app_localizations.dart';
 import 'workspace_techniques_screen.dart';
+import 'workspace_map_screen.dart';
 import '../widgets/workspace_cancellations_analytics_panel.dart';
 import '../widgets/workspace_expenses_analytics_panel.dart';
 import '../widgets/department_maintenance_reasons_sheet.dart';
@@ -1340,6 +1341,19 @@ class _OverviewTabState extends State<_OverviewTab> {
           ),
           const SizedBox(height: 14),
         ],
+        _GradientButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const WorkspaceMapScreen(),
+              ),
+            );
+          },
+          label: 'Workspace map',
+          icon: Icons.map_rounded,
+          stretch: true,
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -2112,6 +2126,14 @@ class _StaffTab extends StatefulWidget {
 class _StaffTabState extends State<_StaffTab> {
   String? _filterDepartmentId;
   String? _filterRole;
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   void _openCreate({PrivateCompanyStaff? existing}) {
     showModalBottomSheet<void>(
@@ -2237,11 +2259,22 @@ class _StaffTabState extends State<_StaffTab> {
   @override
   Widget build(BuildContext context) {
     final pc = context.watch<PrivateCompanyProvider>();
+    final query = _searchQuery.trim().toLowerCase();
     final filtered = widget.workspace.staff.where((s) {
       if (_filterDepartmentId != null && s.departmentId != _filterDepartmentId) {
         return false;
       }
       if (_filterRole != null && s.role != _filterRole) return false;
+      if (query.isNotEmpty) {
+        final name = (s.name ?? '').toLowerCase();
+        final username = s.username.toLowerCase();
+        final phone = (s.phone ?? '').toLowerCase();
+        if (!name.contains(query) &&
+            !username.contains(query) &&
+            !phone.contains(query)) {
+          return false;
+        }
+      }
       return true;
     }).toList();
 
@@ -2256,6 +2289,41 @@ class _StaffTabState extends State<_StaffTab> {
             stretch: true,
           ),
         const SizedBox(height: 14),
+        TextField(
+          controller: _searchCtrl,
+          onChanged: (v) => setState(() => _searchQuery = v),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Search staff by name',
+            hintStyle: TextStyle(color: Colors.white.withAlpha(110), fontSize: 14),
+            prefixIcon: Icon(Icons.search_rounded,
+                color: Colors.white.withAlpha(140), size: 20),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.close_rounded,
+                        color: Colors.white.withAlpha(140), size: 18),
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                : null,
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            filled: true,
+            fillColor: Colors.white.withAlpha(13),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.white.withAlpha(28)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFF6C63FF)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -2342,6 +2410,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
   String? _specialization;
   String? _province;
   String? _engineerTicketScopeOverride;
+  String _status = 'ACTIVE';
 
   bool _initialDefaultsApplied = false;
 
@@ -2360,6 +2429,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
       _specialization = e.specialization;
       _province = e.province;
       _engineerTicketScopeOverride = e.engineerTicketScopeOverride;
+      _status = e.status.isNotEmpty ? e.status.toUpperCase() : 'ACTIVE';
     }
   }
 
@@ -2387,6 +2457,49 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
     _email.dispose();
     _phone.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmDelete() async {
+    final existing = widget.existing;
+    if (existing == null) return;
+    final pc = context.read<PrivateCompanyProvider>();
+    final isOwner = pc.isOwner;
+    final name = (existing.name ?? '').trim().isNotEmpty
+        ? existing.name!.trim()
+        : existing.username;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF13132B),
+        title: Text(
+          isOwner ? 'Delete staff account?' : 'Remove staff member?',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          isOwner
+              ? 'This permanently deletes $name\'s account and login. This cannot be undone.'
+              : 'This removes $name from your workspace. They will lose access until re-added.',
+          style: TextStyle(color: Colors.white.withAlpha(200), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(
+              isOwner ? 'Delete' : 'Remove',
+              style: const TextStyle(
+                  color: Color(0xFFFF4757), fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await pc.removeStaff(existing.id, hardDelete: isOwner);
+    if (ok && mounted) Navigator.pop(context);
   }
 
   Future<void> _submit() async {
@@ -2436,6 +2549,9 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
         departmentId: _departmentId ?? '',
         specialization: _specialization ?? '',
         name: '${_firstName.text.trim()} ${_lastName.text.trim()}'.trim(),
+        email: _email.text.trim(),
+        phone: _phone.text.trim(),
+        status: _status,
         province: province,
         clearEngineerTicketScopeOverride: _role == 'ENGINEER' && _engineerTicketScopeOverride == null,
         privateCompanyEngineerTicketScope:
@@ -2702,6 +2818,30 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                     );
                   }).toList(),
                 ),
+                if (isEdit) ...[
+                  const SizedBox(height: 18),
+                  const _SectionTitle('Account status'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ('ACTIVE', 'Active', const Color(0xFF4ADE80)),
+                      ('SUSPENDED', 'Suspended', const Color(0xFFFBBF24)),
+                      ('BLOCKED', 'Blocked', const Color(0xFFFF4757)),
+                    ].map((opt) {
+                      final selected = _status == opt.$1;
+                      return GestureDetector(
+                        onTap: () => setState(() => _status = opt.$1),
+                        child: _ChipBox(
+                          label: opt.$2,
+                          selected: selected,
+                          color: opt.$3,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 Row(
                   children: [
@@ -2743,6 +2883,31 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                   icon: Icons.person_add_alt_1_rounded,
                   stretch: true,
                 ),
+                if (isEdit && pc.canManageStaff) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: pc.submitting ? null : _confirmDelete,
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Color(0xFFFF4757)),
+                      label: Text(
+                        pc.isOwner ? 'Delete staff account' : 'Remove from workspace',
+                        style: const TextStyle(
+                          color: Color(0xFFFF4757),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: Color(0x55FF4757)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 if (!isEdit)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),

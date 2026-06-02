@@ -1310,6 +1310,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
     String? specialization,
     String? status,
     String? name,
+    String? email,
+    String? phone,
     String? province,
     bool? provinceFilterActive,
     List<String>? privateCompanyAllowedTaskSlugs,
@@ -1330,6 +1332,8 @@ class PrivateCompanyProvider extends ChangeNotifier {
         if (specialization != null) 'specialization': specialization,
         if (status != null) 'status': status,
         if (name != null) 'name': name,
+        if (email != null) 'email': email.trim(),
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
         if (province != null && province.trim().isNotEmpty)
           'province': province.trim(),
         if (provinceFilterActive != null)

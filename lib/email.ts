@@ -1140,3 +1140,89 @@ export async function sendActivationCodeEmail(args: {
 
   return sendEmail({ to, subject, html, text });
 }
+
+/**
+ * Notify a company owner that their request to upgrade into a private workspace
+ * was approved. Sent from the admin private-companies approve action.
+ */
+export async function sendPrivateWorkspaceApprovedEmail(args: {
+  to: string;
+  recipientName: string | null;
+  workspaceName: string;
+}): Promise<boolean> {
+  const to = args.to.trim();
+  if (!to || !to.includes('@')) return false;
+
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const siteUrl = raw.startsWith('http') ? raw : (raw ? `https://${raw}` : 'https://usmart-iot.com');
+  const logoUrl = process.env.NEXT_PUBLIC_EMAIL_LOGO_URL?.trim();
+  const name = args.recipientName?.trim() || 'there';
+  const workspace = args.workspaceName.trim() || 'your workspace';
+  const subject = 'Provisor — your private workspace is approved';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:28px 32px;text-align:center;">
+            ${
+              logoUrl
+                ? `<img src="${escapeHtml(logoUrl)}" alt="U-SMART Provisor" width="180" style="display:block;margin:0 auto;max-width:100%;height:auto;" />
+            <div style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Private workspaces</div>`
+                : `<div style="font-size:26px;font-weight:800;color:#f59e0b;letter-spacing:0.5px;">U-SMART</div>
+            <div style="margin-top:6px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Private workspaces</div>`
+            }
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 32px 24px;">
+            <div style="margin:0 0 20px;padding:14px 18px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;text-align:center;">
+              <p style="margin:0;font-size:16px;font-weight:700;color:#065f46;">🎉 Request approved</p>
+            </div>
+            <p style="margin:0 0 12px;font-size:18px;font-weight:600;color:#0f172a;">Hello ${escapeHtml(name)},</p>
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#475569;">Great news — your request to upgrade to a private workspace, <strong>${escapeHtml(workspace)}</strong>, has been approved. You can now build your departments, invite staff, and start managing tickets in the Provisor app.</p>
+            <div style="margin-top:8px;padding:14px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#1e3a8a;">Next steps</p>
+              <ol style="margin:0;padding-left:18px;color:#1e40af;font-size:13px;line-height:1.55;">
+                <li>Open the <strong>Provisor</strong> app and go to your workspace.</li>
+                <li>Create departments and add managers, owners, and staff.</li>
+                <li>Start creating and assigning tickets.</li>
+              </ol>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+            <a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:12px 22px;background:#f59e0b;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">Visit website</a>
+            <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} U-SMART · Provisor</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const text = [
+    `Hello ${name},`,
+    '',
+    `Your request to upgrade to a private workspace, ${workspace}, has been approved.`,
+    'You can now build your departments, invite staff, and start managing tickets in the Provisor app.',
+    '',
+    'Next steps:',
+    '1. Open the Provisor app and go to your workspace.',
+    '2. Create departments and add managers, owners, and staff.',
+    '3. Start creating and assigning tickets.',
+    '',
+    `Website: ${siteUrl}`,
+    '',
+    '© U-SMART Provisor',
+  ].join('\n');
+
+  return sendEmail({ to, subject, html, text });
+}

@@ -8,7 +8,7 @@ import 'profile_contact_email_tile.dart';
 /// Extra tiles attached to every dashboard profile tab (engineer, company,
 /// dashboard) for the v1.0.4 update:
 ///   - Contact us via WhatsApp
-///   - About Proviser
+///   - About Provisor
 ///   - Report a problem (issue reports)
 ///
 /// Each tile is self-contained: tapping does not require any new server
