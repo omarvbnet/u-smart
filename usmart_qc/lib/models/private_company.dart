@@ -294,6 +294,7 @@ class PrivateCompanyStaff {
     this.maintenanceProximityJoinOverride,
     this.maintenanceProximityRadiusOverrideM,
     this.engineerTicketScopeOverride,
+    this.coordinatorAnalyticsScope,
   });
 
   final String id;
@@ -313,6 +314,8 @@ class PrivateCompanyStaff {
   final int? maintenanceProximityRadiusOverrideM;
   /// Per-engineer override: QC_ONLY | MAINTENANCE_ONLY | BOTH | null = use department default.
   final String? engineerTicketScopeOverride;
+  /// Owner-controlled coordinator analytics visibility: COMPANY | DEPARTMENT | null (= DEPARTMENT).
+  final String? coordinatorAnalyticsScope;
 
   factory PrivateCompanyStaff.fromJson(Map<String, dynamic> json) {
     return PrivateCompanyStaff(
@@ -351,6 +354,13 @@ class PrivateCompanyStaff {
         final raw = json['privateCompanyEngineerTicketScope'];
         if (raw == null || raw.toString().trim().isEmpty) return null;
         return PrivateCompanyDepartment._normalizeEngineerTicketScope(raw.toString());
+      }(),
+      coordinatorAnalyticsScope: () {
+        final raw = json['privateCompanyCoordinatorAnalyticsScope'];
+        if (raw == null || raw.toString().trim().isEmpty) return null;
+        return raw.toString().trim().toUpperCase() == 'COMPANY'
+            ? 'COMPANY'
+            : 'DEPARTMENT';
       }(),
     );
   }

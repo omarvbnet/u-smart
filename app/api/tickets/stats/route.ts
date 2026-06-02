@@ -5,6 +5,7 @@ import { getCoordinatorContext } from '@/lib/provider-company-auth';
 import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib/linked-coordinator-company';
 import { getSharedSiteTicketOrClauses } from '@/lib/site-share-access';
 import { workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
+import { normalizeCoordinatorAnalyticsScope } from '@/lib/coordinator-analytics-scope';
 
 export async function GET(req: NextRequest) {
   try {
@@ -103,6 +104,7 @@ export async function GET(req: NextRequest) {
         email: true,
         privateCompanyId: true,
         privateCompanyDepartmentId: true,
+        privateCompanyCoordinatorAnalyticsScope: true,
         privateCompanyOwned: { select: { id: true, status: true } },
       },
     });
@@ -171,12 +173,27 @@ export async function GET(req: NextRequest) {
     // Owner of an APPROVED workspace → whole-company analytics. A department MANAGER
     // (not the owner) → analytics scoped to their own department only.
     const isWorkspaceOwner = !!ownedPrivateCompanyId;
+    // A COORDINATOR's analytics scope is owner-controlled: COMPANY = whole
+    // workspace (like the owner), DEPARTMENT (default) = their department only.
+    const isCoordinator =
+      !isWorkspaceOwner && requesterRole === 'COORDINATOR' && !!privateCompanyId;
+    const coordinatorScope = normalizeCoordinatorAnalyticsScope(
+      (requester as { privateCompanyCoordinatorAnalyticsScope?: string | null })
+        .privateCompanyCoordinatorAnalyticsScope
+    );
+    const coordinatorCompanyWide = isCoordinator && coordinatorScope === 'COMPANY';
     const isDepartmentManager =
       !isWorkspaceOwner &&
       requesterRole === 'MANAGER' &&
       !!privateCompanyId &&
       !!requesterDepartmentId;
-    const useWorkspaceWideStats = !!privateCompanyId && isWorkspaceOwner;
+    // Department-scoped: department managers, plus coordinators whose owner has
+    // NOT granted company-wide visibility (and who have a department assigned).
+    const useDepartmentStats =
+      isDepartmentManager ||
+      (isCoordinator && !coordinatorCompanyWide && !!requesterDepartmentId);
+    const useWorkspaceWideStats =
+      !!privateCompanyId && (isWorkspaceOwner || coordinatorCompanyWide);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let where: any;
@@ -185,15 +202,17 @@ export async function GET(req: NextRequest) {
         privateCompanyMemberIds.length > 0 ? privateCompanyMemberIds : [payload.requesterId];
       where = {
         serviceSlug: filterServiceSlug,
-        OR: workspaceTicketVisibilityOrClauses({
-          memberRequesterIds: memberIds,
-          privateCompanyId,
-          role: requesterRole,
-          ownedPrivateCompanyId,
-          linkedCoordinatorCompanyId: linkedCompanyId,
-        }),
+        OR: coordinatorCompanyWide
+          ? [{ requesterId: { in: memberIds } }, { privateCompanyId }]
+          : workspaceTicketVisibilityOrClauses({
+              memberRequesterIds: memberIds,
+              privateCompanyId,
+              role: requesterRole,
+              ownedPrivateCompanyId,
+              linkedCoordinatorCompanyId: linkedCompanyId,
+            }),
       };
-    } else if (isDepartmentManager) {
+    } else if (useDepartmentStats) {
       let deptMemberIds: string[] = [];
       try {
         const deptMembers = await prisma.ticketRequester.findMany({
@@ -287,20 +306,17 @@ export async function GET(req: NextRequest) {
     let inspectionTrend: InspectionCounts | undefined;
 
     if (filterServiceSlug === 'quality-control-supervision') {
-      const sharedQc = canReceiveSharedSites
-        ? await getSharedSiteTicketOrClauses(prisma, payload.requesterId, 'quality-control-supervision')
-        : [];
-      const qcVisibilityOr = linkedCompanyId
-        ? [{ requesterId: payload.requesterId }, { coordinatorCompanyId: linkedCompanyId }, ...sharedQc]
-        : [{ requesterId: payload.requesterId }, ...sharedQc];
+      // Reuse the exact role-scoped visibility built for the main query so the
+      // inspection result counts match the logged-in user's scope:
+      //  - workspace owner  → whole-company inspections
+      //  - department manager → that department's inspections
+      //  - linked coordinator / personal → own + shared/linked inspections
+      // Only the date window differs (current vs trailing period), so we clone
+      // the scope and swap createdAt per window. filterServiceSlug is already
+      // 'quality-control-supervision' here, and siteName is baked into where.AND.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const baseWhere: any = {
-        serviceSlug: 'quality-control-supervision',
-        AND: [{ OR: qcVisibilityOr }],
-      };
-      if (siteNameParam) {
-        baseWhere.AND.push({ OR: [{ company: { contains: siteNameParam } }] });
-      }
+      const scopedWhere: any = { ...where };
+      delete scopedWhere.createdAt;
 
       const currentFrom = from ? new Date(from) : new Date(now - 30 * 24 * 60 * 60 * 1000);
       const currentTo = to ? new Date(to) : new Date(now);
@@ -314,11 +330,11 @@ export async function GET(req: NextRequest) {
 
       const [currentRows, prevRows] = await Promise.all([
         prisma.visitorRequest.findMany({
-          where: { ...baseWhere, createdAt: { gte: currentFrom, lte: currentTo } },
+          where: { ...scopedWhere, createdAt: { gte: currentFrom, lte: currentTo } },
           select: { company: true, createdAt: true },
         }),
         prisma.visitorRequest.findMany({
-          where: { ...baseWhere, createdAt: { gte: prevStart, lte: prevEnd } },
+          where: { ...scopedWhere, createdAt: { gte: prevStart, lte: prevEnd } },
           select: { company: true, createdAt: true },
         }),
       ]);

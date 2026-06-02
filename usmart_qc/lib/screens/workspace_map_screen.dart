@@ -27,6 +27,30 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
   // Iraq centroid fallback until sites / GPS load.
   static const LatLng _fallbackCenter = LatLng(33.3152, 44.3661);
 
+  // Approximate governorate centers, used to place sites that were created
+  // without precise coordinates so every workspace site is still visible.
+  static const Map<String, LatLng> _provinceCentroids = {
+    'Al-Anbar': LatLng(33.4258, 43.3000),
+    'Babil': LatLng(32.4682, 44.5500),
+    'Baghdad': LatLng(33.3152, 44.3661),
+    'Basra': LatLng(30.5081, 47.7835),
+    'Dhi Qar': LatLng(31.0428, 46.2575),
+    'Al-Qadisiyyah': LatLng(31.9923, 44.9249),
+    'Diyala': LatLng(33.7736, 45.1494),
+    'Duhok': LatLng(36.8674, 42.9880),
+    'Erbil': LatLng(36.1911, 44.0092),
+    'Halabja': LatLng(35.1773, 45.9864),
+    'Karbala': LatLng(32.6160, 44.0249),
+    'Kirkuk': LatLng(35.4681, 44.3922),
+    'Maysan': LatLng(31.8356, 47.1448),
+    'Muthanna': LatLng(31.3093, 45.2810),
+    'Najaf': LatLng(31.9890, 44.3148),
+    'Ninawa': LatLng(36.3450, 43.1450),
+    'Salah Al-Din': LatLng(34.6116, 43.6786),
+    'Sulaymaniyah': LatLng(35.5614, 45.4347),
+    'Wasit': LatLng(32.5150, 45.8181),
+  };
+
   final MapController _mapController = MapController();
   late final MapLiveLocation _liveLoc;
   MapTeamLiveTracker? _teamTracker;
@@ -57,9 +81,10 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
     try {
       final data = await context.read<ApiService>().get(ApiConfig.privateCompanySites);
       if (data['success'] == true && data['sites'] is List) {
+        // Keep ALL workspace sites (not just QField / precisely-located ones).
+        // Sites without exact coordinates fall back to their province centroid.
         final list = (data['sites'] as List)
             .map((e) => WorkspaceSite.fromJson(e as Map<String, dynamic>))
-            .where((s) => s.hasCoordinates)
             .toList();
         if (mounted) setState(() => _sites = list);
       }
@@ -87,11 +112,34 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
     _teamTracker!.start(_liveLoc);
   }
 
+  /// Deterministic position for a site, falling back to a jittered province
+  /// centroid when the site has no precise coordinates. Returns null only when
+  /// the site has neither coordinates nor a recognizable province.
+  ({LatLng point, bool approx})? _positionFor(WorkspaceSite s) {
+    if (s.latitude != null && s.longitude != null) {
+      return (point: LatLng(s.latitude!, s.longitude!), approx: false);
+    }
+    final centroid = _provinceCentroids[s.province.trim()];
+    if (centroid == null) return null;
+    // Stable jitter (~±5km) so multiple sites in the same province don't stack.
+    final h = s.id.hashCode;
+    final dLat = (((h % 9) - 4)) * 0.013;
+    final dLng = ((((h ~/ 9) % 9) - 4)) * 0.013;
+    return (point: LatLng(centroid.latitude + dLat, centroid.longitude + dLng), approx: true);
+  }
+
+  List<({WorkspaceSite site, LatLng point, bool approx})> _plottableSites() {
+    final out = <({WorkspaceSite site, LatLng point, bool approx})>[];
+    for (final s in _sites) {
+      final p = _positionFor(s);
+      if (p != null) out.add((site: s, point: p.point, approx: p.approx));
+    }
+    return out;
+  }
+
   void _fitToContent() {
     final points = <LatLng>[
-      for (final s in _sites)
-        if (s.latitude != null && s.longitude != null)
-          LatLng(s.latitude!, s.longitude!),
+      for (final p in _plottableSites()) p.point,
       if (_liveLoc.position != null) _liveLoc.position!,
       for (final t in _teamTracker?.team ?? const [])
         LatLng(t.latitude, t.longitude),
@@ -126,44 +174,51 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
 
   List<Marker> _siteMarkers() {
     return [
-      for (final s in _sites)
-        if (s.latitude != null && s.longitude != null)
-          Marker(
-            point: LatLng(s.latitude!, s.longitude!),
-            width: 140,
-            height: 56,
-            alignment: Alignment.bottomCenter,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  constraints: const BoxConstraints(maxWidth: 136),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xEE12122A),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFF6C63FF).withAlpha(180)),
-                  ),
-                  child: Text(
-                    s.siteCode,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
+      for (final entry in _plottableSites())
+        Marker(
+          point: entry.point,
+          width: 140,
+          height: 58,
+          alignment: Alignment.bottomCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                constraints: const BoxConstraints(maxWidth: 136),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xEE12122A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: (entry.approx
+                            ? const Color(0xFFFBBF24)
+                            : const Color(0xFF6C63FF))
+                        .withAlpha(180),
                   ),
                 ),
-                const SizedBox(height: 2),
-                const Icon(Icons.location_on,
-                    color: Color(0xFF6C63FF), size: 30),
-              ],
-            ),
+                child: Text(
+                  entry.approx ? '${entry.site.siteCode}  ≈' : entry.site.siteCode,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Icon(
+                entry.approx ? Icons.place_outlined : Icons.location_on,
+                color: entry.approx
+                    ? const Color(0xFFFBBF24)
+                    : const Color(0xFF6C63FF),
+                size: entry.approx ? 26 : 30,
+              ),
+            ],
           ),
+        ),
     ];
   }
 
@@ -283,8 +338,8 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
                     const SizedBox(height: 10),
                     Text(
                       canViewTeam
-                          ? 'No sites with map coordinates yet, and no staff are sharing live location right now.'
-                          : 'No sites with map coordinates yet.',
+                          ? 'No workspace sites yet, and no staff are sharing live location right now.'
+                          : 'No workspace sites yet.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: Colors.white.withAlpha(200), height: 1.4),
@@ -299,6 +354,8 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
   }
 
   Widget _legend(int staffCount, bool canViewTeam) {
+    final plottable = _plottableSites();
+    final approxCount = plottable.where((p) => p.approx).length;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -310,10 +367,14 @@ class _WorkspaceMapScreenState extends State<WorkspaceMapScreen> {
         children: [
           const Icon(Icons.location_on, color: Color(0xFF6C63FF), size: 16),
           const SizedBox(width: 5),
-          Text('${_sites.length} sites',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(width: 14),
+          Text(
+            approxCount > 0
+                ? '${plottable.length} sites · $approxCount ≈ province'
+                : '${plottable.length} sites',
+            style: const TextStyle(
+                color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 12),
           const Icon(Icons.person_pin_circle_rounded,
               color: Color(0xFF00D4AA), size: 16),
           const SizedBox(width: 5),

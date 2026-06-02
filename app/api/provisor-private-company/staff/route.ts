@@ -188,6 +188,7 @@ export async function GET(req: NextRequest) {
           privateCompanyDepartmentId: true,
           privateCompanyAllowedTaskSlugs: true,
           privateCompanyEngineerTicketScope: true,
+          privateCompanyCoordinatorAnalyticsScope: true,
           maintenanceProximityJoinOverride: true,
           maintenanceProximityRadiusOverrideM: true,
           createdAt: true,
@@ -406,6 +407,7 @@ export async function PATCH(req: NextRequest) {
       id: true,
       username: true,
       role: true,
+      phone: true,
       privateCompanyDepartmentId: true,
     },
   });
@@ -574,14 +576,20 @@ export async function PATCH(req: NextRequest) {
   }
   if (typeof body?.phone === 'string' && body.phone.trim()) {
     const ph = body.phone.trim();
-    const existing = await prisma.ticketRequester.findFirst({
-      where: { phone: ph, NOT: { id } },
-      select: { id: true },
-    });
-    if (existing) {
-      return NextResponse.json({ success: false, message: 'Phone number is already in use.' }, { status: 409 });
+    // Only validate + write when the number actually changed, so re-saving an
+    // unchanged phone (e.g. while editing other fields) can never falsely
+    // collide. Uniqueness is scoped to THIS workspace — phone isn't a global
+    // identity field, so an unrelated requester elsewhere must not block edits.
+    if (ph !== (target.phone ?? '')) {
+      const existing = await prisma.ticketRequester.findFirst({
+        where: { phone: ph, privateCompanyId: guard.companyId, NOT: { id } },
+        select: { id: true },
+      });
+      if (existing) {
+        return NextResponse.json({ success: false, message: 'Phone number is already in use in this workspace.' }, { status: 409 });
+      }
+      data.phone = ph;
     }
-    data.phone = ph;
   }
   if (body?.province !== undefined) {
     const p = normalizeProvinceOrNull(body.province);
@@ -614,6 +622,26 @@ export async function PATCH(req: NextRequest) {
     } else {
       return NextResponse.json(
         { success: false, message: 'privateCompanyEngineerTicketScope must be a string or null.' },
+        { status: 400 },
+      );
+    }
+  }
+  if (body?.privateCompanyCoordinatorAnalyticsScope !== undefined) {
+    if (!guard.isOwner) {
+      return NextResponse.json(
+        { success: false, message: 'Only the workspace owner can set coordinator analytics scope.' },
+        { status: 403 },
+      );
+    }
+    const raw = body.privateCompanyCoordinatorAnalyticsScope;
+    if (raw === null || raw === '') {
+      data.privateCompanyCoordinatorAnalyticsScope = null;
+    } else if (typeof raw === 'string') {
+      const { normalizeCoordinatorAnalyticsScope } = await import('@/lib/coordinator-analytics-scope');
+      data.privateCompanyCoordinatorAnalyticsScope = normalizeCoordinatorAnalyticsScope(raw);
+    } else {
+      return NextResponse.json(
+        { success: false, message: 'privateCompanyCoordinatorAnalyticsScope must be a string or null.' },
         { status: 400 },
       );
     }
@@ -730,6 +758,7 @@ export async function PATCH(req: NextRequest) {
       privateCompanyDepartmentId: true,
       privateCompanyAllowedTaskSlugs: true,
       privateCompanyEngineerTicketScope: true,
+      privateCompanyCoordinatorAnalyticsScope: true,
       maintenanceProximityJoinOverride: true,
       maintenanceProximityRadiusOverrideM: true,
     },

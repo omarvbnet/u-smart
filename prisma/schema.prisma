@@ -383,6 +383,9 @@ model TicketRequester {
   privateCompanyAllowedTaskSlugs String[] @default([])
   /// Overrides department [engineerTicketScope] for ENGINEER role (QC_ONLY | MAINTENANCE_ONLY | BOTH).
   privateCompanyEngineerTicketScope String?
+  /// Owner-controlled analytics visibility for COORDINATOR role: COMPANY = whole
+  /// workspace analytics, DEPARTMENT (default / null) = own department only.
+  privateCompanyCoordinatorAnalyticsScope String?
   /// When set, overrides department defaults for maintenance proximity teaming.
   maintenanceProximityJoinOverride   Boolean?
   maintenanceProximityRadiusOverrideM Int?

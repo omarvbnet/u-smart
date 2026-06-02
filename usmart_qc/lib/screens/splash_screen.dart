@@ -128,7 +128,7 @@ class _SplashScreenState extends State<SplashScreen>
                     Opacity(
                       opacity: _titleOpacity.value,
                       child: const Text(
-                        'PROVISER',
+                        'PROVISOR',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 29,

@@ -51,6 +51,7 @@ import { filterRowsToMaintenanceTickets } from '@/lib/technician-maintenance-row
 import { normalizeQFieldProjectsFromCreateBody, qfieldProjectsToJsonValue } from '@/lib/qfield-projects';
 import { extractTicketApiKeyFromRequest, resolveTicketApiKey } from '@/lib/ticket-api-key-auth';
 import { workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
+import { normalizeCoordinatorAnalyticsScope } from '@/lib/coordinator-analytics-scope';
 import {
   computeWorkspaceBilling,
   workspaceTicketQuotaReached,
@@ -1645,6 +1646,7 @@ export async function GET(req: NextRequest) {
         provinceFilterActive: true,
         privateCompanyId: true,
         privateCompanyDepartmentId: true,
+        privateCompanyCoordinatorAnalyticsScope: true,
         privateCompanyOwned: { select: { id: true, status: true } },
         specialization: true,
       },
@@ -1671,6 +1673,17 @@ export async function GET(req: NextRequest) {
     const requesterDepartmentId =
       (requester as { privateCompanyDepartmentId?: string | null }).privateCompanyDepartmentId ?? null;
     const privateCompanyId = ownedPrivateCompanyId ?? staffPrivateCompanyId;
+    // Owner-controlled COORDINATOR visibility: COMPANY = whole workspace,
+    // DEPARTMENT (default) = own department only.
+    const isCoordinator =
+      !ownedPrivateCompanyId && requesterRole === 'COORDINATOR' && !!privateCompanyId;
+    const coordinatorScope = normalizeCoordinatorAnalyticsScope(
+      (requester as { privateCompanyCoordinatorAnalyticsScope?: string | null })
+        .privateCompanyCoordinatorAnalyticsScope
+    );
+    const coordinatorCompanyWide = isCoordinator && coordinatorScope === 'COMPANY';
+    const coordinatorDeptScoped =
+      isCoordinator && !coordinatorCompanyWide && !!requesterDepartmentId;
     let privateCompanyMemberIds: string[] = [];
     if (privateCompanyId) {
       try {
@@ -1877,6 +1890,36 @@ export async function GET(req: NextRequest) {
           { privateCompanyTargetDepartmentId: requesterDepartmentId },
           { requesterId: { in: deptMemberIds } },
         ],
+      };
+    } else if (coordinatorDeptScoped) {
+      // COORDINATOR without owner-granted company-wide access: scoped to their
+      // own department (tickets targeted at it, or created by a dept member).
+      let deptMemberIds: string[] = [];
+      try {
+        const deptMembers = await prisma.ticketRequester.findMany({
+          where: { privateCompanyId, privateCompanyDepartmentId: requesterDepartmentId },
+          select: { id: true },
+        });
+        deptMemberIds = (deptMembers as Array<{ id: string }>).map((m) => m.id);
+      } catch (_) {
+        deptMemberIds = [];
+      }
+      if (!deptMemberIds.includes(payload.requesterId)) deptMemberIds.push(payload.requesterId);
+      where = {
+        serviceSlug: filterServiceSlug,
+        privateCompanyId,
+        OR: [
+          { privateCompanyTargetDepartmentId: requesterDepartmentId },
+          { requesterId: { in: deptMemberIds } },
+        ],
+      };
+    } else if (coordinatorCompanyWide) {
+      // COORDINATOR granted company-wide access by the owner: every workspace ticket.
+      const memberIds =
+        privateCompanyMemberIds.length > 0 ? privateCompanyMemberIds : [payload.requesterId];
+      where = {
+        serviceSlug: filterServiceSlug,
+        OR: [{ requesterId: { in: memberIds } }, { privateCompanyId }],
       };
     } else {
       // COMPANY / owner / COORDINATOR / etc.: own requester tickets plus coordinator-company

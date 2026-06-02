@@ -2410,6 +2410,7 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
   String? _specialization;
   String? _province;
   String? _engineerTicketScopeOverride;
+  String _coordinatorAnalyticsScope = 'DEPARTMENT';
   String _status = 'ACTIVE';
 
   bool _initialDefaultsApplied = false;
@@ -2429,6 +2430,10 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
       _specialization = e.specialization;
       _province = e.province;
       _engineerTicketScopeOverride = e.engineerTicketScopeOverride;
+      _coordinatorAnalyticsScope =
+          (e.coordinatorAnalyticsScope ?? 'DEPARTMENT').toUpperCase() == 'COMPANY'
+              ? 'COMPANY'
+              : 'DEPARTMENT';
       _status = e.status.isNotEmpty ? e.status.toUpperCase() : 'ACTIVE';
     }
   }
@@ -2556,6 +2561,8 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
         clearEngineerTicketScopeOverride: _role == 'ENGINEER' && _engineerTicketScopeOverride == null,
         privateCompanyEngineerTicketScope:
             _role == 'ENGINEER' ? _engineerTicketScopeOverride : null,
+        coordinatorAnalyticsScope:
+            (pc.isOwner && _role == 'COORDINATOR') ? _coordinatorAnalyticsScope : null,
       );
       if (ok && mounted) Navigator.pop(context);
     }
@@ -2786,6 +2793,45 @@ class _StaffEditorSheetState extends State<_StaffEditorSheet> {
                         child: _ChipBox(
                           label: 'Both',
                           selected: _engineerTicketScopeOverride == 'BOTH',
+                          color: const Color(0xFF6C63FF),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (_role == 'COORDINATOR' && pc.isOwner) ...[
+                  const SizedBox(height: 18),
+                  const _SectionTitle('Coordinator analytics access'),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Choose what this coordinator sees on the analysis screen and '
+                    'ticket lists: only their own department, or the whole company.',
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(150),
+                      fontSize: 11.5,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(
+                            () => _coordinatorAnalyticsScope = 'DEPARTMENT'),
+                        child: _ChipBox(
+                          label: 'Their department',
+                          selected: _coordinatorAnalyticsScope == 'DEPARTMENT',
+                          color: const Color(0xFF00D4AA),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(
+                            () => _coordinatorAnalyticsScope = 'COMPANY'),
+                        child: _ChipBox(
+                          label: 'Whole company',
+                          selected: _coordinatorAnalyticsScope == 'COMPANY',
                           color: const Color(0xFF6C63FF),
                         ),
                       ),

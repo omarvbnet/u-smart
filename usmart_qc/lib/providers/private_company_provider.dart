@@ -1317,6 +1317,7 @@ class PrivateCompanyProvider extends ChangeNotifier {
     List<String>? privateCompanyAllowedTaskSlugs,
     String? privateCompanyEngineerTicketScope,
     bool clearEngineerTicketScopeOverride = false,
+    String? coordinatorAnalyticsScope,
     bool? maintenanceProximityJoinOverride,
     bool clearMaintenanceProximityJoinOverride = false,
     int? maintenanceProximityRadiusOverrideM,
@@ -1346,6 +1347,11 @@ class PrivateCompanyProvider extends ChangeNotifier {
             privateCompanyEngineerTicketScope != null)
           'privateCompanyEngineerTicketScope':
               _normalizeEngineerTicketScope(privateCompanyEngineerTicketScope),
+        if (coordinatorAnalyticsScope != null)
+          'privateCompanyCoordinatorAnalyticsScope':
+              coordinatorAnalyticsScope.toUpperCase() == 'COMPANY'
+                  ? 'COMPANY'
+                  : 'DEPARTMENT',
         if (clearMaintenanceProximityJoinOverride)
           'maintenanceProximityJoinOverride': null,
         if (!clearMaintenanceProximityJoinOverride &&
