@@ -6,6 +6,8 @@ import { getLinkedCoordinatorCompanyId, coordinatorRoleTicketWhere } from '@/lib
 import { getSharedSiteTicketOrClauses } from '@/lib/site-share-access';
 import { workspaceTicketVisibilityOrClauses } from '@/lib/private-company-ticket-visibility';
 import { normalizeCoordinatorAnalyticsScope } from '@/lib/coordinator-analytics-scope';
+import { isWorkspaceEngineerRole } from '@/lib/workspace-task-assignment';
+import { parseTicketCompanyJson, ticketFieldStaffInvolvesRequester } from '@/lib/private-company-kpi';
 
 export async function GET(req: NextRequest) {
   try {
@@ -194,6 +196,15 @@ export async function GET(req: NextRequest) {
       (isCoordinator && !coordinatorCompanyWide && !!requesterDepartmentId);
     const useWorkspaceWideStats =
       !!privateCompanyId && (isWorkspaceOwner || coordinatorCompanyWide);
+    // Field staff (ENGINEER / TECHNICIAN, workspace or open-pool): their analytics
+    // must reflect their OWN performance — only tickets they personally handled
+    // (assigned to them or completed by them) or joined as maintenance crew — NOT
+    // every ticket in the workspace and NOT just tickets they created.
+    const isWorkspaceFieldStaff =
+      !isWorkspaceOwner &&
+      !useDepartmentStats &&
+      !useWorkspaceWideStats &&
+      (isWorkspaceEngineerRole(requesterRole) || requesterRole === 'TECHNICIAN');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let where: any;
@@ -231,6 +242,15 @@ export async function GET(req: NextRequest) {
           { privateCompanyTargetDepartmentId: requesterDepartmentId },
           { requesterId: { in: deptMemberIds } },
         ],
+      };
+    } else if (isWorkspaceFieldStaff) {
+      // Only tickets this engineer/technician personally worked on. The assignee
+      // id and maintenance-crew ids live inside the ticket `company` JSON, so we
+      // pre-filter at the DB with a substring match and then confirm involvement
+      // in memory (handles assignee + crew, and avoids loose false positives).
+      where = {
+        serviceSlug: filterServiceSlug,
+        company: { contains: payload.requesterId },
       };
     } else if (linkedCompanyId) {
       where = {
@@ -305,6 +325,16 @@ export async function GET(req: NextRequest) {
     let inspectionStats: InspectionCounts | undefined;
     let inspectionTrend: InspectionCounts | undefined;
 
+    // For field staff the DB `company contains` pre-filter is a substring match;
+    // confirm the requester is the assignee or a maintenance-crew member before
+    // counting so the numbers reflect only work they actually handled.
+    const involvesField = (raw: unknown): boolean =>
+      !isWorkspaceFieldStaff ||
+      ticketFieldStaffInvolvesRequester(
+        parseTicketCompanyJson(typeof raw === 'string' ? raw : null),
+        payload.requesterId
+      );
+
     if (filterServiceSlug === 'quality-control-supervision') {
       // Reuse the exact role-scoped visibility built for the main query so the
       // inspection result counts match the logged-in user's scope:
@@ -341,11 +371,16 @@ export async function GET(req: NextRequest) {
 
       inspectionStats = { total: 0, accepted: 0, accepted_with_comments: 0, not_accepted: 0, ncr: 0, in_progress: 0 };
       inspectionTrend = { total: 0, accepted: 0, accepted_with_comments: 0, not_accepted: 0, ncr: 0, in_progress: 0 };
-      currentRows.forEach((r) => countInspection(r, inspectionStats!));
-      prevRows.forEach((r) => countInspection(r, inspectionTrend!));
+      currentRows
+        .filter((r) => involvesField(r.company))
+        .forEach((r) => countInspection(r, inspectionStats!));
+      prevRows
+        .filter((r) => involvesField(r.company))
+        .forEach((r) => countInspection(r, inspectionTrend!));
     }
 
     for (const r of rows) {
+      if (!involvesField(r.company)) continue;
       let siteName: string | null = null;
       let slaHours: number | null = null;
       let status: string = r.status ?? 'PENDING';
