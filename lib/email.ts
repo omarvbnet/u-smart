@@ -722,6 +722,142 @@ export async function notifyTicketsRegistrationRequest(data: {
   sendTicketsNotification(`New registration: ${data.legalName} (${roleText})`, html).catch((e) => console.error('Tickets notification (registration):', e));
 }
 
+/** Notify tickets@ of a new Provisor staff (engineer/technician) registration request. */
+export async function notifyTicketsStaffRegistration(data: {
+  id: string;
+  legalName: string;
+  dateOfBirth: string;
+  email: string;
+  phone: string;
+  role: string;
+  specialization?: string | null;
+  province: string;
+  idDocumentUrl: string;
+  certificateUrls: string[];
+}): Promise<void> {
+  const roleLabels: Record<string, string> = {
+    ENGINEER: 'Engineer',
+    TECHNICIAN: 'Technician',
+  };
+  const roleText = roleLabels[data.role] || data.role;
+  const baseUrl = getBaseUrl();
+  const reviewUrl = `${baseUrl}/admin/staff-registrations`;
+  const certRows = data.certificateUrls.length
+    ? data.certificateUrls.map((u, i) => row(`Certificate ${i + 1}`, u)).join('')
+    : row('Certificates', '—');
+  const html = `
+    <p style="margin:0 0 16px; font-size:16px; color:#0f172a;"><strong>New Provisor staff registration request</strong></p>
+    <table style="border-collapse:collapse;">${row('Request ID', data.id)}${row('Legal name', data.legalName)}${row('Date of birth', data.dateOfBirth)}${row('Education', roleText)}${data.specialization ? row('Specialization', data.specialization) : ''}${row('Email', data.email)}${row('Phone', data.phone)}${row('Province', data.province)}${row('ID document', data.idDocumentUrl)}${certRows}${row('Review', reviewUrl)}</table>
+    <p style="margin:16px 0 0; color:#64748b; font-size:12px;">U-SMART Notifications</p>`;
+  sendTicketsNotification(`New staff registration: ${data.legalName} (${roleText})`, html).catch((e) =>
+    console.error('Tickets notification (staff registration):', e)
+  );
+}
+
+/**
+ * After admin approves a Provisor staff registration, deliver the generated
+ * sign-in username + temporary password and explain how to log in to the
+ * Provisor mobile app.
+ */
+export async function sendProviserStaffApprovedEmail(args: {
+  to: string;
+  recipientName: string | null;
+  role: string;
+  specialization?: string | null;
+  username: string;
+  temporaryPassword: string;
+}): Promise<boolean> {
+  const to = args.to.trim();
+  if (!to || !to.includes('@')) return false;
+
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const siteUrl = raw.startsWith('http') ? raw : raw ? `https://${raw}` : 'https://usmart-iot.com';
+  const logoUrl = process.env.NEXT_PUBLIC_EMAIL_LOGO_URL?.trim();
+  const name = args.recipientName?.trim() || 'there';
+  const roleLabel = args.role === 'ENGINEER' ? 'Engineer' : args.role === 'TECHNICIAN' ? 'Technician' : args.role;
+  const roleLine = `${roleLabel}${args.specialization ? ` · ${args.specialization}` : ''}`;
+  const subject = 'Provisor — your staff account is approved';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:28px 32px;text-align:center;">
+            ${
+              logoUrl
+                ? `<img src="${escapeHtml(logoUrl)}" alt="U-SMART Provisor" width="180" style="display:block;margin:0 auto;max-width:100%;height:auto;" />
+            <div style="margin-top:12px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Field staff</div>`
+                : `<div style="font-size:26px;font-weight:800;color:#f59e0b;letter-spacing:0.5px;">U-SMART</div>
+            <div style="margin-top:6px;font-size:13px;color:rgba(255,255,255,0.85);">Provisor · Field staff</div>`
+            }
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 32px 24px;">
+            <div style="margin:0 0 20px;padding:14px 18px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;text-align:center;">
+              <p style="margin:0;font-size:16px;font-weight:700;color:#065f46;">🎉 Registration approved</p>
+            </div>
+            <p style="margin:0 0 12px;font-size:18px;font-weight:600;color:#0f172a;">Hello ${escapeHtml(name)},</p>
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#475569;">Your request to join as Provisor staff has been approved. Use the credentials below to sign in to the <strong>Provisor</strong> mobile app.</p>
+            <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Role</p>
+            <p style="margin:0 0 20px;font-size:15px;color:#0f172a;font-weight:600;">${escapeHtml(roleLine)}</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+              <tr style="background:#f8fafc;">
+                <td style="padding:12px 16px;font-size:13px;color:#64748b;width:38%;">Username</td>
+                <td style="padding:12px 16px;font-size:15px;font-weight:600;color:#0f172a;font-family:Consolas,monospace;">${escapeHtml(args.username)}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;">Temporary password</td>
+                <td style="padding:12px 16px;font-size:15px;font-weight:700;color:#b45309;font-family:Consolas,monospace;border-top:1px solid #e2e8f0;">${escapeHtml(args.temporaryPassword)}</td>
+              </tr>
+            </table>
+            <div style="margin-top:22px;padding:14px 16px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#9a3412;">Important — security</p>
+              <ul style="margin:0;padding-left:18px;color:#7c2d12;font-size:13px;line-height:1.55;">
+                <li>Do not share your password in chat, screenshots, or social media.</li>
+                <li>Change your password from the app after your first sign-in.</li>
+              </ul>
+            </div>
+            <p style="margin:24px 0 0;font-size:14px;color:#475569;">Open the <strong>Provisor</strong> app, choose <strong>Password sign-in</strong>, and enter your username and temporary password.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+            <a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:12px 22px;background:#f59e0b;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">Visit website</a>
+            <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">© ${new Date().getFullYear()} U-SMART · Provisor</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const text = [
+    `Hello ${name},`,
+    '',
+    'Your request to join as Provisor staff has been approved.',
+    `Role: ${roleLine}`,
+    '',
+    `Username: ${args.username}`,
+    `Temporary password: ${args.temporaryPassword}`,
+    '',
+    'Open the Provisor app, choose Password sign-in, and enter your username and temporary password.',
+    'Change your password after your first sign-in.',
+    '',
+    `Website: ${siteUrl}`,
+    '',
+    '© U-SMART Provisor',
+  ].join('\n');
+
+  return sendEmail({ to, subject, html, text });
+}
+
 /** Notify tickets@ of new product request (full info). */
 export async function notifyTicketsProductRequest(data: { productTitle: string; productType: string; name: string; email: string; phone: string; message?: string | null }): Promise<void> {
   const html = `

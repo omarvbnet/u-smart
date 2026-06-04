@@ -1,0 +1,277 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ArrowPathIcon, CheckIcon, XMarkIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+
+type StaffRegistration = {
+  id: string;
+  legalName: string;
+  dateOfBirth: string;
+  email: string;
+  phone: string;
+  role: string;
+  specialization?: string | null;
+  province: string;
+  idDocumentUrl: string;
+  certificateUrls: string[];
+  rejectionReason?: string | null;
+  status: string;
+  createdAt: string;
+};
+
+function fileHref(url: string) {
+  if (!url) return '#';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${typeof window !== 'undefined' ? window.location.origin : ''}${url}`;
+  return url;
+}
+
+export default function AdminStaffRegistrationsPage() {
+  const [list, setList] = useState<StaffRegistration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [approveResult, setApproveResult] = useState<{ id: string; username: string; password: string } | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/staff-registrations');
+      const data = await res.json();
+      if (data.success && data.requests) setList(data.requests);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleAction = async (id: string, action: 'approve' | 'reject') => {
+    setActionId(id);
+    setApproveResult(null);
+    setActionError('');
+    try {
+      const payload: { action: 'approve' | 'reject'; reason?: string } = { action };
+      if (action === 'reject') {
+        const reason = (rejectReason[id] || '').trim();
+        if (!reason) {
+          setActionError('Please provide a rejection reason.');
+          setActionId(null);
+          return;
+        }
+        payload.reason = reason;
+      }
+      const res = await fetch(`/api/admin/staff-registrations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setList((prev) => prev.map((r) => (r.id === id ? { ...r, status: data.status } : r)));
+        if (action === 'approve' && data.credentials) {
+          setApproveResult({ id, ...data.credentials });
+        }
+      } else {
+        setActionError(data.message || 'Failed to process request.');
+      }
+    } catch (e) {
+      console.error(e);
+      setActionError('Network error while processing request.');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const formatDate = (s: string) => {
+    try {
+      return new Date(s).toLocaleString();
+    } catch {
+      return s;
+    }
+  };
+  const formatDob = (s: string) => {
+    try {
+      return new Date(s).toLocaleDateString();
+    } catch {
+      return s;
+    }
+  };
+
+  const pending = list.filter((r) => r.status === 'PENDING');
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">Staff registrations</h1>
+          {pending.length > 0 && (
+            <span className="px-2.5 py-0.5 text-sm font-medium rounded-full bg-amber-100 text-amber-800">
+              {pending.length} pending
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 disabled:opacity-50"
+        >
+          <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {approveResult && (
+        <div className="mb-4 p-4 rounded-lg border border-emerald-200 bg-emerald-50">
+          <p className="text-sm font-medium text-emerald-800 mb-2">
+            Credentials generated and emailed to the applicant (Provisor app sign-in):
+          </p>
+          <p className="text-sm text-emerald-900 font-mono">Username: {approveResult.username}</p>
+          <p className="text-sm text-emerald-900 font-mono">Password: {approveResult.password}</p>
+          <button
+            type="button"
+            onClick={() => setApproveResult(null)}
+            className="mt-2 text-xs text-emerald-700 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {actionError && (
+        <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
+
+      {loading && list.length === 0 ? (
+        <div className="py-12 text-center text-gray-500">Loading...</div>
+      ) : list.length === 0 ? (
+        <div className="py-12 text-center text-gray-500 rounded-lg border border-gray-200 bg-gray-50">
+          No staff registration requests yet.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Legal name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DOB</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Education</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Specialization</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Province</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Documents</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {list.map((r) => (
+                <tr key={r.id} className="hover:bg-gray-50 align-top">
+                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(r.createdAt)}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.legalName}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDob(r.dateOfBirth)}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                        r.role === 'ENGINEER' ? 'bg-amber-100 text-amber-800' : 'bg-violet-100 text-violet-800'
+                      }`}
+                    >
+                      {r.role === 'ENGINEER' ? 'Engineer' : 'Technician'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.specialization ?? '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.phone}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.email}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.province}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <div className="flex flex-col gap-1">
+                      <a
+                        href={fileHref(r.idDocumentUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        <DocumentTextIcon className="w-4 h-4" />
+                        ID
+                      </a>
+                      {(r.certificateUrls ?? []).map((u, i) => (
+                        <a
+                          key={`${u}-${i}`}
+                          href={fileHref(u)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                        >
+                          <DocumentTextIcon className="w-4 h-4" />
+                          Cert {i + 1}
+                        </a>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                        r.status === 'PENDING'
+                          ? 'bg-amber-100 text-amber-800'
+                          : r.status === 'APPROVED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm space-x-2">
+                    {r.status === 'PENDING' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleAction(r.id, 'approve')}
+                          disabled={actionId === r.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 text-xs font-medium disabled:opacity-50"
+                        >
+                          <CheckIcon className="w-3.5 h-3.5" />
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAction(r.id, 'reject')}
+                          disabled={actionId === r.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 text-xs font-medium disabled:opacity-50"
+                        >
+                          <XMarkIcon className="w-3.5 h-3.5" />
+                          Reject
+                        </button>
+                        <div className="mt-2">
+                          <input
+                            type="text"
+                            value={rejectReason[r.id] || ''}
+                            onChange={(e) => setRejectReason((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            placeholder="Reject reason (required)"
+                            className="w-56 px-2 py-1 text-xs rounded border border-gray-300"
+                          />
+                        </div>
+                      </>
+                    )}
+                    {r.status === 'REJECTED' && r.rejectionReason && (
+                      <div className="mt-1 text-xs text-red-600">Reason: {r.rejectionReason}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

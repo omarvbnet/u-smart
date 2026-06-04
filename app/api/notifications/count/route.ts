@@ -130,6 +130,17 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: true, count: 0 });
       }
     }
+    if (type === 'pending_staff_registrations') {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const delegate = (prisma as any).staffRegistrationRequest;
+        if (!delegate?.count) return NextResponse.json({ success: true, count: 0 });
+        const count = await delegate.count({ where: { status: 'PENDING' } });
+        return NextResponse.json({ success: true, count });
+      } catch {
+        return NextResponse.json({ success: true, count: 0 });
+      }
+    }
     if (type === 'admin_unread') {
       const count = await prisma.notification.count({
         where: { forAdmin: true, read: false },

@@ -246,7 +246,13 @@ export default function ProviserLoginPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-600 mt-6">
+        <p className="text-center text-sm text-gray-400 mt-6">
+          Want to work with us?{' '}
+          <Link href="/proviser/staff/requestForRegisteraion" className="text-amber-400 hover:underline">
+            Register as Provisor staff
+          </Link>
+        </p>
+        <p className="text-center text-xs text-gray-600 mt-3">
           <Link href="https://www.usmart-iot.com" className="hover:text-gray-400">
             U-SMART main site
           </Link>

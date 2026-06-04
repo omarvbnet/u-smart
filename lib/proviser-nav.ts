@@ -69,9 +69,11 @@ export function isProviserPublicPath(pathname: string): boolean {
     '/proviser/login',
     '/proviser/register',
     '/proviser/download',
+    '/proviser/staff/requestForRegisteraion',
     '/login',
     '/register',
     '/download',
+    '/staff/requestForRegisteraion',
   ]);
   return publicPaths.has(pathname);
 }

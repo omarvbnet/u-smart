@@ -483,6 +483,34 @@ enum RegistrationRequestStatus {
   REJECTED
 }
 
+// Public "request to register as a Proviser staff" (engineer / technician).
+// Submitted from proviser.usmart-iot.com/staff/requestForRegisteraion.
+// When an admin approves, a verified TicketRequester is created and the
+// generated username + password are emailed so the person can sign in to the
+// Provisor (Flutter) app.
+model StaffRegistrationRequest {
+  id              String                    @id @default(cuid())
+  legalName       String
+  dateOfBirth     DateTime
+  email           String
+  phone           String
+  role            RequesterRole // ENGINEER or TECHNICIAN
+  specialization  RequesterSpecialization?
+  province        String
+  idDocumentUrl   String // attached national ID / passport
+  certificateUrls String[]                  @default([]) // uploaded certificate file URLs
+  status          RegistrationRequestStatus @default(PENDING)
+  rejectionReason String?
+  username        String? // set on approval
+  passwordHash    String? // set on approval
+  reviewedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([status])
+  @@map("staff_registration_requests")
+}
+
 // Approved company (linked to a dashboard account for one service type)
 model Company {
   id             String          @id @default(cuid())
