@@ -61,12 +61,19 @@ export function buildProviserNav(
 }
 
 export function isProviserPublicPath(pathname: string): boolean {
-  return (
-    pathname === '/proviser/login' ||
-    pathname === '/proviser/register' ||
-    pathname === '/proviser/download' ||
-    pathname === '/proviser'
-  );
+  // On the Proviser subdomain the middleware rewrites `/foo` -> `/proviser/foo`,
+  // but `usePathname()` returns the browser path (without the `/proviser` prefix).
+  // Match both forms so public pages stay public regardless of how they're served.
+  const publicPaths = new Set([
+    '/proviser',
+    '/proviser/login',
+    '/proviser/register',
+    '/proviser/download',
+    '/login',
+    '/register',
+    '/download',
+  ]);
+  return publicPaths.has(pathname);
 }
 
 export function isNavActive(pathname: string, href: string): boolean {
