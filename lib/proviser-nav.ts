@@ -64,6 +64,7 @@ export function isProviserPublicPath(pathname: string): boolean {
   return (
     pathname === '/proviser/login' ||
     pathname === '/proviser/register' ||
+    pathname === '/proviser/download' ||
     pathname === '/proviser'
   );
 }
