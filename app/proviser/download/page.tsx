@@ -16,7 +16,7 @@ export const metadata: Metadata = {
       'Quality control and supervision tickets for field teams and companies — get Provisor for iOS and Android.',
     url: `${ORIGIN}/download`,
     siteName: 'Provisor',
-    images: [{ url: `${ORIGIN}/app/icon-512.png`, width: 512, height: 512 }],
+    images: [{ url: `${ORIGIN}/app/provisor-logo.png`, width: 512, height: 512 }],
     type: 'website',
   },
 };
