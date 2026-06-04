@@ -18,6 +18,11 @@ export async function GET(req: NextRequest) {
     const requests = await delegate.findMany({ orderBy: { createdAt: 'desc' } });
     return NextResponse.json({ success: true, requests });
   } catch (err) {
+    const code = (err as { code?: string })?.code;
+    // Table not created yet on this environment — show an empty list instead of erroring.
+    if (code === 'P2021' || code === 'P2010') {
+      return NextResponse.json({ success: true, requests: [] });
+    }
     console.error('GET /api/admin/staff-registrations:', err);
     return NextResponse.json({ success: false, message: 'Failed to fetch requests' }, { status: 500 });
   }

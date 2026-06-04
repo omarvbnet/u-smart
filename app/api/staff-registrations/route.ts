@@ -17,6 +17,47 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function isMissingTableError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  if (code === 'P2021' || code === 'P2010') return true;
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return msg.includes('does not exist') && msg.includes('staff_registration_requests');
+}
+
+/**
+ * Idempotently ensure the staff_registration_requests table exists. This is a
+ * safety net for environments where `prisma migrate deploy` has not yet created
+ * the table. The referenced enum types (RequesterRole, RequesterSpecialization,
+ * RegistrationRequestStatus) already exist from earlier migrations.
+ */
+async function ensureStaffRegistrationTable(): Promise<void> {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "staff_registration_requests" (
+      "id" TEXT NOT NULL,
+      "legalName" TEXT NOT NULL,
+      "dateOfBirth" TIMESTAMP(3) NOT NULL,
+      "email" TEXT NOT NULL,
+      "phone" TEXT NOT NULL,
+      "role" "RequesterRole" NOT NULL,
+      "specialization" "RequesterSpecialization",
+      "province" TEXT NOT NULL,
+      "idDocumentUrl" TEXT NOT NULL,
+      "certificateUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      "status" "RegistrationRequestStatus" NOT NULL DEFAULT 'PENDING',
+      "rejectionReason" TEXT,
+      "username" TEXT,
+      "passwordHash" TEXT,
+      "reviewedAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "staff_registration_requests_pkey" PRIMARY KEY ("id")
+    );
+  `);
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "staff_registration_requests_status_idx" ON "staff_registration_requests"("status");`
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -94,34 +135,49 @@ export async function POST(req: NextRequest) {
     }
 
     // Guard against duplicate pending submissions from the same email/phone.
-    const existingPending = await (
-      prisma as {
-        staffRegistrationRequest?: { findFirst: (args: unknown) => Promise<{ id: string } | null> };
+    // Tolerate a missing table here (handled/created during the create step below).
+    try {
+      const existingPending = await (
+        prisma as {
+          staffRegistrationRequest?: { findFirst: (args: unknown) => Promise<{ id: string } | null> };
+        }
+      ).staffRegistrationRequest?.findFirst?.({
+        where: { status: 'PENDING', OR: [{ email }, { phone }] },
+        select: { id: true },
+      });
+      if (existingPending) {
+        return NextResponse.json(
+          { success: false, message: 'You already have a pending registration request under review.' },
+          { status: 400 }
+        );
       }
-    ).staffRegistrationRequest?.findFirst?.({
-      where: { status: 'PENDING', OR: [{ email }, { phone }] },
-      select: { id: true },
-    });
-    if (existingPending) {
-      return NextResponse.json(
-        { success: false, message: 'You already have a pending registration request under review.' },
-        { status: 400 }
-      );
+    } catch (e) {
+      if (!isMissingTableError(e)) throw e;
     }
 
-    const created = await delegate.create({
-      data: {
-        legalName,
-        dateOfBirth,
-        email,
-        phone,
-        role,
-        specialization,
-        province,
-        idDocumentUrl,
-        certificateUrls,
-      },
-    });
+    const data = {
+      legalName,
+      dateOfBirth,
+      email,
+      phone,
+      role,
+      specialization,
+      province,
+      idDocumentUrl,
+      certificateUrls,
+    };
+
+    let created: { id: string };
+    try {
+      created = await delegate.create({ data });
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        await ensureStaffRegistrationTable();
+        created = await delegate.create({ data });
+      } else {
+        throw e;
+      }
+    }
 
     notifyTicketsStaffRegistration({
       id: created.id,
@@ -141,9 +197,29 @@ export async function POST(req: NextRequest) {
       message: 'Your request has been submitted. You will receive an email once it is reviewed.',
     });
   } catch (err) {
-    console.error('POST /api/staff-registrations:', err);
+    const code = (err as { code?: string })?.code;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('POST /api/staff-registrations:', code, message, err);
+
+    // Table not created yet (migration not applied on this environment).
+    if (code === 'P2021' || code === 'P2022') {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Staff registration is being set up. Please try again shortly or contact support.',
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { success: false, message: 'Failed to submit your request. Please try again.' },
+      {
+        success: false,
+        message: 'Failed to submit your request. Please try again.',
+        // Diagnostic detail (safe: no secrets). Helps surface the root cause in production logs/clients.
+        error: code ? `${code}: ${message}` : message,
+      },
       { status: 500 }
     );
   }
