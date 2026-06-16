@@ -3,7 +3,7 @@
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { getCatalogEntry, type CatalogEntry } from '../lib/catalog';
-import { Icon } from './icon';
+import { Icon } from './lucide-icon';
 import { Trash2 } from 'lucide-react';
 
 /** Human-readable spec rows per domain. */

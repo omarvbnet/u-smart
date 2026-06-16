@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { PALETTE_GROUPS } from '../lib/catalog';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
-import { Icon } from './icon';
+import { Icon } from './lucide-icon';
 import { ChevronDown, Search } from 'lucide-react';
 
 export function Palette() {

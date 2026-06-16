@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { getCatalogEntry } from '../lib/catalog';
 import { useStudio } from '../lib/store';
-import { Icon } from './icon';
+import { Icon } from './lucide-icon';
 import type { Severity } from '../lib/engine/validation';
 
 export type DeviceNodeData = {
