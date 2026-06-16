@@ -7,9 +7,11 @@ import { Canvas } from './Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
 import { ValidationPanel } from './ValidationPanel';
 import { QualityIndex } from './QualityIndex';
+import { BusMonitor } from './BusMonitor';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
+import { readShareFromHash } from '../lib/share';
 import { SlidersHorizontal, ShieldCheck, Gauge } from 'lucide-react';
 
 type Tab = 'properties' | 'validation' | 'quality';
@@ -21,6 +23,9 @@ export function Workspace() {
   const selectedId = useStudio((s) => s.selectedNodeId);
   const nodeCount = useStudio((s) => s.nodes.length);
   const edgeCount = useStudio((s) => s.edges.length);
+  const hydrate = useStudio((s) => s.hydrate);
+  const loadDesign = useStudio((s) => s.loadDesign);
+  const duplicateNode = useStudio((s) => s.duplicateNode);
   const { issues } = useAnalysis();
   const [tab, setTab] = useState<Tab>('validation');
   const rtl = RTL_LOCALES.has(locale);
@@ -29,6 +34,33 @@ export function Workspace() {
   useEffect(() => {
     if (selectedId) setTab('properties');
   }, [selectedId]);
+
+  // Load a shared design from the URL hash, otherwise restore the autosave.
+  useEffect(() => {
+    const shared = readShareFromHash();
+    if (shared) {
+      loadDesign(shared);
+      window.history.replaceState(null, '', window.location.pathname);
+    } else {
+      hydrate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keyboard shortcuts (ignored while typing in form fields).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        const id = useStudio.getState().selectedNodeId;
+        if (id) duplicateNode(id);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [duplicateNode]);
 
   const criticalCount = issues.filter((i) => i.severity === 'critical').length;
 
@@ -53,6 +85,7 @@ export function Workspace() {
 
         <main className="relative min-w-0 flex-1">
           <Canvas />
+          <BusMonitor />
           <div className="absolute bottom-3 ltr:left-3 rtl:right-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
             <span>{nodeCount} {t('nodes')}</span>
             <span className="opacity-40">·</span>

@@ -7,8 +7,18 @@ import type { Fix } from './engine/validation';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
 import { defaultControlState, type ControlState } from './controls';
+import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 
 export type Theme = 'dark' | 'light';
+
+export type DesignFile = {
+  version: 1;
+  designName: string;
+  nodes: DesignNode[];
+  edges: DesignEdge[];
+  controls: Record<string, ControlState>;
+  map: MapBackground | null;
+};
 
 export type MapBackground = {
   src: string;
@@ -30,6 +40,7 @@ type StudioState = {
   showDeclarations: boolean;
   controls: Record<string, ControlState>;
   map: MapBackground | null;
+  telegrams: Telegram[];
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -56,6 +67,12 @@ type StudioState = {
   moveMap: (x: number, y: number) => void;
   setMapOpacity: (opacity: number) => void;
   clearMap: () => void;
+
+  duplicateNode: (id: string) => void;
+  clearTelegrams: () => void;
+  serialize: () => DesignFile;
+  loadDesign: (file: DesignFile) => void;
+  hydrate: () => void;
 };
 
 let counter = 0;
@@ -98,6 +115,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   showDeclarations: false,
   controls: {},
   map: null,
+  telegrams: [],
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -147,7 +165,20 @@ export const useStudio = create<StudioState>((set, get) => ({
   select: (id) => set({ selectedNodeId: id }),
 
   setControl: (id, key, value) =>
-    set((s) => ({ controls: { ...s.controls, [id]: { ...s.controls[id], [key]: value } } })),
+    set((s) => {
+      const controls = { ...s.controls, [id]: { ...s.controls[id], [key]: value } };
+      // Emit a bus telegram when operating an automation device during sim.
+      let telegrams = s.telegrams;
+      if (s.simulating) {
+        const node = s.nodes.find((n) => n.id === id);
+        const entry = node ? getCatalogEntry(node.catalogId) : undefined;
+        if (entry && (entry.domain === 'smarthome' || entry.domain === 'sensor')) {
+          const addr = assignAddresses(s.nodes).get(id);
+          if (addr) telegrams = [makeTelegram(entry, addr, key, value), ...s.telegrams].slice(0, 200);
+        }
+      }
+      return { controls, telegrams };
+    }),
 
   connect: (edge) =>
     set((s) => {
@@ -203,14 +234,74 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
   },
 
-  toggleSimulation: () => set((s) => ({ simulating: !s.simulating })),
+  toggleSimulation: () => set((s) => ({ simulating: !s.simulating, telegrams: s.simulating ? s.telegrams : [] })),
 
   setMap: (src, width, height) =>
     set({ map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 0.85 } }),
   moveMap: (x, y) => set((s) => (s.map ? { map: { ...s.map, x, y } } : s)),
   setMapOpacity: (opacity) => set((s) => (s.map ? { map: { ...s.map, opacity } } : s)),
   clearMap: () => set({ map: null }),
+
+  duplicateNode: (id) =>
+    set((s) => {
+      const src = s.nodes.find((n) => n.id === id);
+      if (!src) return s;
+      const entry = getCatalogEntry(src.catalogId);
+      const copy: DesignNode = { ...src, id: uid('n'), x: src.x + 40, y: src.y + 40, params: { ...src.params } };
+      return {
+        nodes: [...s.nodes, copy],
+        selectedNodeId: copy.id,
+        controls: { ...s.controls, [copy.id]: entry ? defaultControlState(entry) : {} },
+      };
+    }),
+
+  clearTelegrams: () => set({ telegrams: [] }),
+
+  serialize: () => {
+    const s = get();
+    return { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map };
+  },
+
+  loadDesign: (file) =>
+    set({
+      designName: file.designName ?? '',
+      nodes: file.nodes ?? [],
+      edges: file.edges ?? [],
+      controls: file.controls ?? {},
+      map: file.map ?? null,
+      selectedNodeId: null,
+      telegrams: [],
+      simulating: false,
+    }),
+
+  hydrate: () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem('studio.design');
+      if (!raw) return;
+      const file = JSON.parse(raw) as DesignFile;
+      if (file && file.version === 1) get().loadDesign(file);
+    } catch {
+      /* ignore corrupt autosave */
+    }
+  },
 }));
+
+// Debounced autosave of the design to localStorage.
+if (typeof window !== 'undefined') {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  useStudio.subscribe((s) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const file: DesignFile = { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map };
+      try {
+        window.localStorage.setItem('studio.design', JSON.stringify(file));
+      } catch {
+        /* quota / serialization issues ignored */
+      }
+    }, 700);
+  });
+}
 
 function pickBreaker(rating: number): CatalogEntry | undefined {
   const protections = CATALOG.filter((e) => e.domain === 'protection') as Extract<CatalogEntry, { domain: 'protection' }>[];

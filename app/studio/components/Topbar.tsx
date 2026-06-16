@@ -7,9 +7,12 @@ import { useT } from './hooks';
 import { STUDIO_LOCALES, LOCALE_LABELS, type StudioLocale } from '../lib/i18n';
 import { importMapFile } from '../lib/import-map';
 import { exportDesignPdf } from '../lib/export-pdf';
+import { ReportsModal } from './ReportsModal';
+import { ShareModal } from './ShareModal';
+import type { DesignFile } from '../lib/store';
 import {
   FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages,
-  Map as MapIcon, Eye, EyeOff, FileDown, Loader2,
+  Map as MapIcon, Eye, EyeOff, FileDown, Loader2, FileBarChart2, Share2, FileJson, Upload,
 } from 'lucide-react';
 
 export function Topbar() {
@@ -28,10 +31,14 @@ export function Topbar() {
   const map = useStudio((s) => s.map);
   const setMap = useStudio((s) => s.setMap);
   const clearMap = useStudio((s) => s.clearMap);
+  const loadDesign = useStudio((s) => s.loadDesign);
 
   const [langOpen, setLangOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const jsonRef = useRef<HTMLInputElement>(null);
 
   const btn = 'flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--studio-text)] hover:bg-[var(--studio-hover)] transition';
 
@@ -52,6 +59,26 @@ export function Topbar() {
       await exportDesignPdf({ designName, nodes, edges });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const exportJson = () => {
+    const file = useStudio.getState().serialize();
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(file.designName || 'usmart-studio').replace(/[^\w-]+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importJson = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as DesignFile;
+      if (parsed && parsed.version === 1) loadDesign(parsed);
+    } catch {
+      /* invalid file */
     }
   };
 
@@ -96,9 +123,36 @@ export function Topbar() {
           <span className="hidden xl:inline">{t('declarations')}</span>
         </button>
 
+        <button className={btn} onClick={() => setReportsOpen(true)}>
+          <FileBarChart2 className="h-3.5 w-3.5" />
+          <span className="hidden xl:inline">{t('reports')}</span>
+        </button>
+
         <button className={btn} onClick={handleExport} disabled={exporting}>
           {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
           <span className="hidden lg:inline">{t('exportPdf')}</span>
+        </button>
+
+        <input
+          ref={jsonRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            void importJson(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <button className={btn} onClick={() => jsonRef.current?.click()} title={t('importJson')}>
+          <Upload className="h-3.5 w-3.5" />
+        </button>
+        <button className={btn} onClick={exportJson} title={t('exportJson')}>
+          <FileJson className="h-3.5 w-3.5" />
+        </button>
+
+        <button className={btn} onClick={() => setShareOpen(true)}>
+          <Share2 className="h-3.5 w-3.5" />
+          <span className="hidden xl:inline">{t('share')}</span>
         </button>
 
         <button
@@ -139,6 +193,9 @@ export function Topbar() {
           {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </button>
       </div>
+
+      {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} />}
+      {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
     </header>
   );
 }
