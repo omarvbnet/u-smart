@@ -5,6 +5,7 @@ import { PALETTE_GROUPS } from '../lib/catalog';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { Icon } from './lucide-icon';
+import { EntryImage } from './EntryImage';
 import { ChevronDown, Search } from 'lucide-react';
 
 export function Palette() {
@@ -73,11 +74,8 @@ export function Palette() {
                       }}
                       className="group flex cursor-grab items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 hover:border-[var(--studio-border)] hover:bg-[var(--studio-hover)] active:cursor-grabbing"
                     >
-                      <span
-                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md"
-                        style={{ backgroundColor: `${entry.color}1f`, color: entry.color }}
-                      >
-                        <Icon name={entry.icon} className="h-4 w-4" />
+                      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-white/5">
+                        <EntryImage entry={entry} className="h-7 w-7" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-medium text-[var(--studio-text)]">{entry.name[locale]}</div>

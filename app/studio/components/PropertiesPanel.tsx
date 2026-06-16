@@ -3,8 +3,10 @@
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { getCatalogEntry, type CatalogEntry } from '../lib/catalog';
-import { Icon } from './lucide-icon';
-import { Trash2 } from 'lucide-react';
+import { controlsForEntry } from '../lib/controls';
+import { declarationFor } from '../lib/engine/declarations';
+import { EntryImage } from './EntryImage';
+import { Trash2, Zap } from 'lucide-react';
 
 /** Human-readable spec rows per domain. */
 function specRows(entry: CatalogEntry): { label: string; value: string }[] {
@@ -79,6 +81,8 @@ export function PropertiesPanel() {
   const node = useStudio((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const updateParam = useStudio((s) => s.updateNodeParam);
   const removeNode = useStudio((s) => s.removeNode);
+  const control = useStudio((s) => (s.selectedNodeId ? s.controls[s.selectedNodeId] : undefined));
+  const setControl = useStudio((s) => s.setControl);
 
   if (!selectedId || !node) {
     return (
@@ -91,24 +95,85 @@ export function PropertiesPanel() {
   const entry = getCatalogEntry(node.catalogId);
   if (!entry) return null;
 
+  const declaration = declarationFor(entry);
+  const controls = controlsForEntry(entry);
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-[var(--studio-border)] p-4">
         <div className="flex items-center gap-3">
-          <span
-            className="flex h-10 w-10 items-center justify-center rounded-lg"
-            style={{ backgroundColor: `${entry.color}1f`, color: entry.color }}
-          >
-            <Icon name={entry.icon} className="h-5 w-5" />
+          <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/5">
+            <EntryImage entry={entry} className="h-11 w-11" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold text-[var(--studio-text)]">{entry.name[locale]}</div>
             <div className="truncate text-xs text-[var(--studio-muted)]">{entry.manufacturer} · {entry.model}</div>
           </div>
         </div>
+        {declaration && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5">
+            <Zap className="h-4 w-4 text-amber-500" />
+            <span className="text-sm font-bold tracking-wide text-amber-500">{declaration.text}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {controls.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('controls')}</h3>
+            <div className="space-y-3 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] p-3">
+              {controls.map((c) => {
+                if (c.kind === 'toggle') {
+                  const on = (control?.[c.key as 'on'] ?? (c.default as boolean)) === true;
+                  return (
+                    <div key={c.key} className="flex items-center justify-between">
+                      <span className="text-xs text-[var(--studio-text)]">{c.label[locale]}</span>
+                      <button
+                        onClick={() => setControl(node.id, c.key, !on)}
+                        className={`relative h-5 w-9 rounded-full transition ${on ? 'bg-emerald-500' : 'bg-[var(--studio-border)]'}`}
+                      >
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                  );
+                }
+                if (c.kind === 'trigger') {
+                  const active = (control?.[c.key as 'active'] ?? false) === true;
+                  return (
+                    <button
+                      key={c.key}
+                      onMouseDown={() => setControl(node.id, c.key, true)}
+                      onMouseUp={() => setControl(node.id, c.key, false)}
+                      onMouseLeave={() => active && setControl(node.id, c.key, false)}
+                      className={`w-full rounded-lg py-2 text-xs font-semibold transition ${active ? 'bg-cyan-500 text-white' : 'bg-[var(--studio-hover)] text-[var(--studio-text)]'}`}
+                    >
+                      {c.label[locale]}
+                    </button>
+                  );
+                }
+                const val = Number(control?.[c.key as 'level' | 'setpoint'] ?? (c.default as number));
+                return (
+                  <div key={c.key}>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-[var(--studio-text)]">{c.label[locale]}</span>
+                      <span className="font-semibold text-cyan-400">{val}{c.unit}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={c.min}
+                      max={c.max}
+                      value={val}
+                      onChange={(e) => setControl(node.id, c.key, Number(e.target.value))}
+                      className="w-full accent-cyan-500"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {entry.domain === 'cable' && (
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">{t('length')}</span>

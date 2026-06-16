@@ -2,9 +2,9 @@
 
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { getCatalogEntry } from '../lib/catalog';
+import { getCatalogEntry, type ComponentPort, type PortKind } from '../lib/catalog';
 import { useStudio } from '../lib/store';
-import { Icon } from './lucide-icon';
+import { EntryImage } from './EntryImage';
 import type { Severity } from '../lib/engine/validation';
 
 export type DeviceNodeData = {
@@ -12,6 +12,9 @@ export type DeviceNodeData = {
   label: string;
   severity: Severity | null;
   rtl: boolean;
+  declaration: string | null;
+  energised: boolean;
+  active: boolean;
 };
 
 const SEVERITY_RING: Record<Severity, string> = {
@@ -19,12 +22,38 @@ const SEVERITY_RING: Record<Severity, string> = {
   warning: 'ring-2 ring-orange-400 shadow-[0_0_0_4px_rgba(251,146,60,0.15)]',
   recommendation: 'ring-2 ring-blue-400 shadow-[0_0_0_4px_rgba(96,165,250,0.15)]',
 };
-
 const SEVERITY_DOT: Record<Severity, string> = {
   critical: 'bg-red-500',
   warning: 'bg-orange-400',
   recommendation: 'bg-blue-400',
 };
+
+/** Handle colour per electrical port kind so compatible ports read at a glance. */
+export const PORT_COLOR: Record<PortKind, string> = {
+  power: '#f59e0b',
+  bus: '#22c55e',
+  signal: '#3b82f6',
+  control: '#a855f7',
+};
+
+type Placed = { port: ComponentPort; side: 'lead' | 'trail'; topPct: number };
+
+/** Distribute ports onto leading/trailing edges of the node. */
+export function layoutPorts(ports: ComponentPort[]): Placed[] {
+  const inout = ports.filter((p) => p.direction === 'inout');
+  const splitInout = inout.length === 2 && ports.length === 2;
+  const lead: ComponentPort[] = [];
+  const trail: ComponentPort[] = [];
+  ports.forEach((p, i) => {
+    if (p.direction === 'in') lead.push(p);
+    else if (p.direction === 'out') trail.push(p);
+    else if (splitInout) (i === 0 ? lead : trail).push(p);
+    else trail.push(p);
+  });
+  const place = (arr: ComponentPort[], side: 'lead' | 'trail'): Placed[] =>
+    arr.map((port, i) => ({ port, side, topPct: ((i + 1) / (arr.length + 1)) * 100 }));
+  return [...place(lead, 'lead'), ...place(trail, 'trail')];
+}
 
 function DeviceNodeImpl({ data, selected }: NodeProps) {
   const d = data as DeviceNodeData;
@@ -32,27 +61,45 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
   const simulating = useStudio((s) => s.simulating);
   if (!entry) return null;
 
-  const startPos = d.rtl ? Position.Right : Position.Left;
-  const endPos = d.rtl ? Position.Left : Position.Right;
+  const leadPos = d.rtl ? Position.Right : Position.Left;
+  const trailPos = d.rtl ? Position.Left : Position.Right;
+  const placed = layoutPorts(entry.ports);
 
   return (
     <div
-      className={`group relative w-[150px] rounded-xl border bg-[var(--studio-node)] border-[var(--studio-border)] px-3 py-2.5 transition
-        ${selected ? 'ring-2 ring-cyan-400' : d.severity ? SEVERITY_RING[d.severity] : ''}`}
+      className={`group relative w-[156px] rounded-xl border bg-[var(--studio-node)] px-3 py-2.5 transition
+        ${selected ? 'ring-2 ring-cyan-400' : d.severity ? SEVERITY_RING[d.severity] : 'border-[var(--studio-border)]'}
+        ${simulating && d.active ? 'shadow-[0_0_18px_rgba(34,211,238,0.45)]' : ''}`}
+      style={{ borderColor: selected ? undefined : d.severity ? undefined : 'var(--studio-border)' }}
     >
-      <Handle type="target" id="target" position={startPos} className="!h-3 !w-3 !bg-cyan-400 !border-2 !border-[var(--studio-bg)]" />
-      <Handle type="source" id="source" position={endPos} className="!h-3 !w-3 !bg-cyan-400 !border-2 !border-[var(--studio-bg)]" />
+      {placed.map((p) => (
+        <Handle
+          key={`${p.side}-${p.port.id}`}
+          type={p.side === 'lead' ? 'target' : 'source'}
+          id={p.port.id}
+          position={p.side === 'lead' ? leadPos : trailPos}
+          style={{ top: `${p.topPct}%`, background: PORT_COLOR[p.port.kind], borderColor: 'var(--studio-bg)' }}
+          className="!h-3 !w-3 !border-2"
+          title={p.port.label[d.rtl ? 'ar' : 'en']}
+        />
+      ))}
 
       {d.severity && (
         <span className={`absolute -top-1.5 ${d.rtl ? '-left-1.5' : '-right-1.5'} h-3.5 w-3.5 rounded-full ${SEVERITY_DOT[d.severity]} ring-2 ring-[var(--studio-bg)]`} />
       )}
 
-      <div className="flex items-center gap-2.5">
+      {simulating && (
         <span
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg"
-          style={{ backgroundColor: `${entry.color}1f`, color: entry.color }}
+          className={`absolute -top-1.5 ${d.rtl ? '-right-1.5' : '-left-1.5'} flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold ring-2 ring-[var(--studio-bg)]
+            ${d.active ? 'bg-emerald-500 text-white' : d.energised ? 'bg-amber-500 text-white' : 'bg-zinc-500 text-white'}`}
         >
-          <Icon name={entry.icon} className="h-5 w-5" />
+          {d.active ? 'ON' : d.energised ? '~' : 'OFF'}
+        </span>
+      )}
+
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-white/5">
+          <EntryImage entry={entry} className="h-10 w-10" />
         </span>
         <div className="min-w-0">
           <div className="truncate text-[11px] font-semibold text-[var(--studio-text)]">{d.label}</div>
@@ -60,10 +107,9 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
         </div>
       </div>
 
-      {simulating && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          <span className="text-[9px] font-medium text-emerald-400">live</span>
+      {d.declaration && (
+        <div className="mt-1.5 rounded-md bg-amber-400/15 px-1.5 py-0.5 text-center text-[9px] font-bold tracking-wide text-amber-500">
+          {d.declaration}
         </div>
       )}
     </div>

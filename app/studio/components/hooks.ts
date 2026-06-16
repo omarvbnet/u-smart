@@ -8,6 +8,7 @@ import { CABLES } from '../lib/catalog/cables';
 import { resolveNodes } from '../lib/model';
 import { validateDesign, type Issue } from '../lib/engine/validation';
 import { computeQuality, computeCompliance } from '../lib/engine/quality';
+import { simulate } from '../lib/engine/simulate';
 
 /** Translator bound to the current locale. */
 export function useT() {
@@ -34,4 +35,18 @@ export function useAnalysis() {
     }
     return { issues, quality, compliance, byNode };
   }, [nodes, edges]);
+}
+
+/** Live simulation state per node (energised / active / current). */
+export function useSimulation() {
+  const nodes = useStudio((s) => s.nodes);
+  const edges = useStudio((s) => s.edges);
+  const controls = useStudio((s) => s.controls);
+  const simulating = useStudio((s) => s.simulating);
+
+  return useMemo(() => {
+    if (!simulating) return {} as ReturnType<typeof simulate>;
+    const resolved = resolveNodes(nodes, getCatalogEntry);
+    return simulate(resolved, edges, controls);
+  }, [nodes, edges, controls, simulating]);
 }

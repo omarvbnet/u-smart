@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import StudioLogo from './StudioLogo';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { STUDIO_LOCALES, LOCALE_LABELS, type StudioLocale } from '../lib/i18n';
-import { FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages, Download } from 'lucide-react';
+import { importMapFile } from '../lib/import-map';
+import { exportDesignPdf } from '../lib/export-pdf';
+import {
+  FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages,
+  Map as MapIcon, Eye, EyeOff, FileDown, Loader2,
+} from 'lucide-react';
 
 export function Topbar() {
   const t = useT();
@@ -18,32 +23,82 @@ export function Topbar() {
   const designName = useStudio((s) => s.designName);
   const simulating = useStudio((s) => s.simulating);
   const toggleSimulation = useStudio((s) => s.toggleSimulation);
+  const showDeclarations = useStudio((s) => s.showDeclarations);
+  const toggleDeclarations = useStudio((s) => s.toggleDeclarations);
+  const map = useStudio((s) => s.map);
+  const setMap = useStudio((s) => s.setMap);
+  const clearMap = useStudio((s) => s.clearMap);
+
   const [langOpen, setLangOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const btn = 'flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--studio-text)] hover:bg-[var(--studio-hover)] transition';
+
+  const handleMapFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const { src, width, height } = await importMapFile(file);
+      setMap(src, width, height);
+    } catch {
+      /* ignore unreadable file */
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { nodes, edges, designName } = useStudio.getState();
+      await exportDesignPdf({ designName, nodes, edges });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <header className="flex items-center gap-3 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2">
       <StudioLogo size="compact" />
-
       {designName && (
-        <span className="hidden truncate text-sm font-medium text-[var(--studio-muted)] md:block max-w-[200px]">
-          / {designName}
-        </span>
+        <span className="hidden truncate text-sm font-medium text-[var(--studio-muted)] md:block max-w-[180px]">/ {designName}</span>
       )}
 
       <div className="ms-auto flex items-center gap-1.5">
         <button className={btn} onClick={clear}>
           <FilePlus2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t('newDesign')}</span>
+          <span className="hidden 2xl:inline">{t('newDesign')}</span>
         </button>
         <button className={btn} onClick={loadSample}>
           <FolderOpen className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t('sample')}</span>
+          <span className="hidden 2xl:inline">{t('sample')}</span>
         </button>
-        <button className={btn} onClick={clear}>
-          <Trash2 className="h-3.5 w-3.5" />
-          <span className="hidden lg:inline">{t('clear')}</span>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            void handleMapFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <button className={btn} onClick={() => (map ? clearMap() : fileRef.current?.click())}>
+          <MapIcon className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">{map ? t('removeMap') : t('importMap')}</span>
+        </button>
+
+        <button
+          className={`${btn} ${showDeclarations ? '!border-amber-400/50 !text-amber-500' : ''}`}
+          onClick={toggleDeclarations}
+          title={t('declarations')}
+        >
+          {showDeclarations ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          <span className="hidden xl:inline">{t('declarations')}</span>
+        </button>
+
+        <button className={btn} onClick={handleExport} disabled={exporting}>
+          {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+          <span className="hidden lg:inline">{t('exportPdf')}</span>
         </button>
 
         <button

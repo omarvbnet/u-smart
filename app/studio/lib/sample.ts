@@ -40,25 +40,25 @@ export function buildSampleDesign(locale: StudioLocale): {
     { id: 'hvac-ac', catalogId: 'hvac-split-3.5', label: 'Split AC', x: 1040, y: 400, params: {} },
   ];
 
-  const edge = (source: string, target: string): DesignEdge => ({
+  const edge = (source: string, sourceHandle: string, target: string, targetHandle: string): DesignEdge => ({
     id: `e_${source}_${target}`,
     source,
-    sourceHandle: 'source',
+    sourceHandle,
     target,
-    targetHandle: 'target',
+    targetHandle,
   });
 
   const edges: DesignEdge[] = [
-    edge('utility', 'main'),
-    edge('main', 'mcb-light'),
-    edge('main', 'mcb-socket'),
-    edge('main', 'mcb-ac'),
-    edge('mcb-light', 'cable-light'),
-    edge('cable-light', 'load-light'),
-    edge('mcb-socket', 'cable-socket'),
-    edge('cable-socket', 'load-socket'),
-    edge('mcb-ac', 'cable-ac'),
-    edge('cable-ac', 'hvac-ac'),
+    edge('utility', 'out', 'main', 'line'),
+    edge('main', 'load', 'mcb-light', 'line'),
+    edge('main', 'load', 'mcb-socket', 'line'),
+    edge('main', 'load', 'mcb-ac', 'line'),
+    edge('mcb-light', 'load', 'cable-light', 'a'),
+    edge('cable-light', 'b', 'load-light', 'in'),
+    edge('mcb-socket', 'load', 'cable-socket', 'a'),
+    edge('cable-socket', 'b', 'load-socket', 'in'),
+    edge('mcb-ac', 'load', 'cable-ac', 'a'),
+    edge('cable-ac', 'b', 'hvac-ac', 'in'),
   ];
 
   return { nodes, edges, name: names[locale] ?? names.en };
