@@ -1,0 +1,42 @@
+/* U Smart Studio — scoped theme tokens for the Digital Twin workspace. */
+
+[data-studio-theme='dark'] {
+  --studio-bg: #0a0a0f;
+  --studio-panel: #111118;
+  --studio-node: #16161f;
+  --studio-border: #26263a;
+  --studio-hover: #1c1c28;
+  --studio-grid: #1e1e2e;
+  --studio-text: #e9e9f1;
+  --studio-muted: #8b8ba7;
+}
+
+[data-studio-theme='light'] {
+  --studio-bg: #f4f6fb;
+  --studio-panel: #ffffff;
+  --studio-node: #ffffff;
+  --studio-border: #dfe4ee;
+  --studio-hover: #eef1f7;
+  --studio-grid: #d8deea;
+  --studio-text: #11131c;
+  --studio-muted: #5b6478;
+}
+
+.studio-root {
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+/* React Flow control theming */
+.studio-root .react-flow__controls-button {
+  background: var(--studio-panel);
+  border-color: var(--studio-border);
+  color: var(--studio-text);
+  fill: var(--studio-text);
+}
+.studio-root .react-flow__controls-button:hover {
+  background: var(--studio-hover);
+}
+.studio-root .react-flow__attribution {
+  display: none;
+}

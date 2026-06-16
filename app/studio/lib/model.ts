@@ -1,0 +1,53 @@
+/**
+ * U Smart Studio — Design model.
+ *
+ * Framework-agnostic representation of a Digital Twin design. The Zustand
+ * store and the React Flow canvas both project from these structures.
+ */
+import type { CatalogEntry } from './catalog';
+
+/** A placed component instance on the canvas. */
+export type DesignNode = {
+  id: string;
+  catalogId: string;
+  label: string;
+  x: number;
+  y: number;
+  /**
+   * Instance overrides. For cables this includes `lengthM`; runtime simulation
+   * state (energised, current, etc.) is stored under `runtime`.
+   */
+  params: Record<string, number | string | boolean>;
+};
+
+/** A connection between two component ports. */
+export type DesignEdge = {
+  id: string;
+  source: string;
+  sourceHandle: string | null;
+  target: string;
+  targetHandle: string | null;
+  /** Resolved catalog entry of the cable used for this run, if any. */
+  cableId?: string;
+};
+
+export type Design = {
+  id: string;
+  name: string;
+  nodes: DesignNode[];
+  edges: DesignEdge[];
+};
+
+export type ResolvedNode = DesignNode & { spec: CatalogEntry };
+
+export function resolveNodes(
+  nodes: DesignNode[],
+  getEntry: (id: string) => CatalogEntry | undefined,
+): ResolvedNode[] {
+  const out: ResolvedNode[] = [];
+  for (const n of nodes) {
+    const spec = getEntry(n.catalogId);
+    if (spec) out.push({ ...n, spec });
+  }
+  return out;
+}

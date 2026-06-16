@@ -1,0 +1,89 @@
+'use client';
+
+import { useState } from 'react';
+import StudioLogo from './StudioLogo';
+import { useStudio } from '../lib/store';
+import { useT } from './hooks';
+import { STUDIO_LOCALES, LOCALE_LABELS, type StudioLocale } from '../lib/i18n';
+import { FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages, Download } from 'lucide-react';
+
+export function Topbar() {
+  const t = useT();
+  const locale = useStudio((s) => s.locale);
+  const setLocale = useStudio((s) => s.setLocale);
+  const theme = useStudio((s) => s.theme);
+  const toggleTheme = useStudio((s) => s.toggleTheme);
+  const clear = useStudio((s) => s.clear);
+  const loadSample = useStudio((s) => s.loadSample);
+  const designName = useStudio((s) => s.designName);
+  const simulating = useStudio((s) => s.simulating);
+  const toggleSimulation = useStudio((s) => s.toggleSimulation);
+  const [langOpen, setLangOpen] = useState(false);
+
+  const btn = 'flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--studio-text)] hover:bg-[var(--studio-hover)] transition';
+
+  return (
+    <header className="flex items-center gap-3 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2">
+      <StudioLogo size="compact" />
+
+      {designName && (
+        <span className="hidden truncate text-sm font-medium text-[var(--studio-muted)] md:block max-w-[200px]">
+          / {designName}
+        </span>
+      )}
+
+      <div className="ms-auto flex items-center gap-1.5">
+        <button className={btn} onClick={clear}>
+          <FilePlus2 className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{t('newDesign')}</span>
+        </button>
+        <button className={btn} onClick={loadSample}>
+          <FolderOpen className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{t('sample')}</span>
+        </button>
+        <button className={btn} onClick={clear}>
+          <Trash2 className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">{t('clear')}</span>
+        </button>
+
+        <button
+          onClick={toggleSimulation}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition ${simulating ? 'bg-red-500 hover:bg-red-400' : 'bg-emerald-500 hover:bg-emerald-400'}`}
+        >
+          {simulating ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">{simulating ? t('stop') : t('simulate')}</span>
+        </button>
+
+        <div className="relative">
+          <button className={btn} onClick={() => setLangOpen((o) => !o)} aria-label={t('language')}>
+            <Languages className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{LOCALE_LABELS[locale]}</span>
+          </button>
+          {langOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setLangOpen(false)} />
+              <div className="absolute z-20 mt-1 ltr:right-0 rtl:left-0 w-32 overflow-hidden rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] shadow-xl">
+                {STUDIO_LOCALES.map((l: StudioLocale) => (
+                  <button
+                    key={l}
+                    onClick={() => {
+                      setLocale(l);
+                      setLangOpen(false);
+                    }}
+                    className={`block w-full px-3 py-2 text-start text-xs hover:bg-[var(--studio-hover)] ${l === locale ? 'text-cyan-400 font-semibold' : 'text-[var(--studio-text)]'}`}
+                  >
+                    {LOCALE_LABELS[l]}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <button className={btn} onClick={toggleTheme} aria-label={t('theme')}>
+          {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    </header>
+  );
+}

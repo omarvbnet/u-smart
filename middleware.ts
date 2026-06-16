@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import createIntlMiddleware from 'next-intl/middleware';
 import { isProviserAppHost } from '@/lib/proviser-host';
+import { isStudioAppHost } from '@/lib/studio-host';
 import { routing } from '@/i18n/routing';
 
 const handleLocales = createIntlMiddleware({
@@ -40,6 +41,19 @@ export default function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';
   const { pathname } = request.nextUrl;
 
+  if (isStudioAppHost(host)) {
+    if (pathname.startsWith('/studio') || pathname.startsWith('/api')) {
+      return NextResponse.next();
+    }
+    if (isLocalizedLegalPath(pathname)) {
+      const response = handleLocales(request);
+      return response ? applySecurityHeaders(response) : NextResponse.next();
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === '/' ? '/studio' : `/studio${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
   if (isProviserAppHost(host)) {
     if (pathname.startsWith('/proviser') || pathname.startsWith('/api')) {
       return NextResponse.next();
@@ -53,7 +67,7 @@ export default function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
-  if (pathname.startsWith('/proviser')) {
+  if (pathname.startsWith('/proviser') || pathname.startsWith('/studio')) {
     return NextResponse.next();
   }
 
@@ -62,5 +76,5 @@ export default function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|admin|coordinator|proviser|_next|.*\\..*).*)'],
+  matcher: ['/((?!api|admin|coordinator|proviser|studio|_next|.*\\..*).*)'],
 };
