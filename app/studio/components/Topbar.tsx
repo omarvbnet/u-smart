@@ -55,8 +55,8 @@ export function Topbar() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const { nodes, edges, designName } = useStudio.getState();
-      await exportDesignPdf({ designName, nodes, edges });
+      const { nodes, edges, designName, project } = useStudio.getState();
+      await exportDesignPdf({ designName, nodes, edges, project });
     } finally {
       setExporting(false);
     }

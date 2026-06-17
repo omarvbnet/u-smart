@@ -6,14 +6,18 @@ import { useT } from './hooks';
 import { getCatalogEntry } from '../lib/catalog';
 import { resolveNodes } from '../lib/model';
 import { buildBoq, buildLoadSchedule, buildCableSchedule } from '../lib/engine/reports';
+import { buildingTypeLabel } from '../lib/project';
 import { X, FileBarChart2 } from 'lucide-react';
 
 type Tab = 'boq' | 'loads' | 'cables';
 
 export function ReportsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const locale = useStudio((s) => s.locale);
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
+  const designName = useStudio((s) => s.designName);
+  const project = useStudio((s) => s.project);
   const [tab, setTab] = useState<Tab>('boq');
 
   const { boq, loads, cables } = useMemo(() => {
@@ -42,6 +46,14 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="ms-auto rounded-lg p-1.5 text-[var(--studio-muted)] hover:bg-[var(--studio-hover)]">
             <X className="h-4 w-4" />
           </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--studio-border)] px-4 py-2 text-[11px] text-[var(--studio-muted)]">
+          <span className="font-semibold text-[var(--studio-text)]">{designName || '—'}</span>
+          {project.client && <span>{t('client')}: {project.client}</span>}
+          <span>{t('buildingType')}: {buildingTypeLabel(project.buildingType)[locale] ?? buildingTypeLabel(project.buildingType).en}</span>
+          {project.reference && <span>{t('reference')}: {project.reference}</span>}
+          <span>{project.standards.join(', ')}</span>
         </div>
 
         <div className="flex gap-1 border-b border-[var(--studio-border)] px-3 py-2">

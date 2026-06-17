@@ -7,14 +7,15 @@ import { Canvas } from './Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
 import { ValidationPanel } from './ValidationPanel';
 import { QualityIndex } from './QualityIndex';
+import { ProjectPanel } from './ProjectPanel';
 import { BusMonitor } from './BusMonitor';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
 import { readShareFromHash } from '../lib/share';
-import { SlidersHorizontal, ShieldCheck, Gauge } from 'lucide-react';
+import { SlidersHorizontal, ShieldCheck, Gauge, Building2 } from 'lucide-react';
 
-type Tab = 'properties' | 'validation' | 'quality';
+type Tab = 'properties' | 'validation' | 'quality' | 'project';
 
 export function Workspace() {
   const t = useT();
@@ -68,6 +69,7 @@ export function Workspace() {
     { key: 'validation', label: t('validation'), icon: ShieldCheck, badge: issues.length },
     { key: 'quality', label: t('quality'), icon: Gauge },
     { key: 'properties', label: t('properties'), icon: SlidersHorizontal },
+    { key: 'project', label: t('project'), icon: Building2 },
   ];
 
   return (
@@ -120,6 +122,7 @@ export function Workspace() {
             {tab === 'properties' && <PropertiesPanel />}
             {tab === 'validation' && <ValidationPanel />}
             {tab === 'quality' && <QualityIndex />}
+            {tab === 'project' && <ProjectPanel />}
           </div>
         </aside>
       </div>

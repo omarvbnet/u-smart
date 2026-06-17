@@ -15,11 +15,13 @@ import { declarationFor } from './engine/declarations';
 import { resolveNodes, type DesignNode, type DesignEdge } from './model';
 import { validateDesign } from './engine/validation';
 import { computeQuality } from './engine/quality';
+import { buildingTypeLabel, type ProjectInfo } from './project';
 
 export async function exportDesignPdf(opts: {
   designName: string;
   nodes: DesignNode[];
   edges: DesignEdge[];
+  project?: ProjectInfo;
 }): Promise<void> {
   const { default: jsPDF } = await import('jspdf');
   const html2canvas = (await import('html2canvas-pro')).default;
@@ -44,15 +46,33 @@ export async function exportDesignPdf(opts: {
 
   // ---- Page 1: canvas snapshot ----
   header(opts.designName || 'Untitled design');
+  let topY = 24;
+  const p = opts.project;
+  if (p) {
+    const info = [
+      p.client && `Client: ${p.client}`,
+      p.consultant && `Consultant: ${p.consultant}`,
+      `Building: ${buildingTypeLabel(p.buildingType).en}`,
+      p.location && `Location: ${p.location}`,
+      p.reference && `Ref: ${p.reference}`,
+      `Rev: ${p.revision}`,
+    ].filter(Boolean) as string[];
+    doc.setTextColor(70, 80, 100);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(info.join('   |   '), 12, 23);
+    if (p.standards.length) doc.text(`Standards: ${p.standards.join(', ')}`, 12, 27.5);
+    topY = 31;
+  }
   if (el) {
     const canvas = await html2canvas(el, { backgroundColor: '#0a0a0f', scale: 2, logging: false });
     const img = canvas.toDataURL('image/png');
     const maxW = pageW - 20;
-    const maxH = pageH - 28;
+    const maxH = pageH - topY - 6;
     const ratio = Math.min(maxW / canvas.width, maxH / canvas.height);
     const w = canvas.width * ratio;
     const h = canvas.height * ratio;
-    doc.addImage(img, 'PNG', (pageW - w) / 2, 24, w, h);
+    doc.addImage(img, 'PNG', (pageW - w) / 2, topY, w, h);
   }
 
   // ---- Page 2: component & cable schedule ----

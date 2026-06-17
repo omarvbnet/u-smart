@@ -8,6 +8,7 @@ import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
 import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
+import { defaultProject, type ProjectInfo } from './project';
 
 export type Theme = 'dark' | 'light';
 
@@ -18,6 +19,7 @@ export type DesignFile = {
   edges: DesignEdge[];
   controls: Record<string, ControlState>;
   map: MapBackground | null;
+  project?: ProjectInfo;
 };
 
 export type MapBackground = {
@@ -41,6 +43,7 @@ type StudioState = {
   controls: Record<string, ControlState>;
   map: MapBackground | null;
   telegrams: Telegram[];
+  project: ProjectInfo;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -67,6 +70,10 @@ type StudioState = {
   moveMap: (x: number, y: number) => void;
   setMapOpacity: (opacity: number) => void;
   clearMap: () => void;
+
+  setDesignName: (name: string) => void;
+  updateProject: (patch: Partial<ProjectInfo>) => void;
+  toggleStandard: (code: ProjectInfo['standards'][number]) => void;
 
   duplicateNode: (id: string) => void;
   clearTelegrams: () => void;
@@ -116,6 +123,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   controls: {},
   map: null,
   telegrams: [],
+  project: defaultProject(),
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -191,7 +199,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   removeEdge: (id) => set((s) => ({ edges: s.edges.filter((e) => e.id !== id) })),
 
-  clear: () => set({ nodes: [], edges: [], selectedNodeId: null, designName: '', controls: {} }),
+  clear: () => set({ nodes: [], edges: [], selectedNodeId: null, designName: '', controls: {}, project: defaultProject(), map: null, telegrams: [] }),
 
   loadSample: () => {
     const { nodes, edges, name } = buildSampleDesign(get().locale);
@@ -255,16 +263,32 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }),
 
+  setDesignName: (name) => set({ designName: name }),
+
+  updateProject: (patch) => set((s) => ({ project: { ...s.project, ...patch } })),
+
+  toggleStandard: (code) =>
+    set((s) => {
+      const has = s.project.standards.includes(code);
+      return {
+        project: {
+          ...s.project,
+          standards: has ? s.project.standards.filter((c) => c !== code) : [...s.project.standards, code],
+        },
+      };
+    }),
+
   clearTelegrams: () => set({ telegrams: [] }),
 
   serialize: () => {
     const s = get();
-    return { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map };
+    return { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map, project: s.project };
   },
 
   loadDesign: (file) =>
     set({
       designName: file.designName ?? '',
+      project: file.project ?? defaultProject(),
       nodes: file.nodes ?? [],
       edges: file.edges ?? [],
       controls: file.controls ?? {},
@@ -293,7 +317,7 @@ if (typeof window !== 'undefined') {
   useStudio.subscribe((s) => {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      const file: DesignFile = { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map };
+      const file: DesignFile = { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map, project: s.project };
       try {
         window.localStorage.setItem('studio.design', JSON.stringify(file));
       } catch {
