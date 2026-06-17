@@ -2,15 +2,17 @@
 
 import { create } from 'zustand';
 import { CATALOG, getCatalogEntry, type CatalogEntry } from './catalog';
-import type { DesignNode, DesignEdge } from './model';
+import type { DesignNode, DesignEdge, DesignRoom } from './model';
 import type { Fix } from './engine/validation';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
 import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
-import { defaultProject, type ProjectInfo } from './project';
+import { defaultProject, normalizeProject, type ProjectInfo } from './project';
+import { buildStarterDesign } from './engine/starter-design';
 
 export type Theme = 'dark' | 'light';
+export type FloorPlanTool = 'select' | 'draw-room';
 
 export type DesignFile = {
   version: 1;
@@ -20,6 +22,7 @@ export type DesignFile = {
   controls: Record<string, ControlState>;
   map: MapBackground | null;
   project?: ProjectInfo;
+  rooms?: DesignRoom[];
 };
 
 export type MapBackground = {
@@ -44,6 +47,9 @@ type StudioState = {
   map: MapBackground | null;
   telegrams: Telegram[];
   project: ProjectInfo;
+  rooms: DesignRoom[];
+  selectedRoomId: string | null;
+  floorPlanTool: FloorPlanTool;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -52,6 +58,8 @@ type StudioState = {
 
   addNodeFromCatalog: (catalogId: string, x: number, y: number) => void;
   moveNode: (id: string, x: number, y: number) => void;
+  updateNodeLabel: (id: string, label: string) => void;
+  replaceNodeCatalog: (id: string, catalogId: string) => void;
   updateNodeParam: (id: string, key: string, value: number | string | boolean) => void;
   removeNode: (id: string) => void;
   select: (id: string | null) => void;
@@ -74,6 +82,18 @@ type StudioState = {
   setDesignName: (name: string) => void;
   updateProject: (patch: Partial<ProjectInfo>) => void;
   toggleStandard: (code: ProjectInfo['standards'][number]) => void;
+  completeWizard: (project: ProjectInfo, generateDesign: boolean) => void;
+  reopenWizard: () => void;
+
+  setFloorPlanTool: (tool: FloorPlanTool) => void;
+  addRoom: (room: Omit<DesignRoom, 'id'> & { id?: string }) => void;
+  addRoomTemplate: (label: string, zone: DesignRoom['zone'], width: number, height: number) => void;
+  seedDefaultRooms: () => void;
+  updateRoom: (id: string, patch: Partial<DesignRoom>) => void;
+  moveRoom: (id: string, x: number, y: number) => void;
+  resizeRoom: (id: string, width: number, height: number) => void;
+  removeRoom: (id: string) => void;
+  selectRoom: (id: string | null) => void;
 
   duplicateNode: (id: string) => void;
   clearTelegrams: () => void;
@@ -124,6 +144,9 @@ export const useStudio = create<StudioState>((set, get) => ({
   map: null,
   telegrams: [],
   project: defaultProject(),
+  rooms: [],
+  selectedRoomId: null,
+  floorPlanTool: 'select',
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -155,6 +178,20 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   moveNode: (id, x, y) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) })),
 
+  updateNodeLabel: (id, label) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, label } : n)) })),
+
+  replaceNodeCatalog: (id, catalogId) =>
+    set((s) => {
+      const entry = getCatalogEntry(catalogId);
+      if (!entry) return s;
+      return {
+        nodes: s.nodes.map((n) =>
+          n.id === id ? { ...n, catalogId, label: defaultLabel(entry, s.locale) } : n,
+        ),
+        controls: { ...s.controls, [id]: defaultControlState(entry) },
+      };
+    }),
+
   updateNodeParam: (id, key, value) =>
     set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, params: { ...n.params, [key]: value } } : n)) })),
 
@@ -170,7 +207,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }),
 
-  select: (id) => set({ selectedNodeId: id }),
+  select: (id) => set({ selectedNodeId: id, selectedRoomId: null }),
 
   setControl: (id, key, value) =>
     set((s) => {
@@ -199,7 +236,20 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   removeEdge: (id) => set((s) => ({ edges: s.edges.filter((e) => e.id !== id) })),
 
-  clear: () => set({ nodes: [], edges: [], selectedNodeId: null, designName: '', controls: {}, project: defaultProject(), map: null, telegrams: [] }),
+  clear: () =>
+    set({
+      nodes: [],
+      edges: [],
+      rooms: [],
+      selectedNodeId: null,
+      selectedRoomId: null,
+      designName: '',
+      controls: {},
+      project: defaultProject(),
+      map: null,
+      telegrams: [],
+      floorPlanTool: 'select',
+    }),
 
   loadSample: () => {
     const { nodes, edges, name } = buildSampleDesign(get().locale);
@@ -278,22 +328,98 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }),
 
+  completeWizard: (project, generateDesign) => {
+    const s = get();
+    let rooms = s.rooms;
+    if (rooms.length === 0) {
+      rooms = seedRoomsForBuilding(project.buildingType);
+    }
+    let nodes = s.nodes;
+    let edges = s.edges;
+    let controls = s.controls;
+    let designName = s.designName;
+    if (generateDesign) {
+      const starter = buildStarterDesign(project, s.locale, rooms);
+      nodes = starter.nodes;
+      edges = starter.edges;
+      designName = starter.name;
+      controls = {};
+      for (const n of nodes) {
+        const entry = getCatalogEntry(n.catalogId);
+        if (entry) controls[n.id] = defaultControlState(entry);
+      }
+    }
+    set({
+      project,
+      rooms,
+      nodes,
+      edges,
+      controls,
+      designName,
+      selectedNodeId: null,
+      selectedRoomId: null,
+    });
+  },
+
+  reopenWizard: () => set((s) => ({ project: { ...s.project, setupComplete: false } })),
+
+  setFloorPlanTool: (tool) => set({ floorPlanTool: tool }),
+
+  addRoom: (room) => {
+    const id = room.id ?? uid('room');
+    const r: DesignRoom = { id, label: room.label, x: room.x, y: room.y, width: room.width, height: room.height, zone: room.zone };
+    set((s) => ({ rooms: [...s.rooms, r], selectedRoomId: id, selectedNodeId: null }));
+  },
+
+  addRoomTemplate: (label, zone, width, height) => {
+    const offset = get().rooms.length * 24;
+    get().addRoom({ label, zone, x: -120 + offset, y: -80 + offset, width, height });
+  },
+
+  seedDefaultRooms: () => set({ rooms: seedRoomsForBuilding(get().project.buildingType), selectedRoomId: null }),
+
+  updateRoom: (id, patch) => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
+
+  moveRoom: (id, x, y) => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, x, y } : r)) })),
+
+  resizeRoom: (id, width, height) =>
+    set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, width: Math.max(60, width), height: Math.max(50, height) } : r)) })),
+
+  removeRoom: (id) =>
+    set((s) => ({
+      rooms: s.rooms.filter((r) => r.id !== id),
+      selectedRoomId: s.selectedRoomId === id ? null : s.selectedRoomId,
+    })),
+
+  selectRoom: (id) => set({ selectedRoomId: id, selectedNodeId: null }),
+
   clearTelegrams: () => set({ telegrams: [] }),
 
   serialize: () => {
     const s = get();
-    return { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map, project: s.project };
+    return {
+      version: 1,
+      designName: s.designName,
+      nodes: s.nodes,
+      edges: s.edges,
+      controls: s.controls,
+      map: s.map,
+      project: s.project,
+      rooms: s.rooms,
+    };
   },
 
   loadDesign: (file) =>
     set({
       designName: file.designName ?? '',
-      project: file.project ?? defaultProject(),
+      project: normalizeProject(file.project),
+      rooms: file.rooms ?? [],
       nodes: file.nodes ?? [],
       edges: file.edges ?? [],
       controls: file.controls ?? {},
       map: file.map ?? null,
       selectedNodeId: null,
+      selectedRoomId: null,
       telegrams: [],
       simulating: false,
     }),
@@ -317,7 +443,16 @@ if (typeof window !== 'undefined') {
   useStudio.subscribe((s) => {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      const file: DesignFile = { version: 1, designName: s.designName, nodes: s.nodes, edges: s.edges, controls: s.controls, map: s.map, project: s.project };
+      const file: DesignFile = {
+        version: 1,
+        designName: s.designName,
+        nodes: s.nodes,
+        edges: s.edges,
+        controls: s.controls,
+        map: s.map,
+        project: s.project,
+        rooms: s.rooms,
+      };
       try {
         window.localStorage.setItem('studio.design', JSON.stringify(file));
       } catch {
@@ -333,4 +468,20 @@ function pickBreaker(rating: number): CatalogEntry | undefined {
     .filter((p) => p.protectionType === 'MCB' || p.protectionType === 'MCCB')
     .sort((a, b) => a.ratedCurrentA - b.ratedCurrentA)
     .find((p) => p.ratedCurrentA >= rating);
+}
+
+function seedRoomsForBuilding(bt: ProjectInfo['buildingType']): DesignRoom[] {
+  if (bt === 'apartment' || bt === 'house' || bt === 'villa') {
+    return [
+      { id: 'room_living', label: 'Living', x: -220, y: -140, width: 300, height: 200, zone: 'general' },
+      { id: 'room_kitchen', label: 'Kitchen', x: 100, y: -140, width: 180, height: 140, zone: 'kitchen' },
+      { id: 'room_bed', label: 'Bedroom', x: -220, y: 80, width: 200, height: 160, zone: 'bedroom' },
+      { id: 'room_bath', label: 'Bathroom', x: 20, y: 80, width: 120, height: 100, zone: 'bathroom' },
+    ];
+  }
+  return [
+    { id: 'room_lobby', label: 'Lobby', x: -260, y: -160, width: 340, height: 180, zone: 'general' },
+    { id: 'room_office', label: 'Office', x: 100, y: -160, width: 220, height: 180, zone: 'office' },
+    { id: 'room_mech', label: 'MEP', x: -260, y: 40, width: 160, height: 140, zone: 'mechanical' },
+  ];
 }

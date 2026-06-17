@@ -31,11 +31,24 @@ export type DesignEdge = {
   cableId?: string;
 };
 
+/** A room zone on the floor plan (drawn from zero or AI-detected). */
+export type DesignRoom = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Zone classification for load / HVAC rules. */
+  zone: 'general' | 'bedroom' | 'kitchen' | 'bathroom' | 'office' | 'corridor' | 'mechanical';
+};
+
 export type Design = {
   id: string;
   name: string;
   nodes: DesignNode[];
   edges: DesignEdge[];
+  rooms?: DesignRoom[];
 };
 
 export type ResolvedNode = DesignNode & { spec: CatalogEntry };

@@ -39,6 +39,8 @@ model User {
   services       Service[]
   testimonials   Testimonial[]
   products       Product[]
+  studioMembers  StudioMember[]
+  studioProjects StudioProject[] @relation("StudioProjectOwner")
 
   @@map("users")
 }
@@ -2088,4 +2090,357 @@ model PrivateCompanyMaterialRequest {
   @@index([requesterId])
   @@index([materialId])
   @@map("private_company_material_requests")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// U Smart Studio — Electrical Digital Twin (engineering projects)
+// Separate from marketing `Project` and ticket systems above.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum StudioRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  SENIOR_ENGINEER
+  ELECTRICAL_ENGINEER
+  HVAC_ENGINEER
+  SMART_HOME_ENGINEER
+  TECHNICIAN
+  VIEWER
+  CLIENT
+}
+
+enum StudioBuildingType {
+  HOUSE
+  VILLA
+  APARTMENT
+  RESIDENTIAL
+  COMMERCIAL
+  HOTEL
+  HOSPITAL
+  INDUSTRIAL
+}
+
+enum StudioProjectStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+enum StudioValidationSeverity {
+  CRITICAL
+  WARNING
+  RECOMMENDATION
+}
+
+model StudioCompany {
+  id        String         @id @default(cuid())
+  name      String
+  slug      String         @unique
+  logoUrl   String?
+  deletedAt DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  members   StudioMember[]
+  projects  StudioProject[]
+
+  @@map("studio_companies")
+}
+
+model StudioMember {
+  id        String        @id @default(cuid())
+  companyId String
+  company   StudioCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      StudioRole    @default(VIEWER)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([companyId, userId])
+  @@map("studio_members")
+}
+
+model StudioProject {
+  id             String              @id @default(cuid())
+  companyId      String?
+  company        StudioCompany?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  ownerUserId    String?
+  ownerUser      User?               @relation("StudioProjectOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  name           String
+  client         String?
+  consultant     String?
+  location       String?
+  reference      String?
+  revision       String              @default("R0")
+  buildingType   StudioBuildingType  @default(VILLA)
+  status         StudioProjectStatus @default(DRAFT)
+  smartBuilding  Boolean             @default(false)
+  smartProtocol  String?
+  hvacMode       String              @default("auto")
+  hvacTypes      String[]            @default([])
+  energySources  String[]            @default(["grid"])
+  standards      String[]            @default([])
+  designJson     Json?
+  shareToken     String?             @unique
+  sharePublic    Boolean             @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  buildings      StudioBuilding[]
+  revisions      StudioDesignRevision[]
+  reports        StudioReport[]
+  errorLogs      StudioValidationError[]
+  simulations    StudioSimulationSession[]
+  panels         StudioPanel[]
+
+  @@index([companyId])
+  @@index([ownerUserId])
+  @@map("studio_projects")
+}
+
+model StudioBuilding {
+  id        String        @id @default(cuid())
+  projectId String
+  project   StudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  deletedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  floors    StudioFloor[]
+
+  @@index([projectId])
+  @@map("studio_buildings")
+}
+
+model StudioFloor {
+  id         String         @id @default(cuid())
+  buildingId String
+  building   StudioBuilding @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  name       String
+  level      Int            @default(0)
+  mapUrl     String?
+  mapWidth   Int?
+  mapHeight  Int?
+  deletedAt  DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  rooms      StudioRoom[]
+  devices    StudioDevice[]
+
+  @@index([buildingId])
+  @@map("studio_floors")
+}
+
+model StudioRoom {
+  id        String      @id @default(cuid())
+  floorId   String
+  floor     StudioFloor @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  label     String
+  zone      String      @default("general")
+  x         Float
+  y         Float
+  width     Float
+  height    Float
+  areaM2    Float?
+  luxTarget Float?
+  deletedAt DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  devices   StudioDevice[]
+
+  @@index([floorId])
+  @@map("studio_rooms")
+}
+
+model StudioDevice {
+  id          String      @id @default(cuid())
+  floorId     String
+  floor       StudioFloor @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  roomId      String?
+  room        StudioRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  catalogId   String
+  label       String
+  x           Float
+  y           Float
+  params      Json        @default("{}")
+  panelId     String?
+  panel       StudioPanel? @relation(fields: [panelId], references: [id], onDelete: SetNull)
+  hvacUnit    StudioHvacUnit?
+  smartDevice StudioSmartDevice?
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  connectionsFrom StudioConnection[] @relation("ConnectionSource")
+  connectionsTo   StudioConnection[] @relation("ConnectionTarget")
+
+  @@index([floorId])
+  @@index([roomId])
+  @@map("studio_devices")
+}
+
+model StudioPanel {
+  id        String         @id @default(cuid())
+  projectId String
+  project   StudioProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  ratedA    Float?
+  deletedAt DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  devices   StudioDevice[]
+  circuits  StudioCircuit[]
+
+  @@index([projectId])
+  @@map("studio_panels")
+}
+
+model StudioCircuit {
+  id        String       @id @default(cuid())
+  panelId   String
+  panel     StudioPanel  @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  name      String
+  ratedA    Float?
+  deletedAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  cables    StudioCable[]
+
+  @@index([panelId])
+  @@map("studio_circuits")
+}
+
+model StudioCable {
+  id         String         @id @default(cuid())
+  circuitId  String?
+  circuit    StudioCircuit? @relation(fields: [circuitId], references: [id], onDelete: SetNull)
+  catalogId  String
+  lengthM    Float          @default(20)
+  deletedAt  DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([circuitId])
+  @@map("studio_cables")
+}
+
+model StudioHvacUnit {
+  id        String       @id @default(cuid())
+  deviceId  String       @unique
+  device    StudioDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  catalogId String
+  coolingKw Float?
+  heatingKw Float?
+  cop       Float?
+  deletedAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("studio_hvac_units")
+}
+
+model StudioSmartDevice {
+  id           String       @id @default(cuid())
+  deviceId     String       @unique
+  device       StudioDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  protocol     String
+  busAddress   String?
+  groupAddress String?
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("studio_smart_devices")
+}
+
+model StudioConnection {
+  id            String       @id @default(cuid())
+  sourceId      String
+  source        StudioDevice @relation("ConnectionSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetId      String
+  target        StudioDevice @relation("ConnectionTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  sourcePortId  String?
+  targetPortId  String?
+  cableId       String?
+  deletedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([sourceId])
+  @@index([targetId])
+  @@map("studio_connections")
+}
+
+model StudioSimulationSession {
+  id        String        @id @default(cuid())
+  projectId String
+  project   StudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  active    Boolean       @default(false)
+  stateJson Json?
+  startedAt DateTime      @default(now())
+  endedAt   DateTime?
+
+  @@index([projectId])
+  @@map("studio_simulation_sessions")
+}
+
+model StudioValidationError {
+  id         String                   @id @default(cuid())
+  projectId  String
+  project    StudioProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deviceId   String?
+  severity   StudioValidationSeverity
+  code       String
+  title      String
+  detail     String
+  standard   String?
+  resolved   Boolean                  @default(false)
+  deletedAt  DateTime?
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+
+  @@index([projectId, severity])
+  @@map("studio_validation_errors")
+}
+
+model StudioReport {
+  id        String        @id @default(cuid())
+  projectId String
+  project   StudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  fileUrl   String?
+  meta      Json?
+  deletedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([projectId])
+  @@map("studio_reports")
+}
+
+model StudioDesignRevision {
+  id          String        @id @default(cuid())
+  projectId   String
+  project     StudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revision    String
+  designJson  Json
+  createdById String?
+  note        String?
+  createdAt   DateTime      @default(now())
+
+  @@index([projectId, createdAt])
+  @@map("studio_design_revisions")
+}
+
+model StudioStandardReference {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  title       String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("studio_standard_references")
 }

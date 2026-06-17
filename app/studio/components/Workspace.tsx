@@ -9,6 +9,7 @@ import { ValidationPanel } from './ValidationPanel';
 import { QualityIndex } from './QualityIndex';
 import { ProjectPanel } from './ProjectPanel';
 import { BusMonitor } from './BusMonitor';
+import { SetupWizard } from './SetupWizard';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
@@ -27,16 +28,17 @@ export function Workspace() {
   const hydrate = useStudio((s) => s.hydrate);
   const loadDesign = useStudio((s) => s.loadDesign);
   const duplicateNode = useStudio((s) => s.duplicateNode);
+  const project = useStudio((s) => s.project);
   const { issues } = useAnalysis();
   const [tab, setTab] = useState<Tab>('validation');
+  const [wizardOpen, setWizardOpen] = useState(false);
   const rtl = RTL_LOCALES.has(locale);
 
-  // Jump to properties when the user selects a node.
   useEffect(() => {
-    if (selectedId) setTab('properties');
-  }, [selectedId]);
+    if (!project.setupComplete) setWizardOpen(true);
+  }, [project.setupComplete]);
 
-  // Load a shared design from the URL hash, otherwise restore the autosave.
+  // Load shared design or autosave; show wizard when setup is incomplete.
   useEffect(() => {
     const shared = readShareFromHash();
     if (shared) {
@@ -45,8 +47,19 @@ export function Workspace() {
     } else {
       hydrate();
     }
+    const p = useStudio.getState().project;
+    if (!p.setupComplete) setWizardOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (selectedId) setTab('properties');
+  }, [selectedId]);
+
+  const selectedRoomId = useStudio((s) => s.selectedRoomId);
+  useEffect(() => {
+    if (selectedRoomId) setTab('properties');
+  }, [selectedRoomId]);
 
   // Keyboard shortcuts (ignored while typing in form fields).
   useEffect(() => {
@@ -126,6 +139,8 @@ export function Workspace() {
           </div>
         </aside>
       </div>
+
+      {wizardOpen && <SetupWizard onComplete={() => setWizardOpen(false)} />}
     </div>
   );
 }

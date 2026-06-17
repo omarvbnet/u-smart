@@ -13,6 +13,7 @@ export function ProjectPanel() {
   const project = useStudio((s) => s.project);
   const updateProject = useStudio((s) => s.updateProject);
   const toggleStandard = useStudio((s) => s.toggleStandard);
+  const reopenWizard = useStudio((s) => s.reopenWizard);
 
   const label = 'mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-muted)]';
   const input =
@@ -94,6 +95,19 @@ export function ProjectPanel() {
             })}
           </div>
         </div>
+
+        <div className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] p-3 text-xs space-y-1">
+          <div><span className="text-[var(--studio-muted)]">{t('smartBuilding')}:</span> {project.smartBuilding ? (project.smartProtocol ?? '—') : t('no')}</div>
+          <div><span className="text-[var(--studio-muted)]">HVAC:</span> {project.hvacMode === 'auto' ? t('hvacAuto') : project.hvacTypes.join(', ')}</div>
+          <div><span className="text-[var(--studio-muted)]">{t('wizardEnergy')}:</span> {project.energySources.join(', ')}</div>
+        </div>
+
+        <button
+          onClick={reopenWizard}
+          className="w-full rounded-lg border border-cyan-400/40 bg-cyan-500/10 py-2 text-xs font-semibold text-cyan-300"
+        >
+          {t('reopenWizard')}
+        </button>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { loadCurrent, SQRT3 } from './electrical';
 
 export type Declaration = { voltage: number; current: number; text: string };
 
-export function declarationFor(entry: CatalogEntry): Declaration | null {
+export function declarationFor(entry: CatalogEntry, params?: Record<string, number | string | boolean>): Declaration | null {
   switch (entry.domain) {
     case 'source': {
       const i = entry.phases === 3
@@ -21,8 +21,10 @@ export function declarationFor(entry: CatalogEntry): Declaration | null {
     case 'cable':
       if (entry.ampacityA <= 0) return { voltage: entry.voltageRating, current: 0, text: `${entry.voltageRating}V` };
       return mk(entry.voltageRating > 1000 ? entry.voltageRating : entry.voltageRating, entry.ampacityA);
-    case 'load':
-      return mk(entry.voltage, loadCurrent(entry.powerW, entry.voltage, entry.phases, entry.powerFactor));
+    case 'load': {
+      const powerW = Number(params?.powerW) || entry.powerW;
+      return mk(entry.voltage, loadCurrent(powerW, entry.voltage, entry.phases, entry.powerFactor));
+    }
     case 'hvac':
       return mk(entry.voltage, loadCurrent(entry.inputKw * 1000, entry.voltage, entry.phases, 0.9));
     case 'sensor':

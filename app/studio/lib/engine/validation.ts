@@ -73,14 +73,15 @@ function buildAdjacency(edges: DesignEdge[]): Map<string, Set<string>> {
   return adj;
 }
 
-/** Demand current/voltage/phases for a consuming node. */
-function loadElectricals(spec: CatalogEntry): { p: number; v: number; ph: 1 | 3; pf: number } | null {
-  if (spec.domain === 'load') {
-    const l = spec as LoadSpec;
-    return { p: l.powerW, v: l.voltage, ph: l.phases, pf: l.powerFactor };
+/** Demand current/voltage/phases for a consuming node (respects instance overrides). */
+function loadElectricals(node: ResolvedNode): { p: number; v: number; ph: 1 | 3; pf: number } | null {
+  if (node.spec.domain === 'load') {
+    const l = node.spec as LoadSpec;
+    const p = Number(node.params.powerW) || l.powerW;
+    return { p, v: l.voltage, ph: l.phases, pf: l.powerFactor };
   }
-  if (spec.domain === 'hvac') {
-    const h = spec as HvacSpec;
+  if (node.spec.domain === 'hvac') {
+    const h = node.spec as HvacSpec;
     return { p: h.inputKw * 1000, v: h.voltage, ph: h.phases, pf: 0.9 };
   }
   return null;
@@ -92,7 +93,7 @@ function traceCircuit(
   byId: Map<string, ResolvedNode>,
   adj: Map<string, Set<string>>,
 ): Circuit | null {
-  const el = loadElectricals(load.spec);
+  const el = loadElectricals(load);
   if (!el) return null;
 
   const cables: ResolvedNode[] = [];
@@ -387,7 +388,7 @@ export function validateDesign(
     const totalKva = sources.reduce((s, n) => s + (n.spec as SourceSpec).ratedKva, 0);
     let demandKva = 0;
     for (const c of circuits) {
-      const el = loadElectricals(c.load.spec);
+      const el = loadElectricals(c.load);
       if (!el) continue;
       const df = c.load.spec.domain === 'load' ? (c.load.spec as LoadSpec).demandFactor : 1;
       demandKva += apparentKva(el.p * df, el.pf);
