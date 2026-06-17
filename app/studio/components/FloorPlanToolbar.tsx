@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
-import { Square, MousePointer2, LayoutTemplate, Trash2, Scan } from 'lucide-react';
+import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3 } from 'lucide-react';
 
 const ROOM_TEMPLATES = [
   { label: 'Living', zone: 'general' as const, w: 280, h: 200 },
@@ -22,6 +22,7 @@ export function FloorPlanToolbar() {
   const addRoomTemplate = useStudio((s) => s.addRoomTemplate);
   const seedDefaultRooms = useStudio((s) => s.seedDefaultRooms);
   const detectRoomsFromMap = useStudio((s) => s.detectRoomsFromMap);
+  const createMapFromZero = useStudio((s) => s.createMapFromZero);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
   const removeRoom = useStudio((s) => s.removeRoom);
   const rooms = useStudio((s) => s.rooms);
@@ -50,11 +51,17 @@ export function FloorPlanToolbar() {
         <button className={btn(tool === 'draw-room')} onClick={() => setTool('draw-room')} title={t('toolDrawRoom')}>
           <Square className="h-3.5 w-3.5" />
         </button>
+        {!map && (
+          <button className={btn(false)} onClick={createMapFromZero} title={t('createMapFromZero')}>
+            <Grid3x3 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('createMapFromZero')}</span>
+          </button>
+        )}
         <button className={btn(false)} onClick={seedDefaultRooms} title={t('toolLayout')}>
           <LayoutTemplate className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t('toolLayout')}</span>
         </button>
-        {map?.src && (
+        {map?.src && map.mode !== 'blank' && (
           <button className={btn(false)} onClick={() => void runDetect()} disabled={detecting} title={t('detectRooms')}>
             <Scan className={`h-3.5 w-3.5 ${detecting ? 'animate-pulse' : ''}`} />
             <span className="hidden sm:inline">{t('detectRooms')}</span>

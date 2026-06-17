@@ -14,7 +14,10 @@ import {
   type SmartProtocol,
   type ProjectInfo,
 } from '../lib/project';
-import { ChevronLeft, ChevronRight, Sparkles, Building2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, Building2, Grid3x3, Upload, PenLine } from 'lucide-react';
+import type { FloorPlanSource } from '../lib/project';
+
+type FloorPlanChoice = 'zero' | 'import' | 'skip';
 
 type Props = {
   onComplete: () => void;
@@ -25,6 +28,7 @@ export function SetupWizard({ onComplete }: Props) {
   const locale = useStudio((s) => s.locale);
   const completeWizard = useStudio((s) => s.completeWizard);
   const [step, setStep] = useState(0);
+  const [floorPlan, setFloorPlan] = useState<FloorPlanChoice>('zero');
   const [draft, setDraft] = useState<ProjectInfo>(() => useStudio.getState().project);
 
   const patch = (p: Partial<ProjectInfo>) => setDraft((d) => ({ ...d, ...p }));
@@ -48,11 +52,19 @@ export function SetupWizard({ onComplete }: Props) {
   };
 
   const finish = (generate: boolean) => {
-    completeWizard({ ...draft, setupComplete: true }, generate);
+    const fp: FloorPlanSource | 'skip' = floorPlan;
+    completeWizard({ ...draft, setupComplete: true }, { generateDesign: generate, floorPlan: fp });
     onComplete();
   };
 
-  const steps = [t('wizardBuilding'), t('wizardSmart'), t('wizardHvac'), t('wizardEnergy'), t('wizardReview')];
+  const steps = [
+    t('wizardBuilding'),
+    t('wizardSmart'),
+    t('wizardHvac'),
+    t('wizardEnergy'),
+    t('wizardFloorPlan'),
+    t('wizardReview'),
+  ];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
@@ -161,11 +173,50 @@ export function SetupWizard({ onComplete }: Props) {
           )}
 
           {step === 4 && (
+            <div className="space-y-4">
+              <p className="text-sm text-[var(--studio-muted)]">{t('wizardFloorPlanHint')}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <FloorPlanCard
+                  active={floorPlan === 'zero'}
+                  onClick={() => setFloorPlan('zero')}
+                  icon={Grid3x3}
+                  title={t('floorPlanFromZero')}
+                  hint={t('floorPlanFromZeroHint')}
+                />
+                <FloorPlanCard
+                  active={floorPlan === 'import'}
+                  onClick={() => setFloorPlan('import')}
+                  icon={Upload}
+                  title={t('floorPlanImport')}
+                  hint={t('floorPlanImportHint')}
+                />
+                <FloorPlanCard
+                  active={floorPlan === 'skip'}
+                  onClick={() => setFloorPlan('skip')}
+                  icon={PenLine}
+                  title={t('floorPlanSkip')}
+                  hint={t('floorPlanSkipHint')}
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
             <div className="space-y-3 text-sm text-[var(--studio-text)]">
               <Row label={t('buildingType')} value={BUILDING_TYPES.find((b) => b.id === draft.buildingType)?.label[locale] ?? ''} />
               <Row label={t('smartBuilding')} value={draft.smartBuilding ? (draft.smartProtocol ?? '—') : t('no')} />
               <Row label="HVAC" value={draft.hvacMode === 'auto' ? t('hvacAuto') : draft.hvacTypes.join(', ')} />
               <Row label={t('wizardEnergy')} value={draft.energySources.join(', ')} />
+              <Row
+                label={t('wizardFloorPlan')}
+                value={
+                  floorPlan === 'zero'
+                    ? t('floorPlanFromZero')
+                    : floorPlan === 'import'
+                      ? t('floorPlanImport')
+                      : t('floorPlanSkip')
+                }
+              />
               <div>
                 <span className="text-xs text-[var(--studio-muted)]">{t('standards')}</span>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -217,6 +268,33 @@ export function SetupWizard({ onComplete }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+function FloorPlanCard({
+  active,
+  onClick,
+  icon: Icon,
+  title,
+  hint,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Grid3x3;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-start gap-2 rounded-xl border p-4 text-start transition ${
+        active ? 'border-cyan-400 bg-cyan-500/10 ring-1 ring-cyan-400/40' : 'border-[var(--studio-border)] hover:bg-[var(--studio-hover)]'
+      }`}
+    >
+      <Icon className={`h-6 w-6 ${active ? 'text-cyan-400' : 'text-[var(--studio-muted)]'}`} />
+      <span className="text-sm font-bold text-[var(--studio-text)]">{title}</span>
+      <span className="text-[11px] leading-snug text-[var(--studio-muted)]">{hint}</span>
+    </button>
   );
 }
 

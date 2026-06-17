@@ -28,6 +28,9 @@ export type HvacSystemType =
 
 export type EnergySourceType = 'grid' | 'generator' | 'solar' | 'battery' | 'ups';
 
+/** How the floor plan was created: draw on blank canvas, import file, or none yet. */
+export type FloorPlanSource = 'none' | 'zero' | 'import';
+
 export type ProjectInfo = {
   client: string;
   consultant: string;
@@ -43,6 +46,7 @@ export type ProjectInfo = {
   hvacMode: 'auto' | 'manual';
   hvacTypes: HvacSystemType[];
   energySources: EnergySourceType[];
+  floorPlanSource: FloorPlanSource;
 };
 
 export const BUILDING_TYPES: { id: BuildingType; label: LocalizedText }[] = [
@@ -102,6 +106,7 @@ export function defaultProject(): ProjectInfo {
     hvacMode: 'auto',
     hvacTypes: ['split'],
     energySources: ['grid'],
+    floorPlanSource: 'none',
   };
 }
 
@@ -120,5 +125,6 @@ export function normalizeProject(p: Partial<ProjectInfo> | undefined): ProjectIn
     hvacTypes: p.hvacTypes ?? d.hvacTypes,
     energySources: p.energySources ?? d.energySources,
     setupComplete: p.setupComplete ?? (p.client ? true : false),
+    floorPlanSource: p.floorPlanSource ?? d.floorPlanSource,
   };
 }

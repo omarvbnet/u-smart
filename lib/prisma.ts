@@ -25,7 +25,7 @@ function createPrisma(): PrismaClient {
 
 // Invalidate stale cache when schema was updated (e.g. after adding new models)
 let prismaInstance = globalForPrisma.prisma
-if (prismaInstance && (!('visitorRequest' in prismaInstance) || !('ticketRequester' in prismaInstance) || !('site' in prismaInstance) || !('companyRequest' in prismaInstance) || !('company' in prismaInstance) || !('inspectionChecklist' in prismaInstance))) {
+if (prismaInstance && (!('visitorRequest' in prismaInstance) || !('ticketRequester' in prismaInstance) || !('site' in prismaInstance) || !('companyRequest' in prismaInstance) || !('company' in prismaInstance) || !('inspectionChecklist' in prismaInstance) || !('studioProject' in prismaInstance))) {
   try {
     (prismaInstance as any).$disconnect?.().catch(() => {})
   } catch {

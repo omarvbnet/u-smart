@@ -93,7 +93,7 @@ function CanvasInner() {
         id: MAP_ID,
         type: 'map',
         position: { x: map.x, y: map.y },
-        data: { src: map.src, width: map.width, height: map.height, opacity: map.opacity } satisfies MapNodeData,
+        data: { src: map.src, width: map.width, height: map.height, opacity: map.opacity, mode: map.mode } satisfies MapNodeData,
         draggable: true,
         selectable: false,
         deletable: false,

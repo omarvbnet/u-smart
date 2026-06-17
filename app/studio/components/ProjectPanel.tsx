@@ -14,6 +14,8 @@ export function ProjectPanel() {
   const updateProject = useStudio((s) => s.updateProject);
   const toggleStandard = useStudio((s) => s.toggleStandard);
   const reopenWizard = useStudio((s) => s.reopenWizard);
+  const map = useStudio((s) => s.map);
+  const createMapFromZero = useStudio((s) => s.createMapFromZero);
 
   const label = 'mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-muted)]';
   const input =
@@ -100,7 +102,24 @@ export function ProjectPanel() {
           <div><span className="text-[var(--studio-muted)]">{t('smartBuilding')}:</span> {project.smartBuilding ? (project.smartProtocol ?? '—') : t('no')}</div>
           <div><span className="text-[var(--studio-muted)]">HVAC:</span> {project.hvacMode === 'auto' ? t('hvacAuto') : project.hvacTypes.join(', ')}</div>
           <div><span className="text-[var(--studio-muted)]">{t('wizardEnergy')}:</span> {project.energySources.join(', ')}</div>
+          <div>
+            <span className="text-[var(--studio-muted)]">{t('wizardFloorPlan')}:</span>{' '}
+            {project.floorPlanSource === 'zero'
+              ? t('floorPlanFromZero')
+              : project.floorPlanSource === 'import'
+                ? t('floorPlanImport')
+                : t('floorPlanSkip')}
+          </div>
         </div>
+
+        {!map && (
+          <button
+            onClick={createMapFromZero}
+            className="w-full rounded-lg border border-[var(--studio-border)] py-2 text-xs font-semibold text-[var(--studio-text)] hover:bg-[var(--studio-hover)]"
+          >
+            {t('createMapFromZero')}
+          </button>
+        )}
 
         <button
           onClick={reopenWizard}

@@ -118,6 +118,7 @@ function projectFromRow(row: StudioRow): ProjectInfo {
     hvacMode: (row.hvacMode as ProjectInfo['hvacMode']) ?? 'auto',
     hvacTypes: (row.hvacTypes as ProjectInfo['hvacTypes']) ?? ['split'],
     energySources: (row.energySources as ProjectInfo['energySources']) ?? ['grid'],
+    floorPlanSource: (fromJson?.floorPlanSource as ProjectInfo['floorPlanSource']) ?? 'none',
   };
 }
 

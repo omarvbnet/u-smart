@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import StudioLogo from './StudioLogo';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
@@ -14,7 +14,7 @@ import { exportDesignExcel } from '../lib/export-excel';
 import type { DesignFile } from '../lib/store';
 import {
   FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages,
-  Map as MapIcon, Eye, EyeOff, FileDown, Loader2, FileBarChart2, Share2, FileJson, Upload, Cloud, Sheet,
+  Map as MapIcon, Eye, EyeOff, FileDown, Loader2, FileBarChart2, Share2, FileJson, Upload, Cloud, Sheet, Grid3x3,
 } from 'lucide-react';
 
 export function Topbar() {
@@ -33,6 +33,9 @@ export function Topbar() {
   const map = useStudio((s) => s.map);
   const setMap = useStudio((s) => s.setMap);
   const clearMap = useStudio((s) => s.clearMap);
+  const createMapFromZero = useStudio((s) => s.createMapFromZero);
+  const pendingMapImport = useStudio((s) => s.pendingMapImport);
+  const clearPendingMapImport = useStudio((s) => s.clearPendingMapImport);
   const loadDesign = useStudio((s) => s.loadDesign);
 
   const [langOpen, setLangOpen] = useState(false);
@@ -43,6 +46,12 @@ export function Topbar() {
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const jsonRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!pendingMapImport) return;
+    clearPendingMapImport();
+    fileRef.current?.click();
+  }, [pendingMapImport, clearPendingMapImport]);
 
   const btn = 'flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--studio-text)] hover:bg-[var(--studio-hover)] transition';
 
@@ -127,6 +136,13 @@ export function Topbar() {
           <MapIcon className="h-3.5 w-3.5" />
           <span className="hidden lg:inline">{map ? t('removeMap') : t('importMap')}</span>
         </button>
+
+        {!map && (
+          <button className={btn} onClick={createMapFromZero} title={t('createMapFromZero')}>
+            <Grid3x3 className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">{t('createMapFromZero')}</span>
+          </button>
+        )}
 
         <button
           className={`${btn} ${showDeclarations ? '!border-amber-400/50 !text-amber-500' : ''}`}

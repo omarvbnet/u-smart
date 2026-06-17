@@ -9,7 +9,8 @@ import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
 import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
-import { defaultProject, normalizeProject, type ProjectInfo } from './project';
+import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
+import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
 import { buildStarterDesign } from './engine/starter-design';
 import { detectRoomsFromMap as detectRooms } from './engine/plan-detect';
 import { aggregateSimulation } from './engine/sim-metrics';
@@ -36,6 +37,8 @@ export type MapBackground = {
   x: number;
   y: number;
   opacity: number;
+  /** `blank` = procedural grid canvas; `image` = imported PDF/photo. */
+  mode?: 'blank' | 'image';
 };
 
 type StudioState = {
@@ -56,6 +59,7 @@ type StudioState = {
   floorPlanTool: FloorPlanTool;
   cloudProjectId: string | null;
   simEnergyKwh: number;
+  pendingMapImport: boolean;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -84,11 +88,16 @@ type StudioState = {
   moveMap: (x: number, y: number) => void;
   setMapOpacity: (opacity: number) => void;
   clearMap: () => void;
+  createMapFromZero: () => void;
+  clearPendingMapImport: () => void;
 
   setDesignName: (name: string) => void;
   updateProject: (patch: Partial<ProjectInfo>) => void;
   toggleStandard: (code: ProjectInfo['standards'][number]) => void;
-  completeWizard: (project: ProjectInfo, generateDesign: boolean) => void;
+  completeWizard: (
+    project: ProjectInfo,
+    options: { generateDesign: boolean; floorPlan: FloorPlanSource | 'skip' },
+  ) => void;
   reopenWizard: () => void;
 
   setFloorPlanTool: (tool: FloorPlanTool) => void;
@@ -158,6 +167,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   floorPlanTool: 'select',
   cloudProjectId: null,
   simEnergyKwh: 0,
+  pendingMapImport: false,
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -261,6 +271,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       telegrams: [],
       floorPlanTool: 'select',
       cloudProjectId: null,
+      pendingMapImport: false,
     }),
 
   loadSample: () => {
@@ -312,10 +323,33 @@ export const useStudio = create<StudioState>((set, get) => ({
     })),
 
   setMap: (src, width, height) =>
-    set({ map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 0.85 } }),
+    set({
+      map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 0.85, mode: 'image' },
+      project: { ...get().project, floorPlanSource: 'import' },
+    }),
   moveMap: (x, y) => set((s) => (s.map ? { map: { ...s.map, x, y } } : s)),
   setMapOpacity: (opacity) => set((s) => (s.map ? { map: { ...s.map, opacity } } : s)),
-  clearMap: () => set({ map: null }),
+  clearMap: () =>
+    set((s) => ({
+      map: null,
+      project: { ...s.project, floorPlanSource: s.project.floorPlanSource === 'import' ? 'none' : s.project.floorPlanSource },
+    })),
+
+  createMapFromZero: () => {
+    const s = get();
+    const { width, height } = floorPlanSizeForBuilding(s.project.buildingType);
+    const src = blankFloorPlanDataUrl(width, height);
+    const rooms = s.rooms.length > 0 ? s.rooms : seedRoomsForBuilding(s.project.buildingType);
+    set({
+      map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 1, mode: 'blank' },
+      rooms,
+      floorPlanTool: 'draw-room',
+      selectedRoomId: null,
+      project: { ...s.project, floorPlanSource: 'zero' },
+    });
+  },
+
+  clearPendingMapImport: () => set({ pendingMapImport: false }),
 
   duplicateNode: (id) =>
     set((s) => {
@@ -345,18 +379,41 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }),
 
-  completeWizard: (project, generateDesign) => {
+  completeWizard: (project, options) => {
     const s = get();
+    const floorPlanSource: FloorPlanSource =
+      options.floorPlan === 'zero' ? 'zero' : options.floorPlan === 'import' ? 'import' : 'none';
+    const mergedProject = { ...project, floorPlanSource };
     let rooms = s.rooms;
     if (rooms.length === 0) {
-      rooms = seedRoomsForBuilding(project.buildingType);
+      rooms = seedRoomsForBuilding(mergedProject.buildingType);
     }
     let nodes = s.nodes;
     let edges = s.edges;
     let controls = s.controls;
     let designName = s.designName;
-    if (generateDesign) {
-      const starter = buildStarterDesign(project, s.locale, rooms);
+    let map = s.map;
+    let floorPlanTool = s.floorPlanTool;
+    let pendingMapImport = false;
+
+    if (options.floorPlan === 'zero') {
+      const { width, height } = floorPlanSizeForBuilding(mergedProject.buildingType);
+      map = {
+        src: blankFloorPlanDataUrl(width, height),
+        width,
+        height,
+        x: -width / 2,
+        y: -height / 2,
+        opacity: 1,
+        mode: 'blank',
+      };
+      floorPlanTool = 'draw-room';
+    } else if (options.floorPlan === 'import') {
+      pendingMapImport = true;
+    }
+
+    if (options.generateDesign) {
+      const starter = buildStarterDesign(mergedProject, s.locale, rooms);
       nodes = starter.nodes;
       edges = starter.edges;
       designName = starter.name;
@@ -366,13 +423,17 @@ export const useStudio = create<StudioState>((set, get) => ({
         if (entry) controls[n.id] = defaultControlState(entry);
       }
     }
+
     set({
-      project,
+      project: mergedProject,
       rooms,
       nodes,
       edges,
       controls,
       designName,
+      map,
+      floorPlanTool,
+      pendingMapImport,
       selectedNodeId: null,
       selectedRoomId: null,
     });
@@ -440,6 +501,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       telegrams: [],
       simulating: false,
       simEnergyKwh: 0,
+      floorPlanTool: file.map?.mode === 'blank' ? 'draw-room' : 'select',
     }),
 
   hydrate: () => {
@@ -476,7 +538,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   detectRoomsFromMap: async () => {
     const s = get();
-    if (!s.map?.src) return 0;
+    if (!s.map?.src || s.map.mode === 'blank') return 0;
     const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
     const rooms = detected.map((r) => ({ ...r, id: uid('room') }));
     set({ rooms, selectedRoomId: null });
