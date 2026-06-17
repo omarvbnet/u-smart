@@ -10,6 +10,7 @@ import {
   MiniMap,
   ConnectionMode,
   useReactFlow,
+  useNodesState,
   type Node,
   type Edge,
   type Connection,
@@ -35,6 +36,8 @@ const nodeTypes = {
 };
 
 const MAP_ID = '__map__';
+const DEVICE_W = 156;
+const DEVICE_H = 92;
 const roomRfId = (id: string) => `room_${id}`;
 
 function roomAreaM2(w: number, h: number): number {
@@ -86,7 +89,7 @@ function CanvasInner() {
     return m;
   }, [nodes]);
 
-  const rfNodes = useMemo<Node[]>(() => {
+  const storeRfNodes = useMemo<Node[]>(() => {
     const list: Node[] = [];
     if (map) {
       list.push({
@@ -109,6 +112,8 @@ function CanvasInner() {
         type: 'room',
         position: { x: r.x, y: r.y },
         style: { width: r.width, height: r.height },
+        width: r.width,
+        height: r.height,
         data: { room: r, selected: r.id === selectedRoomId, areaM2: roomAreaM2(r.width, r.height) } satisfies RoomNodeData,
         draggable: !drawing,
         selectable: !drawing,
@@ -130,6 +135,9 @@ function CanvasInner() {
         id: n.id,
         type: 'device',
         position: { x: n.x, y: n.y },
+        style: { width: DEVICE_W, height: DEVICE_H },
+        width: DEVICE_W,
+        height: DEVICE_H,
         zIndex: 2,
         selected: n.id === selectedId,
         data: {
@@ -145,6 +153,24 @@ function CanvasInner() {
     }
     return list;
   }, [nodes, rooms, map, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing]);
+
+  const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
+
+  useEffect(() => {
+    setRfNodes((prev) => {
+      const prevById = new Map(prev.map((n) => [n.id, n]));
+      return storeRfNodes.map((n) => {
+        const existing = prevById.get(n.id);
+        if (!existing) return n;
+        return {
+          ...n,
+          measured: existing.measured,
+          dragging: existing.dragging,
+          position: existing.dragging ? existing.position : n.position,
+        };
+      });
+    });
+  }, [storeRfNodes, setRfNodes]);
 
   const rfEdges = useMemo<Edge[]>(
     () =>
@@ -181,18 +207,29 @@ function CanvasInner() {
     [nodes.length, rooms.length, map?.width, map?.height],
   );
 
+  const storeRfNodesRef = useRef(storeRfNodes);
+  storeRfNodesRef.current = storeRfNodes;
+
   useEffect(() => {
     if (nodes.length === 0 && rooms.length === 0 && !map) return;
     const timer = window.setTimeout(() => {
-      void fitView({ padding: 0.16, maxZoom: 1.1, minZoom: 0.3, duration: 280 });
-    }, 80);
+      const focus = storeRfNodesRef.current.filter((n) => n.type === 'device' || n.type === 'room');
+      void fitView({
+        nodes: focus.length > 0 ? focus : undefined,
+        padding: 0.18,
+        maxZoom: 1.15,
+        minZoom: 0.35,
+        duration: 280,
+      });
+    }, 120);
     return () => window.clearTimeout(timer);
   }, [layoutKey, fitView, nodes.length, rooms.length, map]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      onRfNodesChange(changes);
       for (const c of changes) {
-        if (c.type === 'position' && c.position) {
+        if (c.type === 'position' && c.position && !c.dragging) {
           if (c.id === MAP_ID) moveMap(c.position.x, c.position.y);
           else if (c.id.startsWith('room_')) moveRoom(c.id.slice(5), c.position.x, c.position.y);
           else moveNode(c.id, c.position.x, c.position.y);
@@ -203,7 +240,7 @@ function CanvasInner() {
         }
       }
     },
-    [moveNode, moveRoom, resizeRoom, moveMap, removeNode],
+    [onRfNodesChange, moveNode, moveRoom, resizeRoom, moveMap, removeNode],
   );
 
   const onConnect = useCallback(
@@ -279,8 +316,6 @@ function CanvasInner() {
       ref={wrapper}
       className={`relative h-full w-full ${drawing ? 'cursor-crosshair' : ''}`}
       onMouseDown={onPaneMouseDown}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
       onMouseMove={onPaneMouseMove}
       onMouseUp={onPaneMouseUp}
       onMouseLeave={onPaneMouseUp}
@@ -293,6 +328,8 @@ function CanvasInner() {
         connectionMode={ConnectionMode.Loose}
         isValidConnection={isValidConnection}
         onNodesChange={onNodesChange}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
         onConnect={onConnect}
         onNodeClick={(_, n) => {
           if (n.id === MAP_ID) return;
