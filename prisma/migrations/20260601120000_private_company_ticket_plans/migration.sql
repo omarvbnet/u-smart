@@ -1,21 +1,33 @@
 -- CreateEnum
-CREATE TYPE "PrivateCompanyTicketPlan" AS ENUM ('PACK_100', 'PACK_1000', 'YEARLY_UNLIMITED');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PrivateCompanyTicketPlan') THEN
+    CREATE TYPE "PrivateCompanyTicketPlan" AS ENUM ('PACK_100', 'PACK_1000', 'YEARLY_UNLIMITED');
+  END IF;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "PrivateCompanyPlanRequestStatus" AS ENUM ('PENDING', 'FULFILLED', 'REJECTED');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PrivateCompanyPlanRequestStatus') THEN
+    CREATE TYPE "PrivateCompanyPlanRequestStatus" AS ENUM ('PENDING', 'FULFILLED', 'REJECTED');
+  END IF;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "PrivateCompanyActivationCodeStatus" AS ENUM ('ACTIVE', 'REDEEMED', 'REVOKED');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PrivateCompanyActivationCodeStatus') THEN
+    CREATE TYPE "PrivateCompanyActivationCodeStatus" AS ENUM ('ACTIVE', 'REDEEMED', 'REVOKED');
+  END IF;
+END $$;
 
 -- AlterTable
 ALTER TABLE "private_companies"
-    ADD COLUMN "freeTicketsLimit" INTEGER NOT NULL DEFAULT 30,
-    ADD COLUMN "ticketsUsed" INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN "ticketCreditsTotal" INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN "unlimitedUntil" TIMESTAMP(3);
+    ADD COLUMN IF NOT EXISTS "freeTicketsLimit" INTEGER NOT NULL DEFAULT 30,
+    ADD COLUMN IF NOT EXISTS "ticketsUsed" INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS "ticketCreditsTotal" INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS "unlimitedUntil" TIMESTAMP(3);
 
 -- CreateTable
-CREATE TABLE "private_company_plan_requests" (
+CREATE TABLE IF NOT EXISTS "private_company_plan_requests" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "requestedById" TEXT NOT NULL,
@@ -30,7 +42,7 @@ CREATE TABLE "private_company_plan_requests" (
 );
 
 -- CreateTable
-CREATE TABLE "private_company_activation_codes" (
+CREATE TABLE IF NOT EXISTS "private_company_activation_codes" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "code" TEXT NOT NULL,

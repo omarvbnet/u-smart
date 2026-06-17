@@ -1,8 +1,8 @@
 -- AlterTable
-ALTER TABLE "ticket_requesters" ADD COLUMN "preferredLocale" TEXT;
+ALTER TABLE "ticket_requesters" ADD COLUMN IF NOT EXISTS "preferredLocale" TEXT;
 
 -- AlterTable
-ALTER TABLE "coordinator_users" ADD COLUMN "preferredLocale" TEXT;
+ALTER TABLE "coordinator_users" ADD COLUMN IF NOT EXISTS "preferredLocale" TEXT;
 
 -- AlterTable
-ALTER TABLE "notifications" ADD COLUMN "payload" JSONB;
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "payload" JSONB;

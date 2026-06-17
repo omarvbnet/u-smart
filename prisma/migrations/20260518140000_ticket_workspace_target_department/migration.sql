@@ -1,6 +1,6 @@
 -- Optional workspace ticket scope: restrict visibility/self-assign to one department, or leave null for all departments.
 
-ALTER TABLE "visitor_requests" ADD COLUMN "privateCompanyTargetDepartmentId" TEXT;
+ALTER TABLE "visitor_requests" ADD COLUMN IF NOT EXISTS "privateCompanyTargetDepartmentId" TEXT;
 
 CREATE INDEX "visitor_requests_privateCompanyTargetDepartmentId_idx" ON "visitor_requests"("privateCompanyTargetDepartmentId");
 

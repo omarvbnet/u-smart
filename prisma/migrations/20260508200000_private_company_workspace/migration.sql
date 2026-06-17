@@ -67,11 +67,11 @@ CREATE INDEX "private_company_checklists_departmentId_idx"
 
 -- ─── ticket_requesters: link to workspace + department ─────────────────────
 ALTER TABLE "ticket_requesters"
-    ADD COLUMN "privateCompanyId"           TEXT,
-    ADD COLUMN "privateCompanyDepartmentId" TEXT;
-CREATE INDEX "ticket_requesters_privateCompanyId_idx"
+    ADD COLUMN IF NOT EXISTS "privateCompanyId"           TEXT,
+    ADD COLUMN IF NOT EXISTS "privateCompanyDepartmentId" TEXT;
+CREATE INDEX IF NOT EXISTS "ticket_requesters_privateCompanyId_idx"
     ON "ticket_requesters"("privateCompanyId");
-CREATE INDEX "ticket_requesters_privateCompanyDepartmentId_idx"
+CREATE INDEX IF NOT EXISTS "ticket_requesters_privateCompanyDepartmentId_idx"
     ON "ticket_requesters"("privateCompanyDepartmentId");
 
 -- ─── Foreign keys ──────────────────────────────────────────────────────────

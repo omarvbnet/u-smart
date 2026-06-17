@@ -1,9 +1,17 @@
 -- Material requests (staff) + enums for private company warehouse
 
-CREATE TYPE "PrivateCompanyMaterialRequestKind" AS ENUM ('INVENTORY_MATERIAL', 'CUSTOM_UNAVAILABLE');
-CREATE TYPE "PrivateCompanyMaterialRequestStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED', 'FULFILLED', 'CANCELLED');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PrivateCompanyMaterialRequestKind') THEN
+    CREATE TYPE "PrivateCompanyMaterialRequestKind" AS ENUM ('INVENTORY_MATERIAL', 'CUSTOM_UNAVAILABLE');
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PrivateCompanyMaterialRequestStatus') THEN
+    CREATE TYPE "PrivateCompanyMaterialRequestStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED', 'FULFILLED', 'CANCELLED');
+  END IF;
+END $$;
 
-CREATE TABLE "private_company_material_requests" (
+CREATE TABLE IF NOT EXISTS "private_company_material_requests" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "requesterId" TEXT NOT NULL,

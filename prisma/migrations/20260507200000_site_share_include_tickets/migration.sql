@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "site_shares" ADD COLUMN "includeTickets" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "site_shares" ADD COLUMN IF NOT EXISTS "includeTickets" BOOLEAN NOT NULL DEFAULT true;

@@ -41,22 +41,32 @@ const BUILDING_REVERSE: Record<StudioBuildingType, BuildingType> = {
   INDUSTRIAL: 'industrial',
 };
 
-function studioDelegate() {
+type StudioProjectDelegate = {
+  create: (args: unknown) => Promise<StudioRow>;
+  update: (args: unknown) => Promise<StudioRow>;
+  findFirst: (args: unknown) => Promise<StudioRow | null>;
+  findMany: (args: unknown) => Promise<StudioRow[]>;
+};
+
+type StudioDb = {
+  studioProject: StudioProjectDelegate;
+  studioDesignRevision?: {
+    create: (args: unknown) => Promise<unknown>;
+  };
+};
+
+function studioDelegate(): StudioDb {
   const p = prisma as unknown as {
-    studioProject?: {
-      create: (args: unknown) => Promise<StudioRow>;
-      update: (args: unknown) => Promise<StudioRow>;
-      findFirst: (args: unknown) => Promise<StudioRow | null>;
-      findMany: (args: unknown) => Promise<StudioRow[]>;
-    };
-    studioDesignRevision?: {
-      create: (args: unknown) => Promise<unknown>;
-    };
+    studioProject?: StudioProjectDelegate;
+    studioDesignRevision?: StudioDb['studioDesignRevision'];
   };
   if (!p.studioProject) {
     throw new Error('STUDIO_SCHEMA_NOT_READY');
   }
-  return p;
+  return {
+    studioProject: p.studioProject,
+    studioDesignRevision: p.studioDesignRevision,
+  };
 }
 
 type StudioRow = {

@@ -1,3 +1,3 @@
 -- AlterTable
-ALTER TABLE "sites" ADD COLUMN "hasQfield" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "sites" ADD COLUMN "qfieldProjects" JSONB;
+ALTER TABLE "sites" ADD COLUMN IF NOT EXISTS "hasQfield" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "sites" ADD COLUMN IF NOT EXISTS "qfieldProjects" JSONB;

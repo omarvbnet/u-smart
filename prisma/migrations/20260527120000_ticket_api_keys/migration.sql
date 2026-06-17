@@ -1,8 +1,12 @@
 -- CreateEnum
-CREATE TYPE "TicketApiKeyAccessRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TicketApiKeyAccessRequestStatus') THEN
+    CREATE TYPE "TicketApiKeyAccessRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+  END IF;
+END $$;
 
 -- CreateTable
-CREATE TABLE "ticket_api_key_access_requests" (
+CREATE TABLE IF NOT EXISTS "ticket_api_key_access_requests" (
     "id" TEXT NOT NULL,
     "requesterId" TEXT NOT NULL,
     "useCase" TEXT,
@@ -17,7 +21,7 @@ CREATE TABLE "ticket_api_key_access_requests" (
 );
 
 -- CreateTable
-CREATE TABLE "ticket_api_keys" (
+CREATE TABLE IF NOT EXISTS "ticket_api_keys" (
     "id" TEXT NOT NULL,
     "requesterId" TEXT NOT NULL,
     "accessRequestId" TEXT,
