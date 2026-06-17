@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -45,7 +45,7 @@ function CanvasInner() {
   const wrapper = useRef<HTMLDivElement>(null);
   const drawStart = useRef<{ x: number; y: number } | null>(null);
   const [drawPreview, setDrawPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+  const { screenToFlowPosition, flowToScreenPosition, fitView } = useReactFlow();
   const t = useT();
 
   const nodes = useStudio((s) => s.nodes);
@@ -93,6 +93,9 @@ function CanvasInner() {
         id: MAP_ID,
         type: 'map',
         position: { x: map.x, y: map.y },
+        style: { width: map.width, height: map.height },
+        width: map.width,
+        height: map.height,
         data: { src: map.src, width: map.width, height: map.height, opacity: map.opacity, mode: map.mode } satisfies MapNodeData,
         draggable: true,
         selectable: false,
@@ -127,6 +130,7 @@ function CanvasInner() {
         id: n.id,
         type: 'device',
         position: { x: n.x, y: n.y },
+        zIndex: 2,
         selected: n.id === selectedId,
         data: {
           catalogId: n.catalogId,
@@ -171,6 +175,19 @@ function CanvasInner() {
     },
     [portKinds],
   );
+
+  const layoutKey = useMemo(
+    () => `${nodes.length}:${rooms.length}:${map?.width ?? 0}:${map?.height ?? 0}`,
+    [nodes.length, rooms.length, map?.width, map?.height],
+  );
+
+  useEffect(() => {
+    if (nodes.length === 0 && rooms.length === 0 && !map) return;
+    const timer = window.setTimeout(() => {
+      void fitView({ padding: 0.16, maxZoom: 1.1, minZoom: 0.3, duration: 280 });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [layoutKey, fitView, nodes.length, rooms.length, map]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -289,10 +306,11 @@ function CanvasInner() {
           }
         }}
         onEdgesDelete={(eds) => eds.forEach((e) => useStudio.getState().removeEdge(e.id))}
-        fitView
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={['Backspace', 'Delete']}
         panOnDrag={!drawing}
+        minZoom={0.15}
+        maxZoom={2}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--studio-grid)" />
         <Controls className="!shadow-lg" />

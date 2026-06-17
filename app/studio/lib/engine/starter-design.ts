@@ -39,8 +39,10 @@ export function buildStarterDesign(
 
   const nodes: DesignNode[] = [];
   const edges: DesignEdge[] = [];
-  let yBase = 200;
-  let xSource = 80;
+  const targets = rooms.length > 0 ? rooms : defaultRooms(bt);
+  const minRoomX = targets.length ? Math.min(...targets.map((r) => r.x)) : 0;
+  const yBase = targets.length ? Math.min(...targets.map((r) => r.y)) + 40 : 200;
+  let xSource = minRoomX - 200;
 
   // Primary energy sources from wizard
   project.energySources.forEach((src, i) => {
@@ -51,7 +53,7 @@ export function buildStarterDesign(
   });
 
   const mainId = 'panel_main';
-  nodes.push({ id: mainId, catalogId: 'load-distribution-board', label: 'Main DB', x: 320, y: yBase + 40, params: {} });
+  nodes.push({ id: mainId, catalogId: 'load-distribution-board', label: 'Main DB', x: minRoomX - 80, y: yBase + 40, params: {} });
 
   const primarySrc = nodes[0];
   if (primarySrc) {
@@ -59,19 +61,23 @@ export function buildStarterDesign(
   }
 
   // Room-based lighting & socket loads placed on floor plan
-  const targets = rooms.length > 0 ? rooms : defaultRooms(bt);
-  targets.forEach((room, i) => {
-    const col = i % 3;
-    const row = Math.floor(i / 3);
+  targets.forEach((room) => {
     const cx = room.x + room.width / 2;
     const cy = room.y + room.height / 2;
     const mcbId = `mcb_${room.id}`;
     const cableId = `cable_${room.id}`;
     const lightId = `load_${room.id}`;
 
-    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: 560 + col * 200, y: 80 + row * 100, params: {} });
-    nodes.push({ id: cableId, catalogId: 'cable-lv-cu-2.5', label: `${room.label} cable`, x: 760 + col * 200, y: 80 + row * 100, params: { lengthM: Math.max(10, Math.round(room.width / 40)) } });
-    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: cx, y: cy, params: { powerW: roomAreaW(room) } });
+    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: room.x + 8, y: room.y + 8, params: {} });
+    nodes.push({
+      id: cableId,
+      catalogId: 'cable-lv-cu-2.5',
+      label: `${room.label} cable`,
+      x: room.x + room.width * 0.25,
+      y: cy - 20,
+      params: { lengthM: Math.max(10, Math.round(room.width / 40)) },
+    });
+    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: cx - 40, y: cy - 20, params: { powerW: roomAreaW(room) } });
 
     edges.push(edge(mainId, 'out', mcbId, 'line'));
     edges.push(edge(mcbId, 'load', cableId, 'a'));
@@ -87,8 +93,9 @@ export function buildStarterDesign(
     const cableId = `cable_hvac_${i}`;
     const hvacId = `hvac_${i}`;
     const room = targets[i] ?? targets[0];
-    nodes.push({ id: mcbId, catalogId: 'mcb-c16', label: 'HVAC MCB', x: 560, y: 400 + i * 120, params: {} });
-    nodes.push({ id: cableId, catalogId: 'cable-lv-cu-4', label: 'HVAC cable', x: 760, y: 400 + i * 120, params: { lengthM: 22 } });
+    const baseY = room ? room.y + room.height + 48 + i * 100 : yBase + 200 + i * 120;
+    nodes.push({ id: mcbId, catalogId: 'mcb-c16', label: 'HVAC MCB', x: room ? room.x + 8 : minRoomX, y: baseY, params: {} });
+    nodes.push({ id: cableId, catalogId: 'cable-lv-cu-4', label: 'HVAC cable', x: room ? room.x + room.width * 0.35 : minRoomX + 120, y: baseY, params: { lengthM: 22 } });
     nodes.push({
       id: hvacId,
       catalogId,

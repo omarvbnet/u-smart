@@ -15,7 +15,7 @@ import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
 import { readShareFromHash } from '../lib/share';
-import { SlidersHorizontal, ShieldCheck, Gauge, Building2 } from 'lucide-react';
+import { SlidersHorizontal, ShieldCheck, Gauge, Building2, PanelLeft } from 'lucide-react';
 
 type Tab = 'properties' | 'validation' | 'quality' | 'project';
 
@@ -33,6 +33,7 @@ export function Workspace() {
   const { issues } = useAnalysis();
   const [tab, setTab] = useState<Tab>('validation');
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const rtl = RTL_LOCALES.has(locale);
 
   useEffect(() => {
@@ -99,22 +100,43 @@ export function Workspace() {
           <Palette />
         </aside>
 
-        <main className="relative min-w-0 flex-1">
-          <Canvas />
-          <SimulationHud />
-          <BusMonitor />
-          <div className="absolute bottom-3 ltr:left-3 rtl:right-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
-            <span>{nodeCount} {t('nodes')}</span>
-            <span className="opacity-40">·</span>
-            <span>{edgeCount} {t('connections')}</span>
-            {criticalCount > 0 && (
-              <>
-                <span className="opacity-40">·</span>
-                <span className="font-semibold text-red-400">{criticalCount} {t('critical')}</span>
-              </>
-            )}
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-1.5 md:hidden">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-semibold text-[var(--studio-text)]"
+            >
+              <PanelLeft className="h-4 w-4" />
+              {t('palette')}
+            </button>
+          </div>
+          <div className="relative min-h-0 flex-1">
+            <Canvas />
+            <SimulationHud />
+            <BusMonitor />
+            <div className="absolute bottom-3 ltr:left-3 rtl:right-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
+              <span>{nodeCount} {t('nodes')}</span>
+              <span className="opacity-40">·</span>
+              <span>{edgeCount} {t('connections')}</span>
+              {criticalCount > 0 && (
+                <>
+                  <span className="opacity-40">·</span>
+                  <span className="font-semibold text-red-400">{criticalCount} {t('critical')}</span>
+                </>
+              )}
+            </div>
           </div>
         </main>
+
+        {paletteOpen && (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <button type="button" className="absolute inset-0 bg-black/50" aria-label={t('close')} onClick={() => setPaletteOpen(false)} />
+            <aside className="absolute inset-y-0 flex w-[min(100%,280px)] flex-col bg-[var(--studio-panel)] shadow-xl ltr:left-0 ltr:border-e rtl:right-0 rtl:border-s border-[var(--studio-border)]">
+              <Palette />
+            </aside>
+          </div>
+        )}
 
         <aside className="hidden w-[330px] flex-shrink-0 border-s border-[var(--studio-border)] bg-[var(--studio-panel)] lg:flex lg:flex-col">
           <div className="flex border-b border-[var(--studio-border)]">

@@ -59,7 +59,13 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
   const d = data as DeviceNodeData;
   const entry = getCatalogEntry(d.catalogId);
   const simulating = useStudio((s) => s.simulating);
-  if (!entry) return null;
+  if (!entry) {
+    return (
+      <div className="w-[156px] rounded-xl border border-dashed border-orange-400 bg-[var(--studio-node)] px-3 py-2.5 text-[10px] text-orange-400">
+        Unknown: {d.catalogId}
+      </div>
+    );
+  }
 
   const leadPos = d.rtl ? Position.Right : Position.Left;
   const trailPos = d.rtl ? Position.Left : Position.Right;
