@@ -7,9 +7,10 @@ import { getCatalogEntry } from '../lib/catalog';
 import { resolveNodes } from '../lib/model';
 import { buildBoq, buildLoadSchedule, buildCableSchedule } from '../lib/engine/reports';
 import { buildingTypeLabel } from '../lib/project';
+import { useAnalysis } from './hooks';
 import { X, FileBarChart2 } from 'lucide-react';
 
-type Tab = 'boq' | 'loads' | 'cables';
+type Tab = 'boq' | 'loads' | 'cables' | 'compliance';
 
 export function ReportsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -18,6 +19,7 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
   const edges = useStudio((s) => s.edges);
   const designName = useStudio((s) => s.designName);
   const project = useStudio((s) => s.project);
+  const { compliance } = useAnalysis();
   const [tab, setTab] = useState<Tab>('boq');
 
   const { boq, loads, cables } = useMemo(() => {
@@ -29,6 +31,7 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
     { key: 'boq', label: t('boq') },
     { key: 'loads', label: t('loadSchedule') },
     { key: 'cables', label: t('cableSchedule') },
+    { key: 'compliance', label: t('compliance') },
   ];
 
   const th = 'px-3 py-2 text-start text-[10px] font-bold uppercase tracking-wide text-[var(--studio-muted)]';
@@ -130,6 +133,31 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
                       <td className={td}>{r.tag}</td><td className={td}>{r.type}</td><td className={td}>{r.csa}</td><td className={td}>{r.cores}</td>
                       <td className={td}>{r.material}</td><td className={td}>{r.lengthM}</td><td className={td}>{r.ampacity}</td>
                       <td className={`${td} font-semibold ${r.vdropPct > 4 ? 'text-orange-400' : ''}`}>{r.vdropPct.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+
+          {tab === 'compliance' && (
+            compliance.length === 0 ? <Empty t={t} /> : (
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th className={th}>{t('standard')}</th>
+                    <th className={th}>{t('compliance')}</th>
+                    <th className={th}>{t('violations')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compliance.map((row) => (
+                    <tr key={row.standard}>
+                      <td className={td}>{row.label[locale] ?? row.label.en}</td>
+                      <td className={`${td} font-semibold ${row.percent >= 85 ? 'text-emerald-400' : row.percent >= 65 ? 'text-yellow-400' : 'text-orange-400'}`}>
+                        {row.percent}%
+                      </td>
+                      <td className={td}>{row.violations}</td>
                     </tr>
                   ))}
                 </tbody>

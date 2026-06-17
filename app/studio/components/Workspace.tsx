@@ -9,6 +9,7 @@ import { ValidationPanel } from './ValidationPanel';
 import { QualityIndex } from './QualityIndex';
 import { ProjectPanel } from './ProjectPanel';
 import { BusMonitor } from './BusMonitor';
+import { SimulationHud } from './SimulationHud';
 import { SetupWizard } from './SetupWizard';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
@@ -100,6 +101,7 @@ export function Workspace() {
 
         <main className="relative min-w-0 flex-1">
           <Canvas />
+          <SimulationHud />
           <BusMonitor />
           <div className="absolute bottom-3 ltr:left-3 rtl:right-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
             <span>{nodeCount} {t('nodes')}</span>

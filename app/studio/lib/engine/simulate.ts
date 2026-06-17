@@ -64,7 +64,7 @@ export function simulate(
   for (const n of nodes) {
     const en = energised.has(n.id);
     const ctrl = controls[n.id] ?? {};
-    const decl = declarationFor(n.spec);
+    const decl = declarationFor(n.spec, n.params);
     let active = false;
     let currentA = 0;
     const voltageV = decl?.voltage ?? 0;

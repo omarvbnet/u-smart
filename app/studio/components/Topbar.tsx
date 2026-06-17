@@ -9,10 +9,12 @@ import { importMapFile } from '../lib/import-map';
 import { exportDesignPdf } from '../lib/export-pdf';
 import { ReportsModal } from './ReportsModal';
 import { ShareModal } from './ShareModal';
+import { ProjectsModal } from './ProjectsModal';
+import { exportDesignExcel } from '../lib/export-excel';
 import type { DesignFile } from '../lib/store';
 import {
   FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages,
-  Map as MapIcon, Eye, EyeOff, FileDown, Loader2, FileBarChart2, Share2, FileJson, Upload,
+  Map as MapIcon, Eye, EyeOff, FileDown, Loader2, FileBarChart2, Share2, FileJson, Upload, Cloud, Sheet,
 } from 'lucide-react';
 
 export function Topbar() {
@@ -37,6 +39,8 @@ export function Topbar() {
   const [exporting, setExporting] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const jsonRef = useRef<HTMLInputElement>(null);
 
@@ -49,6 +53,16 @@ export function Topbar() {
       setMap(src, width, height);
     } catch {
       /* ignore unreadable file */
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExportingXlsx(true);
+    try {
+      const { nodes, edges, designName } = useStudio.getState();
+      await exportDesignExcel({ designName, nodes, edges });
+    } finally {
+      setExportingXlsx(false);
     }
   };
 
@@ -123,9 +137,19 @@ export function Topbar() {
           <span className="hidden xl:inline">{t('declarations')}</span>
         </button>
 
+        <button className={btn} onClick={() => setProjectsOpen(true)}>
+          <Cloud className="h-3.5 w-3.5" />
+          <span className="hidden xl:inline">{t('cloudProjects')}</span>
+        </button>
+
         <button className={btn} onClick={() => setReportsOpen(true)}>
           <FileBarChart2 className="h-3.5 w-3.5" />
           <span className="hidden xl:inline">{t('reports')}</span>
+        </button>
+
+        <button className={btn} onClick={handleExportExcel} disabled={exportingXlsx}>
+          {exportingXlsx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sheet className="h-3.5 w-3.5" />}
+          <span className="hidden lg:inline">{t('exportExcel')}</span>
         </button>
 
         <button className={btn} onClick={handleExport} disabled={exporting}>
@@ -196,6 +220,7 @@ export function Topbar() {
 
       {reportsOpen && <ReportsModal onClose={() => setReportsOpen(false)} />}
       {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
+      {projectsOpen && <ProjectsModal onClose={() => setProjectsOpen(false)} />}
     </header>
   );
 }

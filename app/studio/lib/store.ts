@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { CATALOG, getCatalogEntry, type CatalogEntry } from './catalog';
 import type { DesignNode, DesignEdge, DesignRoom } from './model';
+import { resolveNodes } from './model';
 import type { Fix } from './engine/validation';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
@@ -10,6 +11,9 @@ import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo } from './project';
 import { buildStarterDesign } from './engine/starter-design';
+import { detectRoomsFromMap as detectRooms } from './engine/plan-detect';
+import { aggregateSimulation } from './engine/sim-metrics';
+import { simulate } from './engine/simulate';
 
 export type Theme = 'dark' | 'light';
 export type FloorPlanTool = 'select' | 'draw-room';
@@ -50,6 +54,8 @@ type StudioState = {
   rooms: DesignRoom[];
   selectedRoomId: string | null;
   floorPlanTool: FloorPlanTool;
+  cloudProjectId: string | null;
+  simEnergyKwh: number;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -100,6 +106,9 @@ type StudioState = {
   serialize: () => DesignFile;
   loadDesign: (file: DesignFile) => void;
   hydrate: () => void;
+  setCloudProjectId: (id: string | null) => void;
+  tickSimulation: () => void;
+  detectRoomsFromMap: () => Promise<number>;
 };
 
 let counter = 0;
@@ -147,6 +156,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   rooms: [],
   selectedRoomId: null,
   floorPlanTool: 'select',
+  cloudProjectId: null,
+  simEnergyKwh: 0,
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -249,6 +260,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       map: null,
       telegrams: [],
       floorPlanTool: 'select',
+      cloudProjectId: null,
     }),
 
   loadSample: () => {
@@ -292,7 +304,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
   },
 
-  toggleSimulation: () => set((s) => ({ simulating: !s.simulating, telegrams: s.simulating ? s.telegrams : [] })),
+  toggleSimulation: () =>
+    set((s) => ({
+      simulating: !s.simulating,
+      telegrams: s.simulating ? s.telegrams : [],
+      simEnergyKwh: s.simulating ? s.simEnergyKwh : 0,
+    })),
 
   setMap: (src, width, height) =>
     set({ map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 0.85 } }),
@@ -422,18 +439,48 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedRoomId: null,
       telegrams: [],
       simulating: false,
+      simEnergyKwh: 0,
     }),
 
   hydrate: () => {
     if (typeof window === 'undefined') return;
     try {
       const raw = window.localStorage.getItem('studio.design');
-      if (!raw) return;
-      const file = JSON.parse(raw) as DesignFile;
-      if (file && file.version === 1) get().loadDesign(file);
+      if (raw) {
+        const file = JSON.parse(raw) as DesignFile;
+        if (file && file.version === 1) get().loadDesign(file);
+      }
+      const cloudId = window.localStorage.getItem('studio.cloudProjectId');
+      if (cloudId) set({ cloudProjectId: cloudId });
     } catch {
       /* ignore corrupt autosave */
     }
+  },
+
+  setCloudProjectId: (id) => {
+    if (typeof window !== 'undefined') {
+      if (id) window.localStorage.setItem('studio.cloudProjectId', id);
+      else window.localStorage.removeItem('studio.cloudProjectId');
+    }
+    set({ cloudProjectId: id });
+  },
+
+  tickSimulation: () => {
+    const s = get();
+    if (!s.simulating) return;
+    const resolved = resolveNodes(s.nodes, getCatalogEntry);
+    const states = simulate(resolved, s.edges, s.controls);
+    const m = aggregateSimulation(resolved, states);
+    set({ simEnergyKwh: s.simEnergyKwh + m.totalKw / 3600 });
+  },
+
+  detectRoomsFromMap: async () => {
+    const s = get();
+    if (!s.map?.src) return 0;
+    const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
+    const rooms = detected.map((r) => ({ ...r, id: uid('room') }));
+    set({ rooms, selectedRoomId: null });
+    return rooms.length;
   },
 }));
 

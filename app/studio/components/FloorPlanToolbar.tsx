@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
-import { Square, MousePointer2, LayoutTemplate, Trash2 } from 'lucide-react';
+import { Square, MousePointer2, LayoutTemplate, Trash2, Scan } from 'lucide-react';
 
 const ROOM_TEMPLATES = [
   { label: 'Living', zone: 'general' as const, w: 280, h: 200 },
@@ -16,12 +17,24 @@ const ROOM_TEMPLATES = [
 export function FloorPlanToolbar() {
   const t = useT();
   const tool = useStudio((s) => s.floorPlanTool);
+  const map = useStudio((s) => s.map);
   const setTool = useStudio((s) => s.setFloorPlanTool);
   const addRoomTemplate = useStudio((s) => s.addRoomTemplate);
   const seedDefaultRooms = useStudio((s) => s.seedDefaultRooms);
+  const detectRoomsFromMap = useStudio((s) => s.detectRoomsFromMap);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
   const removeRoom = useStudio((s) => s.removeRoom);
   const rooms = useStudio((s) => s.rooms);
+  const [detecting, setDetecting] = useState(false);
+
+  const runDetect = async () => {
+    setDetecting(true);
+    try {
+      await detectRoomsFromMap();
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const btn = (active: boolean) =>
     `flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition ${
@@ -41,6 +54,12 @@ export function FloorPlanToolbar() {
           <LayoutTemplate className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t('toolLayout')}</span>
         </button>
+        {map?.src && (
+          <button className={btn(false)} onClick={() => void runDetect()} disabled={detecting} title={t('detectRooms')}>
+            <Scan className={`h-3.5 w-3.5 ${detecting ? 'animate-pulse' : ''}`} />
+            <span className="hidden sm:inline">{t('detectRooms')}</span>
+          </button>
+        )}
       </div>
 
       <div className="hidden lg:flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
