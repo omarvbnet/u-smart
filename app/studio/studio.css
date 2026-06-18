@@ -40,3 +40,6 @@
 .studio-root .react-flow__attribution {
   display: none;
 }
+.studio-root .react-flow__node {
+  overflow: visible;
+}

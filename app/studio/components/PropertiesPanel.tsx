@@ -2,78 +2,13 @@
 
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
-import { getCatalogEntry, CATALOG, type CatalogEntry } from '../lib/catalog';
+import { getCatalogEntry } from '../lib/catalog';
 import { controlsForEntry } from '../lib/controls';
 import { declarationFor } from '../lib/engine/declarations';
+import { specRows, catalogAlternatives } from '../lib/spec-display';
 import { PORT_COLOR } from './DeviceNode';
 import { EntryImage } from './EntryImage';
 import { Trash2, Zap, Plug } from 'lucide-react';
-
-/** Human-readable spec rows per domain. */
-function specRows(entry: CatalogEntry): { label: string; value: string }[] {
-  switch (entry.domain) {
-    case 'cable':
-      return [
-        { label: 'CSA', value: `${entry.csaMm2} mm²` },
-        { label: 'Ampacity', value: `${entry.ampacityA} A` },
-        { label: 'Cores', value: `${entry.coreCount}` },
-        { label: 'V rating', value: `${entry.voltageRating} V` },
-        { label: 'R', value: `${entry.resistanceOhmPerKm} Ω/km` },
-        { label: 'Cost/m', value: `${entry.costPerMeter}` },
-      ];
-    case 'protection':
-      return [
-        { label: 'In', value: `${entry.ratedCurrentA} A` },
-        { label: 'Poles', value: `${entry.poles}P` },
-        { label: 'Icu', value: `${entry.breakingCapacityKA} kA` },
-        { label: 'Curve', value: entry.tripCurve },
-        ...(entry.residualSensitivityMa ? [{ label: 'IΔn', value: `${entry.residualSensitivityMa} mA` }] : []),
-      ];
-    case 'source':
-      return [
-        { label: 'Type', value: entry.sourceType },
-        { label: 'Voltage', value: `${entry.voltage} V` },
-        { label: 'kVA', value: `${entry.ratedKva}` },
-        { label: 'PF', value: `${entry.powerFactor}` },
-        { label: 'η', value: `${(entry.efficiency * 100).toFixed(0)}%` },
-        { label: 'Isc', value: `${entry.scContributionKA} kA` },
-      ];
-    case 'load':
-      return [
-        { label: 'Power', value: `${entry.powerW} W` },
-        { label: 'Voltage', value: `${entry.voltage} V` },
-        { label: 'Phases', value: `${entry.phases}` },
-        { label: 'PF', value: `${entry.powerFactor}` },
-        { label: 'Demand', value: `${entry.demandFactor}` },
-      ];
-    case 'hvac':
-      return [
-        { label: 'Cooling', value: `${entry.coolingKw} kW` },
-        { label: 'Heating', value: `${entry.heatingKw} kW` },
-        { label: 'Input', value: `${entry.inputKw} kW` },
-        { label: 'COP', value: `${entry.cop}` },
-        { label: 'EER', value: `${entry.eer}` },
-        { label: 'BTU', value: `${Math.round(entry.coolingKw * 3412)} ` },
-      ];
-    case 'sensor':
-      return [
-        { label: 'Type', value: entry.sensorType },
-        { label: 'Protocol', value: entry.protocol },
-        { label: 'Voltage', value: `${entry.voltage} V` },
-        { label: 'Current', value: `${entry.currentMa} mA` },
-      ];
-    case 'smarthome':
-      return [
-        { label: 'Protocol', value: entry.protocol },
-        { label: 'Class', value: entry.deviceClass },
-        { label: 'Channels', value: `${entry.channels}` },
-        ...(entry.channelCurrentA ? [{ label: 'Ch current', value: `${entry.channelCurrentA} A` }] : []),
-        { label: 'Bus', value: `${entry.busCurrentMa} mA` },
-      ];
-    default:
-      return [];
-  }
-}
 
 export function PropertiesPanel() {
   const t = useT();
@@ -146,7 +81,7 @@ export function PropertiesPanel() {
 
   const declaration = declarationFor(entry);
   const controls = controlsForEntry(entry);
-  const alternatives = CATALOG.filter((e) => e.domain === entry.domain && e.id !== entry.id).slice(0, 12);
+  const alternatives = catalogAlternatives(entry);
   const connected = edges.filter((e) => e.source === node.id || e.target === node.id);
 
   return (
@@ -230,16 +165,34 @@ export function PropertiesPanel() {
         )}
 
         {entry.domain === 'cable' && (
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">{t('length')}</span>
-            <input
-              type="number"
-              min={1}
-              value={Number(node.params.lengthM ?? 20)}
-              onChange={(e) => updateParam(node.id, 'lengthM', Number(e.target.value))}
-              className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400"
-            />
-          </label>
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">{t('length')}</span>
+              <input
+                type="number"
+                min={1}
+                value={Number(node.params.lengthM ?? 20)}
+                onChange={(e) => updateParam(node.id, 'lengthM', Number(e.target.value))}
+                className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400"
+              />
+            </label>
+            <div>
+              <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">Rotation</span>
+              <div className="flex gap-1">
+                {[0, 90, 180, 270].map((deg) => (
+                  <button
+                    key={deg}
+                    type="button"
+                    onClick={() => updateParam(node.id, 'rotation', deg)}
+                    className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition
+                      ${Number(node.params.rotation ?? 0) === deg ? 'bg-cyan-500 text-white' : 'bg-[var(--studio-hover)] text-[var(--studio-muted)]'}`}
+                  >
+                    {deg}°
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
         )}
 
         {entry.domain === 'load' && (

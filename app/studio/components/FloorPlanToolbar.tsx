@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
-import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3 } from 'lucide-react';
+import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3, Maximize2, Focus } from 'lucide-react';
 
 const ROOM_TEMPLATES = [
   { label: 'Living', zone: 'general' as const, w: 280, h: 200 },
@@ -26,6 +26,9 @@ export function FloorPlanToolbar() {
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
   const removeRoom = useStudio((s) => s.removeRoom);
   const rooms = useStudio((s) => s.rooms);
+  const nodes = useStudio((s) => s.nodes);
+  const canvasViewMode = useStudio((s) => s.canvasViewMode);
+  const setCanvasViewMode = useStudio((s) => s.setCanvasViewMode);
   const [detecting, setDetecting] = useState(false);
 
   const runDetect = async () => {
@@ -65,6 +68,16 @@ export function FloorPlanToolbar() {
           <button className={btn(false)} onClick={() => void runDetect()} disabled={detecting} title={t('detectRooms')}>
             <Scan className={`h-3.5 w-3.5 ${detecting ? 'animate-pulse' : ''}`} />
             <span className="hidden sm:inline">{t('detectRooms')}</span>
+          </button>
+        )}
+        {(map || rooms.length > 0 || nodes.length > 0) && (
+          <button
+            className={btn(canvasViewMode === 'full')}
+            onClick={() => setCanvasViewMode(canvasViewMode === 'full' ? 'content' : 'full')}
+            title={canvasViewMode === 'full' ? t('viewFocusPlan') : t('viewAllPlan')}
+          >
+            {canvasViewMode === 'full' ? <Focus className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{canvasViewMode === 'full' ? t('viewFocusPlan') : t('viewAllPlan')}</span>
           </button>
         )}
       </div>

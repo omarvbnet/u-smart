@@ -4,6 +4,7 @@
 import type { DesignNode, DesignEdge, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import type { StudioLocale } from '../i18n';
+import { cableRunBetween } from '../node-layout';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -68,16 +69,22 @@ export function buildStarterDesign(
     const cableId = `cable_${room.id}`;
     const lightId = `load_${room.id}`;
 
-    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: room.x + 8, y: room.y + 8, params: {} });
+    const mcbX = room.x + 8;
+    const mcbY = room.y + 8;
+    const loadX = cx - 20;
+    const loadY = cy;
+    const run = cableRunBetween(mcbX, mcbY, loadX, loadY);
+
+    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: mcbX, y: mcbY, params: {} });
     nodes.push({
       id: cableId,
       catalogId: 'cable-lv-cu-2.5',
       label: `${room.label} cable`,
-      x: room.x + room.width * 0.25,
-      y: cy - 20,
-      params: { lengthM: Math.max(10, Math.round(room.width / 40)) },
+      x: run.x,
+      y: run.y,
+      params: { lengthM: run.lengthM, rotation: run.rotation },
     });
-    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: cx - 40, y: cy - 20, params: { powerW: roomAreaW(room) } });
+    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: loadX, y: loadY, params: { powerW: roomAreaW(room) } });
 
     edges.push(edge(mainId, 'out', mcbId, 'line'));
     edges.push(edge(mcbId, 'load', cableId, 'a'));
@@ -94,14 +101,27 @@ export function buildStarterDesign(
     const hvacId = `hvac_${i}`;
     const room = targets[i] ?? targets[0];
     const baseY = room ? room.y + room.height + 48 + i * 100 : yBase + 200 + i * 120;
-    nodes.push({ id: mcbId, catalogId: 'mcb-c16', label: 'HVAC MCB', x: room ? room.x + 8 : minRoomX, y: baseY, params: {} });
-    nodes.push({ id: cableId, catalogId: 'cable-lv-cu-4', label: 'HVAC cable', x: room ? room.x + room.width * 0.35 : minRoomX + 120, y: baseY, params: { lengthM: 22 } });
+    const hvacX = room ? room.x + room.width - 72 : 900;
+    const hvacY = room ? room.y + 40 : 400 + i * 120;
+    const mcbX = room ? room.x + 8 : minRoomX;
+    const mcbY = baseY;
+    const hvacRun = cableRunBetween(mcbX, mcbY, hvacX, hvacY);
+
+    nodes.push({ id: mcbId, catalogId: 'mcb-c16', label: 'HVAC MCB', x: mcbX, y: mcbY, params: {} });
+    nodes.push({
+      id: cableId,
+      catalogId: 'cable-lv-cu-4',
+      label: 'HVAC cable',
+      x: hvacRun.x,
+      y: hvacRun.y,
+      params: { lengthM: hvacRun.lengthM, rotation: hvacRun.rotation },
+    });
     nodes.push({
       id: hvacId,
       catalogId,
       label: ht,
-      x: room ? room.x + room.width - 80 : 900,
-      y: room ? room.y + 40 : 400 + i * 120,
+      x: hvacX,
+      y: hvacY,
       params: {},
     });
     edges.push(edge(mainId, 'out', mcbId, 'line'));

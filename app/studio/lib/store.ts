@@ -18,6 +18,8 @@ import { simulate } from './engine/simulate';
 
 export type Theme = 'dark' | 'light';
 export type FloorPlanTool = 'select' | 'draw-room';
+/** `content` = zoom to rooms & elements; `full` = include the entire map layer. */
+export type CanvasViewMode = 'content' | 'full';
 
 export type DesignFile = {
   version: 1;
@@ -60,6 +62,8 @@ type StudioState = {
   cloudProjectId: string | null;
   simEnergyKwh: number;
   pendingMapImport: boolean;
+  canvasViewMode: CanvasViewMode;
+  canvasFitSeq: number;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -118,6 +122,8 @@ type StudioState = {
   setCloudProjectId: (id: string | null) => void;
   tickSimulation: () => void;
   detectRoomsFromMap: () => Promise<number>;
+  setCanvasViewMode: (mode: CanvasViewMode) => void;
+  fitCanvasView: () => void;
 };
 
 let counter = 0;
@@ -145,6 +151,11 @@ function initialTheme(): Theme {
   return window.localStorage.getItem('studio.theme') === 'light' ? 'light' : 'dark';
 }
 
+function initialCanvasViewMode(): CanvasViewMode {
+  if (typeof window === 'undefined') return 'content';
+  return window.localStorage.getItem('studio.canvasViewMode') === 'full' ? 'full' : 'content';
+}
+
 function defaultLabel(entry: CatalogEntry, locale: StudioLocale): string {
   return entry.name[locale] ?? entry.name.en;
 }
@@ -168,6 +179,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   cloudProjectId: null,
   simEnergyKwh: 0,
   pendingMapImport: false,
+  canvasViewMode: initialCanvasViewMode(),
+  canvasFitSeq: 0,
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -188,7 +201,10 @@ export const useStudio = create<StudioState>((set, get) => ({
     const entry = getCatalogEntry(catalogId);
     if (!entry) return;
     const params: DesignNode['params'] = {};
-    if (entry.domain === 'cable') params.lengthM = 20;
+    if (entry.domain === 'cable') {
+      params.lengthM = 20;
+      params.rotation = 0;
+    }
     const node: DesignNode = { id: uid('n'), catalogId, label: defaultLabel(entry, get().locale), x, y, params };
     set((s) => ({
       nodes: [...s.nodes, node],
@@ -206,9 +222,16 @@ export const useStudio = create<StudioState>((set, get) => ({
       const entry = getCatalogEntry(catalogId);
       if (!entry) return s;
       return {
-        nodes: s.nodes.map((n) =>
-          n.id === id ? { ...n, catalogId, label: defaultLabel(entry, s.locale) } : n,
-        ),
+        nodes: s.nodes.map((n) => {
+          if (n.id !== id) return n;
+          const params = { ...n.params };
+          if (entry.domain !== 'cable') {
+            delete params.rotation;
+          } else if (params.rotation === undefined) {
+            params.rotation = 0;
+          }
+          return { ...n, catalogId, label: defaultLabel(entry, s.locale), params };
+        }),
         controls: { ...s.controls, [id]: defaultControlState(entry) },
       };
     }),
@@ -544,6 +567,13 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ rooms, selectedRoomId: null });
     return rooms.length;
   },
+
+  setCanvasViewMode: (mode) => {
+    persist('studio.canvasViewMode', mode);
+    set((s) => ({ canvasViewMode: mode, canvasFitSeq: s.canvasFitSeq + 1 }));
+  },
+
+  fitCanvasView: () => set((s) => ({ canvasFitSeq: s.canvasFitSeq + 1 })),
 }));
 
 // Debounced autosave of the design to localStorage.

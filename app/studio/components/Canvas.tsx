@@ -21,23 +21,24 @@ import '@xyflow/react/dist/style.css';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useSimulation, useT } from './hooks';
 import { DeviceNode, type DeviceNodeData } from './DeviceNode';
+import { CableNode, type CableNodeData } from './CableNode';
 import { MapNode, type MapNodeData } from './MapNode';
 import { RoomNode, type RoomNodeData } from './RoomNode';
 import { FloorPlanToolbar } from './FloorPlanToolbar';
 import { getCatalogEntry } from '../lib/catalog';
 import { declarationFor } from '../lib/engine/declarations';
 import { RTL_LOCALES } from '../lib/i18n';
+import { dropPosition, nodeFootprint, nodesForCanvasFit } from '../lib/node-layout';
 import type { PortKind } from '../lib/catalog';
 
 const nodeTypes = {
   device: (p: NodeProps) => <DeviceNode {...p} />,
+  cable: (p: NodeProps) => <CableNode {...p} />,
   map: (p: NodeProps) => <MapNode {...p} />,
   room: (p: NodeProps) => <RoomNode {...p} />,
 };
 
 const MAP_ID = '__map__';
-const DEVICE_W = 156;
-const DEVICE_H = 92;
 const roomRfId = (id: string) => `room_${id}`;
 
 function roomAreaM2(w: number, h: number): number {
@@ -46,6 +47,7 @@ function roomAreaM2(w: number, h: number): number {
 
 function CanvasInner() {
   const wrapper = useRef<HTMLDivElement>(null);
+  const draggingIds = useRef<Set<string>>(new Set());
   const drawStart = useRef<{ x: number; y: number } | null>(null);
   const [drawPreview, setDrawPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const { screenToFlowPosition, flowToScreenPosition, fitView } = useReactFlow();
@@ -71,6 +73,8 @@ function CanvasInner() {
   const selectRoom = useStudio((s) => s.selectRoom);
   const addRoom = useStudio((s) => s.addRoom);
   const setFloorPlanTool = useStudio((s) => s.setFloorPlanTool);
+  const canvasViewMode = useStudio((s) => s.canvasViewMode);
+  const canvasFitSeq = useStudio((s) => s.canvasFitSeq);
 
   const { byNode } = useAnalysis();
   const sim = useSimulation();
@@ -88,6 +92,11 @@ function CanvasInner() {
     }
     return m;
   }, [nodes]);
+
+  const cableNodeIds = useMemo(
+    () => new Set(nodes.filter((n) => getCatalogEntry(n.catalogId)?.domain === 'cable').map((n) => n.id)),
+    [nodes],
+  );
 
   const storeRfNodes = useMemo<Node[]>(() => {
     const list: Node[] = [];
@@ -122,6 +131,7 @@ function CanvasInner() {
     }
     for (const n of nodes) {
       const entry = getCatalogEntry(n.catalogId);
+      if (!entry) continue;
       const issues = byNode.get(n.id) ?? [];
       const severity = issues.some((i) => i.severity === 'critical')
         ? 'critical'
@@ -131,24 +141,39 @@ function CanvasInner() {
             ? 'recommendation'
             : null;
       const s = sim[n.id];
+      const footprint = nodeFootprint(entry, n.params);
+      const isCable = entry.domain === 'cable';
+
       list.push({
         id: n.id,
-        type: 'device',
+        type: isCable ? 'cable' : 'device',
         position: { x: n.x, y: n.y },
-        style: { width: DEVICE_W, height: DEVICE_H },
-        width: DEVICE_W,
-        height: DEVICE_H,
-        zIndex: 2,
+        style: { width: footprint.width, height: footprint.height },
+        width: footprint.width,
+        height: footprint.height,
+        zIndex: isCable ? 1 : 2,
         selected: n.id === selectedId,
-        data: {
-          catalogId: n.catalogId,
-          label: n.label,
-          severity,
-          rtl,
-          declaration: showDeclarations && entry ? declarationFor(entry, n.params)?.text ?? null : null,
-          energised: s?.energised ?? false,
-          active: s?.active ?? false,
-        } satisfies DeviceNodeData,
+        data: isCable
+          ? ({
+              nodeId: n.id,
+              catalogId: n.catalogId,
+              label: n.label,
+              lengthM: Number(n.params.lengthM ?? 20),
+              rotation: Number(n.params.rotation ?? 0),
+              severity,
+              energised: s?.energised ?? false,
+              active: s?.active ?? false,
+            } satisfies CableNodeData)
+          : ({
+              nodeId: n.id,
+              catalogId: n.catalogId,
+              label: n.label,
+              severity,
+              rtl,
+              declaration: showDeclarations ? declarationFor(entry, n.params)?.text ?? null : null,
+              energised: s?.energised ?? false,
+              active: s?.active ?? false,
+            } satisfies DeviceNodeData),
       });
     }
     return list;
@@ -162,11 +187,12 @@ function CanvasInner() {
       return storeRfNodes.map((n) => {
         const existing = prevById.get(n.id);
         if (!existing) return n;
+        const dragging = existing.dragging || draggingIds.current.has(n.id);
         return {
           ...n,
           measured: existing.measured,
           dragging: existing.dragging,
-          position: existing.dragging ? existing.position : n.position,
+          position: dragging ? existing.position : n.position,
         };
       });
     });
@@ -174,7 +200,9 @@ function CanvasInner() {
 
   const rfEdges = useMemo<Edge[]>(
     () =>
-      edges.map((e) => {
+      edges
+        .filter((e) => !cableNodeIds.has(e.source) && !cableNodeIds.has(e.target))
+        .map((e) => {
         const kind = portKinds.get(e.source)?.get(e.sourceHandle ?? '') ?? 'power';
         const live = sim[e.source]?.active && sim[e.target]?.energised;
         return {
@@ -187,7 +215,7 @@ function CanvasInner() {
           style: { stroke: live ? '#22c55e' : EDGE_COLOR[kind], strokeWidth: live ? 2.5 : 2 },
         };
       }),
-    [edges, portKinds, sim],
+    [edges, portKinds, sim, cableNodeIds],
   );
 
   const isValidConnection = useCallback(
@@ -213,29 +241,34 @@ function CanvasInner() {
   useEffect(() => {
     if (nodes.length === 0 && rooms.length === 0 && !map) return;
     const timer = window.setTimeout(() => {
-      const focus = storeRfNodesRef.current.filter((n) => n.type === 'device' || n.type === 'room');
+      const focus = nodesForCanvasFit(storeRfNodesRef.current, canvasViewMode);
       void fitView({
         nodes: focus.length > 0 ? focus : undefined,
-        padding: 0.18,
-        maxZoom: 1.15,
-        minZoom: 0.35,
-        duration: 280,
+        padding: canvasViewMode === 'full' ? 0.06 : 0.18,
+        maxZoom: canvasViewMode === 'full' ? 0.95 : 1.15,
+        minZoom: 0.12,
+        duration: 320,
       });
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [layoutKey, fitView, nodes.length, rooms.length, map]);
+  }, [layoutKey, fitView, nodes.length, rooms.length, map, canvasViewMode, canvasFitSeq]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       onRfNodesChange(changes);
       for (const c of changes) {
-        if (c.type === 'position' && c.position && !c.dragging) {
-          if (c.id === MAP_ID) moveMap(c.position.x, c.position.y);
-          else if (c.id.startsWith('room_')) moveRoom(c.id.slice(5), c.position.x, c.position.y);
-          else moveNode(c.id, c.position.x, c.position.y);
+        if (c.type === 'position' && c.position) {
+          if (c.dragging) draggingIds.current.add(c.id);
+          else {
+            draggingIds.current.delete(c.id);
+            if (c.id === MAP_ID) moveMap(c.position.x, c.position.y);
+            else if (c.id.startsWith('room_')) moveRoom(c.id.slice(5), c.position.x, c.position.y);
+            else moveNode(c.id, c.position.x, c.position.y);
+          }
         } else if (c.type === 'dimensions' && c.dimensions && c.id.startsWith('room_')) {
           resizeRoom(c.id.slice(5), c.dimensions.width, c.dimensions.height);
         } else if (c.type === 'remove') {
+          draggingIds.current.delete(c.id);
           if (c.id !== MAP_ID && !c.id.startsWith('room_')) removeNode(c.id);
         }
       }
@@ -255,9 +288,11 @@ function CanvasInner() {
     (event: React.DragEvent) => {
       event.preventDefault();
       const catalogId = event.dataTransfer.getData('application/studio-catalog');
-      if (!catalogId || !getCatalogEntry(catalogId)) return;
+      const entry = catalogId ? getCatalogEntry(catalogId) : undefined;
+      if (!entry) return;
       const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      addNodeFromCatalog(catalogId, pos.x - 78, pos.y - 28);
+      const { x, y } = dropPosition(pos.x, pos.y, entry);
+      addNodeFromCatalog(catalogId, x, y);
     },
     [screenToFlowPosition, addNodeFromCatalog],
   );
@@ -330,6 +365,11 @@ function CanvasInner() {
         onNodesChange={onNodesChange}
         onDrop={onDrop}
         onDragOver={onDragOver}
+        onNodeDragStop={(_, n) => {
+          if (n.id === MAP_ID || n.id.startsWith('room_')) return;
+          moveNode(n.id, n.position.x, n.position.y);
+          draggingIds.current.delete(n.id);
+        }}
         onConnect={onConnect}
         onNodeClick={(_, n) => {
           if (n.id === MAP_ID) return;
@@ -357,6 +397,7 @@ function CanvasInner() {
           className="!bg-[var(--studio-panel)] !border !border-[var(--studio-border)] hidden md:block"
           nodeColor={(n) => {
             if (n.type === 'room') return '#64748b';
+            if (n.type === 'cable') return '#f59e0b';
             return getCatalogEntry((n.data as DeviceNodeData)?.catalogId)?.color ?? '#22d3ee';
           }}
           maskColor="rgba(0,0,0,0.35)"
