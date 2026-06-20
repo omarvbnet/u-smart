@@ -1,15 +1,21 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
+import { OUTLET_PALETTE, outletsInRoom } from '../lib/engine/outlet-placement';
+import { calculateVrfDistribution, vrfAssignmentForRoom, VRF_INDOOR_OPTIONS } from '../lib/engine/vrf-distribution';
+import { isResidentialBuilding, bedroomRangeForBuilding } from '../lib/engine/residential-layouts';
 import { getCatalogEntry } from '../lib/catalog';
 import { controlsForEntry } from '../lib/controls';
 import { declarationFor } from '../lib/engine/declarations';
 import { specRows, catalogAlternatives } from '../lib/spec-display';
 import { physicalSpecFor } from '../lib/catalog/dimensions';
+import { CONDUIT_STYLE, type ConduitType } from '../lib/engine/cable-map';
+import type { CableSpec } from '../lib/catalog';
 import { PORT_COLOR } from './DeviceNode';
 import { EntryImage } from './EntryImage';
-import { Trash2, Zap, Plug } from 'lucide-react';
+import { Trash2, Zap, Plug, Copy, BedDouble } from 'lucide-react';
 
 export function PropertiesPanel() {
   const t = useT();
@@ -25,17 +31,48 @@ export function PropertiesPanel() {
   const updateRoom = useStudio((s) => s.updateRoom);
   const removeNode = useStudio((s) => s.removeNode);
   const removeRoom = useStudio((s) => s.removeRoom);
+  const rerouteCable = useStudio((s) => s.rerouteCable);
+  const setEditingCableRoute = useStudio((s) => s.setEditingCableRoute);
+  const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
+  const nodes = useStudio((s) => s.nodes);
+  const addOutletToRoom = useStudio((s) => s.addOutletToRoom);
+  const placeRoomOutlets = useStudio((s) => s.placeRoomOutlets);
+  const removeOutletsInRoom = useStudio((s) => s.removeOutletsInRoom);
+  const assignVrfToRoom = useStudio((s) => s.assignVrfToRoom);
+  const setRoomVrfIndoor = useStudio((s) => s.setRoomVrfIndoor);
+  const duplicateRoom = useStudio((s) => s.duplicateRoom);
+  const addBedroomToLayout = useStudio((s) => s.addBedroomToLayout);
+  const project = useStudio((s) => s.project);
+  const rooms = useStudio((s) => s.rooms);
+  const select = useStudio((s) => s.select);
   const control = useStudio((s) => (s.selectedNodeId ? s.controls[s.selectedNodeId] : undefined));
   const setControl = useStudio((s) => s.setControl);
 
+  const vrfReport = useMemo(
+    () => calculateVrfDistribution(rooms, project, nodes),
+    [rooms, project, nodes],
+  );
+  const roomVrf = selectedRoomId ? vrfAssignmentForRoom(vrfReport, selectedRoomId) : undefined;
+
   if (selectedRoomId && room) {
     const areaM2 = ((room.width / 50) * (room.height / 50)).toFixed(1);
+    const isOutlet = (id: string) => {
+      const e = getCatalogEntry(id);
+      return e?.category === 'SOCKET' || e?.category === 'APPLIANCE';
+    };
+    const roomOutlets = outletsInRoom(nodes, room, isOutlet);
+    const vrf = roomVrf;
+    const canAddBedroom =
+      isResidentialBuilding(project.buildingType) &&
+      project.bedrooms < bedroomRangeForBuilding(project.buildingType).max;
     const input =
       'w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400';
+    const chip =
+      'rounded-lg border border-[var(--studio-border)] px-2 py-1 text-[9px] font-semibold text-[var(--studio-muted)] hover:border-cyan-400 hover:text-cyan-300';
     return (
       <div className="flex h-full flex-col p-4">
         <h3 className="mb-3 text-sm font-bold text-[var(--studio-text)]">{t('roomProperties')}</h3>
-        <div className="space-y-3">
+        <div className="space-y-3 flex-1 overflow-y-auto">
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('roomLabel')}</span>
             <input className={input} value={room.label} onChange={(e) => updateRoom(room.id, { label: e.target.value })} />
@@ -58,6 +95,146 @@ export function PropertiesPanel() {
               <div className="font-semibold">{areaM2} m²</div>
             </div>
           </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('roomOutlets')}</h4>
+              <span className="text-[10px] text-cyan-400">{roomOutlets.length}</span>
+            </div>
+            <div className="mb-2 flex flex-wrap gap-1">
+              {OUTLET_PALETTE.map((o) => (
+                <button key={o.id} type="button" className={chip} onClick={() => addOutletToRoom(room.id, o.id)}>
+                  + {o.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded-lg border border-amber-400/40 bg-amber-500/10 py-2 text-[10px] font-semibold text-amber-200"
+                onClick={() => placeRoomOutlets(room.id)}
+              >
+                {t('autoPlaceOutlets')}
+              </button>
+              {roomOutlets.length > 0 && (
+                <button
+                  type="button"
+                  className="rounded-lg border border-red-500/30 px-2 py-2 text-[10px] text-red-400"
+                  onClick={() => removeOutletsInRoom(room.id)}
+                >
+                  {t('clearOutlets')}
+                </button>
+              )}
+            </div>
+            {roomOutlets.length > 0 && (
+              <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                {roomOutlets.map((n) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      className="w-full rounded-lg border border-[var(--studio-border)] px-2 py-1.5 text-left text-[10px] hover:border-cyan-400"
+                      onClick={() => select(n.id)}
+                    >
+                      {n.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {(vrfReport.active || vrf) && (
+            <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">{t('vrfDistribution')}</h4>
+                {!vrf && (
+                  <button type="button" className={chip} onClick={() => assignVrfToRoom(room.id)}>
+                    {t('assignVrf')}
+                  </button>
+                )}
+              </div>
+              {vrf ? (
+                <div className="space-y-2 text-[10px]">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded border border-[var(--studio-border)] p-2">
+                      <div className="text-[var(--studio-muted)]">{t('coolingLoad')}</div>
+                      <div className="font-semibold text-sky-200">{vrf.coolingKw} kW · {vrf.btu} BTU</div>
+                    </div>
+                    <div className="rounded border border-[var(--studio-border)] p-2">
+                      <div className="text-[var(--studio-muted)]">{t('heatingLoad')}</div>
+                      <div className="font-semibold">{vrf.heatingKw} kW</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-[var(--studio-muted)]">{t('vrfIndoorUnits')}</div>
+                    {vrf.indoorUnits.map((u, i) => (
+                      <div key={i} className="mb-1 rounded border border-[var(--studio-border)] px-2 py-1">
+                        {u.qty}× {u.model} · {u.style} · {u.coolingKw} kW
+                      </div>
+                    ))}
+                    {vrf.nodeIds.length > 0 && (
+                      <button
+                        type="button"
+                        className="mt-1 text-cyan-400 underline"
+                        onClick={() => select(vrf.nodeIds[0]!)}
+                      >
+                        {t('selectOnMap')}
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded border border-[var(--studio-border)] p-2">
+                      <div className="text-[var(--studio-muted)]">{t('vrfOutdoorUnit')}</div>
+                      <div className="font-semibold">{vrf.outdoorLabel}</div>
+                      <div className="text-[var(--studio-muted)]">{vrf.outdoorCapacityKw} kW ODU</div>
+                    </div>
+                    <div className="rounded border border-[var(--studio-border)] p-2">
+                      <div className="text-[var(--studio-muted)]">{t('vrfBranch')}</div>
+                      <div className="font-semibold">{vrf.branchAddress}</div>
+                      <div className="text-[var(--studio-muted)]">{vrf.refrigerantRunM} m {t('refrigerantRun')}</div>
+                    </div>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block text-[var(--studio-muted)]">{t('changeIndoorUnit')}</span>
+                    <select
+                      className={input}
+                      value={vrf.indoorUnits[0]?.catalogId ?? ''}
+                      onChange={(e) => setRoomVrfIndoor(room.id, e.target.value)}
+                    >
+                      {VRF_INDOOR_OPTIONS.map((id) => {
+                        const e = getCatalogEntry(id);
+                        return (
+                          <option key={id} value={id}>
+                            {e?.model} · {(e as { coolingKw?: number })?.coolingKw} kW
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <p className="text-[10px] text-[var(--studio-muted)]">{t('vrfNotAssigned')}</p>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => duplicateRoom(room.id)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--studio-border)] py-2 text-[10px] font-semibold text-[var(--studio-text)] hover:border-cyan-400"
+          >
+            <Copy className="h-3.5 w-3.5" /> {t('duplicateRoom')}
+          </button>
+          {canAddBedroom && (
+            <button
+              type="button"
+              onClick={() => addBedroomToLayout(room.id)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 py-2 text-[10px] font-semibold text-emerald-200"
+            >
+              <BedDouble className="h-3.5 w-3.5" /> {t('addBedroom')}
+            </button>
+          )}
         </div>
         <button
           onClick={() => removeRoom(room.id)}
@@ -177,6 +354,44 @@ export function PropertiesPanel() {
                 className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400"
               />
             </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">{t('conduitType')}</span>
+              <select
+                className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)]"
+                value={(node.params.conduitType as string) ?? 'conduit'}
+                onChange={(e) => updateParam(node.id, 'conduitType', e.target.value)}
+              >
+                {(Object.keys(CONDUIT_STYLE) as ConduitType[]).map((k) => (
+                  <option key={k} value={k}>{CONDUIT_STYLE[k].label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-xs">
+              <span className="text-[var(--studio-text)]">{t('showOnMap')}</span>
+              <input
+                type="checkbox"
+                checked={node.params.showOnMap !== false}
+                onChange={(e) => updateParam(node.id, 'showOnMap', e.target.checked)}
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => rerouteCable(node.id)}
+                className="flex-1 rounded-lg border border-amber-400/40 bg-amber-500/10 py-2 text-xs font-semibold text-amber-200"
+              >
+                {t('rerouteCable')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCableRoute(editingCableRouteId === node.id ? null : node.id)}
+                className={`flex-1 rounded-lg py-2 text-xs font-semibold ${
+                  editingCableRouteId === node.id ? 'bg-cyan-500 text-white' : 'border border-[var(--studio-border)] text-[var(--studio-muted)]'
+                }`}
+              >
+                {t('editRouteOnMap')}
+              </button>
+            </div>
             <div>
               <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">Rotation</span>
               <div className="flex gap-1">
@@ -194,6 +409,17 @@ export function PropertiesPanel() {
               </div>
             </div>
           </>
+        )}
+
+        {entry.domain === 'load' && (entry.category === 'SOCKET' || entry.category === 'APPLIANCE') && (
+          <label className="flex items-center justify-between rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-xs">
+            <span className="text-[var(--studio-text)]">{t('showOnMap')}</span>
+            <input
+              type="checkbox"
+              checked={node.params.showOnMap !== false}
+              onChange={(e) => updateParam(node.id, 'showOnMap', e.target.checked)}
+            />
+          </label>
         )}
 
         {entry.domain === 'load' && (

@@ -4,6 +4,7 @@
 import type { DesignRoom } from '../model';
 import type { EnergySourceType, ProjectInfo } from '../project';
 import { defaultProject } from '../project';
+import { buildResidentialRooms, defaultBedroomsForBuilding, isResidentialBuilding } from '../engine/residential-layouts';
 
 export type ParsedBrief = {
   project: ProjectInfo;
@@ -89,6 +90,7 @@ export function parseProjectBrief(text: string, base: ProjectInfo = defaultProje
 
   const specs: { label: string; zone: DesignRoom['zone']; w: number; h: number }[] = [];
   const beds = countOf(q, /(\d+|one|two|three|four|five|six|seven|eight)\s+bedrooms?/) || (has(q, 'bedroom') ? 1 : 0);
+  project.bedrooms = beds > 0 ? beds : defaultBedroomsForBuilding(project.buildingType);
   for (let i = 0; i < Math.max(beds, 0); i++) {
     specs.push({ label: i === 0 && has(q, 'master') ? 'Master Bedroom' : `Bedroom ${i + 1}`, zone: 'bedroom', w: 220, h: 180 });
   }
@@ -106,6 +108,15 @@ export function parseProjectBrief(text: string, base: ProjectInfo = defaultProje
 
   if (specs.length === 0) {
     assumptions.push('Default layout applied — describe rooms in your brief for custom layout.');
+    if (isResidentialBuilding(project.buildingType)) {
+      assumptions.push('Engineering calculations use deterministic IEC/ASHRAE engines — not LLM estimates.');
+      return {
+        project,
+        rooms: buildResidentialRooms(project.buildingType, project.bedrooms).map(({ id: _id, ...r }) => r),
+        designName: `${project.buildingType} — Autonomous Design`,
+        assumptions,
+      };
+    }
     specs.push(
       { label: 'Living Room', zone: 'general', w: 300, h: 220 },
       { label: 'Kitchen', zone: 'kitchen', w: 200, h: 160 },

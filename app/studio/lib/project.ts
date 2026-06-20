@@ -3,6 +3,7 @@
  * Travels with DesignFile (autosave, export, share).
  */
 import type { LocalizedText, StandardCode } from './catalog';
+import { defaultBedroomsForBuilding } from './engine/residential-layouts';
 
 export type BuildingType =
   | 'house'
@@ -47,6 +48,8 @@ export type ProjectInfo = {
   hvacTypes: HvacSystemType[];
   energySources: EnergySourceType[];
   floorPlanSource: FloorPlanSource;
+  /** Bedroom count for residential layout templates (apartment / house / villa). */
+  bedrooms: number;
 };
 
 export const BUILDING_TYPES: { id: BuildingType; label: LocalizedText }[] = [
@@ -107,6 +110,7 @@ export function defaultProject(): ProjectInfo {
     hvacTypes: ['split'],
     energySources: ['grid'],
     floorPlanSource: 'none',
+    bedrooms: 4,
   };
 }
 
@@ -126,5 +130,6 @@ export function normalizeProject(p: Partial<ProjectInfo> | undefined): ProjectIn
     energySources: p.energySources ?? d.energySources,
     setupComplete: p.setupComplete ?? (p.client ? true : false),
     floorPlanSource: p.floorPlanSource ?? d.floorPlanSource,
+    bedrooms: p.bedrooms ?? defaultBedroomsForBuilding(p.buildingType ?? d.buildingType),
   };
 }

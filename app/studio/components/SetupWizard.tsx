@@ -16,6 +16,12 @@ import {
 } from '../lib/project';
 import { ChevronLeft, ChevronRight, Sparkles, Building2, Grid3x3, Upload, PenLine } from 'lucide-react';
 import type { FloorPlanSource } from '../lib/project';
+import {
+  isResidentialBuilding,
+  bedroomRangeForBuilding,
+  defaultBedroomsForBuilding,
+  layoutSummary,
+} from '../lib/engine/residential-layouts';
 
 type FloorPlanChoice = 'zero' | 'import' | 'skip';
 
@@ -34,6 +40,17 @@ export function SetupWizard({ onComplete }: Props) {
   const generateFromBrief = useStudio((s) => s.generateFromBrief);
 
   const patch = (p: Partial<ProjectInfo>) => setDraft((d) => ({ ...d, ...p }));
+
+  const pickBuildingType = (id: BuildingType) => {
+    setDraft((d) => ({
+      ...d,
+      buildingType: id,
+      bedrooms: isResidentialBuilding(id) ? defaultBedroomsForBuilding(id) : d.bedrooms,
+    }));
+  };
+
+  const residential = isResidentialBuilding(draft.buildingType);
+  const bedRange = bedroomRangeForBuilding(draft.buildingType);
 
   const toggleHvac = (id: HvacSystemType) => {
     setDraft((d) => ({
@@ -98,7 +115,7 @@ export function SetupWizard({ onComplete }: Props) {
                 {BUILDING_TYPES.map((b) => (
                   <button
                     key={b.id}
-                    onClick={() => patch({ buildingType: b.id as BuildingType })}
+                    onClick={() => pickBuildingType(b.id as BuildingType)}
                     className={`rounded-xl border px-3 py-3 text-xs font-semibold transition ${
                       draft.buildingType === b.id
                         ? 'border-cyan-400 bg-cyan-500/15 text-cyan-300'
@@ -109,6 +126,31 @@ export function SetupWizard({ onComplete }: Props) {
                   </button>
                 ))}
               </div>
+              {residential && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                  <p className="text-[11px] text-[var(--studio-muted)]">{layoutSummary(draft.buildingType, draft.bedrooms, locale)}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-[var(--studio-text)]">{t('bedrooms')}</span>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[var(--studio-border)] px-3 py-1 text-sm font-bold"
+                      onClick={() => patch({ bedrooms: Math.max(bedRange.min, draft.bedrooms - 1) })}
+                      disabled={draft.bedrooms <= bedRange.min}
+                    >
+                      −
+                    </button>
+                    <span className="text-sm font-bold">{draft.bedrooms}</span>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[var(--studio-border)] px-3 py-1 text-sm font-bold"
+                      onClick={() => patch({ bedrooms: Math.min(bedRange.max, draft.bedrooms + 1) })}
+                      disabled={draft.bedrooms >= bedRange.max}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <Field label={t('client')} value={draft.client} onChange={(v) => patch({ client: v })} />
                 <Field label={t('location')} value={draft.location} onChange={(v) => patch({ location: v })} />

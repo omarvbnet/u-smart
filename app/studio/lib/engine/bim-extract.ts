@@ -1,7 +1,7 @@
 /**
  * Structured BIM extraction — walls, doors, windows from CAD or raster plans.
  */
-import type { BimModel, DesignOpening, DesignWall } from '../model';
+import type { BimModel, DesignOpening, DesignWall, DesignGarden } from '../model';
 
 export type DxfEntity = {
   type: 'LINE' | 'LWPOLYLINE' | 'POLYLINE';
@@ -12,10 +12,12 @@ export type DxfEntity = {
 const WALL_LAYERS = /wall|parti|mauer|mur|a-wall|i-wall|arch/i;
 const DOOR_LAYERS = /door|dr\b|opening/i;
 const WINDOW_LAYERS = /window|glaz|fen/i;
+const GARDEN_LAYERS = /garden|landscape|plant|green|lawn|ext|site/i;
 
-function layerKind(layer: string): 'wall' | 'door' | 'window' | 'other' {
+function layerKind(layer: string): 'wall' | 'door' | 'window' | 'garden' | 'other' {
   if (DOOR_LAYERS.test(layer)) return 'door';
   if (WINDOW_LAYERS.test(layer)) return 'window';
+  if (GARDEN_LAYERS.test(layer)) return 'garden';
   if (WALL_LAYERS.test(layer)) return 'wall';
   return 'other';
 }
@@ -50,8 +52,10 @@ function openingFromSegment(
 export function extractBimFromDxfEntities(entities: DxfEntity[], offsetX = 0, offsetY = 0, flipY = 0): BimModel {
   const walls: DesignWall[] = [];
   const openings: DesignOpening[] = [];
+  const gardens: DesignGarden[] = [];
   let wi = 0;
   let oi = 0;
+  let gi = 0;
 
   for (const ent of entities) {
     const kind = layerKind(ent.layer);
@@ -72,6 +76,23 @@ export function extractBimFromDxfEntities(entities: DxfEntity[], offsetX = 0, of
         openings.push(openingFromSegment({ x: x1, y: y1 }, { x: x2, y: y2 }, 'door', ent.layer, oi++));
       } else if (kind === 'window') {
         openings.push(openingFromSegment({ x: x1, y: y1 }, { x: x2, y: y2 }, 'window', ent.layer, oi++));
+      } else if (kind === 'garden' && ent.type === 'LWPOLYLINE' && pts.length >= 3) {
+        const xs = pts.map((p) => p.x + offsetX);
+        const ys = pts.map((p) => (flipY ? flipY - (p.y + offsetY) : p.y + offsetY));
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        if (maxX - minX > 40 && maxY - minY > 40) {
+          gardens.push({
+            id: `garden_${gi++}`,
+            label: 'Garden',
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+          });
+        }
       } else if (kind === 'wall' || kind === 'other') {
         walls.push({
           id: `wall_${wi++}`,
@@ -86,7 +107,7 @@ export function extractBimFromDxfEntities(entities: DxfEntity[], offsetX = 0, of
     }
   }
 
-  return { walls, openings };
+  return { walls, openings, gardens: gardens.length ? gardens : undefined };
 }
 
 /** Detect wall lines from dark pixels in a rasterized plan (orthogonal segments). */
@@ -161,9 +182,11 @@ export function extractBimFromRaster(
 export function mergeBimModels(...models: BimModel[]): BimModel {
   const walls: DesignWall[] = [];
   const openings: DesignOpening[] = [];
+  const gardens: DesignGarden[] = [];
   for (const m of models) {
     walls.push(...m.walls);
     openings.push(...m.openings);
+    if (m.gardens) gardens.push(...m.gardens);
   }
-  return { walls, openings };
+  return { walls, openings, gardens: gardens.length ? gardens : undefined };
 }

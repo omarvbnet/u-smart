@@ -3,7 +3,11 @@ import type { CatalogEntry } from './types';
 /** IEC-style single-line / floor-plan symbol identifiers. */
 export type EngineeringSymbolId =
   | 'lighting'
+  | 'lighting_linear'
+  | 'lighting_spot'
+  | 'lighting_magnetic'
   | 'socket'
+  | 'appliance'
   | 'switch'
   | 'distribution_board'
   | 'mcb'
@@ -27,8 +31,15 @@ export type EngineeringSymbolId =
 export function engineeringSymbolFor(entry: CatalogEntry): EngineeringSymbolId {
   switch (entry.domain) {
     case 'load':
-      if (entry.category === 'LIGHTING') return 'lighting';
+      if (entry.category === 'LIGHTING') {
+        const lt = (entry as { lightingType?: string }).lightingType;
+        if (lt === 'LINEAR') return 'lighting_linear';
+        if (lt === 'SPOT') return 'lighting_spot';
+        if (lt === 'MAGNETIC') return 'lighting_magnetic';
+        return 'lighting';
+      }
       if (entry.category === 'SOCKET') return 'socket';
+      if (entry.category === 'APPLIANCE') return 'appliance';
       if (entry.category === 'PANEL') return 'distribution_board';
       if (entry.category === 'MOTOR') return 'motor';
       return 'generic';
@@ -42,7 +53,9 @@ export function engineeringSymbolFor(entry: CatalogEntry): EngineeringSymbolId {
     case 'source':
       return 'source';
     case 'hvac':
-      if (entry.hvacType === 'SPLIT' || entry.hvacType === 'VRF' || entry.hvacType === 'FCU') return 'hvac_indoor';
+      if (entry.hvacType === 'VRF_OUTDOOR') return 'hvac_outdoor';
+      if (entry.hvacType === 'VRF_INDOOR' || entry.hvacType === 'VRF') return 'hvac_indoor';
+      if (entry.hvacType === 'SPLIT' || entry.hvacType === 'FCU') return 'hvac_indoor';
       if (entry.hvacType === 'CHILLER' || entry.hvacType === 'AHU' || entry.hvacType === 'PACKAGE') return 'hvac_plant';
       return 'hvac_outdoor';
     case 'sensor':

@@ -1,8 +1,15 @@
 /**
- * Deterministic lighting design (EN 12464-1 target lux).
+ * Deterministic lighting design (EN 12464-1) with fixture-type selection.
  */
 import type { DesignRoom } from '../model';
+import type { LightingFixtureType } from '../catalog/types';
 import { LUX } from './lighting-design-shared';
+import {
+  FIXTURE_SPECS,
+  recommendFixtureType,
+  fixturesForRoom,
+  achievedLux,
+} from './lighting-fixtures';
 
 export type RoomLightingDesign = {
   roomId: string;
@@ -11,6 +18,10 @@ export type RoomLightingDesign = {
   luxTarget: number;
   lumensRequired: number;
   fixturesRecommended: number;
+  fixtureType: LightingFixtureType;
+  catalogId: string;
+  achievedLux: number;
+  compliant: boolean;
   powerW: number;
 };
 
@@ -23,15 +34,19 @@ export type LightingDesignReport = {
 
 export function calculateLightingDesign(rooms: DesignRoom[]): LightingDesignReport {
   const assumptions = [
-    'Target lux per EN 12464-1 typical maintained illuminance.',
-    '800 lm / 12 W LED downlight assumed — replace with selected fixture datasheet.',
+    'Target lux per EN 12464-1 maintained illuminance.',
+    'Fixture types: downlight, linear, spot, magnetic track — datasheet values used for calculations.',
+    'Maintenance factor 0.8 applied to lumen output.',
   ];
 
   const rows = rooms.map((r) => {
     const area = (r.width / 50) * (r.height / 50);
     const lux = LUX[r.zone];
     const lumens = (lux * area) / 0.8;
-    const fixtures = Math.max(1, Math.ceil(lumens / 800));
+    const fixtureType = recommendFixtureType(r);
+    const spec = FIXTURE_SPECS[fixtureType];
+    const fixtures = fixturesForRoom(lumens, fixtureType);
+    const achieved = achievedLux(area, fixtures, fixtureType);
     return {
       roomId: r.id,
       label: r.label,
@@ -39,7 +54,11 @@ export function calculateLightingDesign(rooms: DesignRoom[]): LightingDesignRepo
       luxTarget: lux,
       lumensRequired: Math.round(lumens),
       fixturesRecommended: fixtures,
-      powerW: fixtures * 12,
+      fixtureType,
+      catalogId: spec.catalogId,
+      achievedLux: achieved,
+      compliant: achieved >= lux * 0.9,
+      powerW: fixtures * spec.powerW,
     };
   });
 

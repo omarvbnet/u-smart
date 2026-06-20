@@ -26,16 +26,30 @@ import { MapNode, type MapNodeData } from './MapNode';
 import { RoomNode, type RoomNodeData } from './RoomNode';
 import { WallNode, type WallNodeData } from './WallNode';
 import { OpeningNode, type OpeningNodeData } from './OpeningNode';
+import { GardenNode, type GardenNodeData } from './GardenNode';
+import { CableRouteNode, type CableRouteNodeData } from './CableRouteNode';
 import { FloorPlanToolbar } from './FloorPlanToolbar';
+import { FloorSwitcher } from './FloorSwitcher';
+import { MapOverlayToolbar } from './MapOverlayToolbar';
 import { VisualizationToolbar } from './VisualizationToolbar';
 import { DesignAssistantPanel } from './DesignAssistantPanel';
 import { ClientExperienceBar } from './ClientExperienceBar';
 import { Twin3DView } from './Twin3DView';
+import type { HvacSpec } from '../lib/catalog';
 import { getCatalogEntry } from '../lib/catalog';
 import { declarationFor } from '../lib/engine/declarations';
 import { RTL_LOCALES } from '../lib/i18n';
 import { dropPosition, nodeFootprint, nodesForCanvasFit } from '../lib/node-layout';
 import type { PortKind } from '../lib/catalog';
+import {
+  parseRoutePoints,
+  computeCableRoute,
+  boundingBox,
+  toLocalPoints,
+  conduitTypeForCable,
+  type ConduitType,
+} from '../lib/engine/cable-map';
+import type { CableSpec } from '../lib/catalog';
 import { useLuxHeatmaps, useLoadHeatmaps, useDigitalTwinSync } from './hooks';
 
 const nodeTypes = {
@@ -45,6 +59,8 @@ const nodeTypes = {
   room: (p: NodeProps) => <RoomNode {...p} />,
   wall: (p: NodeProps) => <WallNode {...p} />,
   opening: (p: NodeProps) => <OpeningNode {...p} />,
+  garden: (p: NodeProps) => <GardenNode {...p} />,
+  cableRoute: (p: NodeProps) => <CableRouteNode {...p} />,
 };
 
 const MAP_ID = '__map__';
@@ -66,6 +82,7 @@ function CanvasInner() {
   const edges = useStudio((s) => s.edges);
   const rooms = useStudio((s) => s.rooms);
   const bim = useStudio((s) => s.bim);
+  const activeFloorId = useStudio((s) => s.activeFloorId);
   const locale = useStudio((s) => s.locale);
   const selectedId = useStudio((s) => s.selectedNodeId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
@@ -86,6 +103,9 @@ function CanvasInner() {
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
   const canvasFitSeq = useStudio((s) => s.canvasFitSeq);
   const visualizationMode = useStudio((s) => s.visualizationMode);
+  const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
+  const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
+  const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
 
   const { byNode } = useAnalysis();
   const sim = useSimulation();
@@ -131,6 +151,7 @@ function CanvasInner() {
     }
     if (bim) {
       for (const w of bim.walls) {
+        if (w.floorId && w.floorId !== activeFloorId) continue;
         const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
         list.push({
           id: `wall_${w.id}`,
@@ -144,6 +165,7 @@ function CanvasInner() {
         });
       }
       for (const o of bim.openings) {
+        if (o.floorId && o.floorId !== activeFloorId) continue;
         list.push({
           id: `open_${o.id}`,
           type: 'opening',
@@ -155,10 +177,41 @@ function CanvasInner() {
           zIndex: 0,
         });
       }
+      for (const g of bim.gardens ?? []) {
+        if (g.floorId && g.floorId !== activeFloorId) continue;
+        list.push({
+          id: `garden_${g.id}`,
+          type: 'garden',
+          position: { x: g.x, y: g.y },
+          style: { width: g.width, height: g.height },
+          data: { garden: g } satisfies GardenNodeData,
+          draggable: false,
+          selectable: false,
+          zIndex: -1,
+        });
+      }
     }
     const luxByRoom = new Map(luxHeatmaps.map((h) => [h.roomId, h]));
     const loadByRoom = new Map(loadHeatmaps.map((h) => [h.roomId, h]));
     for (const r of rooms) {
+      if (r.floorId && r.floorId !== activeFloorId) continue;
+      const outletCount = nodes.filter((n) => {
+        if (n.params.showOnMap === false) return false;
+        const e = getCatalogEntry(n.catalogId);
+        if (e?.category !== 'SOCKET' && e?.category !== 'APPLIANCE') return false;
+        if (n.params.roomId === r.id) return true;
+        const cx = n.x + 21;
+        const cy = n.y + 21;
+        return cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height;
+      }).length;
+      const vrfUnitCount = nodes.filter((n) => {
+        const e = getCatalogEntry(n.catalogId) as HvacSpec | undefined;
+        if (e?.hvacType !== 'VRF_INDOOR') return false;
+        if (n.params.roomId === r.id) return true;
+        const cx = n.x + 21;
+        const cy = n.y + 21;
+        return cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height;
+      }).length;
       list.push({
         id: roomRfId(r.id),
         type: 'room',
@@ -172,15 +225,76 @@ function CanvasInner() {
           areaM2: roomAreaM2(r.width, r.height),
           luxHeatmap: luxByRoom.get(r.id) ?? null,
           loadHeatmap: loadByRoom.get(r.id) ?? null,
+          outletCount: showOutletsOnMap ? outletCount : 0,
+          vrfUnitCount,
         } satisfies RoomNodeData,
         draggable: !drawing,
         selectable: !drawing,
         zIndex: -1,
       });
     }
+    if (mapOverlayMode !== 'plan') {
+      for (const n of nodes) {
+        if (n.floorId && n.floorId !== activeFloorId) continue;
+        const entry = getCatalogEntry(n.catalogId);
+        if (entry?.domain !== 'cable') continue;
+        if (n.params.showOnMap === false) continue;
+        let world = parseRoutePoints(n.params);
+        if (world.length < 2) world = computeCableRoute(n, nodes, edges, rooms);
+        const box = boundingBox(world);
+        const local = toLocalPoints(world, { x: box.x, y: box.y });
+        const issues = byNode.get(n.id) ?? [];
+        const severity = issues.some((i) => i.severity === 'critical')
+          ? 'critical'
+          : issues.some((i) => i.severity === 'warning')
+            ? 'warning'
+            : issues.some((i) => i.severity === 'recommendation')
+              ? 'recommendation'
+              : null;
+        const s = sim[n.id];
+        const cableEntry = entry as CableSpec;
+        const conduitType =
+          (n.params.conduitType as ConduitType | undefined) ?? conduitTypeForCable(cableEntry);
+        list.push({
+          id: `route_${n.id}`,
+          type: 'cableRoute',
+          position: { x: box.x, y: box.y },
+          style: { width: box.w, height: box.h },
+          width: box.w,
+          height: box.h,
+          data: {
+            cableId: n.id,
+            catalogId: n.catalogId,
+            label: n.label,
+            points: local,
+            width: box.w,
+            height: box.h,
+            conduitType,
+            overlayMode: mapOverlayMode,
+            selected: n.id === selectedId,
+            editing: editingCableRouteId === n.id,
+            severity,
+            energised: s?.energised ?? false,
+            active: s?.active ?? false,
+            lengthM: Number(n.params.lengthM ?? 20),
+          } satisfies CableRouteNodeData,
+          draggable: false,
+          selectable: true,
+          zIndex: 3,
+        });
+      }
+    }
     for (const n of nodes) {
+      if (n.floorId && n.floorId !== activeFloorId) continue;
       const entry = getCatalogEntry(n.catalogId);
       if (!entry) continue;
+      if (
+        !showOutletsOnMap &&
+        (entry.category === 'SOCKET' || entry.category === 'APPLIANCE') &&
+        n.params.showOnMap !== false
+      ) {
+        continue;
+      }
       const issues = byNode.get(n.id) ?? [];
       const severity = issues.some((i) => i.severity === 'critical')
         ? 'critical'
@@ -226,7 +340,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps]);
+  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 
@@ -405,6 +519,10 @@ function CanvasInner() {
       onMouseLeave={onPaneMouseUp}
     >
       <FloorPlanToolbar />
+      <div className="absolute top-3 z-10 ltr:right-3 rtl:left-3">
+        <FloorSwitcher />
+      </div>
+      <MapOverlayToolbar />
       <VisualizationToolbar />
       <DesignAssistantPanel />
       <ClientExperienceBar />
@@ -426,6 +544,7 @@ function CanvasInner() {
         onNodeClick={(_, n) => {
           if (n.id === MAP_ID) return;
           if (n.id.startsWith('room_')) selectRoom(n.id.slice(5));
+          else if (n.id.startsWith('route_')) select(n.id.slice(6));
           else select(n.id);
         }}
         onPaneClick={() => {
@@ -495,6 +614,7 @@ export function Canvas() {
     return (
       <div className="relative h-full w-full">
         <VisualizationToolbar />
+        <MapOverlayToolbar />
         <ClientExperienceBar />
         <DesignAssistantPanel />
         <Twin3DView />

@@ -5,7 +5,11 @@ import type { DesignNode, DesignEdge, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import type { StudioLocale } from '../i18n';
 import { cableRunRouted } from './cable-routing';
+import { rerouteCableNode } from './cable-map';
+import { getCatalogEntry } from '../catalog';
 import { placeLightingFixtures, placeHvacUnits, mergePlacementNodes } from './placement-layout';
+import { placeSocketOutlets, placeAppliances, mergeOutletNodes } from './outlet-placement';
+import { seedRoomsForBuilding } from './residential-layouts';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -41,7 +45,7 @@ export function buildStarterDesign(
 
   const nodes: DesignNode[] = [];
   const edges: DesignEdge[] = [];
-  const targets = rooms.length > 0 ? rooms : defaultRooms(bt);
+  const targets = rooms.length > 0 ? rooms : seedRoomsForBuilding(bt, project.bedrooms);
   const minRoomX = targets.length ? Math.min(...targets.map((r) => r.x)) : 0;
   const yBase = targets.length ? Math.min(...targets.map((r) => r.y)) + 40 : 200;
   let xSource = minRoomX - 200;
@@ -148,7 +152,11 @@ export function buildStarterDesign(
     });
   }
 
-  return { nodes, edges, name: names[locale] };
+  const routedNodes = nodes.map((n) =>
+    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, edges, targets) : n,
+  );
+
+  return { nodes: routedNodes, edges, name: names[locale] };
 }
 
 /** Replace single center lights with calculated fixture grid + reposition HVAC from loads. */
@@ -163,30 +171,15 @@ export function enhanceDesignPlacement(
   nextNodes = mergePlacementNodes(nextNodes, lights, 'light');
   const hvacNodes = placeHvacUnits(rooms, project);
   nextNodes = mergePlacementNodes(nextNodes, hvacNodes, 'hvac');
+  nextNodes = mergeOutletNodes(nextNodes, [...placeSocketOutlets(rooms), ...placeAppliances(rooms)]);
+  nextNodes = nextNodes.map((n) =>
+    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nextNodes, edges, rooms) : n,
+  );
   return { nodes: nextNodes, edges };
 }
 
 function edge(source: string, sourceHandle: string, target: string, targetHandle: string): DesignEdge {
   return { id: `e_${source}_${target}`, source, sourceHandle, target, targetHandle };
-}
-
-function defaultRooms(bt: ProjectInfo['buildingType']): DesignRoom[] {
-  if (bt === 'apartment' || bt === 'house') {
-    return [
-      room('living', 'Living', -200, -120, 280, 200),
-      room('kitchen', 'Kitchen', 100, -120, 180, 140),
-      room('bed1', 'Bedroom', -200, 100, 200, 160),
-    ];
-  }
-  return [
-    room('lobby', 'Lobby', -240, -160, 320, 180),
-    room('office', 'Office', 100, -160, 220, 180),
-    room('mech', 'MEP Room', -240, 40, 160, 140),
-  ];
-}
-
-function room(id: string, label: string, x: number, y: number, width: number, height: number): DesignRoom {
-  return { id, label, x, y, width, height, zone: 'general' };
 }
 
 function roomAreaW(r: DesignRoom): number {
@@ -197,6 +190,8 @@ function roomAreaW(r: DesignRoom): number {
 function pickAutoHvac(bt: ProjectInfo['buildingType']): HvacSystemType[] {
   if (bt === 'hotel' || bt === 'hospital' || bt === 'commercial') return ['vrf', 'ahu'];
   if (bt === 'industrial') return ['chiller', 'fcu'];
+  if (bt === 'villa') return ['vrf', 'multi_split'];
+  if (bt === 'house') return ['multi_split', 'split'];
   if (bt === 'apartment' || bt === 'residential') return ['multi_split'];
   return ['split'];
 }

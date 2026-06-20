@@ -14,11 +14,13 @@ export type RoomNodeData = {
   areaM2: number;
   luxHeatmap?: RoomLuxHeatmap | null;
   loadHeatmap?: RoomLoadHeatmap | null;
+  outletCount?: number;
+  vrfUnitCount?: number;
 };
 
 function RoomNodeImpl({ data, selected }: NodeProps) {
   const d = data as RoomNodeData;
-  const { room, areaM2, luxHeatmap, loadHeatmap } = d;
+  const { room, areaM2, luxHeatmap, loadHeatmap, outletCount, vrfUnitCount } = d;
 
   return (
     <>
@@ -80,8 +82,18 @@ function RoomNodeImpl({ data, selected }: NodeProps) {
           <div className="truncate text-xs font-bold text-[var(--studio-text)]">{room.label}</div>
           <div className="text-[9px] text-[var(--studio-muted)]">{areaM2.toFixed(1)} m²</div>
         </div>
-        <div className="absolute bottom-1.5 inset-x-0 text-center text-[8px] uppercase tracking-wider text-[var(--studio-muted)] opacity-70">
-          {room.zone}
+        <div className="absolute bottom-1.5 inset-x-0 flex items-center justify-center gap-2 text-[8px] uppercase tracking-wider text-[var(--studio-muted)] opacity-70">
+          <span>{room.zone}</span>
+          {(outletCount ?? 0) > 0 && (
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-amber-300 normal-case">
+              {outletCount} sockets
+            </span>
+          )}
+          {(vrfUnitCount ?? 0) > 0 && (
+            <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-sky-300 normal-case">
+              {vrfUnitCount} VRF
+            </span>
+          )}
         </div>
       </div>
     </>

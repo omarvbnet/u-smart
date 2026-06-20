@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { CATALOG, getCatalogEntry, type CatalogEntry } from './catalog';
-import type { DesignNode, DesignEdge, DesignRoom, BimModel } from './model';
+import type { DesignNode, DesignEdge, DesignRoom, BimModel, DesignFloor, DesignGarden, DesignOpening } from './model';
 import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
@@ -17,6 +17,13 @@ import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
 import { buildStarterDesign, enhanceDesignPlacement } from './engine/starter-design';
+import {
+  seedRoomsForBuilding,
+  isResidentialBuilding,
+  defaultBedroomsForBuilding,
+  bedroomRangeForBuilding,
+  villaGardenBounds,
+} from './engine/residential-layouts';
 import { detectRoomsFromMap as detectRooms, detectBimFromMap } from './engine/plan-detect';
 import { getTwinConnection } from './twin-stream';
 import { psuCatalogId, findMainPanel } from './engine/autofix';
@@ -25,6 +32,22 @@ import { simulate } from './engine/simulate';
 import { executeDesignCommand as runDesignCommand } from './nl/design-commands';
 import { parseProjectBrief, isGenerateBriefCommand } from './nl/parse-brief';
 import { runAutonomousPipeline } from './platform/pipeline';
+import { applyHdlScene as runHdlScene, type HdlSceneId } from './engine/hdl-automation';
+import { validateLightingDesign } from './engine/lighting-validation';
+import type { MapOverlayMode } from './engine/cable-map';
+import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, type RoutePoint } from './engine/cable-map';
+import {
+  placeSocketOutlets,
+  placeAppliances,
+  defaultPositionInRoom,
+  type OutletCatalogId,
+} from './engine/outlet-placement';
+import {
+  placeVrfDistribution,
+  calculateVrfDistribution,
+  indoorPositionInRoom,
+} from './engine/vrf-distribution';
+import type { HvacSpec } from './catalog';
 import type { VisualizationMode, ExperienceMode } from './visualization/modes';
 
 export type Theme = 'dark' | 'light';
@@ -42,6 +65,8 @@ export type DesignFile = {
   project?: ProjectInfo;
   rooms?: DesignRoom[];
   bim?: BimModel;
+  floors?: DesignFloor[];
+  activeFloorId?: string;
 };
 
 export type MapBackground = {
@@ -81,10 +106,16 @@ type StudioState = {
   assistantOpen: boolean;
   autonomousAssumptions: string[];
   bim: BimModel | null;
+  floors: DesignFloor[];
+  activeFloorId: string;
   showLuxHeatmap: boolean;
   showLoadHeatmap: boolean;
   twinSessionId: string | null;
   twinConnected: boolean;
+  mapOverlayMode: MapOverlayMode;
+  editingCableRouteId: string | null;
+  showCableRoutes3d: boolean;
+  showOutletsOnMap: boolean;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -129,6 +160,9 @@ type StudioState = {
   addRoom: (room: Omit<DesignRoom, 'id'> & { id?: string }) => void;
   addRoomTemplate: (label: string, zone: DesignRoom['zone'], width: number, height: number) => void;
   seedDefaultRooms: () => void;
+  applyBuildingLayout: (options?: { bedrooms?: number; engineering?: boolean; resetMap?: boolean }) => { ok: boolean; message: string; changes: number };
+  duplicateRoom: (roomId: string) => void;
+  addBedroomToLayout: (roomId?: string) => void;
   updateRoom: (id: string, patch: Partial<DesignRoom>) => void;
   moveRoom: (id: string, x: number, y: number) => void;
   resizeRoom: (id: string, width: number, height: number) => void;
@@ -156,6 +190,25 @@ type StudioState = {
   toggleLoadHeatmap: () => void;
   placeEngineeringLayout: () => { ok: boolean; message: string; changes: number };
   analyzePlanFull: () => Promise<{ rooms: number; walls: number }>;
+  addFloor: (label?: string) => void;
+  switchFloor: (floorId: string) => void;
+  removeFloor: (floorId: string) => void;
+  addGarden: (label?: string, x?: number, y?: number, width?: number, height?: number) => void;
+  addOpening: (kind: 'door' | 'window', x?: number, y?: number) => void;
+  applyHdlScene: (sceneId: HdlSceneId) => number;
+  setMapOverlayMode: (mode: MapOverlayMode) => void;
+  setEditingCableRoute: (cableId: string | null) => void;
+  rerouteCable: (cableId: string) => void;
+  rerouteAllCables: () => void;
+  updateCableRoutePoints: (cableId: string, points: RoutePoint[]) => void;
+  toggleCableRoutes3d: () => void;
+  toggleOutletsOnMap: () => void;
+  addOutletToRoom: (roomId: string, catalogId: OutletCatalogId) => void;
+  placeRoomOutlets: (roomId?: string) => { added: number };
+  removeOutletsInRoom: (roomId: string) => void;
+  assignVrfToRoom: (roomId: string) => void;
+  setRoomVrfIndoor: (roomId: string, catalogId: string) => void;
+  placeVrfLayout: () => { added: number };
 };
 
 let counter = 0;
@@ -213,6 +266,44 @@ function defaultLabel(entry: CatalogEntry, locale: StudioLocale): string {
   return entry.name[locale] ?? entry.name.en;
 }
 
+function defaultFloors(): DesignFloor[] {
+  return [{ id: 'floor_0', label: 'Ground Floor', level: 0, elevationM: 0 }];
+}
+
+function normalizeFloors(floors?: DesignFloor[]): { floors: DesignFloor[]; activeFloorId: string } {
+  const list = floors?.length ? floors : defaultFloors();
+  return { floors: list, activeFloorId: list[0]!.id };
+}
+
+function floorLabelForLevel(level: number): string {
+  if (level === 0) return 'Ground Floor';
+  if (level === 1) return 'First Floor';
+  if (level === 2) return 'Second Floor';
+  if (level < 0) return `Basement ${Math.abs(level)}`;
+  return `Floor ${level}`;
+}
+
+function matchesFloor<T extends { floorId?: string }>(item: T, activeFloorId: string): boolean {
+  return !item.floorId || item.floorId === activeFloorId;
+}
+
+function initialMapOverlayMode(): MapOverlayMode {
+  if (typeof window === 'undefined') return 'combined';
+  const v = window.localStorage.getItem('studio.mapOverlay');
+  if (v === 'plan' || v === 'cables' || v === 'pipes' || v === 'combined') return v;
+  return 'combined';
+}
+
+function initialCableRoutes3d(): boolean {
+  if (typeof window === 'undefined') return true;
+  return window.localStorage.getItem('studio.cableRoutes3d') !== '0';
+}
+
+function initialOutletsOnMap(): boolean {
+  if (typeof window === 'undefined') return true;
+  return window.localStorage.getItem('studio.outletsOnMap') !== '0';
+}
+
 export const useStudio = create<StudioState>((set, get) => ({
   locale: initialLocale(),
   theme: initialTheme(),
@@ -239,10 +330,16 @@ export const useStudio = create<StudioState>((set, get) => ({
   assistantOpen: false,
   autonomousAssumptions: [],
   bim: null,
+  floors: defaultFloors(),
+  activeFloorId: 'floor_0',
   showLuxHeatmap: initialLuxHeatmap(),
   showLoadHeatmap: initialLoadHeatmap(),
   twinSessionId: null,
   twinConnected: false,
+  mapOverlayMode: initialMapOverlayMode(),
+  editingCableRouteId: null,
+  showCableRoutes3d: initialCableRoutes3d(),
+  showOutletsOnMap: initialOutletsOnMap(),
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -266,13 +363,21 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (entry.domain === 'cable') {
       params.lengthM = 20;
       params.rotation = 0;
+      params.conduitType = 'conduit';
+      params.showOnMap = true;
     }
-    const node: DesignNode = { id: uid('n'), catalogId, label: defaultLabel(entry, get().locale), x, y, params };
-    set((s) => ({
-      nodes: [...s.nodes, node],
-      selectedNodeId: node.id,
-      controls: { ...s.controls, [node.id]: defaultControlState(entry) },
-    }));
+    const node: DesignNode = { id: uid('n'), catalogId, label: defaultLabel(entry, get().locale), x, y, floorId: get().activeFloorId, params };
+    set((s) => {
+      let nodes = [...s.nodes, node];
+      if (entry.domain === 'cable') {
+        nodes = nodes.map((n) => (n.id === node.id ? rerouteCableNode(n, nodes, s.edges, s.rooms) : n));
+      }
+      return {
+        nodes,
+        selectedNodeId: node.id,
+        controls: { ...s.controls, [node.id]: defaultControlState(entry) },
+      };
+    });
   },
 
   moveNode: (id, x, y) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) })),
@@ -339,7 +444,15 @@ export const useStudio = create<StudioState>((set, get) => ({
         (e) => e.source === edge.source && e.target === edge.target && e.sourceHandle === edge.sourceHandle && e.targetHandle === edge.targetHandle,
       );
       if (exists) return s;
-      return { edges: [...s.edges, { ...edge, id: uid('e') }] };
+      const edges = [...s.edges, { ...edge, id: uid('e') }];
+      const cableIds = new Set(
+        [edge.source, edge.target].filter((id) => getCatalogEntry(s.nodes.find((n) => n.id === id)?.catalogId ?? '')?.domain === 'cable'),
+      );
+      const nodes =
+        cableIds.size > 0
+          ? s.nodes.map((n) => (cableIds.has(n.id) ? rerouteCableNode(n, s.nodes, edges, s.rooms) : n))
+          : s.nodes;
+      return { edges, nodes };
     }),
 
   removeEdge: (id) => set((s) => ({ edges: s.edges.filter((e) => e.id !== id) })),
@@ -356,6 +469,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       project: defaultProject(),
       map: null,
       bim: null,
+      floors: defaultFloors(),
+      activeFloorId: 'floor_0',
       telegrams: [],
       floorPlanTool: 'select',
       cloudProjectId: null,
@@ -531,7 +646,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     const { width, height } = floorPlanSizeForBuilding(s.project.buildingType);
     const src = blankFloorPlanDataUrl(width, height);
-    const rooms = s.rooms.length > 0 ? s.rooms : seedRoomsForBuilding(s.project.buildingType);
+    const rooms = s.rooms.length > 0 ? s.rooms : seedRoomsForBuilding(s.project.buildingType, s.project.bedrooms);
     set({
       map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 1, mode: 'blank' },
       rooms,
@@ -578,7 +693,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const mergedProject = { ...project, floorPlanSource };
     let rooms = s.rooms;
     if (rooms.length === 0) {
-      rooms = seedRoomsForBuilding(mergedProject.buildingType);
+      rooms = seedRoomsForBuilding(mergedProject.buildingType, mergedProject.bedrooms);
     }
     let nodes = s.nodes;
     let edges = s.edges;
@@ -637,7 +752,16 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   addRoom: (room) => {
     const id = room.id ?? uid('room');
-    const r: DesignRoom = { id, label: room.label, x: room.x, y: room.y, width: room.width, height: room.height, zone: room.zone };
+    const r: DesignRoom = {
+      id,
+      label: room.label,
+      x: room.x,
+      y: room.y,
+      width: room.width,
+      height: room.height,
+      zone: room.zone,
+      floorId: room.floorId ?? get().activeFloorId,
+    };
     set((s) => ({ rooms: [...s.rooms, r], selectedRoomId: id, selectedNodeId: null }));
   },
 
@@ -646,7 +770,112 @@ export const useStudio = create<StudioState>((set, get) => ({
     get().addRoom({ label, zone, x: -120 + offset, y: -80 + offset, width, height });
   },
 
-  seedDefaultRooms: () => set({ rooms: seedRoomsForBuilding(get().project.buildingType), selectedRoomId: null }),
+  seedDefaultRooms: () => {
+    get().applyBuildingLayout({ engineering: false, resetMap: true });
+  },
+
+  applyBuildingLayout: (options) => {
+    const s = get();
+    const bt = s.project.buildingType;
+    if (!isResidentialBuilding(bt)) {
+      const rooms = seedRoomsForBuilding(bt);
+      set({ rooms, selectedRoomId: null });
+      return { ok: true, message: 'Default commercial layout applied.', changes: rooms.length };
+    }
+    const bedrooms = options?.bedrooms ?? s.project.bedrooms ?? defaultBedroomsForBuilding(bt);
+    const rooms = seedRoomsForBuilding(bt, bedrooms);
+    let map = s.map;
+    if (options?.resetMap !== false && (!map || map.mode === 'blank')) {
+      const { width, height } = floorPlanSizeForBuilding(bt);
+      map = {
+        src: blankFloorPlanDataUrl(width, height),
+        width,
+        height,
+        x: -width / 2,
+        y: -height / 2,
+        opacity: 1,
+        mode: 'blank',
+      };
+    }
+    let bim = s.bim;
+    if (bt === 'villa') {
+      const g = villaGardenBounds();
+      const gardens = bim?.gardens ?? [];
+      const hasGarden = gardens.some((x) => x.label.toLowerCase().includes('garden') || x.label.toLowerCase().includes('terrace'));
+      if (!hasGarden) {
+        bim = {
+          walls: bim?.walls ?? [],
+          openings: bim?.openings ?? [],
+          gardens: [
+            ...gardens,
+            { id: uid('garden'), label: 'Garden', x: g.x, y: g.y, width: g.width, height: g.height, floorId: s.activeFloorId },
+          ],
+        };
+      }
+    }
+    let nodes = s.nodes;
+    let edges = s.edges;
+    let controls = s.controls;
+    if (options?.engineering) {
+      const project = { ...s.project, bedrooms };
+      const starter = buildStarterDesign(project, s.locale, rooms);
+      const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges);
+      nodes = placed.nodes;
+      edges = placed.edges;
+      controls = {};
+      for (const n of nodes) {
+        const entry = getCatalogEntry(n.catalogId);
+        if (entry) controls[n.id] = defaultControlState(entry);
+      }
+    }
+    set({
+      project: {
+        ...s.project,
+        bedrooms,
+        floorPlanSource: map?.mode === 'blank' ? 'zero' : s.project.floorPlanSource,
+      },
+      rooms,
+      map,
+      bim,
+      nodes,
+      edges,
+      controls,
+      selectedRoomId: null,
+      selectedNodeId: null,
+      floorPlanTool: map ? 'select' : s.floorPlanTool,
+    });
+    return {
+      ok: true,
+      message: `Layout applied: ${rooms.length} rooms, ${bedrooms} bedrooms.`,
+      changes: rooms.length,
+    };
+  },
+
+  duplicateRoom: (roomId) => {
+    const src = get().rooms.find((r) => r.id === roomId);
+    if (!src) return;
+    get().addRoom({
+      label: `${src.label} (copy)`,
+      zone: src.zone,
+      x: src.x + 36,
+      y: src.y + 36,
+      width: src.width,
+      height: src.height,
+      floorId: src.floorId,
+    });
+  },
+
+  addBedroomToLayout: (roomId) => {
+    const s = get();
+    const bt = s.project.buildingType;
+    if (!isResidentialBuilding(bt)) return;
+    const { max } = bedroomRangeForBuilding(bt);
+    const next = Math.min(max, (s.project.bedrooms ?? defaultBedroomsForBuilding(bt)) + 1);
+    get().applyBuildingLayout({ bedrooms: next, engineering: false, resetMap: false });
+    const bedroomsRooms = get().rooms.filter((r) => r.zone === 'bedroom');
+    const picked = bedroomsRooms[bedroomsRooms.length - 1];
+    if (picked) set({ selectedRoomId: picked.id });
+  },
 
   updateRoom: (id, patch) => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
 
@@ -677,16 +906,21 @@ export const useStudio = create<StudioState>((set, get) => ({
       project: s.project,
       rooms: s.rooms,
       bim: s.bim ?? undefined,
+      floors: s.floors,
+      activeFloorId: s.activeFloorId,
     };
   },
 
-  loadDesign: (file) =>
+  loadDesign: (file) => {
+    const { floors, activeFloorId } = normalizeFloors(file.floors);
     set({
       designName: file.designName ?? '',
       project: normalizeProject(file.project),
-      rooms: file.rooms ?? [],
+      rooms: (file.rooms ?? []).map((r) => ({ ...r, floorId: r.floorId ?? floors[0]!.id })),
       bim: file.bim ?? null,
-      nodes: file.nodes ?? [],
+      floors,
+      activeFloorId: file.activeFloorId && floors.some((f) => f.id === file.activeFloorId) ? file.activeFloorId : activeFloorId,
+      nodes: (file.nodes ?? []).map((n) => ({ ...n, floorId: n.floorId ?? floors[0]!.id })),
       edges: file.edges ?? [],
       controls: file.controls ?? {},
       map: file.map ?? null,
@@ -696,7 +930,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       simulating: false,
       simEnergyKwh: 0,
       floorPlanTool: file.map?.mode === 'blank' ? 'draw-room' : 'select',
-    }),
+    });
+  },
 
   hydrate: () => {
     if (typeof window === 'undefined') return;
@@ -851,6 +1086,254 @@ export const useStudio = create<StudioState>((set, get) => ({
       changes: Math.max(0, added),
     };
   },
+
+  addFloor: (label) => {
+    const s = get();
+    const level = s.floors.length ? Math.max(...s.floors.map((f) => f.level)) + 1 : 1;
+    const floor: DesignFloor = {
+      id: uid('floor'),
+      label: label ?? floorLabelForLevel(level),
+      level,
+      elevationM: level * 3,
+    };
+    set({ floors: [...s.floors, floor], activeFloorId: floor.id });
+  },
+
+  switchFloor: (floorId) => set({ activeFloorId: floorId, selectedNodeId: null, selectedRoomId: null }),
+
+  removeFloor: (floorId) =>
+    set((s) => {
+      if (s.floors.length <= 1) return s;
+      const floors = s.floors.filter((f) => f.id !== floorId);
+      const fallback = floors[0]!.id;
+      return {
+        floors,
+        activeFloorId: s.activeFloorId === floorId ? fallback : s.activeFloorId,
+        rooms: s.rooms.filter((r) => r.floorId !== floorId),
+        nodes: s.nodes.filter((n) => n.floorId !== floorId),
+        bim: s.bim
+          ? {
+              walls: s.bim.walls.filter((w) => w.floorId !== floorId),
+              openings: s.bim.openings.filter((o) => o.floorId !== floorId),
+              gardens: s.bim.gardens?.filter((g) => g.floorId !== floorId),
+            }
+          : null,
+      };
+    }),
+
+  addGarden: (label = 'Garden', x = -400, y = 120, width = 240, height = 180) =>
+    set((s) => {
+      const garden: DesignGarden = {
+        id: uid('garden'),
+        label,
+        x,
+        y,
+        width,
+        height,
+        floorId: s.activeFloorId,
+      };
+      const bim: BimModel = {
+        walls: s.bim?.walls ?? [],
+        openings: s.bim?.openings ?? [],
+        gardens: [...(s.bim?.gardens ?? []), garden],
+      };
+      return { bim };
+    }),
+
+  addOpening: (kind, x = 0, y = 0) =>
+    set((s) => {
+      const opening: DesignOpening = {
+        id: uid('open'),
+        kind,
+        x,
+        y,
+        width: kind === 'door' ? 80 : 100,
+        height: kind === 'door' ? 20 : 12,
+        floorId: s.activeFloorId,
+      };
+      const bim: BimModel = {
+        walls: s.bim?.walls ?? [],
+        openings: [...(s.bim?.openings ?? []), opening],
+        gardens: s.bim?.gardens,
+      };
+      return { bim };
+    }),
+
+  applyHdlScene: (sceneId) => {
+    const s = get();
+    if (!s.simulating) set({ simulating: true });
+    return runHdlScene(sceneId, s.nodes, (id, key, value) => get().setControl(id, key, value));
+  },
+
+  setMapOverlayMode: (mode) => {
+    persist('studio.mapOverlay', mode);
+    set({ mapOverlayMode: mode });
+  },
+
+  setEditingCableRoute: (cableId) => set({ editingCableRouteId: cableId, selectedNodeId: cableId }),
+
+  rerouteCable: (cableId) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) => (n.id === cableId ? rerouteCableNode(n, s.nodes, s.edges, s.rooms) : n)),
+    })),
+
+  rerouteAllCables: () =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, s.nodes, s.edges, s.rooms) : n,
+      ),
+    })),
+
+  updateCableRoutePoints: (cableId, points) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== cableId) return n;
+        const entry = getCatalogEntry(n.catalogId) as CableSpec | undefined;
+        return { ...n, params: applyRouteToCable(n, points, entry) };
+      }),
+    })),
+
+  toggleCableRoutes3d: () => {
+    const next = !get().showCableRoutes3d;
+    persist('studio.cableRoutes3d', next ? '1' : '0');
+    set({ showCableRoutes3d: next });
+  },
+
+  toggleOutletsOnMap: () => {
+    const next = !get().showOutletsOnMap;
+    persist('studio.outletsOnMap', next ? '1' : '0');
+    set({ showOutletsOnMap: next });
+  },
+
+  addOutletToRoom: (roomId, catalogId) => {
+    const s = get();
+    const room = s.rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    const entry = getCatalogEntry(catalogId);
+    if (!entry) return;
+    const pos = defaultPositionInRoom(room, catalogId);
+    const node: DesignNode = {
+      id: uid('outlet'),
+      catalogId,
+      label: `${room.label} ${entry.name[s.locale] ?? entry.name.en}`,
+      x: pos.x,
+      y: pos.y,
+      floorId: room.floorId ?? s.activeFloorId,
+      params: { roomId, showOnMap: true },
+    };
+    set((st) => ({
+      nodes: [...st.nodes, node],
+      selectedNodeId: node.id,
+      controls: { ...st.controls, [node.id]: defaultControlState(entry) },
+    }));
+  },
+
+  placeRoomOutlets: (roomId) => {
+    const s = get();
+    const targets = roomId ? s.rooms.filter((r) => r.id === roomId) : s.rooms;
+    const sockets = placeSocketOutlets(targets);
+    const appliances = placeAppliances(targets);
+    const placed = [...sockets, ...appliances];
+    const prefixFilter = (n: DesignNode) =>
+      roomId
+        ? n.id.startsWith(`outlet_${roomId}_`) || n.id.startsWith(`appliance_${roomId}_`)
+        : n.id.startsWith('outlet_') || n.id.startsWith('appliance_');
+    const kept = s.nodes.filter((n) => !prefixFilter(n));
+    set({ nodes: [...kept, ...placed] });
+    return { added: placed.length };
+  },
+
+  removeOutletsInRoom: (roomId) =>
+    set((s) => ({
+      nodes: s.nodes.filter((n) => {
+        const e = getCatalogEntry(n.catalogId);
+        if (e?.category !== 'SOCKET' && e?.category !== 'APPLIANCE') return true;
+        if (n.params.roomId === roomId) return false;
+        if (n.id.startsWith(`outlet_${roomId}_`) || n.id.startsWith(`appliance_${roomId}_`)) return false;
+        const room = s.rooms.find((r) => r.id === roomId);
+        if (!room) return true;
+        const cx = n.x + 21;
+        const cy = n.y + 21;
+        const inside = cx >= room.x && cx <= room.x + room.width && cy >= room.y && cy <= room.y + room.height;
+        return !inside;
+      }),
+    })),
+
+  assignVrfToRoom: (roomId) => {
+    const s = get();
+    const room = s.rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    const report = calculateVrfDistribution(s.rooms, s.project, s.nodes);
+    const row = report.rooms.find((r) => r.roomId === roomId);
+    if (!row) return;
+    const without = s.nodes.filter(
+      (n) => !(n.params.roomId === roomId && (getCatalogEntry(n.catalogId) as HvacSpec | undefined)?.hvacType === 'VRF_INDOOR'),
+    );
+    const added: DesignNode[] = [];
+    let unitIdx = 0;
+    for (const unit of row.indoorUnits) {
+      for (let q = 0; q < unit.qty; q++) {
+        const pos = indoorPositionInRoom(room, unit.style, unitIdx);
+        added.push({
+          id: uid('hvac_vrf'),
+          catalogId: unit.catalogId,
+          label: `${room.label} VRF ${unit.style}`,
+          x: pos.x,
+          y: pos.y,
+          floorId: room.floorId ?? s.activeFloorId,
+          params: {
+            roomId,
+            vrfGroupId: row.outdoorGroupId,
+            vrfRole: 'indoor',
+            branchAddress: row.branchAddress,
+            showOnMap: true,
+          },
+        });
+        unitIdx++;
+      }
+    }
+    set({ nodes: [...without, ...added], selectedNodeId: added[0]?.id ?? null });
+  },
+
+  setRoomVrfIndoor: (roomId, catalogId) => {
+    const s = get();
+    const room = s.rooms.find((r) => r.id === roomId);
+    const entry = getCatalogEntry(catalogId) as HvacSpec | undefined;
+    if (!room || entry?.hvacType !== 'VRF_INDOOR') return;
+    const report = calculateVrfDistribution(s.rooms, s.project, s.nodes);
+    const row = report.rooms.find((r) => r.roomId === roomId);
+    const pos = indoorPositionInRoom(room, entry.vrfIndoorStyle ?? 'wall', 0);
+    const without = s.nodes.filter(
+      (n) => !(n.params.roomId === roomId && (getCatalogEntry(n.catalogId) as HvacSpec | undefined)?.hvacType === 'VRF_INDOOR'),
+    );
+    const node: DesignNode = {
+      id: uid('hvac_vrf'),
+      catalogId,
+      label: `${room.label} VRF`,
+      x: pos.x,
+      y: pos.y,
+      floorId: room.floorId ?? s.activeFloorId,
+      params: {
+        roomId,
+        vrfGroupId: row?.outdoorGroupId ?? 'vrf_odu_0',
+        vrfRole: 'indoor',
+        branchAddress: row?.branchAddress ?? 'ODU.1',
+        showOnMap: true,
+      },
+    };
+    set({ nodes: [...without, node], selectedNodeId: node.id });
+  },
+
+  placeVrfLayout: () => {
+    const s = get();
+    const placed = placeVrfDistribution(s.rooms, s.project);
+    const filtered = s.nodes.filter((n) => {
+      const e = getCatalogEntry(n.catalogId) as HvacSpec | undefined;
+      return !n.id.startsWith('hvac_vrf_') && e?.hvacType !== 'VRF_INDOOR' && e?.hvacType !== 'VRF_OUTDOOR';
+    });
+    set({ nodes: [...filtered, ...placed] });
+    return { added: placed.length };
+  },
 }));
 
 // Debounced autosave of the design to localStorage.
@@ -869,6 +1352,8 @@ if (typeof window !== 'undefined') {
         project: s.project,
         rooms: s.rooms,
         bim: s.bim ?? undefined,
+        floors: s.floors,
+        activeFloorId: s.activeFloorId,
       };
       try {
         window.localStorage.setItem('studio.design', JSON.stringify(file));
@@ -879,12 +1364,15 @@ if (typeof window !== 'undefined') {
   });
 }
 
-function collectIssues(st: Pick<StudioState, 'nodes' | 'edges' | 'rooms' | 'project'>): Issue[] {
+function collectIssues(st: Pick<StudioState, 'nodes' | 'edges' | 'rooms' | 'project' | 'activeFloorId'>): Issue[] {
   const resolved = resolveNodes(st.nodes, getCatalogEntry);
-  const { issues: eng } = validateDesign(resolved, st.edges, CABLES as CableSpec[]);
-  const place = validatePlacement(st.nodes, st.rooms, getCatalogEntry);
-  const smart = suggestSmartFixes(st.project, st.nodes, st.edges, st.rooms);
-  return [...eng, ...place, ...smart];
+  const activeRooms = st.rooms.filter((r) => matchesFloor(r, st.activeFloorId));
+  const activeNodes = resolved.filter((n) => matchesFloor(n, st.activeFloorId));
+  const { issues: eng } = validateDesign(activeNodes, st.edges, CABLES as CableSpec[]);
+  const place = validatePlacement(st.nodes.filter((n) => matchesFloor(n, st.activeFloorId)), activeRooms, getCatalogEntry);
+  const lighting = validateLightingDesign(activeNodes, activeRooms);
+  const smart = suggestSmartFixes(st.project, st.nodes, st.edges, activeRooms);
+  return [...eng, ...place, ...lighting, ...smart];
 }
 
 function findMainPanelNodes(nodes: DesignNode[]): DesignNode[] {
@@ -898,20 +1386,4 @@ function pickBreaker(rating: number): CatalogEntry | undefined {
     .filter((p) => p.protectionType === 'MCB' || p.protectionType === 'MCCB')
     .sort((a, b) => a.ratedCurrentA - b.ratedCurrentA)
     .find((p) => p.ratedCurrentA >= rating);
-}
-
-function seedRoomsForBuilding(bt: ProjectInfo['buildingType']): DesignRoom[] {
-  if (bt === 'apartment' || bt === 'house' || bt === 'villa') {
-    return [
-      { id: 'room_living', label: 'Living', x: -220, y: -140, width: 300, height: 200, zone: 'general' },
-      { id: 'room_kitchen', label: 'Kitchen', x: 100, y: -140, width: 180, height: 140, zone: 'kitchen' },
-      { id: 'room_bed', label: 'Bedroom', x: -220, y: 80, width: 200, height: 160, zone: 'bedroom' },
-      { id: 'room_bath', label: 'Bathroom', x: 20, y: 80, width: 120, height: 100, zone: 'bathroom' },
-    ];
-  }
-  return [
-    { id: 'room_lobby', label: 'Lobby', x: -260, y: -160, width: 340, height: 180, zone: 'general' },
-    { id: 'room_office', label: 'Office', x: 100, y: -160, width: 220, height: 180, zone: 'office' },
-    { id: 'room_mech', label: 'MEP', x: -260, y: 40, width: 160, height: 140, zone: 'mechanical' },
-  ];
 }

@@ -14,6 +14,7 @@ import { validatePlacement } from '../lib/engine/placement-validation';
 import { suggestSmartFixes } from '../lib/engine/autofix';
 import { calculateHvacLoads } from '../lib/engine/hvac-loads';
 import { calculateLightingDesign } from '../lib/engine/lighting-design';
+import { validateLightingDesign } from '../lib/engine/lighting-validation';
 import { buildSmartTopology } from '../lib/engine/smarthome-topology';
 import { computeQuality, computeCompliance } from '../lib/engine/quality';
 import { simulate } from '../lib/engine/simulate';
@@ -30,13 +31,17 @@ export function useAnalysis() {
   const edges = useStudio((s) => s.edges);
   const rooms = useStudio((s) => s.rooms);
   const project = useStudio((s) => s.project);
+  const activeFloorId = useStudio((s) => s.activeFloorId);
 
   return useMemo(() => {
     const resolved = resolveNodes(nodes, getCatalogEntry);
-    const { issues: engIssues } = validateDesign(resolved, edges, CABLES as CableSpec[]);
-    const placeIssues = validatePlacement(nodes, rooms, getCatalogEntry);
-    const smartIssues = suggestSmartFixes(project, nodes, edges, rooms);
-    const issues = [...engIssues, ...placeIssues, ...smartIssues];
+    const activeRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
+    const activeResolved = resolved.filter((n) => !n.floorId || n.floorId === activeFloorId);
+    const { issues: engIssues } = validateDesign(activeResolved, edges, CABLES as CableSpec[]);
+    const placeIssues = validatePlacement(nodes.filter((n) => !n.floorId || n.floorId === activeFloorId), activeRooms, getCatalogEntry);
+    const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
+    const smartIssues = suggestSmartFixes(project, nodes, edges, activeRooms);
+    const issues = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
     const quality = computeQuality(issues, resolved.length);
     const compliance = computeCompliance(issues);
     const byNode = new Map<string, Issue[]>();
@@ -47,7 +52,7 @@ export function useAnalysis() {
       byNode.set(i.nodeId, arr);
     }
     return { issues, quality, compliance, byNode };
-  }, [nodes, edges, rooms, project]);
+  }, [nodes, edges, rooms, project, activeFloorId]);
 }
 
 /** Live simulation state per node (energised / active / current). */

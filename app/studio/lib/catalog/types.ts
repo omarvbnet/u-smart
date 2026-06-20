@@ -143,6 +143,8 @@ export type SourceSpec = CatalogEntryBase & {
 
 /* ----------------------------- Loads ------------------------------- */
 
+export type LightingFixtureType = 'DOWNLIGHT' | 'LINEAR' | 'SPOT' | 'MAGNETIC';
+
 export type LoadSpec = CatalogEntryBase & {
   domain: 'load';
   /** Active power in watts. */
@@ -151,6 +153,16 @@ export type LoadSpec = CatalogEntryBase & {
   phases: 1 | 3;
   powerFactor: number;
   demandFactor: number;
+  /** Lighting fixture classification (when category === LIGHTING). */
+  lightingType?: LightingFixtureType;
+  /** Nominal lumens per fixture. */
+  lumens?: number;
+  /** Beam angle in degrees (spot/downlight). */
+  beamAngleDeg?: number;
+  /** Track / linear length in mm. */
+  lengthMm?: number;
+  /** Map outlet / appliance kind (SOCKET or APPLIANCE category). */
+  outletKind?: 'socket' | 'double_socket' | 'washer' | 'dryer' | 'dishwasher' | 'oven' | 'fridge' | 'cooker' | 'water_heater';
 };
 
 /* ----------------------------- HVAC -------------------------------- */
@@ -158,12 +170,16 @@ export type LoadSpec = CatalogEntryBase & {
 export type HvacType =
   | 'SPLIT'
   | 'VRF'
+  | 'VRF_INDOOR'
+  | 'VRF_OUTDOOR'
   | 'CHILLER'
   | 'FCU'
   | 'AHU'
   | 'PACKAGE'
   | 'HEAT_PUMP'
   | 'UNDERFLOOR';
+
+export type VrfIndoorStyle = 'wall' | 'duct' | 'cassette' | 'floor';
 
 export type HvacSpec = CatalogEntryBase & {
   domain: 'hvac';
@@ -180,6 +196,10 @@ export type HvacSpec = CatalogEntryBase & {
   eer: number;
   voltage: number;
   phases: 1 | 3;
+  /** VRF indoor unit style. */
+  vrfIndoorStyle?: VrfIndoorStyle;
+  /** Max connected indoor units (outdoor modules). */
+  maxIndoorUnits?: number;
 };
 
 /* ---------------------------- Sensors ------------------------------ */

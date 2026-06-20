@@ -6,6 +6,19 @@
  */
 import type { CatalogEntry } from './catalog';
 
+/** A room zone on the floor plan (drawn from zero or AI-detected). */
+export type DesignRoom = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Zone classification for load / HVAC rules. */
+  zone: 'general' | 'bedroom' | 'kitchen' | 'bathroom' | 'office' | 'corridor' | 'mechanical';
+  floorId?: string;
+};
+
 /** A placed component instance on the canvas. */
 export type DesignNode = {
   id: string;
@@ -13,6 +26,7 @@ export type DesignNode = {
   label: string;
   x: number;
   y: number;
+  floorId?: string;
   /**
    * Instance overrides. For cables this includes `lengthM`; runtime simulation
    * state (energised, current, etc.) is stored under `runtime`.
@@ -31,18 +45,6 @@ export type DesignEdge = {
   cableId?: string;
 };
 
-/** A room zone on the floor plan (drawn from zero or AI-detected). */
-export type DesignRoom = {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  /** Zone classification for load / HVAC rules. */
-  zone: 'general' | 'bedroom' | 'kitchen' | 'bathroom' | 'office' | 'corridor' | 'mechanical';
-};
-
 /** Wall segment extracted from CAD or raster analysis. */
 export type DesignWall = {
   id: string;
@@ -52,6 +54,7 @@ export type DesignWall = {
   y2: number;
   thickness: number;
   layer?: string;
+  floorId?: string;
 };
 
 /** Door or window opening on the plan. */
@@ -64,12 +67,33 @@ export type DesignOpening = {
   height: number;
   rotation?: number;
   layer?: string;
+  floorId?: string;
+};
+
+/** Outdoor garden / landscape zone on the plan. */
+export type DesignGarden = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  floorId?: string;
+};
+
+/** Floor level in a multi-storey building. */
+export type DesignFloor = {
+  id: string;
+  label: string;
+  level: number;
+  elevationM: number;
 };
 
 /** Structured BIM-like geometry from plan analysis. */
 export type BimModel = {
   walls: DesignWall[];
   openings: DesignOpening[];
+  gardens?: DesignGarden[];
 };
 
 export type Design = {
@@ -79,6 +103,8 @@ export type Design = {
   edges: DesignEdge[];
   rooms?: DesignRoom[];
   bim?: BimModel;
+  floors?: DesignFloor[];
+  activeFloorId?: string;
 };
 
 export type ResolvedNode = DesignNode & { spec: CatalogEntry };

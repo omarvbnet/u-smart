@@ -36,12 +36,47 @@ export function EngineeringSymbol({ symbol, color = '#1e293b', size = 44, select
           {active && <circle cx={22} cy={18} r={6} fill="#fde047" opacity={0.9} />}
         </>,
       );
+    case 'lighting_linear':
+      return wrap(
+        <>
+          <rect x={6} y={16} width={32} height={8} rx={2} fill={fill} stroke={stroke} strokeWidth={1.5} />
+          {[12, 22, 32].map((x) => <circle key={x} cx={x} cy={20} r={2} fill={active ? '#fde047' : stroke} />)}
+        </>,
+      );
+    case 'lighting_spot':
+      return wrap(
+        <>
+          <circle cx={22} cy={14} r={6} fill={fill} stroke={stroke} strokeWidth={1.5} />
+          <path d="M22 20 L14 34 L30 34 Z" fill="none" stroke={stroke} strokeWidth={1} opacity={0.6} />
+          {active && <circle cx={22} cy={14} r={3} fill="#fbbf24" />}
+        </>,
+      );
+    case 'lighting_magnetic':
+      return wrap(
+        <>
+          <rect x={4} y={18} width={36} height={4} fill={stroke} />
+          {[10, 22, 34].map((x) => (
+            <g key={x}>
+              <rect x={x - 3} y={12} width={6} height={10} fill={fill} stroke={stroke} strokeWidth={1} />
+              {active && <circle cx={x} cy={10} r={2} fill="#eab308" />}
+            </g>
+          ))}
+        </>,
+      );
     case 'socket':
       return wrap(
         <>
           <rect x={10} y={10} width={24} height={24} rx={3} fill={fill} stroke={stroke} strokeWidth={1.5} />
           <circle cx={18} cy={22} r={2.5} fill={stroke} />
           <circle cx={26} cy={22} r={2.5} fill={stroke} />
+        </>,
+      );
+    case 'appliance':
+      return wrap(
+        <>
+          <rect x={8} y={12} width={28} height={22} rx={2} fill={fill} stroke={stroke} strokeWidth={1.5} />
+          <rect x={12} y={16} width={20} height={10} rx={1} fill="none" stroke={stroke} strokeWidth={1} />
+          <circle cx={22} cy={30} r={2} fill={stroke} />
         </>,
       );
     case 'switch':

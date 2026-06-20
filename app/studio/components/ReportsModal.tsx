@@ -177,11 +177,17 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
                 <p className="text-[11px] text-[var(--studio-muted)]">{lighting.totalFixtures} fixtures · {lighting.totalPowerW} W total</p>
                 <table className="w-full">
                   <thead>
-                    <tr><th className={th}>Room</th><th className={th}>Lux</th><th className={th}>Fixtures</th><th className={th}>W</th></tr>
+                    <tr><th className={th}>Room</th><th className={th}>Lux</th><th className={th}>{t('fixtureType')}</th><th className={th}>Fixtures</th><th className={th}>W</th></tr>
                   </thead>
                   <tbody>
                     {lighting.rooms.map((r) => (
-                      <tr key={r.roomId}><td className={td}>{r.label}</td><td className={td}>{r.luxTarget}</td><td className={td}>{r.fixturesRecommended}</td><td className={td}>{r.powerW}</td></tr>
+                      <tr key={r.roomId}>
+                        <td className={td}>{r.label}</td>
+                        <td className={td}>{r.luxTarget} → {r.achievedLux}</td>
+                        <td className={td}>{r.fixtureType}</td>
+                        <td className={td}>{r.fixturesRecommended}</td>
+                        <td className={td}>{r.powerW}</td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>

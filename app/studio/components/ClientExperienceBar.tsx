@@ -3,31 +3,33 @@
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { getCatalogEntry } from '../lib/catalog';
-import { Lightbulb, Moon, Sun, Wind, Blinds } from 'lucide-react';
+import { Lightbulb, Moon, Sun, Wind, Blinds, DoorOpen, DoorClosed, TreePine } from 'lucide-react';
+import type { HdlSceneId } from '../lib/engine/hdl-automation';
 
 /** Simplified scene controls for client walkthrough (pre-execution approval). */
 export function ClientExperienceBar() {
   const t = useT();
   const experienceMode = useStudio((s) => s.experienceMode);
   const nodes = useStudio((s) => s.nodes);
+  const applyScene = useStudio((s) => s.applyHdlScene);
   const setControl = useStudio((s) => s.setControl);
-  const execute = useStudio((s) => s.executeDesignCommand);
   const simulating = useStudio((s) => s.simulating);
   const toggleSimulation = useStudio((s) => s.toggleSimulation);
 
   if (experienceMode !== 'client') return null;
 
-  const setLoads = (on: boolean, level?: number) => {
-    for (const n of nodes) {
-      const e = getCatalogEntry(n.catalogId);
-      if (e?.domain === 'load' && e.category === 'LIGHTING') {
-        setControl(n.id, 'on', on);
-        if (level !== undefined) setControl(n.id, 'level', level);
-      }
-    }
+  const scene = (id: HdlSceneId) => {
+    if (!simulating) toggleSimulation();
+    applyScene(id);
   };
 
-  const scene = (cmd: string) => execute(cmd);
+  const hvacOn = () => {
+    if (!simulating) toggleSimulation();
+    for (const n of nodes) {
+      const e = getCatalogEntry(n.catalogId);
+      if (e?.domain === 'hvac') setControl(n.id, 'on', true);
+    }
+  };
 
   const btn =
     'flex flex-col items-center gap-0.5 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 px-3 py-2 text-[9px] font-semibold text-[var(--studio-text)] backdrop-blur transition hover:border-cyan-400';
@@ -42,19 +44,35 @@ export function ClientExperienceBar() {
             {t('startWalkthrough')}
           </button>
         )}
-        <button type="button" className={btn} onClick={() => setLoads(true, 100)}>
+        <button type="button" className={btn} onClick={() => scene('allLightsOn')}>
           <Lightbulb className="h-5 w-5 text-yellow-400" />
           {t('sceneAllLights')}
         </button>
-        <button type="button" className={btn} onClick={() => scene('Good night')}>
+        <button type="button" className={btn} onClick={() => scene('goodNight')}>
           <Moon className="h-5 w-5 text-indigo-400" />
           {t('sceneGoodNight')}
         </button>
-        <button type="button" className={btn} onClick={() => { for (const n of nodes) { const e = getCatalogEntry(n.catalogId); if (e?.domain === 'smarthome' && e.deviceClass.toLowerCase().includes('curtain')) setControl(n.id, 'level', 100); } }}>
+        <button type="button" className={btn} onClick={() => scene('openCurtains')}>
           <Blinds className="h-5 w-5 text-cyan-400" />
           {t('sceneOpenCurtains')}
         </button>
-        <button type="button" className={btn} onClick={() => { for (const n of nodes) { const e = getCatalogEntry(n.catalogId); if (e?.domain === 'hvac') setControl(n.id, 'on', true); } }}>
+        <button type="button" className={btn} onClick={() => scene('closeCurtains')}>
+          <Blinds className="h-5 w-5 text-slate-400" />
+          {t('sceneCloseCurtains')}
+        </button>
+        <button type="button" className={btn} onClick={() => scene('openDoors')}>
+          <DoorOpen className="h-5 w-5 text-amber-300" />
+          {t('sceneOpenDoors')}
+        </button>
+        <button type="button" className={btn} onClick={() => scene('closeDoors')}>
+          <DoorClosed className="h-5 w-5 text-amber-600" />
+          {t('sceneCloseDoors')}
+        </button>
+        <button type="button" className={btn} onClick={() => scene('gardenLights')}>
+          <TreePine className="h-5 w-5 text-emerald-400" />
+          {t('sceneGardenLights')}
+        </button>
+        <button type="button" className={btn} onClick={hvacOn}>
           <Wind className="h-5 w-5 text-sky-400" />
           {t('sceneHvacOn')}
         </button>

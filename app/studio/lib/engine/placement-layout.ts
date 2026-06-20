@@ -5,7 +5,9 @@ import type { DesignEdge, DesignNode, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import { calculateLightingDesign } from './lighting-design';
 import { calculateHvacLoads, type HvacLoadReport } from './hvac-loads';
+import { placeVrfDistribution } from './vrf-distribution';
 import { routeCableSegments } from './cable-routing';
+import { getCatalogEntry, type HvacSpec } from '../catalog';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -41,11 +43,14 @@ export function placeLightingFixtures(
       const rowIdx = Math.floor(i / cols);
       nodes.push({
         id: `${idPrefix}_${room.id}_${i}`,
-        catalogId: 'load-lighting',
-        label: `${room.label} L${i + 1}`,
+        catalogId: row.catalogId,
+        label: `${room.label} ${row.fixtureType} ${i + 1}`,
         x: room.x + padX + col * cellW + cellW / 2 - 21,
         y: room.y + padY + rowIdx * cellH + cellH / 2 - 21,
-        params: { powerW: Math.round(row.powerW / count) },
+        params: {
+          powerW: Math.round(row.powerW / count),
+          lightingType: row.fixtureType,
+        },
       });
     }
   }
@@ -60,6 +65,15 @@ export function placeHvacUnits(
 ): DesignNode[] {
   const loads = hvacReport ?? calculateHvacLoads(rooms, project.buildingType);
   const types = project.hvacMode === 'auto' ? loads.recommendedSystems : project.hvacTypes;
+  const useVrf =
+    types.includes('vrf') ||
+    types.includes('multi_split') ||
+    (project.hvacMode === 'auto' && loads.recommendedSystems.includes('vrf'));
+
+  if (useVrf) {
+    return placeVrfDistribution(rooms, project);
+  }
+
   const catalogId = HVAC_CATALOG[types[0] ?? 'split'] ?? 'hvac-split-3.5';
   const nodes: DesignNode[] = [];
 
@@ -97,7 +111,17 @@ export function placeHvacUnits(
 
 export function mergePlacementNodes(existing: DesignNode[], placed: DesignNode[], domain: 'light' | 'hvac'): DesignNode[] {
   const prefix = domain === 'light' ? 'light_' : 'hvac_auto_';
-  const filtered = existing.filter((n) => !n.id.startsWith(prefix) && !(domain === 'light' && n.catalogId === 'load-lighting' && n.id.startsWith('load_')));
+  const vrfPrefix = 'hvac_vrf_';
+  const lightCatalog = /^(load-lighting|load-downlight|load-linear|load-spot|load-magnetic)$/;
+  const filtered = existing.filter((n) => {
+    if (n.id.startsWith(prefix) || n.id.startsWith(vrfPrefix)) return false;
+    if (domain === 'light' && lightCatalog.test(n.catalogId) && n.id.startsWith('load_')) return false;
+    if (domain === 'hvac') {
+      const e = getCatalogEntry(n.catalogId) as HvacSpec | undefined;
+      if (e?.hvacType === 'VRF_INDOOR' || e?.hvacType === 'VRF_OUTDOOR') return false;
+    }
+    return true;
+  });
   return [...filtered, ...placed];
 }
 
