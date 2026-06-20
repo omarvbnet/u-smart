@@ -3,21 +3,16 @@
 import { computeLuxHeatmaps } from '../lib/engine/lux-heatmap';
 import { computeLoadHeatmaps } from '../lib/engine/load-heatmap';
 import { getTwinConnection } from '../lib/twin-stream';
-import { useEffect, useMemo, useDeferredValue } from 'react';
+import { createContext, createElement, useContext, useEffect, useMemo, useDeferredValue, type ReactNode } from 'react';
 import { useStudio } from '../lib/store';
 import { createTranslator } from '../lib/i18n';
-import { getCatalogEntry, type CableSpec } from '../lib/catalog';
-import { CABLES } from '../lib/catalog/cables';
+import { getCatalogEntry } from '../lib/catalog';
 import { resolveNodes } from '../lib/model';
-import { validateDesign, type Issue } from '../lib/engine/validation';
-import { validatePlacement } from '../lib/engine/placement-validation';
-import { suggestSmartFixes } from '../lib/engine/autofix';
 import { calculateHvacLoads } from '../lib/engine/hvac-loads';
 import { calculateLightingDesign } from '../lib/engine/lighting-design';
-import { validateLightingDesign } from '../lib/engine/lighting-validation';
 import { buildSmartTopology, isBusPowerAdequate } from '../lib/engine/smarthome-topology';
-import { computeQuality, computeCompliance } from '../lib/engine/quality';
 import { simulate } from '../lib/engine/simulate';
+import { computeDesignAnalysis } from '../lib/design-analysis';
 
 /** Translator bound to the current locale. */
 export function useT() {
@@ -25,8 +20,7 @@ export function useT() {
   return useMemo(() => createTranslator(locale), [locale]);
 }
 
-/** Severity badges on canvas — skips quality/compliance scoring for speed. */
-export function useIssueByNode() {
+function useDesignInputs() {
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
   const rooms = useStudio((s) => s.rooms);
@@ -34,69 +28,31 @@ export function useIssueByNode() {
   const activeFloorId = useStudio((s) => s.activeFloorId);
   const deferredNodes = useDeferredValue(nodes);
   const deferredEdges = useDeferredValue(edges);
-
-  return useMemo(() => {
-    const resolved = resolveNodes(deferredNodes, getCatalogEntry);
-    const activeRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
-    const activeResolved = resolved.filter((n) => !n.floorId || n.floorId === activeFloorId);
-    const { issues: engIssues } = validateDesign(activeResolved, deferredEdges, CABLES as CableSpec[]);
-    const placeIssues = validatePlacement(
-      deferredNodes.filter((n) => !n.floorId || n.floorId === activeFloorId),
-      activeRooms,
-      getCatalogEntry,
-    );
-    const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
-    const smartIssues = suggestSmartFixes(project, deferredNodes, deferredEdges, activeRooms);
-    const issues = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
-    const byNode = new Map<string, Issue[]>();
-    for (const i of issues) {
-      if (!i.nodeId) continue;
-      const arr = byNode.get(i.nodeId) ?? [];
-      arr.push(i);
-      byNode.set(i.nodeId, arr);
-    }
-    return byNode;
-  }, [deferredNodes, deferredEdges, rooms, project, activeFloorId]);
+  return { nodes, edges, rooms, project, activeFloorId, deferredNodes, deferredEdges };
 }
 
-/** Full validation + quality + compliance derived from the live design. */
-export function useAnalysis() {
-  const nodes = useStudio((s) => s.nodes);
-  const edges = useStudio((s) => s.edges);
-  const rooms = useStudio((s) => s.rooms);
-  const project = useStudio((s) => s.project);
-  const activeFloorId = useStudio((s) => s.activeFloorId);
-  const deferredNodes = useDeferredValue(nodes);
-  const deferredEdges = useDeferredValue(edges);
-
+/** Shared validation cache — one compute pass per design revision. */
+export function useDesignAnalysis() {
+  const { nodes, edges, rooms, project, activeFloorId, deferredNodes, deferredEdges } = useDesignInputs();
   return useMemo(() => {
-    const resolved = resolveNodes(deferredNodes, getCatalogEntry);
-    const activeRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
-    const activeResolved = resolved.filter((n) => !n.floorId || n.floorId === activeFloorId);
-    const { issues: engIssues } = validateDesign(activeResolved, deferredEdges, CABLES as CableSpec[]);
-    const placeIssues = validatePlacement(
-      deferredNodes.filter((n) => !n.floorId || n.floorId === activeFloorId),
-      activeRooms,
-      getCatalogEntry,
-    );
-    const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
-    const smartIssues = suggestSmartFixes(project, deferredNodes, deferredEdges, activeRooms);
-    const issues = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
-    const quality = computeQuality(issues, resolved.length);
-    const compliance = computeCompliance(issues);
-    const byNode = new Map<string, Issue[]>();
-    for (const i of issues) {
-      if (!i.nodeId) continue;
-      const arr = byNode.get(i.nodeId) ?? [];
-      arr.push(i);
-      byNode.set(i.nodeId, arr);
-    }
-    return { issues, quality, compliance, byNode, isStale: deferredNodes !== nodes || deferredEdges !== edges };
+    const analysis = computeDesignAnalysis(deferredNodes, deferredEdges, rooms, project, activeFloorId);
+    return { ...analysis, isStale: deferredNodes !== nodes || deferredEdges !== edges };
   }, [deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
 }
 
+/** @deprecated use useDesignAnalysis — kept for existing imports */
+export function useAnalysis() {
+  return useDesignAnalysis();
+}
+
+/** Canvas severity badges — same cache as useDesignAnalysis */
+export function useIssueByNode() {
+  const { byNode } = useDesignAnalysis();
+  return byNode;
+}
+
 /** Live simulation state per node (energised / active / current). */
-export function useSimulation() {
+function useSimulationState() {
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
   const controls = useStudio((s) => s.controls);
@@ -109,6 +65,19 @@ export function useSimulation() {
     const busPowerOk = isBusPowerAdequate(project, nodes);
     return simulate(resolved, edges, controls, { busPowerOk });
   }, [nodes, edges, controls, project, simulating]);
+}
+
+const SimulationContext = createContext<ReturnType<typeof simulate> | null>(null);
+const EMPTY_SIM = {} as ReturnType<typeof simulate>;
+
+/** One simulation pass shared by Canvas, HUD, and 3D twin. */
+export function SimulationProvider({ children }: { children: ReactNode }) {
+  const sim = useSimulationState();
+  return createElement(SimulationContext.Provider, { value: sim }, children);
+}
+
+export function useSimulation() {
+  return useContext(SimulationContext) ?? EMPTY_SIM;
 }
 
 /** HVAC, lighting, and smart-home engineering reports (deterministic). */
@@ -132,12 +101,13 @@ export function useLuxHeatmaps() {
   const nodes = useStudio((s) => s.nodes);
   const rooms = useStudio((s) => s.rooms);
   const show = useStudio((s) => s.showLuxHeatmap);
+  const deferredNodes = useDeferredValue(nodes);
 
   return useMemo(() => {
     if (!show || !rooms.length) return [];
-    const resolved = resolveNodes(nodes, getCatalogEntry);
+    const resolved = resolveNodes(deferredNodes, getCatalogEntry);
     return computeLuxHeatmaps(rooms, resolved);
-  }, [nodes, rooms, show]);
+  }, [deferredNodes, rooms, show]);
 }
 
 /** Sync digital twin SSE session with store when simulating. */
@@ -164,10 +134,11 @@ export function useLoadHeatmaps() {
   const nodes = useStudio((s) => s.nodes);
   const rooms = useStudio((s) => s.rooms);
   const show = useStudio((s) => s.showLoadHeatmap);
+  const deferredNodes = useDeferredValue(nodes);
 
   return useMemo(() => {
     if (!show || !rooms.length) return [];
-    const resolved = resolveNodes(nodes, getCatalogEntry);
+    const resolved = resolveNodes(deferredNodes, getCatalogEntry);
     return computeLoadHeatmaps(rooms, resolved);
-  }, [nodes, rooms, show]);
+  }, [deferredNodes, rooms, show]);
 }

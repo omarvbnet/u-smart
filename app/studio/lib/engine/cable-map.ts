@@ -190,6 +190,23 @@ export function rerouteCableNode(
   return { ...cableNode, label: String(params.cableLabel ?? cableNode.label), params };
 }
 
+/** Cables that must be re-routed when a node moves (direct edge neighbors only). */
+export function cableIdsLinkedToNode(nodeId: string, nodes: DesignNode[], edges: DesignEdge[]): Set<string> {
+  const ids = new Set<string>();
+  const self = nodes.find((n) => n.id === nodeId);
+  if (self && getCatalogEntry(self.catalogId)?.domain === 'cable') {
+    ids.add(nodeId);
+    return ids;
+  }
+  for (const e of edges) {
+    if (e.source !== nodeId && e.target !== nodeId) continue;
+    const otherId = e.source === nodeId ? e.target : e.source;
+    const other = nodes.find((n) => n.id === otherId);
+    if (other && getCatalogEntry(other.catalogId)?.domain === 'cable') ids.add(otherId);
+  }
+  return ids;
+}
+
 /** Re-route and auto-label every cable in the design. */
 export function labelAllDesignCables(
   nodes: DesignNode[],

@@ -41,13 +41,14 @@ import { declarationFor } from '../lib/engine/declarations';
 import { RTL_LOCALES } from '../lib/i18n';
 import { dropPosition, nodeFootprint, nodesForCanvasFit } from '../lib/node-layout';
 import type { PortKind } from '../lib/catalog';
+import type { DesignNode, DesignRoom } from '../lib/model';
 import {
   parseRoutePoints,
-  computeCableRoute,
   boundingBox,
   toLocalPoints,
   conduitTypeForCable,
   type ConduitType,
+  type RoutePoint,
 } from '../lib/engine/cable-map';
 import type { CableSpec } from '../lib/catalog';
 import { useLuxHeatmaps, useLoadHeatmaps, useDigitalTwinSync } from './hooks';
@@ -70,6 +71,47 @@ const roomRfId = (id: string) => `room_${id}`;
 
 function roomAreaM2(w: number, h: number): number {
   return (w / 50) * (h / 50);
+}
+
+function nodeCenterInRoom(n: DesignNode, r: DesignRoom): boolean {
+  if (n.params.roomId === r.id) return true;
+  const cx = n.x + 21;
+  const cy = n.y + 21;
+  return cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height;
+}
+
+function fallbackCableWorldPoints(n: DesignNode): RoutePoint[] {
+  const rot = Number(n.params.rotation ?? 0) * (Math.PI / 180);
+  const len = Math.max(40, Number(n.params.lengthM ?? 8) * 4);
+  return [
+    { x: n.x + 20, y: n.y + 9 },
+    { x: n.x + 20 + Math.cos(rot) * len, y: n.y + 9 + Math.sin(rot) * len },
+  ];
+}
+
+function buildRoomDeviceStats(nodes: DesignNode[], rooms: DesignRoom[], activeFloorId: string) {
+  const outlets = new Map<string, number>();
+  const vrf = new Map<string, number>();
+  for (const r of rooms) {
+    if (r.floorId && r.floorId !== activeFloorId) continue;
+    outlets.set(r.id, 0);
+    vrf.set(r.id, 0);
+  }
+  for (const n of nodes) {
+    if (n.floorId && n.floorId !== activeFloorId) continue;
+    const entry = getCatalogEntry(n.catalogId);
+    if (!entry) continue;
+    for (const r of rooms) {
+      if (r.floorId && r.floorId !== activeFloorId) continue;
+      if (!nodeCenterInRoom(n, r)) continue;
+      if (entry.category === 'SOCKET' || entry.category === 'APPLIANCE') {
+        if (n.params.showOnMap !== false) outlets.set(r.id, (outlets.get(r.id) ?? 0) + 1);
+      }
+      if ((entry as HvacSpec).hvacType === 'VRF_INDOOR') vrf.set(r.id, (vrf.get(r.id) ?? 0) + 1);
+      break;
+    }
+  }
+  return { outlets, vrf };
 }
 
 function CanvasInner() {
@@ -145,6 +187,11 @@ function CanvasInner() {
 
   const effectiveWalls = useMemo(() => mergeEffectiveWalls(bim, rooms, activeFloorId), [bim, rooms, activeFloorId]);
 
+  const roomDeviceStats = useMemo(
+    () => buildRoomDeviceStats(nodes, rooms, activeFloorId),
+    [nodes, rooms, activeFloorId],
+  );
+
   const storeRfNodes = useMemo<Node[]>(() => {
     const list: Node[] = [];
     if (map) {
@@ -213,23 +260,8 @@ function CanvasInner() {
     const loadByRoom = new Map(loadHeatmaps.map((h) => [h.roomId, h]));
     for (const r of rooms) {
       if (r.floorId && r.floorId !== activeFloorId) continue;
-      const outletCount = nodes.filter((n) => {
-        if (n.params.showOnMap === false) return false;
-        const e = getCatalogEntry(n.catalogId);
-        if (e?.category !== 'SOCKET' && e?.category !== 'APPLIANCE') return false;
-        if (n.params.roomId === r.id) return true;
-        const cx = n.x + 21;
-        const cy = n.y + 21;
-        return cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height;
-      }).length;
-      const vrfUnitCount = nodes.filter((n) => {
-        const e = getCatalogEntry(n.catalogId) as HvacSpec | undefined;
-        if (e?.hvacType !== 'VRF_INDOOR') return false;
-        if (n.params.roomId === r.id) return true;
-        const cx = n.x + 21;
-        const cy = n.y + 21;
-        return cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height;
-      }).length;
+      const outletCount = roomDeviceStats.outlets.get(r.id) ?? 0;
+      const vrfUnitCount = roomDeviceStats.vrf.get(r.id) ?? 0;
       list.push({
         id: roomRfId(r.id),
         type: 'room',
@@ -258,7 +290,7 @@ function CanvasInner() {
         if (entry?.domain !== 'cable') continue;
         if (n.params.showOnMap === false) continue;
         let world = parseRoutePoints(n.params);
-        if (world.length < 2) world = computeCableRoute(n, nodes, edges, rooms);
+        if (world.length < 2) world = fallbackCableWorldPoints(n);
         const box = boundingBox(world);
         const local = toLocalPoints(world, { x: box.x, y: box.y });
         const issues = byNode.get(n.id) ?? [];
@@ -360,7 +392,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap]);
+  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, roomDeviceStats]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 

@@ -37,7 +37,7 @@ import { applyHdlScene as runHdlScene, type HdlSceneId } from './engine/hdl-auto
 import { isBusPowerAdequate, busPowerStatus } from './engine/smarthome-topology';
 import { validateLightingDesign } from './engine/lighting-validation';
 import type { MapOverlayMode } from './engine/cable-map';
-import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, type RoutePoint } from './engine/cable-map';
+import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, cableIdsLinkedToNode, type RoutePoint } from './engine/cable-map';
 import { wireRoomLoads } from './engine/placement-layout';
 import {
   placeSocketOutlets,
@@ -496,9 +496,12 @@ export const useStudio = create<StudioState>((set, get) => ({
   moveNode: (id, x, y) =>
     set((s) => {
       let nodes = s.nodes.map((n) => (n.id === id ? { ...n, x, y } : n));
-      nodes = nodes.map((n) =>
-        getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, s.edges, s.rooms) : n,
-      );
+      const cableIds = cableIdsLinkedToNode(id, nodes, s.edges);
+      if (cableIds.size > 0) {
+        nodes = nodes.map((n) =>
+          cableIds.has(n.id) ? rerouteCableNode(n, nodes, s.edges, s.rooms) : n,
+        );
+      }
       return withHistory(s, { nodes });
     }),
 
@@ -1689,31 +1692,68 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 }));
 
-// Debounced autosave of the design to localStorage.
+// Debounced autosave — only when design fields change (not selection/sim UI).
 if (typeof window !== 'undefined') {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let lastNodes = useStudio.getState().nodes;
+  let lastEdges = useStudio.getState().edges;
+  let lastRooms = useStudio.getState().rooms;
+  let lastControls = useStudio.getState().controls;
+  let lastBim = useStudio.getState().bim;
+  let lastDesignName = useStudio.getState().designName;
+  let lastMap = useStudio.getState().map;
+  let lastProject = useStudio.getState().project;
+  let lastFloors = useStudio.getState().floors;
+  let lastActiveFloorId = useStudio.getState().activeFloorId;
+
   useStudio.subscribe((s) => {
+    if (
+      s.nodes === lastNodes &&
+      s.edges === lastEdges &&
+      s.rooms === lastRooms &&
+      s.controls === lastControls &&
+      s.bim === lastBim &&
+      s.designName === lastDesignName &&
+      s.map === lastMap &&
+      s.project === lastProject &&
+      s.floors === lastFloors &&
+      s.activeFloorId === lastActiveFloorId
+    ) {
+      return;
+    }
+    lastNodes = s.nodes;
+    lastEdges = s.edges;
+    lastRooms = s.rooms;
+    lastControls = s.controls;
+    lastBim = s.bim;
+    lastDesignName = s.designName;
+    lastMap = s.map;
+    lastProject = s.project;
+    lastFloors = s.floors;
+    lastActiveFloorId = s.activeFloorId;
+
     clearTimeout(timer);
     timer = setTimeout(() => {
+      const st = useStudio.getState();
       const file: DesignFile = {
         version: 1,
-        designName: s.designName,
-        nodes: s.nodes,
-        edges: s.edges,
-        controls: s.controls,
-        map: s.map,
-        project: s.project,
-        rooms: s.rooms,
-        bim: s.bim ?? undefined,
-        floors: s.floors,
-        activeFloorId: s.activeFloorId,
+        designName: st.designName,
+        nodes: st.nodes,
+        edges: st.edges,
+        controls: st.controls,
+        map: st.map,
+        project: st.project,
+        rooms: st.rooms,
+        bim: st.bim ?? undefined,
+        floors: st.floors,
+        activeFloorId: st.activeFloorId,
       };
       try {
         window.localStorage.setItem('studio.design', JSON.stringify(file));
       } catch {
         /* quota / serialization issues ignored */
       }
-    }, 700);
+    }, 900);
   });
 }
 

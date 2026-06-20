@@ -13,7 +13,7 @@ import { SimulationHud } from './SimulationHud';
 import { TwinChainPanel } from './TwinChainPanel';
 import { SetupWizard } from './SetupWizard';
 import { useStudio } from '../lib/store';
-import { useAnalysis, useT } from './hooks';
+import { useAnalysis, useT, SimulationProvider } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
 import { readShareFromHash } from '../lib/share';
 import { SlidersHorizontal, ShieldCheck, Gauge, Building2, PanelLeft } from 'lucide-react';
@@ -142,8 +142,10 @@ export function Workspace() {
             )}
           </div>
           <div className="relative min-h-0 flex-1">
-            <Canvas />
-            <SimulationHud />
+            <SimulationProvider>
+              <Canvas />
+              <SimulationHud />
+            </SimulationProvider>
             <TwinChainPanel />
             {!clientMode && <BusMonitor />}
             <div className="absolute bottom-3 ltr:right-3 rtl:left-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur pointer-events-none">

@@ -1,7 +1,7 @@
 import type { DesignNode, DesignEdge, DesignRoom, BimModel, DesignFloor } from './model';
 import type { ControlState } from './controls';
 
-export const HISTORY_LIMIT = 50;
+export const HISTORY_LIMIT = 35;
 
 export type DesignHistorySnapshot = {
   nodes: DesignNode[];
