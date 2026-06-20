@@ -1,19 +1,21 @@
 /**
  * Generate an initial engineering layout from wizard selections + optional rooms.
  */
-import type { DesignNode, DesignEdge, DesignRoom } from '../model';
+import type { DesignNode, DesignEdge, DesignRoom, BimModel } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import type { StudioLocale } from '../i18n';
 import { cableRunRouted } from './cable-routing';
-import { rerouteCableNode, labelAllDesignCables, formatCableLabel, conduitTypeForCable } from './cable-map';
+import { labelCablesOnly, formatCableLabel, conduitTypeForCable } from './cable-map';
 import { getCatalogEntry, type CableSpec } from '../catalog';
 import { placeLightingFixtures, placeHvacUnits, mergePlacementNodes } from './placement-layout';
 import { placeSocketOutlets, placeAppliances, mergeOutletNodes } from './outlet-placement';
-import { seedRoomsForBuilding } from './residential-layouts';
 import { seedRoomsForProject } from './floor-layout';
 import { placeSmartChannelSystem } from './smart-channel-layout';
 import { placeRoomControls } from './room-controls-layout';
+import { buildBimOpenings, mergeOpeningActuators } from './opening-layout';
+import { calculateLightingDesign, type LightingDesignReport } from './lighting-design';
 import type { ControlState } from '../controls';
+import { defaultControlState } from '../controls';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -198,11 +200,58 @@ export function buildStarterDesign(
     });
   }
 
-  const routedNodes = nodes.map((n) =>
-    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, edges, targets) : n,
-  );
+  const routedNodes = nodes;
 
   return { nodes: routedNodes, edges, name: names[locale] };
+}
+
+function buildControlsForNodes(
+  nodes: DesignNode[],
+  extra: Record<string, ControlState>,
+): Record<string, ControlState> {
+  const controls: Record<string, ControlState> = { ...extra };
+  for (const n of nodes) {
+    if (controls[n.id]) continue;
+    const entry = getCatalogEntry(n.catalogId);
+    if (!entry) continue;
+    if (
+      entry.domain === 'load' ||
+      entry.domain === 'smarthome' ||
+      entry.domain === 'hvac' ||
+      entry.category === 'APPLIANCE' ||
+      entry.category === 'SOCKET'
+    ) {
+      controls[n.id] = defaultControlState(entry);
+    }
+  }
+  return controls;
+}
+
+/** Full engineering layout from wizard project settings (used after setup). */
+export function generateProjectDesign(
+  project: ProjectInfo,
+  rooms: DesignRoom[],
+  locale: StudioLocale,
+  activeFloorId?: string,
+): {
+  nodes: DesignNode[];
+  edges: DesignEdge[];
+  controls: Record<string, ControlState>;
+  designName: string;
+  bim: BimModel;
+} {
+  const starter = buildStarterDesign(project, locale, rooms);
+  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges, locale);
+  const pack = buildBimOpenings(rooms, project, locale, activeFloorId);
+  const nodes = mergeOpeningActuators(placed.nodes, pack.actuatorNodes);
+  const controls = buildControlsForNodes(nodes, { ...placed.controls, ...pack.controls });
+  return {
+    nodes,
+    edges: placed.edges,
+    controls,
+    designName: starter.name,
+    bim: { walls: [], openings: pack.bim.openings, gardens: [] },
+  };
 }
 
 /** Replace single center lights with calculated fixture grid + reposition HVAC from loads. */
@@ -215,7 +264,8 @@ export function enhanceDesignPlacement(
 ): { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } {
   let nextNodes = [...nodes];
   let nextEdges = [...edges];
-  const lights = placeLightingFixtures(rooms);
+  const lightingReport = calculateLightingDesign(rooms);
+  const lights = placeLightingFixtures(rooms, 'light', lightingReport);
   nextNodes = mergePlacementNodes(nextNodes, lights, 'light');
   const hvacNodes = placeHvacUnits(rooms, project);
   nextNodes = mergePlacementNodes(nextNodes, hvacNodes, 'hvac');
@@ -229,12 +279,12 @@ export function enhanceDesignPlacement(
     smartControls = smart.controls;
   }
 
-  const roomControls = placeRoomControls(project, rooms, nextNodes, nextEdges, locale);
+  const roomControls = placeRoomControls(project, rooms, nextNodes, nextEdges, locale, lightingReport);
   nextNodes = roomControls.nodes;
   nextEdges = roomControls.edges;
   smartControls = { ...smartControls, ...roomControls.controls };
 
-  nextNodes = labelAllDesignCables(nextNodes, nextEdges, rooms);
+  nextNodes = labelCablesOnly(nextNodes);
   return { nodes: nextNodes, edges: nextEdges, controls: smartControls };
 }
 

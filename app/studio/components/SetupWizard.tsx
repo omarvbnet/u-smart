@@ -113,14 +113,13 @@ export function SetupWizard({ onComplete }: Props) {
       setupComplete: true,
       floorPlanSource: fp === 'zero' ? 'zero' : fp === 'import' ? 'import' : 'none',
     };
+    onComplete();
     if (projectBrief.trim() && generate) {
       completeWizard(finalized, { generateDesign: false, floorPlan: fp });
       generateFromBrief(projectBrief.trim());
-      onComplete();
       return;
     }
     completeWizard(finalized, { generateDesign: generate, floorPlan: fp });
-    onComplete();
   };
 
   const steps = [

@@ -5,7 +5,7 @@
 import type { DesignEdge, DesignNode, DesignRoom } from '../model';
 import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
-import { calculateLightingDesign } from './lighting-design';
+import { calculateLightingDesign, type LightingDesignReport } from './lighting-design';
 import { getCatalogEntry } from '../catalog';
 import { defaultControlState, type ControlState } from '../controls';
 import type { SmartHomeSpec } from '../catalog';
@@ -71,8 +71,9 @@ export function placeLightingSwitches(
   rooms: DesignRoom[],
   locale: StudioLocale,
   existingNodes: DesignNode[],
+  lightingReport?: LightingDesignReport,
 ): { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } {
-  const lighting = calculateLightingDesign(rooms);
+  const lighting = lightingReport ?? calculateLightingDesign(rooms);
   const lightByRoom = new Map(lighting.rooms.map((r) => [r.roomId, r.fixturesRecommended]));
   const nodes: DesignNode[] = [];
   const edges: DesignEdge[] = [];
@@ -210,8 +211,9 @@ export function placeRoomControls(
   nodes: DesignNode[],
   edges: DesignEdge[],
   locale: StudioLocale,
+  lightingReport?: LightingDesignReport,
 ): { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } {
-  const switches = placeLightingSwitches(project, rooms, locale, nodes);
+  const switches = placeLightingSwitches(project, rooms, locale, nodes, lightingReport);
   let nextNodes = mergeRoomControlNodes(nodes, switches.nodes, 'switch');
   nextNodes = mergeRoomControlNodes(nextNodes, placeTvUnits(rooms, locale), 'tv');
   let nextEdges = mergeRoomControlEdges(edges, switches.edges);

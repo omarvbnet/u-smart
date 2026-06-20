@@ -21,12 +21,13 @@ export function floorPlanSizeForBuilding(buildingType: BuildingType): BlankFloor
 }
 
 /** SVG data URL used as the map layer background (lightweight, no base64 photo). */
-export function blankFloorPlanDataUrl(width: number, height: number, gridPx = 40): string {
+export function blankFloorPlanDataUrl(width: number, height: number, gridPx?: number): string {
+  const step = gridPx ?? (width > 1400 || height > 1200 ? 80 : 40);
   const lines: string[] = [];
-  for (let x = 0; x <= width; x += gridPx) {
+  for (let x = 0; x <= width; x += step) {
     lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${height}" />`);
   }
-  for (let y = 0; y <= height; y += gridPx) {
+  for (let y = 0; y <= height; y += step) {
     lines.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" />`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">

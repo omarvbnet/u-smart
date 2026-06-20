@@ -16,7 +16,7 @@ import { useStudio } from '../lib/store';
 import { useAnalysis, useT, SimulationProvider } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
 import { readShareFromHash } from '../lib/share';
-import { SlidersHorizontal, ShieldCheck, Gauge, Building2, PanelLeft } from 'lucide-react';
+import { SlidersHorizontal, ShieldCheck, Gauge, Building2, PanelLeft, Loader2 } from 'lucide-react';
 
 type Tab = 'properties' | 'validation' | 'quality' | 'project';
 
@@ -33,6 +33,7 @@ export function Workspace() {
   const undo = useStudio((s) => s.undo);
   const redo = useStudio((s) => s.redo);
   const applyingFixes = useStudio((s) => s.applyingFixes);
+  const generatingProject = useStudio((s) => s.generatingProject);
   const project = useStudio((s) => s.project);
   const { issues } = useAnalysis();
   const [tab, setTab] = useState<Tab>('validation');
@@ -146,6 +147,15 @@ export function Workspace() {
               <Canvas />
               <SimulationHud />
             </SimulationProvider>
+            {generatingProject && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-8 py-6 shadow-2xl">
+                  <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+                  <p className="text-sm font-semibold text-[var(--studio-text)]">{t('generatingProject')}</p>
+                  <p className="max-w-xs text-center text-xs text-[var(--studio-muted)]">{t('generatingProjectHint')}</p>
+                </div>
+              </div>
+            )}
             <TwinChainPanel />
             {!clientMode && <BusMonitor />}
             <div className="absolute bottom-3 ltr:right-3 rtl:left-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur pointer-events-none">

@@ -85,13 +85,15 @@ export function computeCableRoute(
   nodes: DesignNode[],
   edges: DesignEdge[],
   rooms: DesignRoom[],
+  nodeById?: Map<string, DesignNode>,
 ): RoutePoint[] {
+  const lookup = nodeById ?? new Map(nodes.map((n) => [n.id, n]));
   const linkedIds = edges
     .filter((e) => e.source === cableNode.id || e.target === cableNode.id)
     .map((e) => (e.source === cableNode.id ? e.target : e.source));
 
   const endpoints = linkedIds
-    .map((id) => nodes.find((n) => n.id === id))
+    .map((id) => lookup.get(id))
     .filter((n): n is DesignNode => !!n && getCatalogEntry(n.catalogId)?.domain !== 'cable');
 
   if (endpoints.length >= 2) {
@@ -207,13 +209,31 @@ export function cableIdsLinkedToNode(nodeId: string, nodes: DesignNode[], edges:
   return ids;
 }
 
+/** Auto-label cables without recomputing geometry (fast path during project generation). */
+export function labelCablesOnly(nodes: DesignNode[]): DesignNode[] {
+  return nodes.map((n) => {
+    const entry = getCatalogEntry(n.catalogId) as CableSpec | undefined;
+    if (!entry || entry.domain !== 'cable') return n;
+    const conduitType = (n.params.conduitType as ConduitType | undefined) ?? conduitTypeForCable(entry);
+    const roomLabel = typeof n.params.roomLabel === 'string' ? n.params.roomLabel : undefined;
+    const circuitIdx = Number(n.params.circuitIndex ?? 0);
+    const label = formatCableLabel(roomLabel, entry, circuitIdx, conduitType);
+    return { ...n, label, params: { ...n.params, cableLabel: label, conduitType } };
+  });
+}
+
 /** Re-route and auto-label every cable in the design. */
 export function labelAllDesignCables(
   nodes: DesignNode[],
   edges: DesignEdge[],
   rooms: DesignRoom[],
 ): DesignNode[] {
-  return nodes.map((n) =>
-    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, edges, rooms) : n,
-  );
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  return nodes.map((n) => {
+    if (getCatalogEntry(n.catalogId)?.domain !== 'cable') return n;
+    const entry = getCatalogEntry(n.catalogId) as CableSpec | undefined;
+    const points = computeCableRoute(n, nodes, edges, rooms, nodeById);
+    const params = applyRouteToCable(n, points, entry);
+    return { ...n, label: String(params.cableLabel ?? n.label), params };
+  });
 }

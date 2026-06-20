@@ -4,7 +4,7 @@
 import type { DesignEdge, DesignNode, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import { primaryCoolingSystem, effectiveHvacTypes } from '../project';
-import { calculateLightingDesign } from './lighting-design';
+import { calculateLightingDesign, type LightingDesignReport } from './lighting-design';
 import { calculateHvacLoads, type HvacLoadReport } from './hvac-loads';
 import { placeVrfDistribution } from './vrf-distribution';
 import { routeCableSegments } from './cable-routing';
@@ -26,11 +26,12 @@ const HVAC_CATALOG: Record<HvacSystemType, string> = {
 export function placeLightingFixtures(
   rooms: DesignRoom[],
   idPrefix = 'light',
+  report?: LightingDesignReport,
 ): DesignNode[] {
-  const report = calculateLightingDesign(rooms);
+  const lighting = report ?? calculateLightingDesign(rooms);
   const nodes: DesignNode[] = [];
 
-  for (const row of report.rooms) {
+  for (const row of lighting.rooms) {
     const room = rooms.find((r) => r.id === row.roomId);
     if (!room) continue;
     const count = row.fixturesRecommended;

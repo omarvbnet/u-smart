@@ -33,11 +33,21 @@ function useDesignInputs() {
 
 /** Shared validation cache — one compute pass per design revision. */
 export function useDesignAnalysis() {
+  const generatingProject = useStudio((s) => s.generatingProject);
   const { nodes, edges, rooms, project, activeFloorId, deferredNodes, deferredEdges } = useDesignInputs();
   return useMemo(() => {
+    if (generatingProject) {
+      return {
+        issues: [],
+        byNode: new Map<string, import('../lib/engine/validation').Issue[]>(),
+        quality: { overall: 0, factors: [] },
+        compliance: [],
+        isStale: false,
+      };
+    }
     const analysis = computeDesignAnalysis(deferredNodes, deferredEdges, rooms, project, activeFloorId);
     return { ...analysis, isStale: deferredNodes !== nodes || deferredEdges !== edges };
-  }, [deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
+  }, [generatingProject, deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
 }
 
 /** @deprecated use useDesignAnalysis — kept for existing imports */

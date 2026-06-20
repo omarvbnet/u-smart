@@ -16,7 +16,8 @@ import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
-import { buildStarterDesign, enhanceDesignPlacement } from './engine/starter-design';
+import { buildStarterDesign, enhanceDesignPlacement, generateProjectDesign } from './engine/starter-design';
+import { invalidateDesignAnalysisCache } from './design-analysis';
 import {
   seedRoomsForBuilding,
   isResidentialBuilding,
@@ -124,6 +125,7 @@ type StudioState = {
   canvasFitSeq: number;
   suppressCanvasFit: boolean;
   applyingFixes: boolean;
+  generatingProject: boolean;
   visualizationMode: VisualizationMode;
   experienceMode: ExperienceMode;
   assistantOpen: boolean;
@@ -251,6 +253,60 @@ type StudioState = {
 
 let counter = 0;
 const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(counter++).toString(36)}`;
+
+const CABLE_REROUTE_BATCH = 30;
+
+/** Spread cable geometry work across idle frames so project creation stays responsive. */
+function scheduleDeferredCableReroute(
+  getState: () => StudioState,
+  setState: (patch: Partial<StudioState>) => void,
+): void {
+  if (typeof window === 'undefined') return;
+  const run = () => {
+    const s = getState();
+    const cableIds = s.nodes.filter((n) => getCatalogEntry(n.catalogId)?.domain === 'cable').map((n) => n.id);
+    if (!cableIds.length) return;
+
+    let index = 0;
+    let working = s.nodes;
+
+    const step = () => {
+      const batch = cableIds.slice(index, index + CABLE_REROUTE_BATCH);
+      if (!batch.length) {
+        setState({ nodes: working });
+        invalidateDesignAnalysisCache();
+        return;
+      }
+      const batchSet = new Set(batch);
+      const edges = getState().edges;
+      const rooms = getState().rooms;
+      const nodeById = new Map(working.map((n) => [n.id, n]));
+      working = working.map((n) => {
+        if (!batchSet.has(n.id)) return n;
+        const entry = getCatalogEntry(n.catalogId);
+        if (entry?.domain !== 'cable') return n;
+        const points = computeCableRoute(n, working, edges, rooms, nodeById);
+        const params = applyRouteToCable(n, points, entry as CableSpec);
+        return { ...n, label: String(params.cableLabel ?? n.label), params };
+      });
+      index += batch.length;
+      if (index < cableIds.length) {
+        window.requestAnimationFrame(step);
+      } else {
+        setState({ nodes: working });
+        invalidateDesignAnalysisCache();
+      }
+    };
+
+    window.requestAnimationFrame(step);
+  };
+
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    window.setTimeout(run, 16);
+  }
+}
 
 function persist(key: string, value: string) {
   if (typeof window !== 'undefined') {
@@ -402,6 +458,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   canvasFitSeq: 0,
   suppressCanvasFit: false,
   applyingFixes: false,
+  generatingProject: false,
   visualizationMode: initialVisualizationMode(),
   experienceMode: initialExperienceMode(),
   assistantOpen: false,
@@ -737,10 +794,6 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (rooms.length === 0 || options.generateDesign) {
       rooms = seedRoomsForProject(mergedProject);
     }
-    let nodes = s.nodes;
-    let edges = s.edges;
-    let controls = s.controls;
-    let designName = s.designName;
     let map = s.map;
     let floorPlanTool = s.floorPlanTool;
     let pendingMapImport = false;
@@ -761,50 +814,70 @@ export const useStudio = create<StudioState>((set, get) => ({
       pendingMapImport = true;
     }
 
-    if (options.generateDesign) {
-      const starter = buildStarterDesign(mergedProject, s.locale, rooms);
-      const placed = enhanceDesignPlacement(mergedProject, rooms, starter.nodes, starter.edges, s.locale);
-      nodes = placed.nodes;
-      edges = placed.edges;
-      designName = starter.name;
-      controls = {};
-      for (const n of nodes) {
-        const entry = getCatalogEntry(n.catalogId);
-        if (entry) controls[n.id] = defaultControlState(entry);
-      }
-      controls = { ...controls, ...placed.controls };
-    }
-
-    let bim = s.bim;
-    if (rooms.length > 0) {
-      const pack = buildBimOpenings(rooms, mergedProject, s.locale, s.activeFloorId);
-      bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
-      if (mergedProject.smartBuilding || options.generateDesign) {
-        nodes = mergeOpeningActuators(nodes, pack.actuatorNodes);
-        controls = { ...controls, ...pack.controls };
-      }
-    }
-
-    set({
+    const basePatch = {
       project: mergedProject,
       floors,
       activeFloorId: floors[0]!.id,
       rooms,
-      nodes,
-      edges,
-      controls,
-      designName,
       map,
-      bim,
       floorPlanTool,
       pendingMapImport,
       selectedNodeId: null,
       selectedRoomId: null,
       selectedOpeningId: null,
       selectedWallId: null,
-      historyPast: [],
-      historyFuture: [],
+      historyPast: [] as StudioState['historyPast'],
+      historyFuture: [] as StudioState['historyFuture'],
+    };
+
+    if (!options.generateDesign) {
+      let nodes = s.nodes;
+      let edges = s.edges;
+      let controls = s.controls;
+      let bim = s.bim;
+      if (rooms.length > 0) {
+        const pack = buildBimOpenings(rooms, mergedProject, s.locale, floors[0]!.id);
+        bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
+        if (mergedProject.smartBuilding) {
+          nodes = mergeOpeningActuators(nodes, pack.actuatorNodes);
+          controls = { ...controls, ...pack.controls };
+        }
+      }
+      set({ ...basePatch, nodes, edges, controls, bim, generatingProject: false });
+      return;
+    }
+
+    invalidateDesignAnalysisCache();
+    set({
+      ...basePatch,
+      generatingProject: true,
+      nodes: [],
+      edges: [],
+      controls: {},
+      bim: null,
+      designName: s.designName,
     });
+
+    const locale = s.locale;
+    const activeFloorId = floors[0]!.id;
+    window.setTimeout(() => {
+      try {
+        const result = generateProjectDesign(mergedProject, rooms, locale, activeFloorId);
+        invalidateDesignAnalysisCache();
+        set({
+          nodes: result.nodes,
+          edges: result.edges,
+          controls: result.controls,
+          designName: result.designName,
+          bim: result.bim,
+          generatingProject: false,
+          canvasFitSeq: get().canvasFitSeq + 1,
+        });
+        scheduleDeferredCableReroute(get, set);
+      } catch {
+        set({ generatingProject: false });
+      }
+    }, 0);
   },
 
   reopenWizard: () => set((s) => ({ project: { ...s.project, setupComplete: false } })),
@@ -1280,31 +1353,33 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   generateFromBrief: (text) => {
-    try {
-      const parsed = parseProjectBrief(text, get().project);
-      const result = runAutonomousPipeline(parsed.project, parsed.rooms, get().locale);
-      set({
-        project: result.project,
-        designName: parsed.designName,
-        nodes: result.nodes,
-        edges: result.edges,
-        rooms: result.rooms,
-        controls: result.controls,
-        map: result.map,
-        floorPlanTool: 'select',
-        selectedNodeId: null,
-        selectedRoomId: null,
-        autonomousAssumptions: [...parsed.assumptions, ...result.assumptions],
-        canvasFitSeq: get().canvasFitSeq + 1,
-      });
-      return {
-        ok: true,
-        message: `Autonomous design generated: ${result.nodes.length} devices, ${result.rooms.length} rooms, BOQ ≈ $${Math.round(result.boqGrandTotal)}.`,
-        assumptions: get().autonomousAssumptions,
-      };
-    } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : 'Generation failed', assumptions: [] };
-    }
+    set({ generatingProject: true });
+    window.setTimeout(() => {
+      try {
+        const parsed = parseProjectBrief(text, get().project);
+        const result = runAutonomousPipeline(parsed.project, parsed.rooms, get().locale);
+        invalidateDesignAnalysisCache();
+        set({
+          project: result.project,
+          designName: result.designName,
+          nodes: result.nodes,
+          edges: result.edges,
+          rooms: result.rooms,
+          controls: result.controls,
+          map: result.map,
+          floorPlanTool: 'select',
+          selectedNodeId: null,
+          selectedRoomId: null,
+          autonomousAssumptions: [...parsed.assumptions, ...result.assumptions],
+          canvasFitSeq: get().canvasFitSeq + 1,
+          generatingProject: false,
+        });
+        scheduleDeferredCableReroute(get, set);
+      } catch (e) {
+        set({ generatingProject: false });
+      }
+    }, 0);
+    return { ok: true, message: 'Generating design…', assumptions: [] };
   },
 
   setBim: (bim) => set({ bim }),
