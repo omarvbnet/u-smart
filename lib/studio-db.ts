@@ -3,7 +3,7 @@
  */
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
-import type { BuildingType, ProjectInfo } from '@/app/studio/lib/project';
+import { normalizeProject, type BuildingType, type ProjectInfo } from '@/app/studio/lib/project';
 import type { DesignFile } from '@/app/studio/lib/store';
 import type { StudioProjectSummary } from '@/app/studio/lib/cloud-types';
 
@@ -104,7 +104,7 @@ export function sanitizeDesignForCloud(file: DesignFile): DesignFile {
 function projectFromRow(row: StudioRow): ProjectInfo {
   const json = (row.designJson ?? {}) as Partial<DesignFile>;
   const fromJson = json.project;
-  return {
+  return normalizeProject({
     client: row.client ?? '',
     consultant: row.consultant ?? '',
     location: row.location ?? '',
@@ -119,7 +119,8 @@ function projectFromRow(row: StudioRow): ProjectInfo {
     hvacTypes: (row.hvacTypes as ProjectInfo['hvacTypes']) ?? ['split'],
     energySources: (row.energySources as ProjectInfo['energySources']) ?? ['grid'],
     floorPlanSource: (fromJson?.floorPlanSource as ProjectInfo['floorPlanSource']) ?? 'none',
-  };
+    bedrooms: fromJson?.bedrooms,
+  });
 }
 
 export function designFileFromRow(row: StudioRow): DesignFile {
