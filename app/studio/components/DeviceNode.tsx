@@ -3,9 +3,11 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { getCatalogEntry, type ComponentPort, type PortKind } from '../lib/catalog';
+import { engineeringSymbolFor } from '../lib/catalog/symbols';
+import { footprintPx, physicalSpecFor } from '../lib/catalog/dimensions';
 import { useStudio } from '../lib/store';
 import { EntryImage } from './EntryImage';
-import { Icon } from './lucide-icon';
+import { EngineeringSymbol } from './EngineeringSymbol';
 import { NodeHoverCard } from './NodeHoverCard';
 import type { Severity } from '../lib/engine/validation';
 
@@ -20,11 +22,6 @@ export type DeviceNodeData = {
   active: boolean;
 };
 
-const SEVERITY_RING: Record<Severity, string> = {
-  critical: 'ring-2 ring-red-500',
-  warning: 'ring-2 ring-orange-400',
-  recommendation: 'ring-2 ring-blue-400',
-};
 const SEVERITY_DOT: Record<Severity, string> = {
   critical: 'bg-red-500',
   warning: 'bg-orange-400',
@@ -56,141 +53,56 @@ export function layoutPorts(ports: ComponentPort[]): Placed[] {
   return [...place(lead, 'lead'), ...place(trail, 'trail')];
 }
 
-function ProtectionShape({ entry, label, selected, severity, simulating, active }: {
-  entry: ReturnType<typeof getCatalogEntry>;
-  label: string;
-  selected: boolean;
-  severity: Severity | null;
-  simulating: boolean;
-  active: boolean;
-}) {
-  if (!entry) return null;
-  return (
-    <div
-      className={`flex h-11 w-11 flex-col items-center justify-center rounded-lg border-2 bg-[var(--studio-node)] transition
-        ${selected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : severity ? SEVERITY_RING[severity] : 'border-[var(--studio-border)]'}
-        ${simulating && active ? 'shadow-[0_0_12px_rgba(34,211,238,0.5)]' : ''}`}
-      style={{ borderColor: selected ? undefined : entry.color }}
-    >
-      <Icon name={entry.icon} className="h-5 w-5" style={{ color: entry.color }} />
-      <span className="mt-0.5 max-w-[40px] truncate text-[7px] font-bold text-[var(--studio-text)]">{label}</span>
-    </div>
-  );
-}
-
-function LoadShape({ entry, label, selected, severity, simulating, active }: {
-  entry: ReturnType<typeof getCatalogEntry>;
-  label: string;
-  selected: boolean;
-  severity: Severity | null;
-  simulating: boolean;
-  active: boolean;
-}) {
-  if (!entry) return null;
-  return (
-    <div
-      className={`flex h-10 w-10 flex-col items-center justify-center rounded-full border-2 bg-[var(--studio-node)] transition
-        ${selected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : severity ? SEVERITY_RING[severity] : 'border-[var(--studio-border)]'}
-        ${simulating && active ? 'bg-emerald-500/20 border-emerald-400' : ''}`}
-      style={{ borderColor: selected ? undefined : entry.color }}
-    >
-      <Icon name={entry.icon} className="h-4 w-4" style={{ color: entry.color }} />
-    </div>
-  );
-}
-
-function SourceShape({ entry, label, selected }: {
-  entry: ReturnType<typeof getCatalogEntry>;
-  label: string;
-  selected: boolean;
-}) {
-  if (!entry) return null;
-  return (
-    <div
-      className={`flex h-[52px] w-[68px] flex-col items-center justify-center rounded-md border-2 bg-[var(--studio-node)] px-1 transition
-        ${selected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : 'border-[var(--studio-border)]'}`}
-      style={{ borderColor: selected ? undefined : entry.color }}
-    >
-      <EntryImage entry={entry} className="h-7 w-7" />
-      <span className="mt-0.5 max-w-full truncate text-[7px] font-bold text-[var(--studio-text)]">{label}</span>
-    </div>
-  );
-}
-
-function HvacShape({ entry, label, selected, simulating, active }: {
-  entry: ReturnType<typeof getCatalogEntry>;
-  label: string;
-  selected: boolean;
-  simulating: boolean;
-  active: boolean;
-}) {
-  if (!entry) return null;
-  return (
-    <div
-      className={`flex h-16 w-[84px] flex-col items-center justify-center rounded-lg border-2 bg-[var(--studio-node)] transition
-        ${selected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : 'border-[var(--studio-border)]'}
-        ${simulating && active ? 'shadow-[0_0_14px_rgba(34,211,238,0.4)]' : ''}`}
-      style={{ borderColor: selected ? undefined : entry.color }}
-    >
-      <EntryImage entry={entry} className="h-9 w-9" />
-      <span className="mt-0.5 max-w-full truncate text-[8px] font-semibold text-[var(--studio-text)]">{label}</span>
-    </div>
-  );
-}
-
-function CompactShape({ entry, selected }: {
-  entry: ReturnType<typeof getCatalogEntry>;
-  selected: boolean;
-}) {
-  if (!entry) return null;
-  return (
-    <div
-      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 bg-[var(--studio-node)] transition
-        ${selected ? 'border-cyan-400' : 'border-[var(--studio-border)]'}`}
-      style={{ borderColor: selected ? undefined : entry.color }}
-    >
-      <Icon name={entry.icon} className="h-4 w-4" style={{ color: entry.color }} />
-    </div>
-  );
-}
-
 function DeviceNodeImpl({ data, selected }: NodeProps) {
   const d = data as DeviceNodeData;
   const entry = getCatalogEntry(d.catalogId);
   const simulating = useStudio((s) => s.simulating);
+  const visualizationMode = useStudio((s) => s.visualizationMode);
+  const experienceMode = useStudio((s) => s.experienceMode);
 
   if (!entry) {
-    return (
-      <div className="w-20 rounded-lg border border-dashed border-orange-400 bg-[var(--studio-node)] px-2 py-1 text-[9px] text-orange-400">
-        ?
-      </div>
-    );
+    return <div className="rounded-lg border border-dashed border-orange-400 px-2 py-1 text-[9px] text-orange-400">?</div>;
   }
 
   const leadPos = d.rtl ? Position.Right : Position.Left;
   const trailPos = d.rtl ? Position.Left : Position.Right;
   const placed = layoutPorts(entry.ports);
+  const phys = physicalSpecFor(entry);
+  const fp = footprintPx(phys);
+  const symbol = engineeringSymbolFor(entry);
+  const live = simulating && d.active;
+  const showLabel = experienceMode === 'client' || visualizationMode === 'product';
 
   const body = (() => {
-    switch (entry.domain) {
-      case 'protection':
-        return <ProtectionShape entry={entry} label={d.label} selected={selected} severity={d.severity} simulating={simulating} active={d.active} />;
-      case 'load':
-        return <LoadShape entry={entry} label={d.label} selected={selected} severity={d.severity} simulating={simulating} active={d.active} />;
-      case 'source':
-        return <SourceShape entry={entry} label={d.label} selected={selected} />;
-      case 'hvac':
-        return <HvacShape entry={entry} label={d.label} selected={selected} simulating={simulating} active={d.active} />;
-      case 'sensor':
-      case 'smarthome':
-        return <CompactShape entry={entry} selected={selected} />;
-      default:
-        return (
-          <div className={`rounded-lg border bg-[var(--studio-node)] px-2 py-1.5 ${selected ? 'border-cyan-400' : 'border-[var(--studio-border)]'}`}>
-            <div className="truncate text-[10px] font-semibold text-[var(--studio-text)]">{d.label}</div>
+    if (visualizationMode === 'product') {
+      return (
+        <div
+          className={`relative flex flex-col items-center justify-center rounded-md border-2 bg-[var(--studio-node)] transition
+            ${selected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : 'border-[var(--studio-border)]'}
+            ${live && entry.domain === 'load' && entry.category === 'LIGHTING' ? 'shadow-[0_0_24px_rgba(253,224,71,0.55)]' : ''}`}
+          style={{ width: fp.w, height: fp.h, borderColor: selected ? undefined : entry.color }}
+        >
+          <EntryImage entry={entry} className="h-[70%] w-[70%] max-h-12 max-w-12" />
+          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[7px] text-[var(--studio-muted)]">
+            {phys.widthMm}×{phys.heightMm} mm
           </div>
-        );
+          {live && entry.domain === 'load' && entry.category === 'LIGHTING' && (
+            <div className="pointer-events-none absolute inset-0 rounded-md bg-yellow-300/20" />
+          )}
+        </div>
+      );
     }
+
+    return (
+      <EngineeringSymbol
+        symbol={symbol}
+        color={entry.color}
+        size={entry.domain === 'source' || entry.domain === 'hvac' ? 52 : 44}
+        selected={selected}
+        active={live}
+        label={showLabel ? d.label : undefined}
+      />
+    );
   })();
 
   return (
@@ -207,7 +119,7 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
         />
       ))}
 
-      {d.severity && (
+      {d.severity && experienceMode === 'engineer' && (
         <span className={`absolute -top-1 ${d.rtl ? '-left-1' : '-right-1'} h-2.5 w-2.5 rounded-full ${SEVERITY_DOT[d.severity]} ring-1 ring-[var(--studio-bg)]`} />
       )}
 
@@ -222,13 +134,15 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
 
       {body}
 
-      {d.declaration && (
+      {d.declaration && experienceMode === 'engineer' && (
         <div className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 rounded bg-amber-400/90 px-1 py-px text-[7px] font-bold text-amber-950">
           {d.declaration}
         </div>
       )}
 
-      <NodeHoverCard nodeId={d.nodeId} catalogId={d.catalogId} label={d.label} />
+      {experienceMode === 'engineer' && (
+        <NodeHoverCard nodeId={d.nodeId} catalogId={d.catalogId} label={d.label} />
+      )}
     </div>
   );
 }

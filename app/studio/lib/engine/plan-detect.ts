@@ -4,7 +4,8 @@
  * Analyses light regions separated by dark wall lines in an imported plan
  * image and returns room bounding boxes aligned to the canvas map layer.
  */
-import type { DesignRoom } from '../model';
+import type { DesignRoom, BimModel } from '../model';
+import { extractBimFromRaster } from './bim-extract';
 
 export type DetectedRoom = Omit<DesignRoom, 'id'>;
 
@@ -50,6 +51,18 @@ export async function detectRoomsFromMap(
     width: r.width,
     height: r.height,
   }));
+}
+
+/** Detect wall lines from raster floor plan for BIM model. */
+export async function detectBimFromMap(
+  src: string,
+  mapX: number,
+  mapY: number,
+  mapWidth: number,
+  mapHeight: number,
+): Promise<BimModel> {
+  const { data, w, h } = await rasterize(src, Math.min(900, mapWidth));
+  return extractBimFromRaster(data, w, h, mapX, mapY, mapWidth, mapHeight);
 }
 
 async function rasterize(src: string, maxW: number): Promise<{ data: Uint8ClampedArray; w: number; h: number }> {

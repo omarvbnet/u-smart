@@ -1,12 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
+import { computeLuxHeatmaps } from '../lib/engine/lux-heatmap';
+import { getTwinConnection } from '../lib/twin-stream';
+import { useEffect, useMemo } from 'react';
 import { useStudio } from '../lib/store';
 import { createTranslator } from '../lib/i18n';
 import { getCatalogEntry, type CableSpec } from '../lib/catalog';
 import { CABLES } from '../lib/catalog/cables';
 import { resolveNodes } from '../lib/model';
 import { validateDesign, type Issue } from '../lib/engine/validation';
+import { validatePlacement } from '../lib/engine/placement-validation';
+import { suggestSmartFixes } from '../lib/engine/autofix';
+import { calculateHvacLoads } from '../lib/engine/hvac-loads';
+import { calculateLightingDesign } from '../lib/engine/lighting-design';
+import { buildSmartTopology } from '../lib/engine/smarthome-topology';
 import { computeQuality, computeCompliance } from '../lib/engine/quality';
 import { simulate } from '../lib/engine/simulate';
 
@@ -20,10 +27,15 @@ export function useT() {
 export function useAnalysis() {
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
+  const rooms = useStudio((s) => s.rooms);
+  const project = useStudio((s) => s.project);
 
   return useMemo(() => {
     const resolved = resolveNodes(nodes, getCatalogEntry);
-    const { issues } = validateDesign(resolved, edges, CABLES as CableSpec[]);
+    const { issues: engIssues } = validateDesign(resolved, edges, CABLES as CableSpec[]);
+    const placeIssues = validatePlacement(nodes, rooms, getCatalogEntry);
+    const smartIssues = suggestSmartFixes(project, nodes, edges, rooms);
+    const issues = [...engIssues, ...placeIssues, ...smartIssues];
     const quality = computeQuality(issues, resolved.length);
     const compliance = computeCompliance(issues);
     const byNode = new Map<string, Issue[]>();
@@ -34,7 +46,7 @@ export function useAnalysis() {
       byNode.set(i.nodeId, arr);
     }
     return { issues, quality, compliance, byNode };
-  }, [nodes, edges]);
+  }, [nodes, edges, rooms, project]);
 }
 
 /** Live simulation state per node (energised / active / current). */
@@ -49,4 +61,52 @@ export function useSimulation() {
     const resolved = resolveNodes(nodes, getCatalogEntry);
     return simulate(resolved, edges, controls);
   }, [nodes, edges, controls, simulating]);
+}
+
+/** HVAC, lighting, and smart-home engineering reports (deterministic). */
+export function useAutonomousReports() {
+  const nodes = useStudio((s) => s.nodes);
+  const edges = useStudio((s) => s.edges);
+  const rooms = useStudio((s) => s.rooms);
+  const project = useStudio((s) => s.project);
+  const assumptions = useStudio((s) => s.autonomousAssumptions);
+
+  return useMemo(() => {
+    const hvac = calculateHvacLoads(rooms, project.buildingType);
+    const lighting = calculateLightingDesign(rooms);
+    const smart = buildSmartTopology(project, nodes, edges, rooms);
+    return { hvac, lighting, smart, assumptions };
+  }, [nodes, edges, rooms, project, assumptions]);
+}
+
+/** Per-room lux heatmap grids for canvas overlay. */
+export function useLuxHeatmaps() {
+  const nodes = useStudio((s) => s.nodes);
+  const rooms = useStudio((s) => s.rooms);
+  const show = useStudio((s) => s.showLuxHeatmap);
+
+  return useMemo(() => {
+    if (!show || !rooms.length) return [];
+    const resolved = resolveNodes(nodes, getCatalogEntry);
+    return computeLuxHeatmaps(rooms, resolved);
+  }, [nodes, rooms, show]);
+}
+
+/** Sync digital twin SSE session with store when simulating. */
+export function useDigitalTwinSync() {
+  const simulating = useStudio((s) => s.simulating);
+  const twinConnected = useStudio((s) => s.twinConnected);
+
+  useEffect(() => {
+    if (!simulating) return;
+    const conn = getTwinConnection();
+    return conn.subscribe((live) => {
+      useStudio.setState({
+        twinConnected: live.connection === 'connected',
+        twinSessionId: live.sessionId,
+      });
+    });
+  }, [simulating]);
+
+  return { twinConnected };
 }

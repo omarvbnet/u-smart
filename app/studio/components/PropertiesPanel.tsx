@@ -6,6 +6,7 @@ import { getCatalogEntry } from '../lib/catalog';
 import { controlsForEntry } from '../lib/controls';
 import { declarationFor } from '../lib/engine/declarations';
 import { specRows, catalogAlternatives } from '../lib/spec-display';
+import { physicalSpecFor } from '../lib/catalog/dimensions';
 import { PORT_COLOR } from './DeviceNode';
 import { EntryImage } from './EntryImage';
 import { Trash2, Zap, Plug } from 'lucide-react';
@@ -250,12 +251,21 @@ export function PropertiesPanel() {
         <div>
           <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('properties')}</h3>
           <div className="grid grid-cols-2 gap-2">
-            {specRows(entry).map((row) => (
+            {(() => {
+              const phys = physicalSpecFor(entry);
+              const install = [
+                { label: 'W×H×D', value: `${phys.widthMm}×${phys.heightMm}×${phys.depthMm} mm` },
+                { label: 'Mount', value: phys.mount },
+                { label: 'Clearance', value: `${phys.clearanceFrontMm} mm front` },
+                ...(phys.listPriceUsd ? [{ label: 'Est. price', value: `$${phys.listPriceUsd}` }] : []),
+              ];
+              return [...install, ...specRows(entry)].map((row) => (
               <div key={row.label} className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-2.5 py-1.5">
                 <div className="text-[10px] text-[var(--studio-muted)]">{row.label}</div>
                 <div className="text-xs font-semibold text-[var(--studio-text)]">{row.value}</div>
               </div>
-            ))}
+            ));
+            })()}
           </div>
         </div>
 

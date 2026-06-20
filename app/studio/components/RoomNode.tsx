@@ -3,16 +3,19 @@
 import { memo } from 'react';
 import { NodeResizer, type NodeProps } from '@xyflow/react';
 import type { DesignRoom } from '../lib/model';
+import type { RoomLuxHeatmap } from '../lib/engine/lux-heatmap';
+import { luxColor } from '../lib/engine/lux-heatmap';
 
 export type RoomNodeData = {
   room: DesignRoom;
   selected: boolean;
   areaM2: number;
+  luxHeatmap?: RoomLuxHeatmap | null;
 };
 
 function RoomNodeImpl({ data, selected }: NodeProps) {
   const d = data as RoomNodeData;
-  const { room, areaM2 } = d;
+  const { room, areaM2, luxHeatmap } = d;
 
   return (
     <>
@@ -28,6 +31,27 @@ function RoomNodeImpl({ data, selected }: NodeProps) {
           ${selected ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-500/60 bg-slate-500/5'}`}
         style={{ minWidth: room.width, minHeight: room.height }}
       >
+        {luxHeatmap && (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+            {luxHeatmap.cells.map((c, i) => (
+              <div
+                key={i}
+                className="absolute rounded-sm"
+                style={{
+                  left: c.x,
+                  top: c.y,
+                  width: Math.max(6, room.width / 8 - 2),
+                  height: Math.max(6, room.height / 8 - 2),
+                  background: luxColor(c.lux, luxHeatmap.targetLux),
+                }}
+                title={`${Math.round(c.lux)} lx`}
+              />
+            ))}
+            <div className="absolute bottom-8 inset-x-0 text-center text-[8px] font-semibold text-emerald-300 drop-shadow">
+              {luxHeatmap.achievedLux}/{luxHeatmap.targetLux} lx
+            </div>
+          </div>
+        )}
         <div className="absolute inset-x-0 top-2 px-2 text-center">
           <div className="truncate text-xs font-bold text-[var(--studio-text)]">{room.label}</div>
           <div className="text-[9px] text-[var(--studio-muted)]">{areaM2.toFixed(1)} m²</div>

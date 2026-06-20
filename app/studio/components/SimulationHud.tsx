@@ -13,6 +13,7 @@ export function SimulationHud() {
   const simulating = useStudio((s) => s.simulating);
   const nodes = useStudio((s) => s.nodes);
   const simEnergyKwh = useStudio((s) => s.simEnergyKwh);
+  const twinConnected = useStudio((s) => s.twinConnected);
   const tickSimulation = useStudio((s) => s.tickSimulation);
   const sim = useSimulation();
 
@@ -34,6 +35,11 @@ export function SimulationHud() {
       <div className="mb-2 flex items-center gap-2">
         <Activity className="h-4 w-4 animate-pulse text-emerald-400" />
         <span className="text-xs font-bold text-[var(--studio-text)]">{t('liveSimulation')}</span>
+        {twinConnected && (
+          <span className="ms-auto rounded bg-emerald-500/20 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">
+            {t('twinStream')}
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2 text-[10px]">
         <Metric icon={Zap} label={t('totalPower')} value={`${metrics.totalKw.toFixed(2)} kW`} />

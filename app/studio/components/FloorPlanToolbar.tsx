@@ -27,8 +27,11 @@ export function FloorPlanToolbar() {
   const removeRoom = useStudio((s) => s.removeRoom);
   const rooms = useStudio((s) => s.rooms);
   const nodes = useStudio((s) => s.nodes);
+  const experienceMode = useStudio((s) => s.experienceMode);
+  const clientMode = experienceMode === 'client';
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
   const setCanvasViewMode = useStudio((s) => s.setCanvasViewMode);
+  const bim = useStudio((s) => s.bim);
   const [detecting, setDetecting] = useState(false);
 
   const runDetect = async () => {
@@ -60,15 +63,22 @@ export function FloorPlanToolbar() {
             <span className="hidden sm:inline">{t('createMapFromZero')}</span>
           </button>
         )}
-        <button className={btn(false)} onClick={seedDefaultRooms} title={t('toolLayout')}>
-          <LayoutTemplate className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t('toolLayout')}</span>
-        </button>
-        {map?.src && map.mode !== 'blank' && (
+        {!clientMode && (
+          <button className={btn(false)} onClick={seedDefaultRooms} title={t('toolLayout')}>
+            <LayoutTemplate className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('toolLayout')}</span>
+          </button>
+        )}
+        {!clientMode && map?.src && map.mode !== 'blank' && (
           <button className={btn(false)} onClick={() => void runDetect()} disabled={detecting} title={t('detectRooms')}>
             <Scan className={`h-3.5 w-3.5 ${detecting ? 'animate-pulse' : ''}`} />
             <span className="hidden sm:inline">{t('detectRooms')}</span>
           </button>
+        )}
+        {bim && bim.walls.length > 0 && (
+          <span className="rounded-lg border border-slate-500/40 px-2 py-1 text-[9px] text-[var(--studio-muted)]">
+            {bim.walls.length} {t('wallsDetected')}
+          </span>
         )}
         {(map || rooms.length > 0 || nodes.length > 0) && (
           <button

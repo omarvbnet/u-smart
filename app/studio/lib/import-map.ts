@@ -1,11 +1,32 @@
 'use client';
 
-/** Imports a floor-plan / villa map from an image or PDF file into a raster. */
-export async function importMapFile(file: File): Promise<{ src: string; width: number; height: number }> {
-  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-    return renderPdfFirstPage(file);
+/** Imports a floor-plan from image, PDF, DXF, or DWG (via conversion service). */
+import { importDwgViaApi, importDxfFile, isDwgFile, isDxfFile, type CadImportResult } from './import-cad';
+import type { BimModel } from './model';
+
+export type MapImportResult = {
+  src: string;
+  width: number;
+  height: number;
+  bim?: BimModel;
+  sourceFormat?: 'dxf' | 'dwg' | 'pdf' | 'image';
+};
+
+export async function importMapFile(file: File): Promise<MapImportResult> {
+  if (isDwgFile(file)) {
+    const d = await importDwgViaApi(file);
+    return { src: d.src, width: d.width, height: d.height, bim: d.bim, sourceFormat: 'dwg' };
   }
-  return readImage(file);
+  if (isDxfFile(file)) {
+    const d = await importDxfFile(file);
+    return { src: d.src, width: d.width, height: d.height, bim: d.bim, sourceFormat: 'dxf' };
+  }
+  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    const r = await renderPdfFirstPage(file);
+    return { ...r, sourceFormat: 'pdf' };
+  }
+  const r = await readImage(file);
+  return { ...r, sourceFormat: 'image' };
 }
 
 function readImage(file: File): Promise<{ src: string; width: number; height: number }> {
@@ -25,7 +46,6 @@ function readImage(file: File): Promise<{ src: string; width: number; height: nu
 
 async function renderPdfFirstPage(file: File): Promise<{ src: string; width: number; height: number }> {
   const pdfjs = await import('pdfjs-dist');
-  // Worker copied into /public (version-matched to the installed pdfjs-dist).
   pdfjs.GlobalWorkerOptions.workerSrc = '/studio/pdf.worker.min.mjs';
 
   const buffer = await file.arrayBuffer();

@@ -24,18 +24,27 @@ import { DeviceNode, type DeviceNodeData } from './DeviceNode';
 import { CableNode, type CableNodeData } from './CableNode';
 import { MapNode, type MapNodeData } from './MapNode';
 import { RoomNode, type RoomNodeData } from './RoomNode';
+import { WallNode, type WallNodeData } from './WallNode';
+import { OpeningNode, type OpeningNodeData } from './OpeningNode';
 import { FloorPlanToolbar } from './FloorPlanToolbar';
+import { VisualizationToolbar } from './VisualizationToolbar';
+import { DesignAssistantPanel } from './DesignAssistantPanel';
+import { ClientExperienceBar } from './ClientExperienceBar';
+import { Twin3DView } from './Twin3DView';
 import { getCatalogEntry } from '../lib/catalog';
 import { declarationFor } from '../lib/engine/declarations';
 import { RTL_LOCALES } from '../lib/i18n';
 import { dropPosition, nodeFootprint, nodesForCanvasFit } from '../lib/node-layout';
 import type { PortKind } from '../lib/catalog';
+import { useLuxHeatmaps, useDigitalTwinSync } from './hooks';
 
 const nodeTypes = {
   device: (p: NodeProps) => <DeviceNode {...p} />,
   cable: (p: NodeProps) => <CableNode {...p} />,
   map: (p: NodeProps) => <MapNode {...p} />,
   room: (p: NodeProps) => <RoomNode {...p} />,
+  wall: (p: NodeProps) => <WallNode {...p} />,
+  opening: (p: NodeProps) => <OpeningNode {...p} />,
 };
 
 const MAP_ID = '__map__';
@@ -56,6 +65,7 @@ function CanvasInner() {
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
   const rooms = useStudio((s) => s.rooms);
+  const bim = useStudio((s) => s.bim);
   const locale = useStudio((s) => s.locale);
   const selectedId = useStudio((s) => s.selectedNodeId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
@@ -75,9 +85,12 @@ function CanvasInner() {
   const setFloorPlanTool = useStudio((s) => s.setFloorPlanTool);
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
   const canvasFitSeq = useStudio((s) => s.canvasFitSeq);
+  const visualizationMode = useStudio((s) => s.visualizationMode);
 
   const { byNode } = useAnalysis();
   const sim = useSimulation();
+  const luxHeatmaps = useLuxHeatmaps();
+  useDigitalTwinSync();
   const rtl = RTL_LOCALES.has(locale);
   const drawing = floorPlanTool === 'draw-room';
 
@@ -115,6 +128,34 @@ function CanvasInner() {
         zIndex: -2,
       });
     }
+    if (bim) {
+      for (const w of bim.walls) {
+        const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+        list.push({
+          id: `wall_${w.id}`,
+          type: 'wall',
+          position: { x: w.x1, y: w.y1 },
+          style: { width: len, height: w.thickness * 2 },
+          data: { wall: w } satisfies WallNodeData,
+          draggable: false,
+          selectable: false,
+          zIndex: -1,
+        });
+      }
+      for (const o of bim.openings) {
+        list.push({
+          id: `open_${o.id}`,
+          type: 'opening',
+          position: { x: o.x - o.width / 2, y: o.y - o.height / 2 },
+          style: { width: o.width, height: o.height },
+          data: { opening: o } satisfies OpeningNodeData,
+          draggable: false,
+          selectable: false,
+          zIndex: 0,
+        });
+      }
+    }
+    const luxByRoom = new Map(luxHeatmaps.map((h) => [h.roomId, h]));
     for (const r of rooms) {
       list.push({
         id: roomRfId(r.id),
@@ -123,7 +164,12 @@ function CanvasInner() {
         style: { width: r.width, height: r.height },
         width: r.width,
         height: r.height,
-        data: { room: r, selected: r.id === selectedRoomId, areaM2: roomAreaM2(r.width, r.height) } satisfies RoomNodeData,
+        data: {
+          room: r,
+          selected: r.id === selectedRoomId,
+          areaM2: roomAreaM2(r.width, r.height),
+          luxHeatmap: luxByRoom.get(r.id) ?? null,
+        } satisfies RoomNodeData,
         draggable: !drawing,
         selectable: !drawing,
         zIndex: -1,
@@ -141,7 +187,7 @@ function CanvasInner() {
             ? 'recommendation'
             : null;
       const s = sim[n.id];
-      const footprint = nodeFootprint(entry, n.params);
+      const footprint = nodeFootprint(entry, n.params, visualizationMode);
       const isCable = entry.domain === 'cable';
 
       list.push({
@@ -177,7 +223,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, map, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing]);
+  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 
@@ -356,6 +402,9 @@ function CanvasInner() {
       onMouseLeave={onPaneMouseUp}
     >
       <FloorPlanToolbar />
+      <VisualizationToolbar />
+      <DesignAssistantPanel />
+      <ClientExperienceBar />
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -437,6 +486,19 @@ const EDGE_COLOR: Record<PortKind, string> = {
 };
 
 export function Canvas() {
+  const visualizationMode = useStudio((s) => s.visualizationMode);
+
+  if (visualizationMode === '3d') {
+    return (
+      <div className="relative h-full w-full">
+        <VisualizationToolbar />
+        <ClientExperienceBar />
+        <DesignAssistantPanel />
+        <Twin3DView />
+      </div>
+    );
+  }
+
   return (
     <ReactFlowProvider>
       <CanvasInner />

@@ -10,6 +10,7 @@ import { QualityIndex } from './QualityIndex';
 import { ProjectPanel } from './ProjectPanel';
 import { BusMonitor } from './BusMonitor';
 import { SimulationHud } from './SimulationHud';
+import { TwinChainPanel } from './TwinChainPanel';
 import { SetupWizard } from './SetupWizard';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
@@ -34,7 +35,13 @@ export function Workspace() {
   const [tab, setTab] = useState<Tab>('validation');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const experienceMode = useStudio((s) => s.experienceMode);
   const rtl = RTL_LOCALES.has(locale);
+  const clientMode = experienceMode === 'client';
+
+  useEffect(() => {
+    if (clientMode) setTab('properties');
+  }, [clientMode]);
 
   useEffect(() => {
     if (!project.setupComplete) setWizardOpen(true);
@@ -80,12 +87,14 @@ export function Workspace() {
 
   const criticalCount = issues.filter((i) => i.severity === 'critical').length;
 
-  const tabs: { key: Tab; label: string; icon: typeof Gauge; badge?: number }[] = [
-    { key: 'validation', label: t('validation'), icon: ShieldCheck, badge: issues.length },
-    { key: 'quality', label: t('quality'), icon: Gauge },
-    { key: 'properties', label: t('properties'), icon: SlidersHorizontal },
-    { key: 'project', label: t('project'), icon: Building2 },
-  ];
+  const tabs: { key: Tab; label: string; icon: typeof Gauge; badge?: number }[] = clientMode
+    ? [{ key: 'properties', label: t('properties'), icon: SlidersHorizontal }]
+    : [
+        { key: 'validation', label: t('validation'), icon: ShieldCheck, badge: issues.length },
+        { key: 'quality', label: t('quality'), icon: Gauge },
+        { key: 'properties', label: t('properties'), icon: SlidersHorizontal },
+        { key: 'project', label: t('project'), icon: Building2 },
+      ];
 
   return (
     <div
@@ -96,25 +105,30 @@ export function Workspace() {
       <Topbar />
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[260px] flex-shrink-0 border-e border-[var(--studio-border)] bg-[var(--studio-panel)] md:block">
-          <Palette />
-        </aside>
+        {!clientMode && (
+          <aside className="hidden w-[260px] flex-shrink-0 border-e border-[var(--studio-border)] bg-[var(--studio-panel)] md:block">
+            <Palette />
+          </aside>
+        )}
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-1.5 md:hidden">
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-semibold text-[var(--studio-text)]"
-            >
-              <PanelLeft className="h-4 w-4" />
-              {t('palette')}
-            </button>
+            {!clientMode && (
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--studio-border)] px-2.5 py-1.5 text-xs font-semibold text-[var(--studio-text)]"
+              >
+                <PanelLeft className="h-4 w-4" />
+                {t('palette')}
+              </button>
+            )}
           </div>
           <div className="relative min-h-0 flex-1">
             <Canvas />
             <SimulationHud />
-            <BusMonitor />
+            <TwinChainPanel />
+            {!clientMode && <BusMonitor />}
             <div className="absolute bottom-3 ltr:left-3 rtl:right-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
               <span>{nodeCount} {t('nodes')}</span>
               <span className="opacity-40">·</span>
@@ -157,9 +171,9 @@ export function Workspace() {
           </div>
           <div className="min-h-0 flex-1">
             {tab === 'properties' && <PropertiesPanel />}
-            {tab === 'validation' && <ValidationPanel />}
-            {tab === 'quality' && <QualityIndex />}
-            {tab === 'project' && <ProjectPanel />}
+            {!clientMode && tab === 'validation' && <ValidationPanel />}
+            {!clientMode && tab === 'quality' && <QualityIndex />}
+            {!clientMode && tab === 'project' && <ProjectPanel />}
           </div>
         </aside>
       </div>

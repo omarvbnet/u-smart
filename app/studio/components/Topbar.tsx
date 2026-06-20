@@ -58,10 +58,10 @@ export function Topbar() {
   const handleMapFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      const { src, width, height } = await importMapFile(file);
-      setMap(src, width, height);
-    } catch {
-      /* ignore unreadable file */
+      const { src, width, height, bim } = await importMapFile(file);
+      setMap(src, width, height, bim ?? null);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -125,7 +125,7 @@ export function Topbar() {
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,application/pdf"
+          accept="image/*,application/pdf,.dxf,.DXF"
           className="hidden"
           onChange={(e) => {
             void handleMapFile(e.target.files?.[0]);

@@ -29,7 +29,9 @@ export function SetupWizard({ onComplete }: Props) {
   const completeWizard = useStudio((s) => s.completeWizard);
   const [step, setStep] = useState(0);
   const [floorPlan, setFloorPlan] = useState<FloorPlanChoice>('zero');
+  const [projectBrief, setProjectBrief] = useState('');
   const [draft, setDraft] = useState<ProjectInfo>(() => useStudio.getState().project);
+  const generateFromBrief = useStudio((s) => s.generateFromBrief);
 
   const patch = (p: Partial<ProjectInfo>) => setDraft((d) => ({ ...d, ...p }));
 
@@ -53,6 +55,12 @@ export function SetupWizard({ onComplete }: Props) {
 
   const finish = (generate: boolean) => {
     const fp: FloorPlanSource | 'skip' = floorPlan;
+    if (projectBrief.trim() && generate) {
+      completeWizard({ ...draft, setupComplete: true, floorPlanSource: fp === 'zero' ? 'zero' : fp === 'import' ? 'import' : 'none' }, { generateDesign: false, floorPlan: fp });
+      generateFromBrief(projectBrief.trim());
+      onComplete();
+      return;
+    }
     completeWizard({ ...draft, setupComplete: true }, { generateDesign: generate, floorPlan: fp });
     onComplete();
   };
@@ -104,6 +112,17 @@ export function SetupWizard({ onComplete }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <Field label={t('client')} value={draft.client} onChange={(v) => patch({ client: v })} />
                 <Field label={t('location')} value={draft.location} onChange={(v) => patch({ location: v })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-[var(--studio-text)]">{t('projectBrief')}</label>
+                <p className="mb-2 text-[11px] text-[var(--studio-muted)]">{t('projectBriefHint')}</p>
+                <textarea
+                  value={projectBrief}
+                  onChange={(e) => setProjectBrief(e.target.value)}
+                  placeholder={t('projectBriefPlaceholder')}
+                  rows={4}
+                  className="w-full rounded-xl border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400"
+                />
               </div>
             </div>
           )}

@@ -1,5 +1,7 @@
 import type { CatalogEntry } from './catalog';
 import type { DesignNode } from './model';
+import type { VisualizationMode } from './visualization/modes';
+import { footprintPx, physicalSpecFor } from './catalog/dimensions';
 
 /** Pixels per metre on the floor plan for cable runs. */
 export const CABLE_PX_PER_M = 3.2;
@@ -16,7 +18,15 @@ export type NodeFootprint = {
   anchorY: number;
 };
 
-export function nodeFootprint(entry: CatalogEntry, params: DesignNode['params'] = {}): NodeFootprint {
+export function nodeFootprint(
+  entry: CatalogEntry,
+  params: DesignNode['params'] = {},
+  visualizationMode: VisualizationMode = 'engineering',
+): NodeFootprint {
+  if (visualizationMode === 'product') {
+    const fp = footprintPx(physicalSpecFor(entry));
+    return { width: fp.w, height: fp.h, anchorX: Math.round(fp.w / 2), anchorY: Math.round(fp.h / 2) };
+  }
   switch (entry.domain) {
     case 'cable': {
       const w = cableLengthPx(Number(params.lengthM ?? 20));

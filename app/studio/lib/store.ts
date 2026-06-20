@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { CATALOG, getCatalogEntry, type CatalogEntry } from './catalog';
-import type { DesignNode, DesignEdge, DesignRoom } from './model';
+import type { DesignNode, DesignEdge, DesignRoom, BimModel } from './model';
 import { resolveNodes } from './model';
 import type { Fix } from './engine/validation';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -12,9 +12,15 @@ import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
 import { buildStarterDesign } from './engine/starter-design';
-import { detectRoomsFromMap as detectRooms } from './engine/plan-detect';
+import { detectRoomsFromMap as detectRooms, detectBimFromMap } from './engine/plan-detect';
+import { getTwinConnection } from './twin-stream';
+import { psuCatalogId } from './engine/autofix';
 import { aggregateSimulation } from './engine/sim-metrics';
 import { simulate } from './engine/simulate';
+import { executeDesignCommand as runDesignCommand } from './nl/design-commands';
+import { parseProjectBrief, isGenerateBriefCommand } from './nl/parse-brief';
+import { runAutonomousPipeline } from './platform/pipeline';
+import type { VisualizationMode, ExperienceMode } from './visualization/modes';
 
 export type Theme = 'dark' | 'light';
 export type FloorPlanTool = 'select' | 'draw-room';
@@ -30,6 +36,7 @@ export type DesignFile = {
   map: MapBackground | null;
   project?: ProjectInfo;
   rooms?: DesignRoom[];
+  bim?: BimModel;
 };
 
 export type MapBackground = {
@@ -64,6 +71,14 @@ type StudioState = {
   pendingMapImport: boolean;
   canvasViewMode: CanvasViewMode;
   canvasFitSeq: number;
+  visualizationMode: VisualizationMode;
+  experienceMode: ExperienceMode;
+  assistantOpen: boolean;
+  autonomousAssumptions: string[];
+  bim: BimModel | null;
+  showLuxHeatmap: boolean;
+  twinSessionId: string | null;
+  twinConnected: boolean;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -88,7 +103,7 @@ type StudioState = {
   applyFix: (fix: Fix) => void;
   toggleSimulation: () => void;
 
-  setMap: (src: string, width: number, height: number) => void;
+  setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
   moveMap: (x: number, y: number) => void;
   setMapOpacity: (opacity: number) => void;
   clearMap: () => void;
@@ -124,6 +139,15 @@ type StudioState = {
   detectRoomsFromMap: () => Promise<number>;
   setCanvasViewMode: (mode: CanvasViewMode) => void;
   fitCanvasView: () => void;
+  setVisualizationMode: (mode: VisualizationMode) => void;
+  setExperienceMode: (mode: ExperienceMode) => void;
+  toggleExperienceMode: () => void;
+  setAssistantOpen: (open: boolean) => void;
+  executeDesignCommand: (text: string) => { ok: boolean; message: string; changes: number };
+  generateFromBrief: (text: string) => { ok: boolean; message: string; assumptions: string[] };
+  setBim: (bim: BimModel | null) => void;
+  toggleLuxHeatmap: () => void;
+  analyzePlanFull: () => Promise<{ rooms: number; walls: number }>;
 };
 
 let counter = 0;
@@ -156,6 +180,22 @@ function initialCanvasViewMode(): CanvasViewMode {
   return window.localStorage.getItem('studio.canvasViewMode') === 'full' ? 'full' : 'content';
 }
 
+function initialVisualizationMode(): VisualizationMode {
+  if (typeof window === 'undefined') return 'engineering';
+  const v = window.localStorage.getItem('studio.visualizationMode');
+  return v === 'product' || v === '3d' ? v : 'engineering';
+}
+
+function initialExperienceMode(): ExperienceMode {
+  if (typeof window === 'undefined') return 'engineer';
+  return window.localStorage.getItem('studio.experienceMode') === 'client' ? 'client' : 'engineer';
+}
+
+function initialLuxHeatmap(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('studio.luxHeatmap') === '1';
+}
+
 function defaultLabel(entry: CatalogEntry, locale: StudioLocale): string {
   return entry.name[locale] ?? entry.name.en;
 }
@@ -181,6 +221,14 @@ export const useStudio = create<StudioState>((set, get) => ({
   pendingMapImport: false,
   canvasViewMode: initialCanvasViewMode(),
   canvasFitSeq: 0,
+  visualizationMode: initialVisualizationMode(),
+  experienceMode: initialExperienceMode(),
+  assistantOpen: false,
+  autonomousAssumptions: [],
+  bim: null,
+  showLuxHeatmap: initialLuxHeatmap(),
+  twinSessionId: null,
+  twinConnected: false,
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -256,7 +304,6 @@ export const useStudio = create<StudioState>((set, get) => ({
   setControl: (id, key, value) =>
     set((s) => {
       const controls = { ...s.controls, [id]: { ...s.controls[id], [key]: value } };
-      // Emit a bus telegram when operating an automation device during sim.
       let telegrams = s.telegrams;
       if (s.simulating) {
         const node = s.nodes.find((n) => n.id === id);
@@ -264,6 +311,9 @@ export const useStudio = create<StudioState>((set, get) => ({
         if (entry && (entry.domain === 'smarthome' || entry.domain === 'sensor')) {
           const addr = assignAddresses(s.nodes).get(id);
           if (addr) telegrams = [makeTelegram(entry, addr, key, value), ...s.telegrams].slice(0, 200);
+        }
+        if (s.twinSessionId) {
+          void getTwinConnection().pushControl(id, key, value);
         }
       }
       return { controls, telegrams };
@@ -291,6 +341,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       controls: {},
       project: defaultProject(),
       map: null,
+      bim: null,
       telegrams: [],
       floorPlanTool: 'select',
       cloudProjectId: null,
@@ -334,27 +385,69 @@ export const useStudio = create<StudioState>((set, get) => ({
         };
         return { nodes: [...s.nodes, node], controls: { ...s.controls, [node.id]: defaultControlState(spd) } };
       }
+      if (fix.kind === 'moveNode') {
+        return { nodes: s.nodes.map((n) => (n.id === fix.nodeId ? { ...n, x: fix.x, y: fix.y } : n)) };
+      }
+      if (fix.kind === 'replaceCatalog') {
+        const replacement = getCatalogEntry(fix.toCatalogId);
+        if (!replacement) return s;
+        return {
+          nodes: s.nodes.map((n) =>
+            n.id === fix.nodeId ? { ...n, catalogId: fix.toCatalogId, label: defaultLabel(replacement, s.locale) } : n,
+          ),
+          controls: { ...s.controls, [fix.nodeId]: defaultControlState(replacement) },
+        };
+      }
+      if (fix.kind === 'addPsu') {
+        const catId = psuCatalogId(s.project);
+        const entry = getCatalogEntry(catId);
+        if (!entry) return s;
+        const added: DesignNode[] = [];
+        const controls = { ...s.controls };
+        const anchor = s.nodes.find((n) => getCatalogEntry(n.catalogId)?.domain === 'smarthome') ?? s.nodes[0];
+        for (let i = 0; i < fix.count; i++) {
+          const node: DesignNode = {
+            id: uid('n'),
+            catalogId: catId,
+            label: `${defaultLabel(entry, s.locale)} PSU`,
+            x: (anchor?.x ?? 0) + 50 + i * 36,
+            y: (anchor?.y ?? 0) + 80,
+            params: {},
+          };
+          added.push(node);
+          controls[node.id] = defaultControlState(entry);
+        }
+        return { nodes: [...s.nodes, ...added], controls };
+      }
       return s;
     });
   },
 
-  toggleSimulation: () =>
-    set((s) => ({
-      simulating: !s.simulating,
-      telegrams: s.simulating ? s.telegrams : [],
-      simEnergyKwh: s.simulating ? s.simEnergyKwh : 0,
-    })),
+  toggleSimulation: () => {
+    const s = get();
+    if (s.simulating) {
+      void getTwinConnection().stop();
+      set({ simulating: false, twinSessionId: null, twinConnected: false });
+      return;
+    }
+    set({ simulating: true, telegrams: [], simEnergyKwh: 0, twinConnected: false, twinSessionId: null });
+    void getTwinConnection()
+      .start(s.nodes, s.edges, s.controls)
+      .then((ok) => set({ twinConnected: ok }));
+  },
 
-  setMap: (src, width, height) =>
+  setMap: (src, width, height, bim?: BimModel | null) =>
     set({
       map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 0.85, mode: 'image' },
       project: { ...get().project, floorPlanSource: 'import' },
+      bim: bim ?? get().bim,
     }),
   moveMap: (x, y) => set((s) => (s.map ? { map: { ...s.map, x, y } } : s)),
   setMapOpacity: (opacity) => set((s) => (s.map ? { map: { ...s.map, opacity } } : s)),
   clearMap: () =>
     set((s) => ({
       map: null,
+      bim: null,
       project: { ...s.project, floorPlanSource: s.project.floorPlanSource === 'import' ? 'none' : s.project.floorPlanSource },
     })),
 
@@ -507,6 +600,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       map: s.map,
       project: s.project,
       rooms: s.rooms,
+      bim: s.bim ?? undefined,
     };
   },
 
@@ -515,6 +609,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       designName: file.designName ?? '',
       project: normalizeProject(file.project),
       rooms: file.rooms ?? [],
+      bim: file.bim ?? null,
       nodes: file.nodes ?? [],
       edges: file.edges ?? [],
       controls: file.controls ?? {},
@@ -564,7 +659,15 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (!s.map?.src || s.map.mode === 'blank') return 0;
     const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
     const rooms = detected.map((r) => ({ ...r, id: uid('room') }));
-    set({ rooms, selectedRoomId: null });
+    let bim = s.bim;
+    if (!bim || bim.walls.length === 0) {
+      try {
+        bim = await detectBimFromMap(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
+      } catch {
+        /* optional */
+      }
+    }
+    set({ rooms, bim, selectedRoomId: null });
     return rooms.length;
   },
 
@@ -574,6 +677,82 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   fitCanvasView: () => set((s) => ({ canvasFitSeq: s.canvasFitSeq + 1 })),
+
+  setVisualizationMode: (mode) => {
+    persist('studio.visualizationMode', mode);
+    set((s) => ({ visualizationMode: mode, canvasFitSeq: s.canvasFitSeq + 1 }));
+  },
+
+  setExperienceMode: (mode) => {
+    persist('studio.experienceMode', mode);
+    set({ experienceMode: mode, assistantOpen: mode === 'engineer' ? get().assistantOpen : false });
+    if (mode === 'client' && !get().simulating) get().toggleSimulation();
+  },
+
+  toggleExperienceMode: () => {
+    const next = get().experienceMode === 'engineer' ? 'client' : 'engineer';
+    get().setExperienceMode(next);
+  },
+
+  setAssistantOpen: (open) => set({ assistantOpen: open }),
+
+  executeDesignCommand: (text): { ok: boolean; message: string; changes: number } => {
+    if (isGenerateBriefCommand(text)) {
+      const gen = get().generateFromBrief(text);
+      return { ok: gen.ok, message: gen.message, changes: gen.ok ? 1 : 0 };
+    }
+    const s = get();
+    return runDesignCommand(text, {
+      getState: get,
+      addNodeFromCatalog: s.addNodeFromCatalog,
+      replaceNodeCatalog: s.replaceNodeCatalog,
+      moveNode: s.moveNode,
+      updateProject: s.updateProject,
+      setControl: s.setControl,
+    });
+  },
+
+  generateFromBrief: (text) => {
+    try {
+      const parsed = parseProjectBrief(text, get().project);
+      const result = runAutonomousPipeline(parsed.project, parsed.rooms, get().locale);
+      set({
+        project: result.project,
+        designName: parsed.designName,
+        nodes: result.nodes,
+        edges: result.edges,
+        rooms: result.rooms,
+        controls: result.controls,
+        map: result.map,
+        floorPlanTool: 'select',
+        selectedNodeId: null,
+        selectedRoomId: null,
+        autonomousAssumptions: [...parsed.assumptions, ...result.assumptions],
+        canvasFitSeq: get().canvasFitSeq + 1,
+      });
+      return {
+        ok: true,
+        message: `Autonomous design generated: ${result.nodes.length} devices, ${result.rooms.length} rooms, BOQ ≈ $${Math.round(result.boqGrandTotal)}.`,
+        assumptions: get().autonomousAssumptions,
+      };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Generation failed', assumptions: [] };
+    }
+  },
+
+  setBim: (bim) => set({ bim }),
+
+  toggleLuxHeatmap: () => {
+    const next = !get().showLuxHeatmap;
+    persist('studio.luxHeatmap', next ? '1' : '0');
+    set({ showLuxHeatmap: next });
+  },
+
+  analyzePlanFull: async () => {
+    const rooms = await get().detectRoomsFromMap();
+    const bim = get().bim;
+    return { rooms, walls: bim?.walls.length ?? 0 };
+  },
 }));
 
 // Debounced autosave of the design to localStorage.
@@ -591,6 +770,7 @@ if (typeof window !== 'undefined') {
         map: s.map,
         project: s.project,
         rooms: s.rooms,
+        bim: s.bim ?? undefined,
       };
       try {
         window.localStorage.setItem('studio.design', JSON.stringify(file));

@@ -2,15 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { useStudio } from '../lib/store';
-import { useT } from './hooks';
+import { useAnalysis, useAutonomousReports, useT } from './hooks';
 import { getCatalogEntry } from '../lib/catalog';
 import { resolveNodes } from '../lib/model';
 import { buildBoq, buildLoadSchedule, buildCableSchedule } from '../lib/engine/reports';
 import { buildingTypeLabel } from '../lib/project';
-import { useAnalysis } from './hooks';
 import { X, FileBarChart2 } from 'lucide-react';
 
-type Tab = 'boq' | 'loads' | 'cables' | 'compliance';
+type Tab = 'boq' | 'loads' | 'cables' | 'hvac' | 'lighting' | 'smart' | 'compliance';
 
 export function ReportsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -20,6 +19,7 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
   const designName = useStudio((s) => s.designName);
   const project = useStudio((s) => s.project);
   const { compliance } = useAnalysis();
+  const { hvac, lighting, smart, assumptions } = useAutonomousReports();
   const [tab, setTab] = useState<Tab>('boq');
 
   const { boq, loads, cables } = useMemo(() => {
@@ -31,6 +31,9 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
     { key: 'boq', label: t('boq') },
     { key: 'loads', label: t('loadSchedule') },
     { key: 'cables', label: t('cableSchedule') },
+    { key: 'hvac', label: t('hvacReport') },
+    { key: 'lighting', label: t('lightingReport') },
+    { key: 'smart', label: t('smartReport') },
     { key: 'compliance', label: t('compliance') },
   ];
 
@@ -140,6 +143,75 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
             )
           )}
 
+          {tab === 'hvac' && (
+            hvac.rooms.length === 0 ? <Empty t={t} /> : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-[11px]">
+                  <Stat label="Cooling" value={`${hvac.totalCoolingKw} kW`} />
+                  <Stat label="Heating" value={`${hvac.totalHeatingKw} kW`} />
+                  <Stat label="BTU" value={String(hvac.totalBtu)} />
+                  <Stat label="Est. kWh/y" value={String(hvac.annualKwhEstimate)} />
+                </div>
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className={th}>Room</th><th className={th}>m²</th><th className={th}>Cool kW</th><th className={th}>Heat kW</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hvac.rooms.map((r) => (
+                      <tr key={r.roomId}>
+                        <td className={td}>{r.label}</td><td className={td}>{r.areaM2}</td><td className={td}>{r.coolingKw}</td><td className={td}>{r.heatingKw}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <Assumptions list={hvac.assumptions} />
+              </div>
+            )
+          )}
+
+          {tab === 'lighting' && (
+            lighting.rooms.length === 0 ? <Empty t={t} /> : (
+              <div className="space-y-3">
+                <p className="text-[11px] text-[var(--studio-muted)]">{lighting.totalFixtures} fixtures · {lighting.totalPowerW} W total</p>
+                <table className="w-full">
+                  <thead>
+                    <tr><th className={th}>Room</th><th className={th}>Lux</th><th className={th}>Fixtures</th><th className={th}>W</th></tr>
+                  </thead>
+                  <tbody>
+                    {lighting.rooms.map((r) => (
+                      <tr key={r.roomId}><td className={td}>{r.label}</td><td className={td}>{r.luxTarget}</td><td className={td}>{r.fixturesRecommended}</td><td className={td}>{r.powerW}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+                <Assumptions list={lighting.assumptions} />
+              </div>
+            )
+          )}
+
+          {tab === 'smart' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+                <Stat label="Protocol" value={smart.protocol} />
+                <Stat label="Bus mA" value={String(smart.totalBusMa)} />
+                <Stat label="PSU" value={`${smart.psuRequired}×640mA`} />
+                <Stat label="Devices" value={String(smart.devices.length)} />
+              </div>
+              {smart.devices.length > 0 && (
+                <table className="w-full">
+                  <thead><tr><th className={th}>Label</th><th className={th}>Address</th><th className={th}>Class</th></tr></thead>
+                  <tbody>
+                    {smart.devices.map((d) => (
+                      <tr key={d.nodeId}><td className={td}>{d.label}</td><td className={td}>{d.address}</td><td className={td}>{d.deviceClass}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <Assumptions list={smart.assumptions} />
+            </div>
+          )}
+
           {tab === 'compliance' && (
             compliance.length === 0 ? <Empty t={t} /> : (
               <table className="w-full">
@@ -172,4 +244,23 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
 
 function Empty({ t }: { t: (k: 'noData') => string }) {
   return <div className="py-10 text-center text-sm text-[var(--studio-muted)]">{t('noData')}</div>;
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-2 py-1.5">
+      <div className="text-[9px] text-[var(--studio-muted)]">{label}</div>
+      <div className="font-semibold text-[var(--studio-text)]">{value}</div>
+    </div>
+  );
+}
+
+function Assumptions({ list }: { list: string[] }) {
+  if (!list.length) return null;
+  return (
+    <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[10px] text-amber-200">
+      <div className="mb-1 font-bold uppercase tracking-wide">Assumptions</div>
+      <ul className="list-inside list-disc space-y-0.5">{list.slice(0, 4).map((a) => <li key={a}>{a}</li>)}</ul>
+    </div>
+  );
 }

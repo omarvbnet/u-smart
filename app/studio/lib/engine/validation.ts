@@ -22,6 +22,7 @@ import {
   prospectiveScKa,
   apparentKva,
 } from './electrical';
+import { suggestHvacFix } from './autofix';
 
 export type Severity = 'critical' | 'warning' | 'recommendation';
 
@@ -31,7 +32,10 @@ export type Fix =
   | { kind: 'replaceBreaker'; nodeId: string; toRating: number }
   | { kind: 'resizeCable'; nodeId: string; toCatalogId: string }
   | { kind: 'setParam'; nodeId: string; key: string; value: number }
-  | { kind: 'addGrounding' };
+  | { kind: 'addGrounding' }
+  | { kind: 'moveNode'; nodeId: string; x: number; y: number }
+  | { kind: 'replaceCatalog'; nodeId: string; toCatalogId: string }
+  | { kind: 'addPsu'; count: number };
 
 export type Issue = {
   id: string;
@@ -448,6 +452,7 @@ export function validateDesign(
           values: [{ label: t('EER', 'EER', 'EER', 'EER'), value: `${h.eer}` }],
           standards: ['ASHRAE'],
           recommendation: t('اختر وحدة بكفاءة EER ≥ 3.5 لتوفير الطاقة.', 'Choose a unit with EER ≥ 3.5 to save energy.', 'یەکەیەک بە EER ≥ 3.5 هەڵبژێرە.', 'Enerji tasarrufu için EER ≥ 3.5 seçin.'),
+          fix: suggestHvacFix(n.id, nodes),
         });
       }
     }

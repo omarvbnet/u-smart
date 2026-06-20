@@ -43,12 +43,42 @@ export type DesignRoom = {
   zone: 'general' | 'bedroom' | 'kitchen' | 'bathroom' | 'office' | 'corridor' | 'mechanical';
 };
 
+/** Wall segment extracted from CAD or raster analysis. */
+export type DesignWall = {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  thickness: number;
+  layer?: string;
+};
+
+/** Door or window opening on the plan. */
+export type DesignOpening = {
+  id: string;
+  kind: 'door' | 'window';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  layer?: string;
+};
+
+/** Structured BIM-like geometry from plan analysis. */
+export type BimModel = {
+  walls: DesignWall[];
+  openings: DesignOpening[];
+};
+
 export type Design = {
   id: string;
   name: string;
   nodes: DesignNode[];
   edges: DesignEdge[];
   rooms?: DesignRoom[];
+  bim?: BimModel;
 };
 
 export type ResolvedNode = DesignNode & { spec: CatalogEntry };
