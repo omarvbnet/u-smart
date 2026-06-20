@@ -86,17 +86,32 @@ export function FloorPlanToolbar() {
         )}
         {!clientMode && (
           <>
+            <button className={btn(tool === 'place-door')} onClick={() => setTool('place-door')} title={t('placeDoor')}>
+              <DoorOpen className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden sm:inline">{t('placeDoor')}</span>
+            </button>
+            <button className={btn(tool === 'place-window')} onClick={() => setTool('place-window')} title={t('placeWindow')}>
+              <AppWindow className="h-3.5 w-3.5 text-sky-400" />
+              <span className="hidden sm:inline">{t('placeWindow')}</span>
+            </button>
             <button className={btn(false)} onClick={() => addGarden()} title={t('addGarden')}>
               <TreePine className="h-3.5 w-3.5 text-emerald-400" />
               <span className="hidden sm:inline">{t('addGarden')}</span>
             </button>
+          </>
+        )}
+        {(bim?.openings.length ?? 0) > 0 && (
+          <span className="rounded-lg border border-amber-500/30 px-2 py-1 text-[9px] text-amber-200">
+            {bim!.openings.length} {t('openingsDetected')}
+          </span>
+        )}
+        {!clientMode && (
+          <>
             <button className={btn(false)} onClick={() => addOpening('door')} title={t('addDoor')}>
               <DoorOpen className="h-3.5 w-3.5 text-amber-400" />
-              <span className="hidden sm:inline">{t('addDoor')}</span>
             </button>
             <button className={btn(false)} onClick={() => addOpening('window')} title={t('addWindow')}>
               <AppWindow className="h-3.5 w-3.5 text-sky-400" />
-              <span className="hidden sm:inline">{t('addWindow')}</span>
             </button>
           </>
         )}

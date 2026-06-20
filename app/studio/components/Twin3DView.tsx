@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo } from 'react';
+import { Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -10,7 +10,8 @@ import { physicalSpecFor, PX_PER_M } from '../lib/catalog/dimensions';
 import { useSimulation, useDigitalTwinSync } from './hooks';
 import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
-import type { DesignOpening, DesignGarden, DesignWall } from '../lib/model';
+import type { DesignOpening, DesignGarden, DesignWall, CurtainStyle } from '../lib/model';
+import { openingOpenPercent } from '../lib/engine/opening-layout';
 import {
   parseRoutePoints,
   computeCableRoute,
@@ -66,15 +67,92 @@ function GardenMesh({ garden, elevation }: { garden: DesignGarden; elevation: nu
   );
 }
 
-function OpeningMesh({ opening, elevation }: { opening: DesignOpening; elevation: number }) {
+function OpeningMesh({
+  opening,
+  elevation,
+  targetOpen,
+}: {
+  opening: DesignOpening;
+  elevation: number;
+  targetOpen: number;
+}) {
   const cx = pxToM(opening.x);
   const cz = pxToM(opening.y);
-  const color = opening.kind === 'door' ? '#d97706' : '#38bdf8';
+  const w = pxToM(opening.width);
+  const doorGroup = useRef<THREE.Group>(null);
+  const curtainL = useRef<THREE.Mesh>(null);
+  const curtainR = useRef<THREE.Mesh>(null);
+  const rollRef = useRef<THREE.Mesh>(null);
+  const anim = useRef(0);
+
+  useFrame((_, dt) => {
+    anim.current = THREE.MathUtils.lerp(anim.current, targetOpen, Math.min(1, dt * 5));
+    const t = anim.current / 100;
+    if (opening.kind === 'door' && doorGroup.current) {
+      doorGroup.current.rotation.y = -t * (Math.PI / 2.2);
+    }
+    const style = opening.curtainStyle ?? 'none';
+    if (opening.kind === 'window' && style === 'roll' && rollRef.current) {
+      rollRef.current.scale.y = Math.max(0.02, 1 - t);
+    }
+    if (opening.kind === 'window' && style === 'single' && curtainL.current) {
+      curtainL.current.position.x = -w * 0.45 * t;
+    }
+    if (opening.kind === 'window' && style === 'double') {
+      if (curtainL.current) curtainL.current.position.x = -w * 0.22 * t;
+      if (curtainR.current) curtainR.current.position.x = w * 0.22 * t;
+    }
+  });
+
+  if (opening.kind === 'door') {
+    return (
+      <group position={[cx, elevation, cz]}>
+        <mesh position={[0, 1.1, 0]} castShadow>
+          <boxGeometry args={[w, 2.2, 0.08]} />
+          <meshStandardMaterial color="#64748b" />
+        </mesh>
+        <group ref={doorGroup} position={[w / 2 - 0.05, 1.1, 0]}>
+          <mesh castShadow>
+            <boxGeometry args={[w * 0.92, 2.1, 0.06]} />
+            <meshStandardMaterial color="#d97706" />
+          </mesh>
+        </group>
+      </group>
+    );
+  }
+
+  const style: CurtainStyle = opening.curtainStyle ?? 'none';
   return (
-    <mesh position={[cx, elevation + (opening.kind === 'door' ? 1.1 : 1.4), cz]} castShadow>
-      <boxGeometry args={[pxToM(opening.width), opening.kind === 'door' ? 2.2 : 1.2, 0.12]} />
-      <meshStandardMaterial color={color} transparent opacity={opening.kind === 'window' ? 0.5 : 0.9} />
-    </mesh>
+    <group position={[cx, elevation + 1.4, cz]}>
+      <mesh castShadow>
+        <boxGeometry args={[w, 1.2, 0.05]} />
+        <meshStandardMaterial color="#38bdf8" transparent opacity={0.35} />
+      </mesh>
+      {style === 'roll' && (
+        <mesh ref={rollRef} position={[0, 0.5, 0.04]}>
+          <boxGeometry args={[w * 0.92, 1, 0.02]} />
+          <meshStandardMaterial color="#1e293b" transparent opacity={0.7} />
+        </mesh>
+      )}
+      {style === 'single' && (
+        <mesh ref={curtainL} position={[0, 0, 0.04]}>
+          <boxGeometry args={[w * 0.45, 1.05, 0.02]} />
+          <meshStandardMaterial color="#1e293b" transparent opacity={0.75} />
+        </mesh>
+      )}
+      {style === 'double' && (
+        <>
+          <mesh ref={curtainL} position={[-w * 0.22, 0, 0.04]}>
+            <boxGeometry args={[w * 0.44, 1.05, 0.02]} />
+            <meshStandardMaterial color="#1e293b" transparent opacity={0.75} />
+          </mesh>
+          <mesh ref={curtainR} position={[w * 0.22, 0, 0.04]}>
+            <boxGeometry args={[w * 0.44, 1.05, 0.02]} />
+            <meshStandardMaterial color="#1e293b" transparent opacity={0.75} />
+          </mesh>
+        </>
+      )}
+    </group>
   );
 }
 
@@ -349,8 +427,6 @@ function SceneContent() {
     return aggregateSimulation(resolveNodes(nodes, getCatalogEntry), sim);
   }, [nodes, sim, simulating]);
 
-  useFrame(() => {});
-
   const devices = useMemo(
     () => nodes.filter((n) => {
       const e = getCatalogEntry(n.catalogId);
@@ -413,7 +489,7 @@ function SceneContent() {
         <WallMesh key={w.id} wall={w} elevation={elevation} />
       ))}
       {openings.map((o) => (
-        <OpeningMesh key={o.id} opening={o} elevation={elevation} />
+        <OpeningMesh key={o.id} opening={o} elevation={elevation} targetOpen={openingOpenPercent(o, controls)} />
       ))}
       {visibleRooms.map((r) => (
         <RoomMesh key={r.id} x={r.x} y={r.y} w={r.width} h={r.height} label={r.label} elevation={elevation} />

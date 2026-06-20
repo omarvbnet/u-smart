@@ -51,6 +51,7 @@ import {
 } from '../lib/engine/cable-map';
 import type { CableSpec } from '../lib/catalog';
 import { useLuxHeatmaps, useLoadHeatmaps, useDigitalTwinSync } from './hooks';
+import { openingOpenPercent } from '../lib/engine/opening-layout';
 
 const nodeTypes = {
   device: (p: NodeProps) => <DeviceNode {...p} />,
@@ -86,6 +87,8 @@ function CanvasInner() {
   const locale = useStudio((s) => s.locale);
   const selectedId = useStudio((s) => s.selectedNodeId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
+  const selectedOpeningId = useStudio((s) => s.selectedOpeningId);
+  const controls = useStudio((s) => s.controls);
   const showDeclarations = useStudio((s) => s.showDeclarations);
   const map = useStudio((s) => s.map);
   const floorPlanTool = useStudio((s) => s.floorPlanTool);
@@ -98,6 +101,9 @@ function CanvasInner() {
   const removeNode = useStudio((s) => s.removeNode);
   const select = useStudio((s) => s.select);
   const selectRoom = useStudio((s) => s.selectRoom);
+  const selectOpening = useStudio((s) => s.selectOpening);
+  const moveOpening = useStudio((s) => s.moveOpening);
+  const addOpening = useStudio((s) => s.addOpening);
   const addRoom = useStudio((s) => s.addRoom);
   const setFloorPlanTool = useStudio((s) => s.setFloorPlanTool);
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
@@ -114,6 +120,7 @@ function CanvasInner() {
   useDigitalTwinSync();
   const rtl = RTL_LOCALES.has(locale);
   const drawing = floorPlanTool === 'draw-room';
+  const placingOpening = floorPlanTool === 'place-door' || floorPlanTool === 'place-window';
 
   const portKinds = useMemo(() => {
     const m = new Map<string, Map<string, PortKind>>();
@@ -171,10 +178,14 @@ function CanvasInner() {
           type: 'opening',
           position: { x: o.x - o.width / 2, y: o.y - o.height / 2 },
           style: { width: o.width, height: o.height },
-          data: { opening: o } satisfies OpeningNodeData,
-          draggable: false,
-          selectable: false,
-          zIndex: 0,
+          data: {
+            opening: o,
+            openPercent: openingOpenPercent(o, controls),
+            selected: o.id === selectedOpeningId,
+          } satisfies OpeningNodeData,
+          draggable: !drawing,
+          selectable: !drawing,
+          zIndex: 2,
         });
       }
       for (const g of bim.gardens ?? []) {
@@ -340,7 +351,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap]);
+  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, selectedOpeningId, controls, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 
@@ -394,8 +405,8 @@ function CanvasInner() {
   );
 
   const layoutKey = useMemo(
-    () => `${nodes.length}:${rooms.length}:${map?.width ?? 0}:${map?.height ?? 0}`,
-    [nodes.length, rooms.length, map?.width, map?.height],
+    () => `${nodes.length}:${rooms.length}:${bim?.openings.length ?? 0}:${map?.width ?? 0}:${map?.height ?? 0}`,
+    [nodes.length, rooms.length, bim?.openings.length, map?.width, map?.height],
   );
 
   const storeRfNodesRef = useRef(storeRfNodes);
@@ -426,7 +437,12 @@ function CanvasInner() {
             draggingIds.current.delete(c.id);
             if (c.id === MAP_ID) moveMap(c.position.x, c.position.y);
             else if (c.id.startsWith('room_')) moveRoom(c.id.slice(5), c.position.x, c.position.y);
-            else moveNode(c.id, c.position.x, c.position.y);
+            else if (c.id.startsWith('open_')) {
+              const opening = bim?.openings.find((o) => o.id === c.id.slice(5));
+              if (opening && c.position) {
+                moveOpening(opening.id, c.position.x + opening.width / 2, c.position.y + opening.height / 2);
+              }
+            } else moveNode(c.id, c.position.x, c.position.y);
           }
         } else if (c.type === 'dimensions' && c.dimensions && c.id.startsWith('room_')) {
           resizeRoom(c.id.slice(5), c.dimensions.width, c.dimensions.height);
@@ -436,7 +452,7 @@ function CanvasInner() {
         }
       }
     },
-    [onRfNodesChange, moveNode, moveRoom, resizeRoom, moveMap, removeNode],
+    [onRfNodesChange, moveNode, moveRoom, moveOpening, resizeRoom, moveMap, removeNode, bim?.openings],
   );
 
   const onConnect = useCallback(
@@ -467,12 +483,18 @@ function CanvasInner() {
 
   const onPaneMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      if (placingOpening && e.button === 0) {
+        const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        addOpening(floorPlanTool === 'place-door' ? 'door' : 'window', pos.x, pos.y);
+        setFloorPlanTool('select');
+        return;
+      }
       if (!drawing || e.button !== 0) return;
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       drawStart.current = pos;
       setDrawPreview({ x: pos.x, y: pos.y, w: 0, h: 0 });
     },
-    [drawing, screenToFlowPosition],
+    [drawing, placingOpening, floorPlanTool, screenToFlowPosition, addOpening, setFloorPlanTool],
   );
 
   const onPaneMouseMove = useCallback(
@@ -512,7 +534,7 @@ function CanvasInner() {
   return (
     <div
       ref={wrapper}
-      className={`relative h-full w-full ${drawing ? 'cursor-crosshair' : ''}`}
+      className={`relative h-full w-full ${drawing || placingOpening ? 'cursor-crosshair' : ''}`}
       onMouseDown={onPaneMouseDown}
       onMouseMove={onPaneMouseMove}
       onMouseUp={onPaneMouseUp}
@@ -544,6 +566,7 @@ function CanvasInner() {
         onNodeClick={(_, n) => {
           if (n.id === MAP_ID) return;
           if (n.id.startsWith('room_')) selectRoom(n.id.slice(5));
+          else if (n.id.startsWith('open_')) selectOpening(n.id.slice(5));
           else if (n.id.startsWith('route_')) select(n.id.slice(6));
           else select(n.id);
         }}

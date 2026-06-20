@@ -15,13 +15,18 @@ import { CONDUIT_STYLE, type ConduitType } from '../lib/engine/cable-map';
 import type { CableSpec } from '../lib/catalog';
 import { PORT_COLOR } from './DeviceNode';
 import { EntryImage } from './EntryImage';
-import { Trash2, Zap, Plug, Copy, BedDouble } from 'lucide-react';
+import { Trash2, Zap, Plug, Copy, BedDouble, DoorOpen, AppWindow } from 'lucide-react';
+import { openingOpenPercent } from '../lib/engine/opening-layout';
+import type { CurtainStyle } from '../lib/model';
 
 export function PropertiesPanel() {
   const t = useT();
   const locale = useStudio((s) => s.locale);
   const selectedId = useStudio((s) => s.selectedNodeId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
+  const selectedOpeningId = useStudio((s) => s.selectedOpeningId);
+  const opening = useStudio((s) => s.bim?.openings.find((o) => o.id === s.selectedOpeningId));
+  const allControls = useStudio((s) => s.controls);
   const room = useStudio((s) => s.rooms.find((r) => r.id === s.selectedRoomId));
   const node = useStudio((s) => s.nodes.find((n) => n.id === s.selectedNodeId));
   const edges = useStudio((s) => s.edges);
@@ -47,12 +52,105 @@ export function PropertiesPanel() {
   const select = useStudio((s) => s.select);
   const control = useStudio((s) => (s.selectedNodeId ? s.controls[s.selectedNodeId] : undefined));
   const setControl = useStudio((s) => s.setControl);
+  const updateOpening = useStudio((s) => s.updateOpening);
+  const removeOpening = useStudio((s) => s.removeOpening);
+  const setOpeningControl = useStudio((s) => s.setOpeningControl);
 
   const vrfReport = useMemo(
     () => calculateVrfDistribution(rooms, project, nodes),
     [rooms, project, nodes],
   );
   const roomVrf = selectedRoomId ? vrfAssignmentForRoom(vrfReport, selectedRoomId) : undefined;
+
+  if (selectedOpeningId && opening) {
+    const input =
+      'w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400';
+    const openPct = openingOpenPercent(opening, allControls);
+    return (
+      <div className="flex h-full flex-col p-4">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--studio-text)]">
+          {opening.kind === 'door' ? <DoorOpen className="h-4 w-4 text-amber-400" /> : <AppWindow className="h-4 w-4 text-sky-400" />}
+          {t('openingProperties')}
+        </h3>
+        <div className="flex-1 space-y-3 overflow-y-auto">
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('openingKind')}</span>
+            <select
+              className={input}
+              value={opening.kind}
+              onChange={(e) => updateOpening(opening.id, { kind: e.target.value as 'door' | 'window' })}
+            >
+              <option value="door">{t('addDoor')}</option>
+              <option value="window">{t('addWindow')}</option>
+            </select>
+          </label>
+          {opening.kind === 'window' && (
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('curtainStyle')}</span>
+              <select
+                className={input}
+                value={opening.curtainStyle ?? 'none'}
+                onChange={(e) => updateOpening(opening.id, { curtainStyle: e.target.value as CurtainStyle, smartEnabled: e.target.value !== 'none' || opening.smartEnabled })}
+              >
+                <option value="none">{t('curtainNone')}</option>
+                <option value="roll">{t('curtainRoll')}</option>
+                <option value="single">{t('curtainSingle')}</option>
+                <option value="double">{t('curtainDouble')}</option>
+              </select>
+            </label>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">W</span>
+              <input className={input} type="number" value={Math.round(opening.width)} onChange={(e) => updateOpening(opening.id, { width: Number(e.target.value) })} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">H</span>
+              <input className={input} type="number" value={Math.round(opening.height)} onChange={(e) => updateOpening(opening.id, { height: Number(e.target.value) })} />
+            </label>
+          </div>
+          <label className="flex items-center justify-between rounded-lg border border-[var(--studio-border)] px-3 py-2">
+            <span className="text-xs text-[var(--studio-text)]">{t('smartOpening')}</span>
+            <input
+              type="checkbox"
+              checked={!!opening.smartEnabled}
+              onChange={(e) => updateOpening(opening.id, { smartEnabled: e.target.checked })}
+            />
+          </label>
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs text-[var(--studio-muted)]">
+              <span>{opening.kind === 'door' ? t('doorOpen') : t('curtainOpen')}</span>
+              <span className="font-semibold text-cyan-300">{Math.round(openPct)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={openPct}
+              className="w-full accent-cyan-400"
+              onChange={(e) => setOpeningControl(opening.id, Number(e.target.value))}
+            />
+            <div className="mt-2 flex gap-2">
+              <button type="button" className="flex-1 rounded-lg border border-emerald-400/40 bg-emerald-500/10 py-1.5 text-[10px] font-semibold text-emerald-200" onClick={() => setOpeningControl(opening.id, 100)}>
+                {t('openActuator')}
+              </button>
+              <button type="button" className="flex-1 rounded-lg border border-[var(--studio-border)] py-1.5 text-[10px] font-semibold" onClick={() => setOpeningControl(opening.id, 0)}>
+                {t('closeActuator')}
+              </button>
+            </div>
+          </div>
+          {opening.linkedNodeId && (
+            <button type="button" className="text-[10px] text-cyan-400 underline" onClick={() => select(opening.linkedNodeId!)}>
+              {t('selectActuator')}
+            </button>
+          )}
+        </div>
+        <button onClick={() => removeOpening(opening.id)} className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 py-2 text-sm text-red-400">
+          <Trash2 className="h-4 w-4" /> {t('deleteOpening')}
+        </button>
+      </div>
+    );
+  }
 
   if (selectedRoomId && room) {
     const areaM2 = ((room.width / 50) * (room.height / 50)).toFixed(1);

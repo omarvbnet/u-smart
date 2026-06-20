@@ -57,6 +57,9 @@ export type DesignWall = {
   floorId?: string;
 };
 
+/** Curtain style for smart windows. */
+export type CurtainStyle = 'none' | 'roll' | 'single' | 'double';
+
 /** Door or window opening on the plan. */
 export type DesignOpening = {
   id: string;
@@ -68,6 +71,12 @@ export type DesignOpening = {
   rotation?: number;
   layer?: string;
   floorId?: string;
+  roomId?: string;
+  linkedNodeId?: string;
+  smartEnabled?: boolean;
+  curtainStyle?: CurtainStyle;
+  /** 0 = closed, 100 = fully open (door swing / curtain travel). */
+  openPercent?: number;
 };
 
 /** Outdoor garden / landscape zone on the plan. */

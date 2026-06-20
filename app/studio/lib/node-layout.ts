@@ -69,9 +69,11 @@ export function nodesForCanvasFit(
   mode: 'content' | 'full',
 ): { id: string; type?: string }[] {
   if (mode === 'full') {
-    return rfNodes.filter((n) => n.type === 'map' || n.type === 'room' || n.type === 'device' || n.type === 'cable');
+    return rfNodes.filter((n) =>
+      n.type === 'map' || n.type === 'room' || n.type === 'device' || n.type === 'cable' || n.type === 'opening' || n.type === 'garden',
+    );
   }
-  return rfNodes.filter((n) => n.type === 'room' || n.type === 'device' || n.type === 'cable');
+  return rfNodes.filter((n) => n.type === 'room' || n.type === 'device' || n.type === 'cable' || n.type === 'opening');
 }
 
 export function cableRunBetween(

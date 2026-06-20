@@ -48,10 +48,16 @@ import {
   indoorPositionInRoom,
 } from './engine/vrf-distribution';
 import type { HvacSpec } from './catalog';
+import {
+  buildBimOpenings,
+  mergeOpeningActuators,
+  syncOpeningsFromControls,
+  actuatorsForOpenings,
+} from './engine/opening-layout';
 import type { VisualizationMode, ExperienceMode } from './visualization/modes';
 
 export type Theme = 'dark' | 'light';
-export type FloorPlanTool = 'select' | 'draw-room';
+export type FloorPlanTool = 'select' | 'draw-room' | 'place-door' | 'place-window';
 /** `content` = zoom to rooms & elements; `full` = include the entire map layer. */
 export type CanvasViewMode = 'content' | 'full';
 
@@ -95,6 +101,7 @@ type StudioState = {
   project: ProjectInfo;
   rooms: DesignRoom[];
   selectedRoomId: string | null;
+  selectedOpeningId: string | null;
   floorPlanTool: FloorPlanTool;
   cloudProjectId: string | null;
   simEnergyKwh: number;
@@ -168,6 +175,11 @@ type StudioState = {
   resizeRoom: (id: string, width: number, height: number) => void;
   removeRoom: (id: string) => void;
   selectRoom: (id: string | null) => void;
+  selectOpening: (id: string | null) => void;
+  updateOpening: (id: string, patch: Partial<DesignOpening>) => void;
+  moveOpening: (id: string, x: number, y: number) => void;
+  removeOpening: (id: string) => void;
+  setOpeningControl: (id: string, openPercent: number) => void;
 
   duplicateNode: (id: string) => void;
   clearTelegrams: () => void;
@@ -319,6 +331,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   project: defaultProject(),
   rooms: [],
   selectedRoomId: null,
+  selectedOpeningId: null,
   floorPlanTool: 'select',
   cloudProjectId: null,
   simEnergyKwh: 0,
@@ -418,7 +431,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }),
 
-  select: (id) => set({ selectedNodeId: id, selectedRoomId: null }),
+  select: (id) => set({ selectedNodeId: id, selectedRoomId: null, selectedOpeningId: null }),
 
   setControl: (id, key, value) =>
     set((s) => {
@@ -435,7 +448,8 @@ export const useStudio = create<StudioState>((set, get) => ({
           void getTwinConnection().pushControl(id, key, value);
         }
       }
-      return { controls, telegrams };
+      const bim = syncOpeningsFromControls(s.bim, controls);
+      return { controls, telegrams, bim };
     }),
 
   connect: (edge) =>
@@ -731,6 +745,16 @@ export const useStudio = create<StudioState>((set, get) => ({
       }
     }
 
+    let bim = s.bim;
+    if (rooms.length > 0) {
+      const pack = buildBimOpenings(rooms, mergedProject, s.locale, s.activeFloorId);
+      bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
+      if (mergedProject.smartBuilding || options.generateDesign) {
+        nodes = mergeOpeningActuators(nodes, pack.actuatorNodes);
+        controls = { ...controls, ...pack.controls };
+      }
+    }
+
     set({
       project: mergedProject,
       rooms,
@@ -739,10 +763,12 @@ export const useStudio = create<StudioState>((set, get) => ({
       controls,
       designName,
       map,
+      bim,
       floorPlanTool,
       pendingMapImport,
       selectedNodeId: null,
       selectedRoomId: null,
+      selectedOpeningId: null,
     });
   },
 
@@ -798,6 +824,12 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }
     let bim = s.bim;
+    const openingPack = buildBimOpenings(rooms, s.project, s.locale, s.activeFloorId);
+    bim = {
+      walls: bim?.walls ?? [],
+      openings: openingPack.bim.openings,
+      gardens: bim?.gardens ?? openingPack.bim.gardens,
+    };
     if (bt === 'villa') {
       const g = villaGardenBounds();
       const gardens = bim?.gardens ?? [];
@@ -816,6 +848,10 @@ export const useStudio = create<StudioState>((set, get) => ({
     let nodes = s.nodes;
     let edges = s.edges;
     let controls = s.controls;
+    if (s.project.smartBuilding || options?.engineering) {
+      nodes = mergeOpeningActuators(nodes, openingPack.actuatorNodes);
+      controls = { ...controls, ...openingPack.controls };
+    }
     if (options?.engineering) {
       const project = { ...s.project, bedrooms };
       const starter = buildStarterDesign(project, s.locale, rooms);
@@ -842,6 +878,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       controls,
       selectedRoomId: null,
       selectedNodeId: null,
+      selectedOpeningId: null,
       floorPlanTool: map ? 'select' : s.floorPlanTool,
     });
     return {
@@ -890,7 +927,63 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedRoomId: s.selectedRoomId === id ? null : s.selectedRoomId,
     })),
 
-  selectRoom: (id) => set({ selectedRoomId: id, selectedNodeId: null }),
+  selectRoom: (id) => set({ selectedRoomId: id, selectedNodeId: null, selectedOpeningId: null }),
+
+  selectOpening: (id) => set({ selectedOpeningId: id, selectedNodeId: null, selectedRoomId: null }),
+
+  updateOpening: (id, patch) =>
+    set((s) => {
+      if (!s.bim) return s;
+      return {
+        bim: {
+          ...s.bim,
+          openings: s.bim.openings.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+        },
+      };
+    }),
+
+  moveOpening: (id, x, y) =>
+    set((s) => {
+      if (!s.bim) return s;
+      return {
+        bim: {
+          ...s.bim,
+          openings: s.bim.openings.map((o) => (o.id === id ? { ...o, x, y } : o)),
+        },
+      };
+    }),
+
+  removeOpening: (id) =>
+    set((s) => {
+      if (!s.bim) return s;
+      const opening = s.bim.openings.find((o) => o.id === id);
+      const linked = opening?.linkedNodeId;
+      const controls = { ...s.controls };
+      if (linked) delete controls[linked];
+      return {
+        bim: { ...s.bim, openings: s.bim.openings.filter((o) => o.id !== id) },
+        nodes: linked ? s.nodes.filter((n) => n.id !== linked) : s.nodes,
+        controls,
+        selectedOpeningId: s.selectedOpeningId === id ? null : s.selectedOpeningId,
+      };
+    }),
+
+  setOpeningControl: (id, openPercent) => {
+    const s = get();
+    const opening = s.bim?.openings.find((o) => o.id === id);
+    if (!opening) return;
+    const pct = Math.max(0, Math.min(100, openPercent));
+    if (opening.linkedNodeId) {
+      if (opening.kind === 'window') get().setControl(opening.linkedNodeId, 'level', pct);
+      else get().setControl(opening.linkedNodeId, 'on', pct >= 50);
+    } else {
+      set((st) => ({
+        bim: st.bim
+          ? { ...st.bim, openings: st.bim.openings.map((o) => (o.id === id ? { ...o, openPercent: pct } : o)) }
+          : st.bim,
+      }));
+    }
+  },
 
   clearTelegrams: () => set({ telegrams: [] }),
 
@@ -1099,7 +1192,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ floors: [...s.floors, floor], activeFloorId: floor.id });
   },
 
-  switchFloor: (floorId) => set({ activeFloorId: floorId, selectedNodeId: null, selectedRoomId: null }),
+  switchFloor: (floorId) => set({ activeFloorId: floorId, selectedNodeId: null, selectedRoomId: null, selectedOpeningId: null }),
 
   removeFloor: (floorId) =>
     set((s) => {
@@ -1140,29 +1233,63 @@ export const useStudio = create<StudioState>((set, get) => ({
       return { bim };
     }),
 
-  addOpening: (kind, x = 0, y = 0) =>
+  addOpening: (kind, x, y) =>
     set((s) => {
-      const opening: DesignOpening = {
+      let cx = x;
+      let cy = y;
+      if (cx == null || cy == null) {
+        const room = s.selectedRoomId ? s.rooms.find((r) => r.id === s.selectedRoomId) : undefined;
+        if (room) {
+          cx = room.x + room.width / 2;
+          cy = kind === 'door' ? room.y + room.height : room.y + 8;
+        } else if (s.map) {
+          cx = s.map.x + s.map.width / 2;
+          cy = s.map.y + s.map.height / 2;
+        } else {
+          cx = 0;
+          cy = 0;
+        }
+      }
+      const smart = s.project.smartBuilding;
+      let opening: DesignOpening = {
         id: uid('open'),
         kind,
-        x,
-        y,
-        width: kind === 'door' ? 80 : 100,
-        height: kind === 'door' ? 20 : 12,
+        x: cx,
+        y: cy,
+        width: kind === 'door' ? 76 : 96,
+        height: kind === 'door' ? 18 : 16,
         floorId: s.activeFloorId,
+        roomId: s.selectedRoomId ?? undefined,
+        smartEnabled: smart,
+        openPercent: 0,
+        curtainStyle: kind === 'window' && smart ? 'single' : 'none',
       };
+      let nodes = s.nodes;
+      let controls = { ...s.controls };
+      if (smart) {
+        const act = actuatorsForOpenings([opening], s.locale, s.activeFloorId);
+        opening = act.openings[0]!;
+        nodes = mergeOpeningActuators(nodes, act.nodes);
+        for (const n of act.nodes) {
+          const entry = getCatalogEntry(n.catalogId);
+          if (entry) controls[n.id] = defaultControlState(entry);
+        }
+      }
       const bim: BimModel = {
         walls: s.bim?.walls ?? [],
         openings: [...(s.bim?.openings ?? []), opening],
         gardens: s.bim?.gardens,
       };
-      return { bim };
+      return { bim, nodes, controls, selectedOpeningId: opening.id, selectedNodeId: null, selectedRoomId: null };
     }),
 
   applyHdlScene: (sceneId) => {
     const s = get();
     if (!s.simulating) set({ simulating: true });
-    return runHdlScene(sceneId, s.nodes, (id, key, value) => get().setControl(id, key, value));
+    const changes = runHdlScene(sceneId, s.nodes, (id, key, value) => get().setControl(id, key, value));
+    const bim = syncOpeningsFromControls(s.bim, get().controls);
+    if (bim !== s.bim) set({ bim });
+    return changes;
   },
 
   setMapOverlayMode: (mode) => {
