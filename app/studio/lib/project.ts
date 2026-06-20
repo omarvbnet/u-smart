@@ -29,6 +29,19 @@ export type HvacSystemType =
 
 export type EnergySourceType = 'grid' | 'generator' | 'solar' | 'battery' | 'ups';
 
+/** How indoor HVAC units are distributed across rooms. */
+export type HvacUnitMode = 'per_room' | 'fixed';
+
+/** Smart actuator quality tier — drives default channel counts. */
+export type SmartActuatorTier = 'standard' | 'premium' | 'hotel';
+
+export type SmartChannelCounts = {
+  relay: number;
+  dimmer: number;
+  curtain: number;
+  dryContact: number;
+};
+
 /** How the floor plan was created: draw on blank canvas, import file, or none yet. */
 export type FloorPlanSource = 'none' | 'zero' | 'import';
 
@@ -46,10 +59,28 @@ export type ProjectInfo = {
   smartProtocol: SmartProtocol | null;
   hvacMode: 'auto' | 'manual';
   hvacTypes: HvacSystemType[];
+  /** Primary cooling system (split, VRF, etc.). */
+  coolingSystem: HvacSystemType;
+  /** Primary heating system — often same as cooling for heat-pump / VRF. */
+  heatingSystem: HvacSystemType;
+  /** One indoor unit per room, or a fixed total count distributed across spaces. */
+  hvacUnitMode: HvacUnitMode;
+  /** Used when hvacUnitMode is `fixed`. */
+  hvacUnitCount: number;
+  /** Actuator quality tier for HDL / KNX channel planning. */
+  smartActuatorTier: SmartActuatorTier;
+  /** Planned smart output channels by actuator type. */
+  smartChannels: SmartChannelCounts;
+  /** Auto-map each channel to a load / opening in the design. */
+  smartAlignChannels: boolean;
   energySources: EnergySourceType[];
   floorPlanSource: FloorPlanSource;
   /** Bedroom count for residential layout templates (apartment / house / villa). */
   bedrooms: number;
+  /** Number of building floors — each gets its own plan view and MEP distribution. */
+  floorCount: number;
+  /** Solar PV array rated capacity (kW) for simulation & declarations. */
+  solarCapacityKw: number;
 };
 
 export const BUILDING_TYPES: { id: BuildingType; label: LocalizedText }[] = [
@@ -94,6 +125,48 @@ export const ALL_STANDARDS: StandardCode[] = [
   'KNX',
 ];
 
+export const SMART_ACTUATOR_TIERS: { id: SmartActuatorTier; label: LocalizedText; desc: LocalizedText }[] = [
+  {
+    id: 'standard',
+    label: { ar: 'قياسي', en: 'Standard', ku: 'ستاندارد', tr: 'Standart' },
+    desc: { ar: 'ريليه ودمر HDL أساسي', en: 'Basic HDL relay & dimmer modules', ku: 'ڕیلێ و دیمەری بنەڕەتی', tr: 'Temel HDL röle & dimmer' },
+  },
+  {
+    id: 'premium',
+    label: { ar: 'ممتاز', en: 'Premium', ku: 'پرێمیوم', tr: 'Premium' },
+    desc: { ar: 'قنوات إضافية ومشغلات أقوى', en: 'Extra channels & higher-rated actuators', ku: 'کەناڵی زیاتر', tr: 'Ek kanallar' },
+  },
+  {
+    id: 'hotel',
+    label: { ar: 'فندقي', en: 'Hotel grade', ku: 'هۆتێل', tr: 'Otel sınıfı' },
+    desc: { ar: 'لوحات فندقية ومشغلات كثيفة', en: 'Hotel panels & dense actuation', ku: 'پانێلی هۆتێل', tr: 'Otel panelleri' },
+  },
+];
+
+export function defaultSmartChannels(tier: SmartActuatorTier, roomCount: number): SmartChannelCounts {
+  const rooms = Math.max(3, roomCount);
+  const mul = tier === 'hotel' ? 1.6 : tier === 'premium' ? 1.3 : 1;
+  const base = Math.round(rooms * 2 * mul);
+  return {
+    relay: base,
+    dimmer: Math.round(base * 0.65),
+    curtain: Math.max(4, Math.round(rooms * mul)),
+    dryContact: Math.max(4, Math.round(rooms * 0.9 * mul)),
+  };
+}
+
+export function effectiveHvacTypes(project: ProjectInfo): HvacSystemType[] {
+  const set = new Set<HvacSystemType>([project.coolingSystem, project.heatingSystem]);
+  if (project.hvacMode === 'manual') project.hvacTypes.forEach((t) => set.add(t));
+  return [...set];
+}
+
+export function primaryCoolingSystem(project: ProjectInfo): HvacSystemType {
+  if (project.coolingSystem) return project.coolingSystem;
+  if (project.hvacMode === 'auto') return 'split';
+  return project.hvacTypes[0] ?? 'split';
+}
+
 export function defaultProject(): ProjectInfo {
   return {
     client: '',
@@ -108,9 +181,18 @@ export function defaultProject(): ProjectInfo {
     smartProtocol: null,
     hvacMode: 'auto',
     hvacTypes: ['split'],
+    coolingSystem: 'vrf',
+    heatingSystem: 'vrf',
+    hvacUnitMode: 'per_room',
+    hvacUnitCount: 4,
+    smartActuatorTier: 'standard',
+    smartChannels: defaultSmartChannels('standard', 4),
+    smartAlignChannels: true,
     energySources: ['grid'],
     floorPlanSource: 'none',
     bedrooms: 4,
+    floorCount: 2,
+    solarCapacityKw: 30,
   };
 }
 
@@ -122,14 +204,28 @@ export function buildingTypeLabel(type: BuildingType): LocalizedText {
 export function normalizeProject(p: Partial<ProjectInfo> | undefined): ProjectInfo {
   const d = defaultProject();
   if (!p) return d;
+  const bedrooms = p.bedrooms ?? defaultBedroomsForBuilding(p.buildingType ?? d.buildingType);
+  const cooling = p.coolingSystem ?? p.hvacTypes?.[0] ?? d.coolingSystem;
+  const heating = p.heatingSystem ?? p.hvacTypes?.[0] ?? cooling;
+  const tier = p.smartActuatorTier ?? d.smartActuatorTier;
+  const floorCount = p.floorCount ?? d.floorCount;
   return {
     ...d,
     ...p,
     standards: p.standards ?? d.standards,
-    hvacTypes: p.hvacTypes ?? d.hvacTypes,
+    hvacTypes: p.hvacTypes ?? [cooling, heating],
+    coolingSystem: cooling,
+    heatingSystem: heating,
+    hvacUnitMode: p.hvacUnitMode ?? d.hvacUnitMode,
+    hvacUnitCount: p.hvacUnitCount ?? bedrooms,
+    smartActuatorTier: tier,
+    smartChannels: p.smartChannels ?? defaultSmartChannels(tier, bedrooms * floorCount),
+    smartAlignChannels: p.smartAlignChannels ?? true,
     energySources: p.energySources ?? d.energySources,
     setupComplete: p.setupComplete ?? (p.client ? true : false),
     floorPlanSource: p.floorPlanSource ?? d.floorPlanSource,
-    bedrooms: p.bedrooms ?? defaultBedroomsForBuilding(p.buildingType ?? d.buildingType),
+    bedrooms,
+    floorCount,
+    solarCapacityKw: p.solarCapacityKw ?? d.solarCapacityKw,
   };
 }

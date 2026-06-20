@@ -146,6 +146,18 @@ export function toWorldPoints(local: RoutePoint[], origin: RoutePoint): RoutePoi
   return local.map((p) => ({ x: p.x + origin.x, y: p.y + origin.y }));
 }
 
+export function formatCableLabel(
+  roomLabel: string | undefined,
+  entry: CableSpec,
+  index: number,
+  conduitType: ConduitType,
+): string {
+  const room = roomLabel ?? 'Circuit';
+  const csa = entry.csaMm2 ? `${entry.csaMm2} mm²` : entry.model;
+  const conduit = CONDUIT_STYLE[conduitType]?.label ?? conduitType;
+  return `${room} · ${entry.category} ${csa} · C${index + 1} · ${conduit}`;
+}
+
 export function applyRouteToCable(
   cableNode: DesignNode,
   points: RoutePoint[],
@@ -153,12 +165,16 @@ export function applyRouteToCable(
 ): DesignNode['params'] {
   const lengthM = routeLengthM(points);
   const conduitType = (cableNode.params.conduitType as ConduitType | undefined) ?? (entry ? conduitTypeForCable(entry) : 'conduit');
+  const roomLabel = typeof cableNode.params.roomLabel === 'string' ? cableNode.params.roomLabel : undefined;
+  const circuitIdx = Number(cableNode.params.circuitIndex ?? 0);
+  const autoLabel = entry ? formatCableLabel(roomLabel, entry, circuitIdx, conduitType) : cableNode.label;
   return {
     ...cableNode.params,
     routePoints: serializeRoutePoints(points),
     lengthM,
     conduitType,
     showOnMap: cableNode.params.showOnMap ?? true,
+    cableLabel: autoLabel,
   };
 }
 
@@ -170,5 +186,17 @@ export function rerouteCableNode(
 ): DesignNode {
   const entry = getCatalogEntry(cableNode.catalogId) as CableSpec | undefined;
   const points = computeCableRoute(cableNode, nodes, edges, rooms);
-  return { ...cableNode, params: applyRouteToCable(cableNode, points, entry) };
+  const params = applyRouteToCable(cableNode, points, entry);
+  return { ...cableNode, label: String(params.cableLabel ?? cableNode.label), params };
+}
+
+/** Re-route and auto-label every cable in the design. */
+export function labelAllDesignCables(
+  nodes: DesignNode[],
+  edges: DesignEdge[],
+  rooms: DesignRoom[],
+): DesignNode[] {
+  return nodes.map((n) =>
+    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, edges, rooms) : n,
+  );
 }

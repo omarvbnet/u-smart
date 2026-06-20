@@ -129,7 +129,7 @@ export function Workspace() {
             <SimulationHud />
             <TwinChainPanel />
             {!clientMode && <BusMonitor />}
-            <div className="absolute bottom-3 ltr:left-3 rtl:right-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
+            <div className="absolute top-3 ltr:right-3 rtl:left-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
               <span>{nodeCount} {t('nodes')}</span>
               <span className="opacity-40">·</span>
               <span>{edgeCount} {t('connections')}</span>

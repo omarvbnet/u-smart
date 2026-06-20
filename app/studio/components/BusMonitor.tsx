@@ -3,40 +3,56 @@
 import { useMemo, useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
-import { busHealth, type BusProtocol } from '../lib/engine/bus';
-import { Activity, ChevronDown, Trash2, Radio } from 'lucide-react';
-
-const PROTO_COLOR: Record<BusProtocol, string> = {
-  HDL: 'text-rose-400 bg-rose-400/10',
-  KNX: 'text-emerald-400 bg-emerald-400/10',
-  IO: 'text-blue-400 bg-blue-400/10',
-};
+import { busHealth } from '../lib/engine/bus';
+import { Activity, ChevronDown, Trash2, Radio, AlertTriangle } from 'lucide-react';
 
 export function BusMonitor() {
   const t = useT();
   const simulating = useStudio((s) => s.simulating);
   const telegrams = useStudio((s) => s.telegrams);
   const nodes = useStudio((s) => s.nodes);
+  const project = useStudio((s) => s.project);
   const clearTelegrams = useStudio((s) => s.clearTelegrams);
   const [open, setOpen] = useState(true);
-  const [filter, setFilter] = useState<BusProtocol | 'ALL'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'HDL' | 'KNX' | 'IO'>('ALL');
 
-  const health = useMemo(() => busHealth(nodes), [nodes]);
+  const health = useMemo(() => busHealth(project, nodes), [project, nodes]);
   const list = filter === 'ALL' ? telegrams : telegrams.filter((g) => g.protocol === filter);
 
   if (!simulating) return null;
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 border-t border-[var(--studio-border)] bg-[var(--studio-panel)]/95 backdrop-blur">
-      <div className="flex items-center gap-2 px-3 py-1.5">
+      {!health.busPowerOk && project.smartBuilding && (
+        <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[10px] text-amber-200">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            {t('busPowerBlocked')}: {health.loadMa} mA {t('busLoadMa')} · {health.installedPsuMa} mA {t('busPsuInstalled')} · {t('addBusPsuHint')}
+          </span>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5">
         <Radio className="h-4 w-4 text-cyan-400" />
         <span className="text-xs font-bold text-[var(--studio-text)]">{t('busMonitor')}</span>
-        <span className="flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+        <span
+          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+            health.busPowerOk ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+          }`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${health.busPowerOk ? 'animate-pulse bg-emerald-400' : 'bg-red-400'}`} />
           {t('busVoltage')} {health.voltageV}V
         </span>
-        <span className="rounded-md bg-rose-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">HDL {health.hdl} {t('online')}</span>
-        <span className="rounded-md bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">KNX {health.knx} {t('online')}</span>
+        {project.smartBuilding && (
+          <span className="rounded-md bg-slate-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+            {health.loadMa}/{health.installedPsuMa} mA
+          </span>
+        )}
+        <span className="rounded-md bg-rose-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">
+          HDL {health.hdlOnline}/{health.hdl} {t('online')}
+        </span>
+        <span className="rounded-md bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+          KNX {health.knxOnline}/{health.knx} {t('online')}
+        </span>
 
         <div className="ms-auto flex items-center gap-1">
           {(['ALL', 'HDL', 'KNX', 'IO'] as const).map((p) => (
@@ -71,7 +87,7 @@ export function BusMonitor() {
                   <tr key={g.id} className="border-b border-[var(--studio-border)]/40">
                     <td className="whitespace-nowrap px-2 py-1 text-[var(--studio-muted)]">{new Date(g.t).toLocaleTimeString()}</td>
                     <td className="px-2 py-1">
-                      <span className={`rounded px-1.5 py-0.5 font-bold ${PROTO_COLOR[g.protocol]}`}>{g.protocol}</span>
+                      <span className={`rounded px-1.5 py-0.5 font-bold ${g.protocol === 'HDL' ? 'text-rose-400 bg-rose-400/10' : g.protocol === 'KNX' ? 'text-emerald-400 bg-emerald-400/10' : 'text-blue-400 bg-blue-400/10'}`}>{g.protocol}</span>
                     </td>
                     <td className="whitespace-nowrap px-2 py-1 text-cyan-300">{g.src} → {g.dst}</td>
                     <td className="px-2 py-1 text-[var(--studio-text)]">{g.op}</td>

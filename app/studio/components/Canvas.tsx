@@ -52,6 +52,7 @@ import {
 import type { CableSpec } from '../lib/catalog';
 import { useLuxHeatmaps, useLoadHeatmaps, useDigitalTwinSync } from './hooks';
 import { openingOpenPercent } from '../lib/engine/opening-layout';
+import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
 
 const nodeTypes = {
   device: (p: NodeProps) => <DeviceNode {...p} />,
@@ -88,6 +89,7 @@ function CanvasInner() {
   const selectedId = useStudio((s) => s.selectedNodeId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
   const selectedOpeningId = useStudio((s) => s.selectedOpeningId);
+  const selectedWallId = useStudio((s) => s.selectedWallId);
   const controls = useStudio((s) => s.controls);
   const showDeclarations = useStudio((s) => s.showDeclarations);
   const map = useStudio((s) => s.map);
@@ -102,6 +104,7 @@ function CanvasInner() {
   const select = useStudio((s) => s.select);
   const selectRoom = useStudio((s) => s.selectRoom);
   const selectOpening = useStudio((s) => s.selectOpening);
+  const selectWall = useStudio((s) => s.selectWall);
   const moveOpening = useStudio((s) => s.moveOpening);
   const addOpening = useStudio((s) => s.addOpening);
   const addRoom = useStudio((s) => s.addRoom);
@@ -139,6 +142,8 @@ function CanvasInner() {
     [nodes],
   );
 
+  const effectiveWalls = useMemo(() => mergeEffectiveWalls(bim, rooms, activeFloorId), [bim, rooms, activeFloorId]);
+
   const storeRfNodes = useMemo<Node[]>(() => {
     const list: Node[] = [];
     if (map) {
@@ -156,21 +161,22 @@ function CanvasInner() {
         zIndex: -2,
       });
     }
-    if (bim) {
-      for (const w of bim.walls) {
-        if (w.floorId && w.floorId !== activeFloorId) continue;
+    if (effectiveWalls.length > 0) {
+      for (const w of effectiveWalls) {
         const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
         list.push({
           id: `wall_${w.id}`,
           type: 'wall',
           position: { x: w.x1, y: w.y1 },
-          style: { width: len, height: w.thickness * 2 },
-          data: { wall: w } satisfies WallNodeData,
+          style: { width: len, height: Math.max(w.thickness * 2, 8) },
+          data: { wall: w, selected: w.id === selectedWallId } satisfies WallNodeData,
           draggable: false,
-          selectable: false,
-          zIndex: -1,
+          selectable: !drawing,
+          zIndex: 0,
         });
       }
+    }
+    if (bim) {
       for (const o of bim.openings) {
         if (o.floorId && o.floorId !== activeFloorId) continue;
         list.push({
@@ -276,8 +282,10 @@ function CanvasInner() {
           data: {
             cableId: n.id,
             catalogId: n.catalogId,
-            label: n.label,
+            label: String(n.params.cableLabel ?? n.label),
+            cableLabel: String(n.params.cableLabel ?? n.label),
             points: local,
+            worldOrigin: { x: box.x, y: box.y },
             width: box.w,
             height: box.h,
             conduitType,
@@ -351,7 +359,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, selectedOpeningId, controls, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap]);
+  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 
@@ -567,6 +575,7 @@ function CanvasInner() {
           if (n.id === MAP_ID) return;
           if (n.id.startsWith('room_')) selectRoom(n.id.slice(5));
           else if (n.id.startsWith('open_')) selectOpening(n.id.slice(5));
+          else if (n.id.startsWith('wall_')) selectWall(n.id.slice(5));
           else if (n.id.startsWith('route_')) select(n.id.slice(6));
           else select(n.id);
         }}
@@ -574,6 +583,8 @@ function CanvasInner() {
           if (!drawing) {
             select(null);
             selectRoom(null);
+            selectOpening(null);
+            selectWall(null);
           }
         }}
         onEdgesDelete={(eds) => eds.forEach((e) => useStudio.getState().removeEdge(e.id))}

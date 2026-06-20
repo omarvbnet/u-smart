@@ -26,6 +26,20 @@ const CLOSED = L('القاطع مغلق', 'Breaker closed', 'برەیکەر دا
 export function controlsForEntry(entry: CatalogEntry): ControlDef[] {
   switch (entry.domain) {
     case 'source':
+      if (entry.sourceType === 'SOLAR_PV') {
+        return [
+          { key: 'on', kind: 'toggle', label: ON, default: true },
+          {
+            key: 'level',
+            kind: 'slider',
+            label: L('إشعاع شمسي', 'Solar irradiance', 'تابشەی خۆر', 'Güneş ışınımı'),
+            min: 0,
+            max: 100,
+            unit: '%',
+            default: 85,
+          },
+        ];
+      }
       return [{ key: 'on', kind: 'toggle', label: ON, default: true }];
     case 'protection':
       if (entry.protectionType === 'SPD') return [];
@@ -50,6 +64,8 @@ export function controlsForEntry(entry: CatalogEntry): ControlDef[] {
         return [{ key: 'level', kind: 'slider', label: L('مستوى الإضاءة', 'Dim level', 'ئاستی ڕووناکی', 'Karartma'), min: 0, max: 100, unit: '%', default: 100 }];
       if (dc.includes('curtain'))
         return [{ key: 'level', kind: 'slider', label: L('فتح الستارة', 'Curtain open', 'کردنەوەی پەردە', 'Perde açıklığı'), min: 0, max: 100, unit: '%', default: 0 }];
+      if (entry.channelCurrentA != null && entry.channels > 1)
+        return [];
       if (entry.channelCurrentA != null)
         return [{ key: 'on', kind: 'toggle', label: L('تشغيل القنوات', 'Channels on', 'کەناڵەکان', 'Kanallar'), default: false }];
       if (dc.includes('panel') || dc.includes('touch') || dc.includes('scene') || dc.includes('input'))
@@ -61,10 +77,21 @@ export function controlsForEntry(entry: CatalogEntry): ControlDef[] {
   }
 }
 
-export type ControlState = { on?: boolean; level?: number; setpoint?: number; active?: boolean };
+export type ControlState = {
+  on?: boolean;
+  level?: number;
+  setpoint?: number;
+  active?: boolean;
+  /** Per-output channel states on multi-channel actuators (index 0 = CH1). */
+  channels?: boolean[];
+};
 
 export function defaultControlState(entry: CatalogEntry): ControlState {
   const state: ControlState = {};
+  if (entry.domain === 'smarthome' && entry.channels > 1) {
+    state.channels = Array(entry.channels).fill(false);
+    return state;
+  }
   for (const c of controlsForEntry(entry)) {
     if (c.kind === 'toggle' || c.kind === 'trigger') state[c.key as 'on' | 'active'] = c.default as boolean;
     else state[c.key as 'level' | 'setpoint'] = c.default as number;

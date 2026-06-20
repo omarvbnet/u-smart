@@ -17,11 +17,13 @@ type Seed = {
   channels: number;
   channelCurrentA: number | null;
   busCurrentMa: number;
+  busSupplyMa?: number;
   actuator: boolean;
 };
 
 /* ----------------------------- HDL Buspro ----------------------------- */
 const hdlSeeds: Seed[] = [
+  { id: 'buspsu', deviceClass: 'Bus PSU', icon: 'Zap', channels: 0, channelCurrentA: null, busCurrentMa: 0, busSupplyMa: 640, actuator: false, name: { ar: 'مزود طاقة باص HDL 640mA', en: 'HDL Bus PSU 640mA', ku: 'PSU باز HDL 640mA', tr: 'HDL Veri Yolu PSU 640mA' } },
   { id: 'relay', deviceClass: 'Relay Actuator', icon: 'ToggleRight', channels: 12, channelCurrentA: 16, busCurrentMa: 25, actuator: true, name: { ar: 'وحدة ريليه HDL', en: 'HDL Relay Actuator', ku: 'ڕیلێی HDL', tr: 'HDL Röle Aktüatör' } },
   { id: 'dimmer', deviceClass: 'Dimmer', icon: 'SlidersHorizontal', channels: 6, channelCurrentA: 2, busCurrentMa: 30, actuator: true, name: { ar: 'وحدة دمر HDL', en: 'HDL Dimmer', ku: 'دیمەری HDL', tr: 'HDL Dimmer' } },
   { id: 'curtain', deviceClass: 'Curtain Controller', icon: 'Blinds', channels: 4, channelCurrentA: 3, busCurrentMa: 25, actuator: true, name: { ar: 'متحكم ستائر HDL', en: 'HDL Curtain Controller', ku: 'کۆنتڕۆڵی پەردە HDL', tr: 'HDL Perde Kontrol' } },
@@ -42,6 +44,7 @@ const hdlSeeds: Seed[] = [
 
 /* ------------------------------- KNX --------------------------------- */
 const knxSeeds: Seed[] = [
+  { id: 'buspsu', deviceClass: 'Bus PSU', icon: 'Zap', channels: 0, channelCurrentA: null, busCurrentMa: 0, busSupplyMa: 640, actuator: false, name: { ar: 'مزود طاقة KNX 640mA', en: 'KNX Bus PSU 640mA', ku: 'PSU باز KNX 640mA', tr: 'KNX Veri Yolu PSU 640mA' } },
   { id: 'actuator', deviceClass: 'Switch Actuator', icon: 'ToggleRight', channels: 8, channelCurrentA: 16, busCurrentMa: 12, actuator: true, name: { ar: 'مشغل KNX', en: 'KNX Switch Actuator', ku: 'ئەکچوەیتەری KNX', tr: 'KNX Anahtarlama Aktüatör' } },
   { id: 'dimmer', deviceClass: 'Dimmer Actuator', icon: 'SlidersHorizontal', channels: 4, channelCurrentA: 1.5, busCurrentMa: 15, actuator: true, name: { ar: 'دمر KNX', en: 'KNX Dimmer', ku: 'دیمەری KNX', tr: 'KNX Dimmer' } },
   { id: 'touch', deviceClass: 'Touch Panel', icon: 'TabletSmartphone', channels: 0, channelCurrentA: null, busCurrentMa: 20, actuator: false, name: { ar: 'لوحة لمس KNX', en: 'KNX Touch Panel', ku: 'پانێلی پاڵنەری KNX', tr: 'KNX Dokunmatik Panel' } },
@@ -72,6 +75,7 @@ function build(protocol: SmartHomeSpec['protocol'], seeds: Seed[]): SmartHomeSpe
     channels: s.channels,
     channelCurrentA: s.channelCurrentA,
     busCurrentMa: s.busCurrentMa,
+    busSupplyMa: s.busSupplyMa,
     voltage: protocol === 'HDL' ? 24 : 30,
   }));
 }

@@ -6,7 +6,7 @@ import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { STUDIO_LOCALES, LOCALE_LABELS, type StudioLocale } from '../lib/i18n';
 import { importMapFile } from '../lib/import-map';
-import { exportDesignPdf } from '../lib/export-pdf';
+import { exportDesignPdf, type FloorMapCapture } from '../lib/export-pdf';
 import { ReportsModal } from './ReportsModal';
 import { ShareModal } from './ShareModal';
 import { ProjectsModal } from './ProjectsModal';
@@ -65,11 +65,38 @@ export function Topbar() {
     }
   };
 
+  const captureAllFloorMaps = async (floors: { id: string; label: string }[]): Promise<FloorMapCapture[]> => {
+    const html2canvas = (await import('html2canvas-pro')).default;
+    const store = useStudio.getState();
+    const prevFloor = store.activeFloorId;
+    const prevVis = store.visualizationMode;
+    if (prevVis === '3d') store.setVisualizationMode('engineering');
+
+    const captures: FloorMapCapture[] = [];
+    for (const f of floors) {
+      store.switchFloor(f.id);
+      store.fitCanvasView();
+      await new Promise((r) => setTimeout(r, 600));
+      const el = document.querySelector('.react-flow') as HTMLElement | null;
+      if (el) {
+        const canvas = await html2canvas(el, { backgroundColor: '#0a0a0f', scale: 2, logging: false });
+        captures.push({ floorId: f.id, floorLabel: f.label, dataUrl: canvas.toDataURL('image/png') });
+      } else {
+        captures.push({ floorId: f.id, floorLabel: f.label, dataUrl: '' });
+      }
+    }
+
+    store.switchFloor(prevFloor);
+    store.fitCanvasView();
+    if (prevVis === '3d') store.setVisualizationMode(prevVis);
+    return captures;
+  };
+
   const handleExportExcel = async () => {
     setExportingXlsx(true);
     try {
-      const { nodes, edges, designName } = useStudio.getState();
-      await exportDesignExcel({ designName, nodes, edges });
+      const { nodes, edges, designName, rooms, floors, project } = useStudio.getState();
+      await exportDesignExcel({ designName, nodes, edges, rooms, floors, project });
     } finally {
       setExportingXlsx(false);
     }
@@ -78,8 +105,9 @@ export function Topbar() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const { nodes, edges, designName, project } = useStudio.getState();
-      await exportDesignPdf({ designName, nodes, edges, project });
+      const { nodes, edges, designName, rooms, floors, project } = useStudio.getState();
+      const floorMaps = await captureAllFloorMaps(floors);
+      await exportDesignPdf({ designName, nodes, edges, rooms, floors, project, floorMaps });
     } finally {
       setExporting(false);
     }

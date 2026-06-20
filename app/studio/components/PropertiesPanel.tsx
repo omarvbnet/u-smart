@@ -13,10 +13,14 @@ import { specRows, catalogAlternatives } from '../lib/spec-display';
 import { physicalSpecFor } from '../lib/catalog/dimensions';
 import { CONDUIT_STYLE, type ConduitType } from '../lib/engine/cable-map';
 import type { CableSpec } from '../lib/catalog';
+import type { SourceSpec } from '../lib/catalog';
 import { PORT_COLOR } from './DeviceNode';
 import { EntryImage } from './EntryImage';
-import { Trash2, Zap, Plug, Copy, BedDouble, DoorOpen, AppWindow } from 'lucide-react';
+import { Trash2, Zap, Plug, Copy, BedDouble, DoorOpen, AppWindow, BrickWall } from 'lucide-react';
 import { openingOpenPercent } from '../lib/engine/opening-layout';
+import { mergeEffectiveWalls, wallLabel, wallLengthM } from '../lib/engine/wall-layout';
+import { parseChannelAssignments } from '../lib/engine/smart-channel-layout';
+import type { SmartHomeSpec } from '../lib/catalog';
 import type { CurtainStyle } from '../lib/model';
 
 export function PropertiesPanel() {
@@ -25,6 +29,9 @@ export function PropertiesPanel() {
   const selectedId = useStudio((s) => s.selectedNodeId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
   const selectedOpeningId = useStudio((s) => s.selectedOpeningId);
+  const selectedWallId = useStudio((s) => s.selectedWallId);
+  const activeFloorId = useStudio((s) => s.activeFloorId);
+  const bim = useStudio((s) => s.bim);
   const opening = useStudio((s) => s.bim?.openings.find((o) => o.id === s.selectedOpeningId));
   const allControls = useStudio((s) => s.controls);
   const room = useStudio((s) => s.rooms.find((r) => r.id === s.selectedRoomId));
@@ -42,6 +49,7 @@ export function PropertiesPanel() {
   const nodes = useStudio((s) => s.nodes);
   const addOutletToRoom = useStudio((s) => s.addOutletToRoom);
   const placeRoomOutlets = useStudio((s) => s.placeRoomOutlets);
+  const placeRoomCables = useStudio((s) => s.placeRoomCables);
   const removeOutletsInRoom = useStudio((s) => s.removeOutletsInRoom);
   const assignVrfToRoom = useStudio((s) => s.assignVrfToRoom);
   const setRoomVrfIndoor = useStudio((s) => s.setRoomVrfIndoor);
@@ -55,12 +63,82 @@ export function PropertiesPanel() {
   const updateOpening = useStudio((s) => s.updateOpening);
   const removeOpening = useStudio((s) => s.removeOpening);
   const setOpeningControl = useStudio((s) => s.setOpeningControl);
+  const updateWall = useStudio((s) => s.updateWall);
+  const assignOpeningToWall = useStudio((s) => s.assignOpeningToWall);
+
+  const floorWalls = useMemo(
+    () => mergeEffectiveWalls(bim, rooms, activeFloorId),
+    [bim, rooms, activeFloorId],
+  );
+  const selectedWall = useMemo(
+    () => (selectedWallId ? floorWalls.find((w) => w.id === selectedWallId) : undefined),
+    [selectedWallId, floorWalls],
+  );
 
   const vrfReport = useMemo(
     () => calculateVrfDistribution(rooms, project, nodes),
     [rooms, project, nodes],
   );
   const roomVrf = selectedRoomId ? vrfAssignmentForRoom(vrfReport, selectedRoomId) : undefined;
+
+  if (selectedWallId && selectedWall) {
+    const input =
+      'w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400';
+    const lenM = wallLengthM(selectedWall);
+    return (
+      <div className="flex h-full flex-col p-4">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--studio-text)]">
+          <BrickWall className={`h-4 w-4 ${selectedWall.outdoor ? 'text-emerald-400' : 'text-slate-400'}`} />
+          {t('wallProperties')}
+        </h3>
+        <div className="flex-1 space-y-3 overflow-y-auto">
+          <div className="rounded-lg border border-[var(--studio-border)] px-3 py-2 text-xs">
+            <div className="font-semibold text-[var(--studio-text)]">{wallLabel(selectedWall, rooms)}</div>
+            {selectedWall.outdoor && (
+              <span className="mt-1 inline-block rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
+                {t('outdoorWall')}
+              </span>
+            )}
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('wallLength')}</span>
+            <input
+              className={input}
+              type="number"
+              step={0.1}
+              min={0.5}
+              value={Number(lenM.toFixed(2))}
+              onChange={(e) => updateWall(selectedWall.id, { lengthM: Number(e.target.value) })}
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('wallThickness')}</span>
+              <input
+                className={input}
+                type="number"
+                min={2}
+                value={Math.round(selectedWall.thickness)}
+                onChange={(e) => updateWall(selectedWall.id, { thickness: Number(e.target.value) })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('wallHeight')}</span>
+              <input
+                className={input}
+                type="number"
+                step={0.1}
+                min={2}
+                value={selectedWall.heightM ?? 2.8}
+                onChange={(e) => updateWall(selectedWall.id, { heightM: Number(e.target.value) })}
+              />
+            </label>
+          </div>
+          <p className="text-[10px] text-[var(--studio-muted)]">{t('wallEditHint')}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedOpeningId && opening) {
     const input =
@@ -109,6 +187,46 @@ export function PropertiesPanel() {
               <input className={input} type="number" value={Math.round(opening.height)} onChange={(e) => updateOpening(opening.id, { height: Number(e.target.value) })} />
             </label>
           </div>
+          {floorWalls.length > 0 && (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('mountOnWall')}</span>
+                <select
+                  className={input}
+                  value={opening.wallId ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) updateOpening(opening.id, { wallId: undefined, along: undefined });
+                    else assignOpeningToWall(opening.id, v, opening.along ?? 0.5);
+                  }}
+                >
+                  <option value="">{t('noWall')}</option>
+                  {floorWalls.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {wallLabel(w, rooms)}{w.outdoor ? ` (${t('outdoorWall')})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {opening.wallId && (
+                <label className="block">
+                  <span className="mb-1 flex items-center justify-between text-xs text-[var(--studio-muted)]">
+                    <span>{t('positionOnWall')}</span>
+                    <span className="font-semibold text-cyan-300">{Math.round((opening.along ?? 0.5) * 100)}%</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={5}
+                    max={95}
+                    value={Math.round((opening.along ?? 0.5) * 100)}
+                    className="w-full accent-cyan-400"
+                    onChange={(e) => assignOpeningToWall(opening.id, opening.wallId!, Number(e.target.value) / 100)}
+                  />
+                </label>
+              )}
+              <p className="text-[10px] text-[var(--studio-muted)]">{t('dragOpeningHint')}</p>
+            </>
+          )}
           <label className="flex items-center justify-between rounded-lg border border-[var(--studio-border)] px-3 py-2">
             <span className="text-xs text-[var(--studio-text)]">{t('smartOpening')}</span>
             <input
@@ -239,6 +357,17 @@ export function PropertiesPanel() {
                 ))}
               </ul>
             )}
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('roomCables')}</h4>
+            <button
+              type="button"
+              className="w-full rounded-lg border border-cyan-400/40 bg-cyan-500/10 py-2 text-[10px] font-semibold text-cyan-200"
+              onClick={() => placeRoomCables(room.id)}
+            >
+              {t('autoPlaceCables')}
+            </button>
           </div>
 
           {(vrfReport.active || vrf) && (
@@ -440,8 +569,91 @@ export function PropertiesPanel() {
           </div>
         )}
 
+        {entry.domain === 'smarthome' && (entry as SmartHomeSpec).channels > 1 && (
+          <div>
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('channelControl')}</h3>
+            <div className="space-y-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] p-3">
+              {parseChannelAssignments(node).length > 0
+                ? parseChannelAssignments(node).map((a) => {
+                    const on = control?.channels?.[a.channel - 1] ?? false;
+                    return (
+                      <div key={a.channel} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="min-w-0 truncate text-[var(--studio-text)]">
+                          {t('channelLabel')}{a.channel} · {a.targetLabel}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setControl(node.id, 'on', !on, a.channel - 1)}
+                          className={`relative h-5 w-9 shrink-0 rounded-full transition ${on ? 'bg-emerald-500' : 'bg-[var(--studio-border)]'}`}
+                        >
+                          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+                        </button>
+                      </div>
+                    );
+                  })
+                : Array.from({ length: (entry as SmartHomeSpec).channels }, (_, i) => {
+                    const on = control?.channels?.[i] ?? false;
+                    return (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-[var(--studio-text)]">{t('channelLabel')}{i + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setControl(node.id, 'on', !on, i)}
+                          className={`relative h-5 w-9 rounded-full transition ${on ? 'bg-emerald-500' : 'bg-[var(--studio-border)]'}`}
+                        >
+                          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+                        </button>
+                      </div>
+                    );
+                  })}
+            </div>
+          </div>
+        )}
+
+        {entry.domain === 'source' && (entry as SourceSpec).sourceType === 'SOLAR_PV' && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">{t('solarCapacity')}</span>
+            <input
+              type="range"
+              min={5}
+              max={500}
+              step={5}
+              value={Number(node.params.ratedKva ?? node.params.capacityKw ?? (entry as SourceSpec).ratedKva)}
+              onChange={(e) => {
+                const kw = Number(e.target.value);
+                useStudio.setState((s) => ({
+                  nodes: s.nodes.map((n) =>
+                    n.id === node.id
+                      ? { ...n, label: `Solar ${kw} kW`, params: { ...n.params, ratedKva: kw, capacityKw: kw } }
+                      : n,
+                  ),
+                }));
+              }}
+              className="w-full accent-amber-500"
+            />
+            <div className="mt-1 text-center text-xs font-semibold text-amber-400">
+              {Number(node.params.ratedKva ?? (entry as SourceSpec).ratedKva)} kW
+            </div>
+          </label>
+        )}
+
         {entry.domain === 'cable' && (
           <>
+            {(() => {
+              const cableEntry = entry as CableSpec;
+              const conduitType =
+                (node.params.conduitType as ConduitType | undefined) ??
+                (cableEntry.category === 'BUS' ? 'bus' : cableEntry.category === 'DATA' ? 'data' : 'conduit');
+              const hint = node.params.cableLabel
+                ? String(node.params.cableLabel)
+                : `${cableEntry.category}${cableEntry.csaMm2 ? ` · ${cableEntry.csaMm2} mm²` : ''} · ${CONDUIT_STYLE[conduitType]?.label ?? conduitType}`;
+              return (
+                <p className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-[10px] text-[var(--studio-muted)]">
+                  <span className="font-semibold text-[var(--studio-text)]">{t('cableTypeHint')}: </span>
+                  {hint}
+                </p>
+              );
+            })()}
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-[var(--studio-muted)]">{t('length')}</span>
               <input

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
+import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
 import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3, Maximize2, Focus, TreePine, DoorOpen, AppWindow } from 'lucide-react';
 
 const ROOM_TEMPLATES = [
@@ -32,6 +33,9 @@ export function FloorPlanToolbar() {
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
   const setCanvasViewMode = useStudio((s) => s.setCanvasViewMode);
   const bim = useStudio((s) => s.bim);
+  const activeFloorId = useStudio((s) => s.activeFloorId);
+  const effectiveWalls = mergeEffectiveWalls(bim, rooms, activeFloorId);
+  const outdoorWalls = effectiveWalls.filter((w) => w.outdoor).length;
   const addGarden = useStudio((s) => s.addGarden);
   const addOpening = useStudio((s) => s.addOpening);
   const [detecting, setDetecting] = useState(false);
@@ -77,11 +81,12 @@ export function FloorPlanToolbar() {
             <span className="hidden sm:inline">{t('detectRooms')}</span>
           </button>
         )}
-        {bim && bim.walls.length > 0 && (
+        {(effectiveWalls.length > 0 || (bim && bim.walls.length > 0)) && (
           <span className="rounded-lg border border-slate-500/40 px-2 py-1 text-[9px] text-[var(--studio-muted)]">
-            {bim.walls.length} {t('wallsDetected')}
-            {bim.openings.length > 0 && ` · ${bim.openings.length} ${t('openingsDetected')}`}
-            {(bim.gardens?.length ?? 0) > 0 && ` · ${bim.gardens!.length} ${t('gardensDetected')}`}
+            {effectiveWalls.length} {t('wallsDetected')}
+            {outdoorWalls > 0 && ` · ${outdoorWalls} ${t('outdoorWall')}`}
+            {(bim?.openings.length ?? 0) > 0 && ` · ${bim!.openings.length} ${t('openingsDetected')}`}
+            {(bim?.gardens?.length ?? 0) > 0 && ` · ${bim!.gardens!.length} ${t('gardensDetected')}`}
           </span>
         )}
         {!clientMode && (

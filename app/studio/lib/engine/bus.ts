@@ -7,6 +7,8 @@
 import type { CatalogEntry } from '../catalog';
 import type { DesignNode } from '../model';
 import { getCatalogEntry } from '../catalog';
+import type { ProjectInfo } from '../project';
+import { busPowerStatus } from './smarthome-topology';
 
 export type BusProtocol = 'HDL' | 'KNX' | 'IO';
 
@@ -45,7 +47,10 @@ export function busNodes(nodes: DesignNode[]): DesignNode[] {
 }
 
 /** Deterministic address map keyed by node id. */
-export function assignAddresses(nodes: DesignNode[]): Map<string, BusAddress> {
+export function assignAddresses(
+  nodes: DesignNode[],
+  protocolOnline?: Partial<Record<BusProtocol, boolean>>,
+): Map<string, BusAddress> {
   const map = new Map<string, BusAddress>();
   let hdl = 1;
   let knx = 1;
@@ -53,14 +58,15 @@ export function assignAddresses(nodes: DesignNode[]): Map<string, BusAddress> {
   for (const n of busNodes(nodes)) {
     const entry = getCatalogEntry(n.catalogId)!;
     const protocol = protocolOf(entry);
+    const online = protocolOnline?.[protocol] ?? true;
     if (protocol === 'HDL') {
-      map.set(n.id, { protocol, device: `1.${hdl}`, group: `S${hdl}`, online: true });
+      map.set(n.id, { protocol, device: `1.${hdl}`, group: `S${hdl}`, online });
       hdl++;
     } else if (protocol === 'KNX') {
-      map.set(n.id, { protocol, device: `1.1.${knx}`, group: `1/1/${knx}`, online: true });
+      map.set(n.id, { protocol, device: `1.1.${knx}`, group: `1/1/${knx}`, online });
       knx++;
     } else {
-      map.set(n.id, { protocol, device: `IO-${io}`, group: `DI/${io}`, online: true });
+      map.set(n.id, { protocol, device: `IO-${io}`, group: `DI/${io}`, online });
       io++;
     }
   }
@@ -121,16 +127,48 @@ function hex(n: number): string {
     .toUpperCase();
 }
 
+export type BusHealthReport = {
+  hdl: number;
+  knx: number;
+  hdlOnline: number;
+  knxOnline: number;
+  voltageV: number;
+  busPowerOk: boolean;
+  loadMa: number;
+  installedPsuMa: number;
+};
+
 /** Nominal bus health metrics for the diagnostics header. */
-export function busHealth(nodes: DesignNode[]): { hdl: number; knx: number; voltageV: number } {
-  const addrs = assignAddresses(nodes);
+export function busHealth(project: ProjectInfo, nodes: DesignNode[]): BusHealthReport {
+  const power = busPowerStatus(project, nodes);
+  const protocolOnline: Partial<Record<BusProtocol, boolean>> = {};
+  for (const seg of power.segments) protocolOnline[seg.protocol] = seg.ok;
+  const addrs = assignAddresses(nodes, protocolOnline);
   let hdl = 0;
   let knx = 0;
+  let hdlOnline = 0;
+  let knxOnline = 0;
   addrs.forEach((a) => {
-    if (a.protocol === 'HDL') hdl++;
-    else if (a.protocol === 'KNX') knx++;
+    if (a.protocol === 'HDL') {
+      hdl++;
+      if (a.online) hdlOnline++;
+    } else if (a.protocol === 'KNX') {
+      knx++;
+      if (a.online) knxOnline++;
+    }
   });
-  // Typical KNX bus ~29 V; HDL ~24 V. Drops slightly with device count.
-  const voltageV = Math.max(21, 30 - (hdl + knx) * 0.05);
-  return { hdl, knx, voltageV: Number(voltageV.toFixed(1)) };
+  const onlineCount = hdlOnline + knxOnline;
+  const voltageV = power.ok
+    ? Math.max(21, 30 - onlineCount * 0.05)
+    : Math.max(18, 24 - power.deficitMa * 0.02);
+  return {
+    hdl,
+    knx,
+    hdlOnline,
+    knxOnline,
+    voltageV: Number(voltageV.toFixed(1)),
+    busPowerOk: power.ok,
+    loadMa: power.totalLoadMa,
+    installedPsuMa: power.installedPsuMa,
+  };
 }

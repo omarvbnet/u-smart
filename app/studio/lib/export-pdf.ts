@@ -1,33 +1,46 @@
 'use client';
 
 /**
- * Export the current design to a multi-page PDF:
- *  1. the canvas single-line / floor-plan view,
- *  2. a component & cable schedule with required voltage/current,
- *  3. a validation + quality summary.
- *
- * Report text is rendered in English (jsPDF has no Arabic shaping); the
- * on-screen UI remains fully localized.
+ * Export the current design to a multi-page PDF with floor-plan snapshots,
+ * full device register (all map items), and engineering schedules.
  */
 import { getCatalogEntry, type CableSpec } from './catalog';
 import { CABLES } from './catalog/cables';
-import { declarationFor } from './engine/declarations';
-import { resolveNodes, type DesignNode, type DesignEdge } from './model';
 import { validateDesign } from './engine/validation';
 import { computeQuality, computeCompliance } from './engine/quality';
-import { buildLoadSchedule, buildCableSchedule } from './engine/reports';
+import {
+  buildLoadSchedule,
+  buildCableSchedule,
+  buildDeviceRegister,
+  buildRoomRegister,
+} from './engine/reports';
 import { buildingTypeLabel, type ProjectInfo } from './project';
+import { resolveNodes, type DesignNode, type DesignEdge, type DesignRoom, type DesignFloor } from './model';
+import type { jsPDF } from 'jspdf';
+
+export type FloorMapCapture = { floorId: string; floorLabel: string; dataUrl: string };
 
 export async function exportDesignPdf(opts: {
   designName: string;
   nodes: DesignNode[];
   edges: DesignEdge[];
+  rooms?: DesignRoom[];
+  floors?: DesignFloor[];
   project?: ProjectInfo;
+  /** One canvas snapshot per floor (all devices visible on each floor plan). */
+  floorMaps?: FloorMapCapture[];
 }): Promise<void> {
   const { default: jsPDF } = await import('jspdf');
   const html2canvas = (await import('html2canvas-pro')).default;
 
-  const el = document.querySelector('.react-flow') as HTMLElement | null;
+  const rooms = opts.rooms ?? [];
+  const floors = opts.floors ?? [{ id: 'floor_0', label: 'Ground Floor', level: 0, elevationM: 0 }];
+  const resolved = resolveNodes(opts.nodes, getCatalogEntry);
+  const devices = buildDeviceRegister(resolved, rooms, floors);
+  const roomReg = buildRoomRegister(resolved, rooms, floors);
+  const loadSched = buildLoadSchedule(resolved, rooms, floors);
+  const cableSched = buildCableSchedule(resolved, opts.edges, rooms, floors);
+
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -45,78 +58,136 @@ export async function exportDesignPdf(opts: {
     doc.text(subtitle, pageW - 12, 12, { align: 'right' });
   };
 
-  // ---- Page 1: canvas snapshot ----
-  header(opts.designName || 'Untitled design');
-  let topY = 24;
-  const p = opts.project;
-  if (p) {
+  const projectBanner = (topY: number): number => {
+    const p = opts.project;
+    if (!p) return topY;
     const info = [
       p.client && `Client: ${p.client}`,
-      p.consultant && `Consultant: ${p.consultant}`,
       `Building: ${buildingTypeLabel(p.buildingType).en}`,
+      `Floors: ${p.floorCount}`,
       p.location && `Location: ${p.location}`,
-      p.reference && `Ref: ${p.reference}`,
-      `Rev: ${p.revision}`,
+      `Devices: ${devices.length}`,
     ].filter(Boolean) as string[];
     doc.setTextColor(70, 80, 100);
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(info.join('   |   '), 12, 23);
-    if (p.standards.length) doc.text(`Standards: ${p.standards.join(', ')}`, 12, 27.5);
-    topY = 31;
-  }
-  if (el) {
-    const canvas = await html2canvas(el, { backgroundColor: '#0a0a0f', scale: 2, logging: false });
-    const img = canvas.toDataURL('image/png');
-    const maxW = pageW - 20;
-    const maxH = pageH - topY - 6;
-    const ratio = Math.min(maxW / canvas.width, maxH / canvas.height);
-    const w = canvas.width * ratio;
-    const h = canvas.height * ratio;
-    doc.addImage(img, 'PNG', (pageW - w) / 2, topY, w, h);
-  }
+    doc.text(info.join('   |   '), 12, topY);
+    return topY + 5;
+  };
 
-  // ---- Page 2: component & cable schedule ----
-  doc.addPage();
-  header('Component & Cable Schedule');
-  const resolved = resolveNodes(opts.nodes, getCatalogEntry);
-  let y = 28;
-  doc.setTextColor(20, 20, 20);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  const cols = [12, 26, 96, 150, 196, 230, 262];
-  const headers = ['#', 'Type', 'Component', 'Model', 'Voltage', 'Current', 'Standards'];
-  headers.forEach((hh, i) => doc.text(hh, cols[i]!, y));
-  doc.setDrawColor(200);
-  doc.line(12, y + 1.5, pageW - 12, y + 1.5);
-  y += 6;
-  doc.setFont('helvetica', 'normal');
-  resolved.forEach((n, idx) => {
-    if (y > pageH - 12) {
-      doc.addPage();
-      header('Component & Cable Schedule (cont.)');
-      y = 28;
+  // ---- Floor plan pages (one per floor or single canvas) ----
+  const mapCaptures =
+    opts.floorMaps?.length
+      ? opts.floorMaps
+      : await captureSingleCanvas(html2canvas, floors[0]?.label ?? 'Floor plan');
+
+  for (const cap of mapCaptures) {
+    header(`${opts.designName || 'Design'} — ${cap.floorLabel}`);
+    let topY = projectBanner(23);
+    const img = cap.dataUrl;
+    if (img) {
+      const imgEl = await loadImage(img);
+      const maxW = pageW - 20;
+      const maxH = pageH - topY - 8;
+      const ratio = Math.min(maxW / imgEl.width, maxH / imgEl.height);
+      const w = imgEl.width * ratio;
+      const h = imgEl.height * ratio;
+      doc.addImage(img, 'PNG', (pageW - w) / 2, topY, w, h);
     }
-    const decl = declarationFor(n.spec);
-    const row = [
-      String(idx + 1),
-      n.spec.domain,
-      truncate(n.spec.name.en, 36),
-      truncate(`${n.spec.manufacturer} ${n.spec.model}`, 26),
-      decl ? `${decl.voltage} V` : '-',
-      decl && decl.current > 0 ? `${decl.current.toFixed(1)} A` : '-',
-      truncate(n.spec.standards.join(', ') || '-', 16),
-    ];
-    row.forEach((c, i) => doc.text(c, cols[i]!, y));
-    y += 5.5;
-  });
+    if (cap !== mapCaptures[mapCaptures.length - 1]) doc.addPage();
+  }
 
-  // ---- Page 3: validation + quality ----
+  // ---- Room summary ----
+  doc.addPage();
+  header('Room & Space Register');
+  drawTable(doc, pageW, pageH, header, 28, ['Floor', 'Room', 'Zone', 'm²', 'Devices', 'Outlets', 'Cables', 'Map X', 'Map Y'], roomReg.map((r) => [
+    truncate(r.floor, 14),
+    truncate(r.room, 18),
+    r.zone,
+    String(r.areaM2),
+    String(r.devices),
+    String(r.outlets),
+    String(r.cables),
+    String(r.mapX),
+    String(r.mapY),
+  ]));
+
+  // ---- Full device register (all map items) ----
+  doc.addPage();
+  header('Device Register — All Map Items');
+  drawTable(
+    doc,
+    pageW,
+    pageH,
+    header,
+    28,
+    ['#', 'Floor', 'Room', 'Label', 'Type', 'Model', 'X', 'Y', 'V', 'A', 'Details'],
+    devices.map((d, i) => [
+      String(i + 1),
+      truncate(d.floor, 10),
+      truncate(d.room, 12),
+      truncate(d.label, 16),
+      truncate(`${d.domain}/${d.category}`, 14),
+      truncate(d.model, 12),
+      String(d.mapX),
+      String(d.mapY),
+      d.voltage,
+      d.current,
+      truncate(d.cableLabel !== '—' ? d.cableLabel : d.declaration, 22),
+    ]),
+  );
+
+  // ---- Cable schedule with labels ----
+  doc.addPage();
+  header('Cable Schedule (labels & routes)');
+  drawTable(
+    doc,
+    pageW,
+    pageH,
+    header,
+    28,
+    ['Label', 'Floor', 'Room', 'Conduit', 'CSA', 'Len', 'X', 'Y', 'Iz', 'Vdrop%'],
+    cableSched.map((r) => [
+      truncate(r.cableLabel, 20),
+      truncate(r.floor, 10),
+      truncate(r.room, 12),
+      truncate(r.conduitType, 10),
+      String(r.csa),
+      String(r.lengthM),
+      String(r.mapX),
+      String(r.mapY),
+      String(r.ampacity),
+      r.vdropPct.toFixed(1),
+    ]),
+  );
+
+  // ---- Load schedule ----
+  doc.addPage();
+  header('Electrical Load Schedule');
+  drawTable(
+    doc,
+    pageW,
+    pageH,
+    header,
+    28,
+    ['Label', 'Floor', 'Room', 'Load', 'kW', 'A', 'Ph', 'Map ref'],
+    loadSched.rows.map((r) => [
+      truncate(r.label, 16),
+      truncate(r.floor, 10),
+      truncate(r.room, 12),
+      truncate(r.name, 18),
+      (r.powerW / 1000).toFixed(2),
+      r.current.toFixed(1),
+      String(r.phases),
+      `${r.nodeId.slice(-8)}`,
+    ]),
+  );
+
+  // ---- Validation ----
   doc.addPage();
   header('Validation & Quality Report');
   const { issues } = validateDesign(resolved, opts.edges, CABLES as CableSpec[]);
   const quality = computeQuality(issues, resolved.length);
-  y = 30;
+  let y = 30;
   doc.setTextColor(20, 20, 20);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
@@ -131,96 +202,89 @@ export async function exportDesignPdf(opts: {
   y += 4;
   const crit = issues.filter((i) => i.severity === 'critical');
   const warn = issues.filter((i) => i.severity === 'warning');
-  const rec = issues.filter((i) => i.severity === 'recommendation');
   doc.setFont('helvetica', 'bold');
-  doc.text(`Issues — Critical: ${crit.length}   Warnings: ${warn.length}   Recommendations: ${rec.length}`, 12, y);
+  doc.text(`Issues — Critical: ${crit.length}   Warnings: ${warn.length}`, 12, y);
   y += 8;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  [...crit, ...warn, ...rec].forEach((i) => {
+  [...crit, ...warn].slice(0, 40).forEach((i) => {
     if (y > pageH - 12) {
       doc.addPage();
-      header('Validation & Quality Report (cont.)');
+      header('Validation (cont.)');
       y = 28;
     }
-    const tag = i.severity === 'critical' ? '[CRIT]' : i.severity === 'warning' ? '[WARN]' : '[REC ]';
-    doc.text(`${tag} ${truncate(i.title.en, 50)} — ${truncate(i.detail.en, 90)}`, 12, y);
+    doc.text(`${i.severity === 'critical' ? '[CRIT]' : '[WARN]'} ${truncate(i.title.en, 90)}`, 12, y);
     y += 5.5;
   });
 
-  // ---- Page 4: formal compliance certificate ----
+  // ---- Compliance ----
   doc.addPage();
   header('Standards Compliance Certificate');
   const complianceRows = computeCompliance(issues);
   y = 32;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Deterministic compliance summary (rule-based engine — not LLM estimates)', 12, y);
-  y += 10;
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(20, 20, 20);
   complianceRows.forEach((row) => {
-    doc.text(`${row.standard}: ${row.percent}% compliant (${row.violations} open violations)`, 12, y);
+    doc.text(`${row.standard}: ${row.percent}% compliant (${row.violations} violations)`, 12, y);
     y += 6;
-  });
-  y += 6;
-  doc.setFont('helvetica', 'italic');
-  doc.text(
-    'Assumptions and missing inputs must be confirmed before tender submission. Calculations reference IEC 60364, IEC 60898, ASHRAE, EN 12464-1 as applicable.',
-    12,
-    y,
-    { maxWidth: pageW - 24 },
-  );
-
-  // ---- Page 5: load schedule ----
-  doc.addPage();
-  header('Electrical Load Schedule');
-  const loadSched = buildLoadSchedule(resolved);
-  y = 28;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  ['Tag', 'Load', 'kW', 'A', 'Ph'].forEach((h, i) => doc.text(h, 12 + i * 52, y));
-  y += 6;
-  doc.setFont('helvetica', 'normal');
-  loadSched.rows.forEach((row) => {
-    if (y > pageH - 12) {
-      doc.addPage();
-      header('Load Schedule (cont.)');
-      y = 28;
-    }
-    doc.text(truncate(row.tag, 10), 12, y);
-    doc.text(truncate(row.name, 22), 64, y);
-    doc.text((row.powerW / 1000).toFixed(2), 116, y);
-    doc.text(row.current.toFixed(1), 168, y);
-    doc.text(String(row.phases), 220, y);
-    y += 5;
-  });
-
-  // ---- Page 6: cable schedule ----
-  doc.addPage();
-  header('Cable Schedule');
-  const cableSched = buildCableSchedule(resolved, opts.edges);
-  y = 28;
-  doc.setFont('helvetica', 'bold');
-  ['Tag', 'Type', 'CSA', 'Len m', 'Iz A'].forEach((h, i) => doc.text(h, 12 + i * 52, y));
-  y += 6;
-  doc.setFont('helvetica', 'normal');
-  cableSched.forEach((row) => {
-    if (y > pageH - 12) {
-      doc.addPage();
-      header('Cable Schedule (cont.)');
-      y = 28;
-    }
-    doc.text(truncate(row.tag, 10), 12, y);
-    doc.text(truncate(row.type, 18), 64, y);
-    doc.text(String(row.csa), 116, y);
-    doc.text(String(row.lengthM), 168, y);
-    doc.text(String(row.ampacity), 220, y);
-    y += 5;
   });
 
   const safe = (opts.designName || 'usmart-studio-design').replace(/[^\w-]+/g, '_');
   doc.save(`${safe}.pdf`);
+}
+
+async function captureSingleCanvas(
+  html2canvas: (el: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>,
+  label: string,
+): Promise<FloorMapCapture[]> {
+  const el = document.querySelector('.react-flow') as HTMLElement | null;
+  if (!el) return [{ floorId: 'floor_0', floorLabel: label, dataUrl: '' }];
+  const canvas = await html2canvas(el, { backgroundColor: '#0a0a0f', scale: 2, logging: false });
+  return [{ floorId: 'floor_0', floorLabel: label, dataUrl: canvas.toDataURL('image/png') }];
+}
+
+function loadImage(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+function drawTable(
+  doc: jsPDF,
+  pageW: number,
+  pageH: number,
+  header: (subtitle: string) => void,
+  startY: number,
+  headers: string[],
+  rows: string[][],
+) {
+  const colW = (pageW - 24) / headers.length;
+  let y = startY;
+  doc.setTextColor(20, 20, 20);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  headers.forEach((h, i) => doc.text(h, 12 + i * colW, y));
+  doc.setDrawColor(200);
+  doc.line(12, y + 1.5, pageW - 12, y + 1.5);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  rows.forEach((row) => {
+    if (y > pageH - 12) {
+      doc.addPage();
+      header('(continued)');
+      y = 28;
+      doc.setFont('helvetica', 'bold');
+      headers.forEach((h, i) => doc.text(h, 12 + i * colW, y));
+      y += 5;
+      doc.setFont('helvetica', 'normal');
+    }
+    row.forEach((cell, i) => doc.text(cell, 12 + i * colW, y));
+    y += 4.5;
+  });
 }
 
 function truncate(s: string, n: number): string {

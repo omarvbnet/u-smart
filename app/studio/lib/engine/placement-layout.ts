@@ -3,11 +3,13 @@
  */
 import type { DesignEdge, DesignNode, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
+import { primaryCoolingSystem, effectiveHvacTypes } from '../project';
 import { calculateLightingDesign } from './lighting-design';
 import { calculateHvacLoads, type HvacLoadReport } from './hvac-loads';
 import { placeVrfDistribution } from './vrf-distribution';
 import { routeCableSegments } from './cable-routing';
-import { getCatalogEntry, type HvacSpec } from '../catalog';
+import { getCatalogEntry, type HvacSpec, type CableSpec } from '../catalog';
+import { formatCableLabel, conduitTypeForCable } from './cable-map';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -47,6 +49,7 @@ export function placeLightingFixtures(
         label: `${room.label} ${row.fixtureType} ${i + 1}`,
         x: room.x + padX + col * cellW + cellW / 2 - 21,
         y: room.y + padY + rowIdx * cellH + cellH / 2 - 21,
+        floorId: room.floorId,
         params: {
           powerW: Math.round(row.powerW / count),
           lightingType: row.fixtureType,
@@ -64,34 +67,56 @@ export function placeHvacUnits(
   hvacReport?: HvacLoadReport,
 ): DesignNode[] {
   const loads = hvacReport ?? calculateHvacLoads(rooms, project.buildingType);
-  const types = project.hvacMode === 'auto' ? loads.recommendedSystems : project.hvacTypes;
+  const types = project.hvacMode === 'auto' ? loads.recommendedSystems : effectiveHvacTypes(project);
+  const cooling = primaryCoolingSystem(project);
   const useVrf =
     types.includes('vrf') ||
     types.includes('multi_split') ||
+    cooling === 'vrf' ||
+    cooling === 'multi_split' ||
     (project.hvacMode === 'auto' && loads.recommendedSystems.includes('vrf'));
 
   if (useVrf) {
     return placeVrfDistribution(rooms, project);
   }
 
-  const catalogId = HVAC_CATALOG[types[0] ?? 'split'] ?? 'hvac-split-3.5';
+  const catalogId = HVAC_CATALOG[cooling] ?? HVAC_CATALOG[types[0] ?? 'split'] ?? 'hvac-split-3.5';
   const nodes: DesignNode[] = [];
-
   const mechanical = rooms.find((r) => r.zone === 'mechanical');
-  const targets = loads.rooms.filter((r) => r.coolingKw >= 1.5);
+  let targetRooms = loads.rooms.filter((r) => r.coolingKw >= 1.0).map((r) => r.roomId);
+  if (!targetRooms.length) targetRooms = rooms.filter((r) => r.zone !== 'corridor').map((r) => r.id);
 
-  targets.forEach((load, i) => {
-    const room = rooms.find((r) => r.id === load.roomId);
+  if (project.hvacUnitMode === 'fixed') {
+    const count = Math.max(1, project.hvacUnitCount);
+    const picked: string[] = [];
+    for (let i = 0; i < count; i++) picked.push(targetRooms[i % Math.max(1, targetRooms.length)]!);
+    targetRooms = picked;
+  }
+
+  targetRooms.forEach((roomId, i) => {
+    const room = rooms.find((r) => r.id === roomId);
     if (!room) return;
     const anchor = mechanical ?? room;
     nodes.push({
-      id: `hvac_auto_${load.roomId}`,
+      id: `hvac_auto_${roomId}_${i}`,
       catalogId,
-      label: `HVAC ${room.label}`,
-      x: anchor.x + anchor.width - 88 + (i % 2) * 44,
-      y: anchor.zone === 'mechanical' ? anchor.y + 24 + i * 72 : room.y + 16,
-      params: {},
+      label: `${project.coolingSystem.toUpperCase()} · ${room.label}`,
+      x: room.x + room.width - 88,
+      y: room.y + 16 + (i % 2) * 36,
+      params: { roomId, showOnMap: true, hvacRole: 'cooling' },
+      floorId: room.floorId,
     });
+    if (project.heatingSystem !== project.coolingSystem) {
+      const heatCatalog = HVAC_CATALOG[project.heatingSystem] ?? catalogId;
+      nodes.push({
+        id: `hvac_heat_${roomId}_${i}`,
+        catalogId: heatCatalog,
+        label: `Heat · ${room.label}`,
+        x: room.x + room.width - 88,
+        y: room.y + 52 + (i % 2) * 36,
+        params: { roomId, showOnMap: true, hvacRole: 'heating' },
+      });
+    }
   });
 
   if (!nodes.length && rooms.length) {
@@ -102,7 +127,7 @@ export function placeHvacUnits(
       label: 'HVAC',
       x: r.x + r.width - 88,
       y: r.y + 16,
-      params: {},
+      params: { roomId: r.id, showOnMap: true },
     });
   }
 
@@ -145,13 +170,24 @@ export function wireRoomLoads(
     const cableId = `cable_${room.id}_${idx}`;
     const segs = routeCableSegments(mcbX, mcbY, load.x + 21, load.y + 21, rooms);
     const seg = segs[0]!;
+    const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec;
+    const conduitType = conduitTypeForCable(cableEntry);
+    const label = formatCableLabel(room.label, cableEntry, idx, conduitType);
     nodePush({
       id: cableId,
       catalogId: 'cable-lv-cu-2.5',
-      label: `${room.label} cable ${idx + 1}`,
+      label,
       x: seg.x,
       y: seg.y,
-      params: { lengthM: segs.reduce((s, x) => s + x.lengthM, 0), rotation: seg.rotation },
+      params: {
+        lengthM: segs.reduce((s, x) => s + x.lengthM, 0),
+        rotation: seg.rotation,
+        roomId: room.id,
+        roomLabel: room.label,
+        circuitIndex: idx,
+        conduitType,
+        showOnMap: true,
+      },
     });
     edgePush(edgeFn(mcbId, 'load', cableId, 'a'));
     edgePush(edgeFn(cableId, 'b', load.id, 'in'));

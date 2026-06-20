@@ -15,7 +15,7 @@ import { suggestSmartFixes } from '../lib/engine/autofix';
 import { calculateHvacLoads } from '../lib/engine/hvac-loads';
 import { calculateLightingDesign } from '../lib/engine/lighting-design';
 import { validateLightingDesign } from '../lib/engine/lighting-validation';
-import { buildSmartTopology } from '../lib/engine/smarthome-topology';
+import { buildSmartTopology, isBusPowerAdequate } from '../lib/engine/smarthome-topology';
 import { computeQuality, computeCompliance } from '../lib/engine/quality';
 import { simulate } from '../lib/engine/simulate';
 
@@ -60,13 +60,15 @@ export function useSimulation() {
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
   const controls = useStudio((s) => s.controls);
+  const project = useStudio((s) => s.project);
   const simulating = useStudio((s) => s.simulating);
 
   return useMemo(() => {
     if (!simulating) return {} as ReturnType<typeof simulate>;
     const resolved = resolveNodes(nodes, getCatalogEntry);
-    return simulate(resolved, edges, controls);
-  }, [nodes, edges, controls, simulating]);
+    const busPowerOk = isBusPowerAdequate(project, nodes);
+    return simulate(resolved, edges, controls, { busPowerOk });
+  }, [nodes, edges, controls, project, simulating]);
 }
 
 /** HVAC, lighting, and smart-home engineering reports (deterministic). */

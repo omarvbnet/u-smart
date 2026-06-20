@@ -16,6 +16,8 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
   const locale = useStudio((s) => s.locale);
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
+  const rooms = useStudio((s) => s.rooms);
+  const floors = useStudio((s) => s.floors);
   const designName = useStudio((s) => s.designName);
   const project = useStudio((s) => s.project);
   const { compliance } = useAnalysis();
@@ -24,8 +26,12 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
 
   const { boq, loads, cables } = useMemo(() => {
     const resolved = resolveNodes(nodes, getCatalogEntry);
-    return { boq: buildBoq(resolved), loads: buildLoadSchedule(resolved), cables: buildCableSchedule(resolved, edges) };
-  }, [nodes, edges]);
+    return {
+      boq: buildBoq(resolved),
+      loads: buildLoadSchedule(resolved, rooms, floors),
+      cables: buildCableSchedule(resolved, edges, rooms, floors),
+    };
+  }, [nodes, edges, rooms, floors]);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'boq', label: t('boq') },
@@ -104,19 +110,19 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
             loads.rows.length === 0 ? <Empty t={t} /> : (
               <table className="w-full">
                 <thead>
-                  <tr><th className={th}>Tag</th><th className={th}>Load</th><th className={th}>Power (W)</th><th className={th}>V</th><th className={th}>Ph</th><th className={th}>PF</th><th className={th}>Current (A)</th></tr>
+                  <tr><th className={th}>Label</th><th className={th}>Floor</th><th className={th}>Room</th><th className={th}>Load</th><th className={th}>Power (W)</th><th className={th}>V</th><th className={th}>Ph</th><th className={th}>PF</th><th className={th}>Current (A)</th></tr>
                 </thead>
                 <tbody>
                   {loads.rows.map((r, i) => (
                     <tr key={i}>
-                      <td className={td}>{r.tag}</td><td className={td}>{r.name}</td><td className={td}>{r.powerW}</td>
+                      <td className={td}>{r.label || r.tag}</td><td className={td}>{r.floor}</td><td className={td}>{r.room}</td><td className={td}>{r.name}</td><td className={td}>{r.powerW}</td>
                       <td className={td}>{r.voltage}</td><td className={td}>{r.phases}</td><td className={td}>{r.pf}</td><td className={`${td} font-semibold`}>{r.current.toFixed(1)}</td>
                     </tr>
                   ))}
                   <tr>
-                    <td className={`${td} font-bold`} colSpan={2}>{t('total')}</td>
+                    <td className={`${td} font-bold`} colSpan={4}>{t('total')}</td>
                     <td className={`${td} font-bold`}>{(loads.totalKw * 1000).toFixed(0)}</td>
-                    <td className={td} colSpan={3}></td>
+                    <td className={td} colSpan={4}></td>
                     <td className={`${td} font-bold text-cyan-400`}>{loads.totalA.toFixed(1)}</td>
                   </tr>
                 </tbody>
@@ -128,13 +134,13 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
             cables.length === 0 ? <Empty t={t} /> : (
               <table className="w-full">
                 <thead>
-                  <tr><th className={th}>Tag</th><th className={th}>Type</th><th className={th}>CSA (mm²)</th><th className={th}>Cores</th><th className={th}>Material</th><th className={th}>Length (m)</th><th className={th}>Ampacity (A)</th><th className={th}>Vdrop (%)</th></tr>
+                  <tr><th className={th}>Label</th><th className={th}>Floor</th><th className={th}>Room</th><th className={th}>Cable</th><th className={th}>Conduit</th><th className={th}>CSA</th><th className={th}>Len (m)</th><th className={th}>Map X/Y</th><th className={th}>Iz</th><th className={th}>Vdrop (%)</th></tr>
                 </thead>
                 <tbody>
                   {cables.map((r, i) => (
                     <tr key={i}>
-                      <td className={td}>{r.tag}</td><td className={td}>{r.type}</td><td className={td}>{r.csa}</td><td className={td}>{r.cores}</td>
-                      <td className={td}>{r.material}</td><td className={td}>{r.lengthM}</td><td className={td}>{r.ampacity}</td>
+                      <td className={td}>{r.label || r.tag}</td><td className={td}>{r.floor}</td><td className={td}>{r.room}</td><td className={td}>{r.cableLabel}</td><td className={td}>{r.conduitType}</td><td className={td}>{r.csa}</td>
+                      <td className={td}>{r.lengthM}</td><td className={td}>{r.mapX}/{r.mapY}</td><td className={td}>{r.ampacity}</td>
                       <td className={`${td} font-semibold ${r.vdropPct > 4 ? 'text-orange-400' : ''}`}>{r.vdropPct.toFixed(2)}</td>
                     </tr>
                   ))}
@@ -201,9 +207,21 @@ export function ReportsModal({ onClose }: { onClose: () => void }) {
               <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
                 <Stat label="Protocol" value={smart.protocol} />
                 <Stat label="Bus mA" value={String(smart.totalBusMa)} />
-                <Stat label="PSU" value={`${smart.psuRequired}×640mA`} />
+                <Stat
+                  label="PSU"
+                  value={
+                    smart.busPowerOk
+                      ? `${smart.installedPsuMa} mA`
+                      : `${smart.installedPsuMa}/${smart.totalBusMa} mA`
+                  }
+                />
                 <Stat label="Devices" value={String(smart.devices.length)} />
               </div>
+              {!smart.busPowerOk && smart.totalBusMa > 0 && (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                  Bus PSU deficit: {smart.psuDeficitMa} mA — install {smart.psuRequired}×640 mA Bus PSU per protocol segment.
+                </p>
+              )}
               {smart.devices.length > 0 && (
                 <table className="w-full">
                   <thead><tr><th className={th}>Label</th><th className={th}>Address</th><th className={th}>Class</th></tr></thead>

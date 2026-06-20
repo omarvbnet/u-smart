@@ -120,6 +120,15 @@ function projectFromRow(row: StudioRow): ProjectInfo {
     energySources: (row.energySources as ProjectInfo['energySources']) ?? ['grid'],
     floorPlanSource: (fromJson?.floorPlanSource as ProjectInfo['floorPlanSource']) ?? 'none',
     bedrooms: fromJson?.bedrooms,
+    coolingSystem: fromJson?.coolingSystem,
+    heatingSystem: fromJson?.heatingSystem,
+    hvacUnitMode: fromJson?.hvacUnitMode,
+    hvacUnitCount: fromJson?.hvacUnitCount,
+    smartActuatorTier: fromJson?.smartActuatorTier,
+    smartChannels: fromJson?.smartChannels,
+    smartAlignChannels: fromJson?.smartAlignChannels,
+    floorCount: fromJson?.floorCount,
+    solarCapacityKw: fromJson?.solarCapacityKw,
   });
 }
 

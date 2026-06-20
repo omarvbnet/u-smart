@@ -6,6 +6,7 @@ import type { DesignNode, DesignOpening, DesignRoom, BimModel } from '../model';
 import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
 import { defaultControlState } from '../controls';
+import { orientOpeningOnWall, wallSegment } from './wall-layout';
 
 export type CurtainStyle = 'none' | 'roll' | 'single' | 'double';
 
@@ -26,35 +27,49 @@ export function openingsForRooms(
   const openings: DesignOpening[] = [];
   for (const room of rooms) {
     if (NO_DOOR.includes(room.zone)) continue;
-    openings.push({
-      id: `door_${room.id}`,
-      kind: 'door',
-      x: room.x + room.width / 2,
-      y: room.y + room.height,
-      width: 76,
-      height: 18,
-      rotation: 0,
-      roomId: room.id,
-      floorId: room.floorId ?? options.floorId,
-      smartEnabled: options.smart ?? false,
-      openPercent: 0,
-      curtainStyle: 'none',
-    });
+    const southWall = wallSegment(room, 'south');
+    openings.push(
+      orientOpeningOnWall(
+        {
+          id: `door_${room.id}`,
+          kind: 'door',
+          x: 0,
+          y: 0,
+          width: 76,
+          height: 18,
+          rotation: 0,
+          roomId: room.id,
+          floorId: room.floorId ?? options.floorId,
+          smartEnabled: options.smart ?? false,
+          openPercent: 0,
+          curtainStyle: 'none',
+        },
+        southWall,
+        0.5,
+      ),
+    );
     if (NO_WINDOW.includes(room.zone)) continue;
-    openings.push({
-      id: `win_${room.id}`,
-      kind: 'window',
-      x: room.x + room.width / 2,
-      y: room.y + 4,
-      width: Math.min(110, Math.max(64, room.width * 0.35)),
-      height: 16,
-      rotation: 0,
-      roomId: room.id,
-      floorId: room.floorId ?? options.floorId,
-      smartEnabled: options.smart ?? false,
-      openPercent: 0,
-      curtainStyle: curtainForZone(room.zone, options.smart ?? false),
-    });
+    const northWall = wallSegment(room, 'north');
+    openings.push(
+      orientOpeningOnWall(
+        {
+          id: `win_${room.id}`,
+          kind: 'window',
+          x: 0,
+          y: 0,
+          width: Math.min(110, Math.max(64, room.width * 0.35)),
+          height: 16,
+          rotation: 0,
+          roomId: room.id,
+          floorId: room.floorId ?? options.floorId,
+          smartEnabled: options.smart ?? false,
+          openPercent: 0,
+          curtainStyle: curtainForZone(room.zone, options.smart ?? false),
+        },
+        northWall,
+        0.5,
+      ),
+    );
   }
   return openings;
 }

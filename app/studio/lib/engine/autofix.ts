@@ -5,7 +5,7 @@ import { CATALOG, getCatalogEntry, type HvacSpec } from '../catalog';
 import type { DesignNode, DesignRoom, DesignEdge } from '../model';
 import type { ProjectInfo } from '../project';
 import type { Fix, Issue } from './validation';
-import { buildSmartTopology } from './smarthome-topology';
+import { buildSmartTopology, busPowerStatus, BUS_PSU_MA } from './smarthome-topology';
 import { calculateHvacLoads } from './hvac-loads';
 import { footprintPx, physicalSpecFor, PX_PER_M } from '../catalog/dimensions';
 
@@ -97,7 +97,15 @@ export function suggestHvacFix(nodeId: string, nodes: DesignNode[]): Fix | undef
 }
 
 export function psuCatalogId(project: ProjectInfo): string {
-  return project.smartProtocol === 'HDL' ? 'hdl-gateway' : 'knx-gateway';
+  if (project.smartProtocol === 'HDL') return 'hdl-buspsu';
+  if (project.smartProtocol === 'BOTH') return 'hdl-buspsu';
+  return 'knx-buspsu';
+}
+
+export function psuCatalogIdsForProject(project: ProjectInfo): string[] {
+  if (project.smartProtocol === 'BOTH') return ['hdl-buspsu', 'knx-buspsu'];
+  if (project.smartProtocol === 'HDL') return ['hdl-buspsu'];
+  return ['knx-buspsu'];
 }
 
 export function suggestSmartFixes(
@@ -108,24 +116,64 @@ export function suggestSmartFixes(
 ): Issue[] {
   if (!project.smartBuilding) return [];
   const topo = buildSmartTopology(project, nodes, edges, rooms);
+  const busPower = busPowerStatus(project, nodes);
   const issues: Issue[] = [];
 
-  if (topo.totalBusMa > topo.psuRequired * 512) {
+  for (const seg of busPower.segments) {
+    if (seg.loadMa === 0) continue;
+    if (seg.installedPsuMa === 0) {
+      issues.push({
+        id: `smart-no-psu-${seg.protocol}`,
+        severity: 'critical',
+        code: 'SMART_NO_BUS_PSU',
+        title: t(`لا يوجد PSU لباص ${seg.protocol}`, `No ${seg.protocol} bus PSU`, `PSU باز ${seg.protocol} نییە`, `${seg.protocol} veri yolu PSU yok`),
+        detail: t(
+          `${seg.protocol}: ${seg.loadMa} mA load — add a ${BUS_PSU_MA} mA Bus PSU before automation works.`,
+          `${seg.protocol}: ${seg.loadMa} mA load — add a ${BUS_PSU_MA} mA Bus PSU before automation works.`,
+          `${seg.protocol}: ${seg.loadMa} mA — PSU زیاد بکە.`,
+          `${seg.protocol}: ${seg.loadMa} mA — ${BUS_PSU_MA} mA Bus PSU ekleyin.`,
+        ),
+        values: [{ label: t('Bus mA', 'Bus mA', 'Bus mA', 'Bus mA'), value: `${seg.loadMa} mA` }],
+        standards: seg.protocol === 'KNX' ? ['KNX'] : [],
+        recommendation: t('أضف مزود طاقة Bus PSU للباص.', 'Add a dedicated Bus PSU module.', 'PSU باز زیاد بکە.', 'Bus PSU modülü ekleyin.'),
+        fix: { kind: 'addPsu', count: seg.psuRequired },
+      });
+    } else if (seg.deficitMa > 0) {
+      issues.push({
+        id: `smart-bus-overload-${seg.protocol}`,
+        severity: 'critical',
+        code: 'SMART_BUS_OVERLOAD',
+        title: t('حمل الباص زائد', 'Bus load exceeded', 'بارگرانی باز', 'Veri yolu aşırı yüklü'),
+        detail: t(
+          `${seg.protocol}: ${seg.loadMa} mA يتجاوز ${seg.installedPsuMa} mA المثبت.`,
+          `${seg.protocol}: ${seg.loadMa} mA exceeds installed ${seg.installedPsuMa} mA.`,
+          `${seg.protocol}: ${seg.loadMa} mA > ${seg.installedPsuMa} mA.`,
+          `${seg.protocol}: ${seg.loadMa} mA, kurulu ${seg.installedPsuMa} mA aşıyor.`,
+        ),
+        values: [{ label: t('Deficit mA', 'Deficit mA', 'Deficit mA', 'Deficit mA'), value: `${seg.deficitMa} mA` }],
+        standards: seg.protocol === 'KNX' ? ['KNX'] : [],
+        recommendation: t('أضف مزود طاقة Bus PSU إضافي.', 'Add another Bus PSU module.', 'PSU زیاد بکە.', 'Ek Bus PSU ekleyin.'),
+        fix: { kind: 'addPsu', count: Math.ceil(seg.deficitMa / BUS_PSU_MA) },
+      });
+    }
+  }
+
+  if (!topo.busPowerOk && topo.totalBusMa > 0 && issues.length === 0) {
     issues.push({
       id: 'smart-bus-overload',
       severity: 'critical',
       code: 'SMART_BUS_OVERLOAD',
       title: t('حمل الباص زائد', 'Bus load exceeded', 'بارگرانی باز', 'Veri yolu aşırı yüklü'),
       detail: t(
-        `التيار ${topo.totalBusMa} mA يتجاوز ${topo.psuRequired * 512} mA.`,
-        `Bus current ${topo.totalBusMa} mA exceeds ${topo.psuRequired * 512} mA.`,
-        `کارەبا ${topo.totalBusMa} mA لە ${topo.psuRequired * 512} mA تێدەپەڕێت.`,
-        `Veri yolu akımı ${topo.totalBusMa} mA, ${topo.psuRequired * 512} mA aşıyor.`,
+        `التيار ${topo.totalBusMa} mA — PSU المثبت ${topo.installedPsuMa} mA.`,
+        `Bus ${topo.totalBusMa} mA — installed PSU ${topo.installedPsuMa} mA.`,
+        `${topo.totalBusMa} mA > ${topo.installedPsuMa} mA.`,
+        `Veri yolu ${topo.totalBusMa} mA — PSU ${topo.installedPsuMa} mA.`,
       ),
       values: [{ label: t('Bus mA', 'Bus mA', 'Bus mA', 'Bus mA'), value: `${topo.totalBusMa} mA` }],
       standards: ['IEC 60364'],
-      recommendation: t('أضف مزود طاقة للباص.', 'Add an additional bus PSU.', 'PSU زیاد بکە.', 'Ek veri yolu PSU ekleyin.'),
-      fix: { kind: 'addPsu', count: Math.ceil(topo.totalBusMa / 512) - topo.psuRequired + 1 },
+      recommendation: t('أضف مزود طاقة Bus PSU.', 'Add Bus PSU modules.', 'PSU زیاد بکە.', 'Bus PSU ekleyin.'),
+      fix: { kind: 'addPsu', count: Math.max(1, topo.psuRequired - Math.floor(topo.installedPsuMa / BUS_PSU_MA)) },
     });
   }
 

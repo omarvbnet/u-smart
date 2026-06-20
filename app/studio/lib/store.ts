@@ -24,18 +24,21 @@ import {
   bedroomRangeForBuilding,
   villaGardenBounds,
 } from './engine/residential-layouts';
+import { buildFloorsFromCount, seedRoomsForProject } from './engine/floor-layout';
 import { detectRoomsFromMap as detectRooms, detectBimFromMap } from './engine/plan-detect';
 import { getTwinConnection } from './twin-stream';
-import { psuCatalogId, findMainPanel } from './engine/autofix';
+import { psuCatalogIdsForProject, findMainPanel } from './engine/autofix';
 import { aggregateSimulation } from './engine/sim-metrics';
 import { simulate } from './engine/simulate';
 import { executeDesignCommand as runDesignCommand } from './nl/design-commands';
 import { parseProjectBrief, isGenerateBriefCommand } from './nl/parse-brief';
 import { runAutonomousPipeline } from './platform/pipeline';
 import { applyHdlScene as runHdlScene, type HdlSceneId } from './engine/hdl-automation';
+import { isBusPowerAdequate, busPowerStatus } from './engine/smarthome-topology';
 import { validateLightingDesign } from './engine/lighting-validation';
 import type { MapOverlayMode } from './engine/cable-map';
 import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, type RoutePoint } from './engine/cable-map';
+import { wireRoomLoads } from './engine/placement-layout';
 import {
   placeSocketOutlets,
   placeAppliances,
@@ -54,6 +57,15 @@ import {
   syncOpeningsFromControls,
   actuatorsForOpenings,
 } from './engine/opening-layout';
+import {
+  mergeEffectiveWalls,
+  snapOpening,
+  resnapOpeningsForRoom,
+  orientOpeningOnWall,
+  setWallLength,
+  roomPatchForWallLength,
+  isVirtualRoomWall,
+} from './engine/wall-layout';
 import type { VisualizationMode, ExperienceMode } from './visualization/modes';
 
 export type Theme = 'dark' | 'light';
@@ -102,6 +114,7 @@ type StudioState = {
   rooms: DesignRoom[];
   selectedRoomId: string | null;
   selectedOpeningId: string | null;
+  selectedWallId: string | null;
   floorPlanTool: FloorPlanTool;
   cloudProjectId: string | null;
   simEnergyKwh: number;
@@ -136,7 +149,7 @@ type StudioState = {
   updateNodeParam: (id: string, key: string, value: number | string | boolean) => void;
   removeNode: (id: string) => void;
   select: (id: string | null) => void;
-  setControl: (id: string, key: keyof ControlState, value: boolean | number) => void;
+  setControl: (id: string, key: keyof ControlState, value: boolean | number, channelIndex?: number) => void;
 
   connect: (edge: Omit<DesignEdge, 'id'>) => void;
   removeEdge: (id: string) => void;
@@ -176,6 +189,9 @@ type StudioState = {
   removeRoom: (id: string) => void;
   selectRoom: (id: string | null) => void;
   selectOpening: (id: string | null) => void;
+  selectWall: (id: string | null) => void;
+  updateWall: (id: string, patch: { lengthM?: number; thickness?: number; heightM?: number }) => void;
+  assignOpeningToWall: (openingId: string, wallId: string, along?: number) => void;
   updateOpening: (id: string, patch: Partial<DesignOpening>) => void;
   moveOpening: (id: string, x: number, y: number) => void;
   removeOpening: (id: string) => void;
@@ -217,6 +233,7 @@ type StudioState = {
   toggleOutletsOnMap: () => void;
   addOutletToRoom: (roomId: string, catalogId: OutletCatalogId) => void;
   placeRoomOutlets: (roomId?: string) => { added: number };
+  placeRoomCables: (roomId?: string) => { added: number };
   removeOutletsInRoom: (roomId: string) => void;
   assignVrfToRoom: (roomId: string) => void;
   setRoomVrfIndoor: (roomId: string, catalogId: string) => void;
@@ -332,6 +349,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   rooms: [],
   selectedRoomId: null,
   selectedOpeningId: null,
+  selectedWallId: null,
   floorPlanTool: 'select',
   cloudProjectId: null,
   simEnergyKwh: 0,
@@ -393,7 +411,14 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
   },
 
-  moveNode: (id, x, y) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) })),
+  moveNode: (id, x, y) =>
+    set((s) => {
+      let nodes = s.nodes.map((n) => (n.id === id ? { ...n, x, y } : n));
+      nodes = nodes.map((n) =>
+        getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, s.edges, s.rooms) : n,
+      );
+      return { nodes };
+    }),
 
   updateNodeLabel: (id, label) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, label } : n)) })),
 
@@ -431,11 +456,29 @@ export const useStudio = create<StudioState>((set, get) => ({
       };
     }),
 
-  select: (id) => set({ selectedNodeId: id, selectedRoomId: null, selectedOpeningId: null }),
+  select: (id) => set({ selectedNodeId: id, selectedRoomId: null, selectedOpeningId: null, selectedWallId: null }),
 
-  setControl: (id, key, value) =>
+  setControl: (id, key, value, channelIndex) =>
     set((s) => {
-      const controls = { ...s.controls, [id]: { ...s.controls[id], [key]: value } };
+      const node = s.nodes.find((n) => n.id === id);
+      const entry = node ? getCatalogEntry(node.catalogId) : undefined;
+      if (
+        entry &&
+        (entry.domain === 'smarthome' || entry.domain === 'sensor') &&
+        !isBusPowerAdequate(s.project, s.nodes)
+      ) {
+        return s;
+      }
+
+      let controls: Record<string, ControlState>;
+      if (channelIndex != null && entry?.domain === 'smarthome' && entry.channels > 1) {
+        const prev = s.controls[id] ?? {};
+        const channels = [...(prev.channels ?? Array(entry.channels).fill(false))];
+        channels[channelIndex] = typeof value === 'boolean' ? value : Boolean(value);
+        controls = { ...s.controls, [id]: { ...prev, channels } };
+      } else {
+        controls = { ...s.controls, [id]: { ...s.controls[id], [key]: value } };
+      }
       let telegrams = s.telegrams;
       if (s.simulating) {
         const node = s.nodes.find((n) => n.id === id);
@@ -542,23 +585,26 @@ export const useStudio = create<StudioState>((set, get) => ({
         };
       }
       if (fix.kind === 'addPsu') {
-        const catId = psuCatalogId(s.project);
-        const entry = getCatalogEntry(catId);
-        if (!entry) return s;
+        const ids = psuCatalogIdsForProject(s.project);
         const added: DesignNode[] = [];
         const controls = { ...s.controls };
         const anchor = s.nodes.find((n) => getCatalogEntry(n.catalogId)?.domain === 'smarthome') ?? s.nodes[0];
-        for (let i = 0; i < fix.count; i++) {
+        let placed = 0;
+        while (placed < fix.count) {
+          const catId = ids[placed % ids.length]!;
+          const entry = getCatalogEntry(catId);
+          if (!entry) break;
           const node: DesignNode = {
             id: uid('n'),
             catalogId: catId,
-            label: `${defaultLabel(entry, s.locale)} PSU`,
-            x: (anchor?.x ?? 0) + 50 + i * 36,
+            label: defaultLabel(entry, s.locale),
+            x: (anchor?.x ?? 0) + 50 + placed * 40,
             y: (anchor?.y ?? 0) + 80,
             params: {},
           };
           added.push(node);
           controls[node.id] = defaultControlState(entry);
+          placed++;
         }
         return { nodes: [...s.nodes, ...added], controls };
       }
@@ -705,9 +751,10 @@ export const useStudio = create<StudioState>((set, get) => ({
     const floorPlanSource: FloorPlanSource =
       options.floorPlan === 'zero' ? 'zero' : options.floorPlan === 'import' ? 'import' : 'none';
     const mergedProject = { ...project, floorPlanSource };
+    const floors = buildFloorsFromCount(mergedProject.floorCount, mergedProject.buildingType);
     let rooms = s.rooms;
-    if (rooms.length === 0) {
-      rooms = seedRoomsForBuilding(mergedProject.buildingType, mergedProject.bedrooms);
+    if (rooms.length === 0 || options.generateDesign) {
+      rooms = seedRoomsForProject(mergedProject);
     }
     let nodes = s.nodes;
     let edges = s.edges;
@@ -735,14 +782,16 @@ export const useStudio = create<StudioState>((set, get) => ({
 
     if (options.generateDesign) {
       const starter = buildStarterDesign(mergedProject, s.locale, rooms);
-      nodes = starter.nodes;
-      edges = starter.edges;
+      const placed = enhanceDesignPlacement(mergedProject, rooms, starter.nodes, starter.edges, s.locale);
+      nodes = placed.nodes;
+      edges = placed.edges;
       designName = starter.name;
       controls = {};
       for (const n of nodes) {
         const entry = getCatalogEntry(n.catalogId);
         if (entry) controls[n.id] = defaultControlState(entry);
       }
+      controls = { ...controls, ...placed.controls };
     }
 
     let bim = s.bim;
@@ -757,6 +806,8 @@ export const useStudio = create<StudioState>((set, get) => ({
 
     set({
       project: mergedProject,
+      floors,
+      activeFloorId: floors[0]!.id,
       rooms,
       nodes,
       edges,
@@ -769,6 +820,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedNodeId: null,
       selectedRoomId: null,
       selectedOpeningId: null,
+      selectedWallId: null,
     });
   },
 
@@ -804,12 +856,16 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     const bt = s.project.buildingType;
     if (!isResidentialBuilding(bt)) {
-      const rooms = seedRoomsForBuilding(bt);
-      set({ rooms, selectedRoomId: null });
+      const project = s.project;
+      const floors = buildFloorsFromCount(project.floorCount, project.buildingType);
+      const rooms = seedRoomsForProject(project);
+      set({ floors, activeFloorId: floors[0]!.id, rooms, selectedRoomId: null });
       return { ok: true, message: 'Default commercial layout applied.', changes: rooms.length };
     }
     const bedrooms = options?.bedrooms ?? s.project.bedrooms ?? defaultBedroomsForBuilding(bt);
-    const rooms = seedRoomsForBuilding(bt, bedrooms);
+    const project = { ...s.project, bedrooms };
+    const floors = buildFloorsFromCount(project.floorCount, project.buildingType);
+    const rooms = seedRoomsForProject(project);
     let map = s.map;
     if (options?.resetMap !== false && (!map || map.mode === 'blank')) {
       const { width, height } = floorPlanSizeForBuilding(bt);
@@ -855,7 +911,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (options?.engineering) {
       const project = { ...s.project, bedrooms };
       const starter = buildStarterDesign(project, s.locale, rooms);
-      const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges);
+      const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges, s.locale);
       nodes = placed.nodes;
       edges = placed.edges;
       controls = {};
@@ -863,6 +919,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         const entry = getCatalogEntry(n.catalogId);
         if (entry) controls[n.id] = defaultControlState(entry);
       }
+      controls = { ...controls, ...placed.controls };
     }
     set({
       project: {
@@ -870,6 +927,8 @@ export const useStudio = create<StudioState>((set, get) => ({
         bedrooms,
         floorPlanSource: map?.mode === 'blank' ? 'zero' : s.project.floorPlanSource,
       },
+      floors,
+      activeFloorId: floors[0]!.id,
       rooms,
       map,
       bim,
@@ -916,10 +975,31 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   updateRoom: (id, patch) => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
 
-  moveRoom: (id, x, y) => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, x, y } : r)) })),
+  moveRoom: (id, x, y) =>
+    set((s) => {
+      const room = s.rooms.find((r) => r.id === id);
+      if (!room) return s;
+      const dx = x - room.x;
+      const dy = y - room.y;
+      const rooms = s.rooms.map((r) => (r.id === id ? { ...r, x, y } : r));
+      if (!s.bim) return { rooms };
+      const walls = mergeEffectiveWalls(s.bim, rooms, s.activeFloorId);
+      const openings = resnapOpeningsForRoom(s.bim.openings, id, walls).map((o) =>
+        o.roomId === id && !o.wallId ? { ...o, x: o.x + dx, y: o.y + dy } : o,
+      );
+      return { rooms, bim: { ...s.bim, openings } };
+    }),
 
   resizeRoom: (id, width, height) =>
-    set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, width: Math.max(60, width), height: Math.max(50, height) } : r)) })),
+    set((s) => {
+      const rooms = s.rooms.map((r) =>
+        r.id === id ? { ...r, width: Math.max(60, width), height: Math.max(50, height) } : r,
+      );
+      if (!s.bim) return { rooms };
+      const walls = mergeEffectiveWalls(s.bim, rooms, s.activeFloorId);
+      const openings = resnapOpeningsForRoom(s.bim.openings, id, walls);
+      return { rooms, bim: { ...s.bim, openings } };
+    }),
 
   removeRoom: (id) =>
     set((s) => ({
@@ -927,9 +1007,89 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedRoomId: s.selectedRoomId === id ? null : s.selectedRoomId,
     })),
 
-  selectRoom: (id) => set({ selectedRoomId: id, selectedNodeId: null, selectedOpeningId: null }),
+  selectRoom: (id) => set({ selectedRoomId: id, selectedNodeId: null, selectedOpeningId: null, selectedWallId: null }),
 
-  selectOpening: (id) => set({ selectedOpeningId: id, selectedNodeId: null, selectedRoomId: null }),
+  selectOpening: (id) => set({ selectedOpeningId: id, selectedNodeId: null, selectedRoomId: null, selectedWallId: null }),
+
+  selectWall: (id) => set({ selectedWallId: id, selectedNodeId: null, selectedRoomId: null, selectedOpeningId: null }),
+
+  updateWall: (id, patch) =>
+    set((s) => {
+      const walls = mergeEffectiveWalls(s.bim, s.rooms, s.activeFloorId);
+      const wall = walls.find((w) => w.id === id);
+      if (!wall) return s;
+
+      if (isVirtualRoomWall(id) && wall.roomId && wall.edge) {
+        const room = s.rooms.find((r) => r.id === wall.roomId);
+        if (!room) return s;
+        let rooms = s.rooms;
+        if (patch.lengthM != null) {
+          const lenPx = patch.lengthM * 50;
+          const roomPatch = roomPatchForWallLength(wall, lenPx, room);
+          if (roomPatch) {
+            rooms = s.rooms.map((r) => (r.id === room.id ? { ...r, ...roomPatch } : r));
+          }
+        }
+        const bim = s.bim ?? { walls: [], openings: [] };
+        const wallMeta = { ...(bim.wallMeta ?? {}) };
+        if (patch.thickness != null || patch.heightM != null) {
+          wallMeta[id] = {
+            ...wallMeta[id],
+            ...(patch.thickness != null ? { thickness: patch.thickness } : {}),
+            ...(patch.heightM != null ? { heightM: patch.heightM } : {}),
+          };
+        }
+        const effWalls = mergeEffectiveWalls({ ...bim, wallMeta }, rooms, s.activeFloorId);
+        const openings = room.id ? resnapOpeningsForRoom(bim.openings, room.id, effWalls) : bim.openings;
+        return { rooms, bim: { ...bim, wallMeta, openings } };
+      }
+
+      if (!s.bim) return s;
+      let nextWalls = s.bim.walls;
+      if (patch.lengthM != null) {
+        const lenPx = patch.lengthM * 50;
+        nextWalls = s.bim.walls.map((w) => (w.id === id ? setWallLength(w, lenPx) : w));
+      }
+      if (patch.thickness != null || patch.heightM != null) {
+        nextWalls = nextWalls.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                ...(patch.thickness != null ? { thickness: patch.thickness } : {}),
+                ...(patch.heightM != null ? { heightM: patch.heightM } : {}),
+              }
+            : w,
+        );
+      }
+      const bim = { ...s.bim, walls: nextWalls };
+      const effWalls = mergeEffectiveWalls(bim, s.rooms, s.activeFloorId);
+      const target = effWalls.find((w) => w.id === id);
+      const openings =
+        target != null
+          ? bim.openings.map((o) => (o.wallId === id ? orientOpeningOnWall(o, target, o.along ?? 0.5) : o))
+          : bim.openings;
+      return { bim: { ...bim, openings } };
+    }),
+
+  assignOpeningToWall: (openingId, wallId, along = 0.5) =>
+    set((s) => {
+      if (!s.bim) return s;
+      const walls = mergeEffectiveWalls(s.bim, s.rooms, s.activeFloorId);
+      const wall = walls.find((w) => w.id === wallId);
+      const opening = s.bim.openings.find((o) => o.id === openingId);
+      if (!wall || !opening) return s;
+      const next = orientOpeningOnWall(opening, wall, along);
+      let nodes = s.nodes;
+      if (next.linkedNodeId) {
+        nodes = nodes.map((n) =>
+          n.id === next.linkedNodeId ? { ...n, x: next.x - 28, y: next.y - 12, floorId: next.floorId } : n,
+        );
+      }
+      return {
+        bim: { ...s.bim, openings: s.bim.openings.map((o) => (o.id === openingId ? next : o)) },
+        nodes,
+      };
+    }),
 
   updateOpening: (id, patch) =>
     set((s) => {
@@ -945,11 +1105,19 @@ export const useStudio = create<StudioState>((set, get) => ({
   moveOpening: (id, x, y) =>
     set((s) => {
       if (!s.bim) return s;
+      const walls = mergeEffectiveWalls(s.bim, s.rooms, s.activeFloorId);
+      const opening = s.bim.openings.find((o) => o.id === id);
+      if (!opening) return s;
+      const next = snapOpening(opening, walls, x, y);
+      let nodes = s.nodes;
+      if (next.linkedNodeId) {
+        nodes = nodes.map((n) =>
+          n.id === next.linkedNodeId ? { ...n, x: next.x + (opening.kind === 'door' ? 24 : -28), y: next.y + (opening.kind === 'door' ? 8 : -20) } : n,
+        );
+      }
       return {
-        bim: {
-          ...s.bim,
-          openings: s.bim.openings.map((o) => (o.id === id ? { ...o, x, y } : o)),
-        },
+        bim: { ...s.bim, openings: s.bim.openings.map((o) => (o.id === id ? next : o)) },
+        nodes,
       };
     }),
 
@@ -1053,7 +1221,8 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     if (!s.simulating) return;
     const resolved = resolveNodes(s.nodes, getCatalogEntry);
-    const states = simulate(resolved, s.edges, s.controls);
+    const busPowerOk = isBusPowerAdequate(s.project, s.nodes);
+    const states = simulate(resolved, s.edges, s.controls, { busPowerOk });
     const m = aggregateSimulation(resolved, states);
     set({ simEnergyKwh: s.simEnergyKwh + m.totalKw / 3600 });
   },
@@ -1170,8 +1339,12 @@ export const useStudio = create<StudioState>((set, get) => ({
   placeEngineeringLayout: () => {
     const s = get();
     const before = s.nodes.length;
-    const placed = enhanceDesignPlacement(s.project, s.rooms, s.nodes, s.edges);
-    set({ nodes: placed.nodes, edges: placed.edges });
+    const placed = enhanceDesignPlacement(s.project, s.rooms, s.nodes, s.edges, s.locale);
+    set((st) => ({
+      nodes: placed.nodes,
+      edges: placed.edges,
+      controls: { ...st.controls, ...placed.controls },
+    }));
     const added = placed.nodes.length - before;
     return {
       ok: true,
@@ -1192,7 +1365,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ floors: [...s.floors, floor], activeFloorId: floor.id });
   },
 
-  switchFloor: (floorId) => set({ activeFloorId: floorId, selectedNodeId: null, selectedRoomId: null, selectedOpeningId: null }),
+  switchFloor: (floorId) => set({ activeFloorId: floorId, selectedNodeId: null, selectedRoomId: null, selectedOpeningId: null, selectedWallId: null }),
 
   removeFloor: (floorId) =>
     set((s) => {
@@ -1264,6 +1437,8 @@ export const useStudio = create<StudioState>((set, get) => ({
         openPercent: 0,
         curtainStyle: kind === 'window' && smart ? 'single' : 'none',
       };
+      const walls = mergeEffectiveWalls(s.bim, s.rooms, s.activeFloorId);
+      opening = snapOpening(opening, walls, cx, cy);
       let nodes = s.nodes;
       let controls = { ...s.controls };
       if (smart) {
@@ -1285,6 +1460,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   applyHdlScene: (sceneId) => {
     const s = get();
+    if (!isBusPowerAdequate(s.project, s.nodes)) return 0;
     if (!s.simulating) set({ simulating: true });
     const changes = runHdlScene(sceneId, s.nodes, (id, key, value) => get().setControl(id, key, value));
     const bim = syncOpeningsFromControls(s.bim, get().controls);
@@ -1316,7 +1492,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       nodes: s.nodes.map((n) => {
         if (n.id !== cableId) return n;
         const entry = getCatalogEntry(n.catalogId) as CableSpec | undefined;
-        return { ...n, params: applyRouteToCable(n, points, entry) };
+        const params = applyRouteToCable(n, points, entry);
+        return { ...n, label: String(params.cableLabel ?? n.label), params };
       }),
     })),
 
@@ -1368,6 +1545,67 @@ export const useStudio = create<StudioState>((set, get) => ({
     const kept = s.nodes.filter((n) => !prefixFilter(n));
     set({ nodes: [...kept, ...placed] });
     return { added: placed.length };
+  },
+
+  placeRoomCables: (roomId) => {
+    const s = get();
+    const panel =
+      s.nodes.find((n) => n.id === 'panel_main') ??
+      s.nodes.find((n) => n.catalogId === 'load-distribution-board');
+    if (!panel) return { added: 0 };
+
+    const targets = roomId ? s.rooms.filter((r) => r.id === roomId) : s.rooms;
+    if (!targets.length) return { added: 0 };
+
+    let nodes = [...s.nodes];
+    let edges = [...s.edges];
+    let added = 0;
+
+    const loadsInRoom = (room: DesignRoom) =>
+      nodes.filter((n) => {
+        const e = getCatalogEntry(n.catalogId);
+        if (!e) return false;
+        if (e.domain === 'cable' || e.domain === 'protection' || e.domain === 'source') return false;
+        if (e.domain !== 'load' && e.category !== 'SOCKET' && e.category !== 'APPLIANCE') return false;
+        if (n.params.roomId === room.id) return true;
+        const cx = n.x + 21;
+        const cy = n.y + 21;
+        return cx >= room.x && cx <= room.x + room.width && cy >= room.y && cy <= room.y + room.height;
+      });
+
+    for (const room of targets) {
+      const prefix = `cable_${room.id}`;
+      const removeIds = new Set(
+        nodes.filter((n) => n.id === prefix || n.id.startsWith(`${prefix}_`)).map((n) => n.id),
+      );
+      nodes = nodes.filter((n) => !removeIds.has(n.id));
+      edges = edges.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target));
+
+      const loads = loadsInRoom(room);
+      if (!loads.length) continue;
+
+      const before = nodes.length;
+      wireRoomLoads(
+        panel.id,
+        room,
+        loads,
+        s.rooms,
+        (src, sh, tgt, th) => ({ id: uid('e'), source: src, sourceHandle: sh, target: tgt, targetHandle: th }),
+        (n) => {
+          nodes.push(n);
+        },
+        (e) => {
+          edges.push(e);
+        },
+      );
+      added += nodes.length - before;
+    }
+
+    nodes = nodes.map((n) =>
+      getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, edges, s.rooms) : n,
+    );
+    set({ nodes, edges });
+    return { added };
   },
 
   removeOutletsInRoom: (roomId) =>

@@ -45,7 +45,7 @@ export type DesignEdge = {
   cableId?: string;
 };
 
-/** Wall segment extracted from CAD or raster analysis. */
+/** Wall segment extracted from CAD, raster analysis, or room perimeter. */
 export type DesignWall = {
   id: string;
   x1: number;
@@ -53,8 +53,14 @@ export type DesignWall = {
   x2: number;
   y2: number;
   thickness: number;
+  /** Wall height in metres (3D / schedules). */
+  heightM?: number;
   layer?: string;
   floorId?: string;
+  roomId?: string;
+  edge?: 'north' | 'south' | 'east' | 'west';
+  /** Exterior / outdoor-facing wall segment. */
+  outdoor?: boolean;
 };
 
 /** Curtain style for smart windows. */
@@ -69,6 +75,10 @@ export type DesignOpening = {
   width: number;
   height: number;
   rotation?: number;
+  /** Wall segment this opening is mounted on. */
+  wallId?: string;
+  /** Position along wall, 0–1 from start to end. */
+  along?: number;
   layer?: string;
   floorId?: string;
   roomId?: string;
@@ -103,6 +113,8 @@ export type BimModel = {
   walls: DesignWall[];
   openings: DesignOpening[];
   gardens?: DesignGarden[];
+  /** Overrides for generated room walls (thickness, height). */
+  wallMeta?: Record<string, { thickness?: number; heightM?: number }>;
 };
 
 export type Design = {

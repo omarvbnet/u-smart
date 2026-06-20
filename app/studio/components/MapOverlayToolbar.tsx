@@ -24,6 +24,7 @@ export function MapOverlayToolbar() {
   const toggleOutlets = useStudio((s) => s.toggleOutletsOnMap);
   const placeAllOutlets = useStudio((s) => s.placeRoomOutlets);
   const visualizationMode = useStudio((s) => s.visualizationMode);
+  const simulating = useStudio((s) => s.simulating);
 
   const btn = (active: boolean) =>
     `flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition ${
@@ -31,36 +32,38 @@ export function MapOverlayToolbar() {
     }`;
 
   const mapLabel = map?.mode === 'blank' ? t('mapTypeBlank') : map ? t('mapTypeImage') : t('mapTypeNone');
+  const bottomClass = simulating ? 'bottom-48' : 'bottom-3';
 
   return (
-    <div className="absolute bottom-3 z-10 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]">
-      <div className="flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
+    <div className={`absolute ${bottomClass} z-30 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]`}>
+      <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/98 p-1 shadow-lg backdrop-blur">
         <span className="px-2 text-[9px] font-semibold text-[var(--studio-muted)]">{mapLabel}</span>
         {MAP_OVERLAY_MODES.map((m) => {
           const meta = MODE_META[m];
           return (
             <button key={m} type="button" className={btn(mode === m)} onClick={() => setMode(m)} title={t(meta.labelKey)}>
               <meta.icon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t(meta.labelKey)}</span>
+              <span>{t(meta.labelKey)}</span>
             </button>
           );
         })}
+        <span className="mx-1 h-4 w-px bg-[var(--studio-border)]" />
         <button type="button" className={btn(showOutlets)} onClick={toggleOutlets} title={t('showOutletsOnMap')}>
           <Plug className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t('showOutletsOnMap')}</span>
+          <span>{t('showOutletsOnMap')}</span>
         </button>
         <button type="button" className={btn(false)} onClick={() => placeAllOutlets()} title={t('autoPlaceOutlets')}>
           <Plug className="h-3.5 w-3.5 text-amber-400" />
-          <span className="hidden md:inline">{t('autoPlaceAllOutlets')}</span>
+          <span>{t('autoPlaceAllOutlets')}</span>
         </button>
         <button type="button" className={btn(false)} onClick={() => rerouteAll()} title={t('rerouteAllCables')}>
           <Cable className="h-3.5 w-3.5" />
-          <span className="hidden md:inline">{t('rerouteAllCables')}</span>
+          <span>{t('rerouteAllCables')}</span>
         </button>
         {visualizationMode === '3d' && (
           <button type="button" className={btn(show3d)} onClick={toggle3d} title={t('showCables3d')}>
             <Cuboid className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">{t('showCables3d')}</span>
+            <span>{t('showCables3d')}</span>
           </button>
         )}
       </div>

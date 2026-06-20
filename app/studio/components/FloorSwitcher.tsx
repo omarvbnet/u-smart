@@ -8,29 +8,23 @@ export function FloorSwitcher() {
   const t = useT();
   const floors = useStudio((s) => s.floors);
   const activeFloorId = useStudio((s) => s.activeFloorId);
+  const rooms = useStudio((s) => s.rooms);
+  const nodes = useStudio((s) => s.nodes);
   const switchFloor = useStudio((s) => s.switchFloor);
   const addFloor = useStudio((s) => s.addFloor);
   const removeFloor = useStudio((s) => s.removeFloor);
+  const project = useStudio((s) => s.project);
 
-  if (floors.length <= 1 && floors[0]?.level === 0) {
-    return (
-      <div className="flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] font-semibold text-[var(--studio-muted)] hover:text-[var(--studio-text)]"
-          onClick={() => addFloor()}
-          title={t('addFloor')}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t('addFloor')}
-        </button>
-      </div>
-    );
-  }
+  const countOnFloor = (floorId: string) => {
+    const roomIds = new Set(rooms.filter((r) => r.floorId === floorId).map((r) => r.id));
+    const inRoom = (n: (typeof nodes)[0]) =>
+      n.floorId === floorId || (n.params.roomId && roomIds.has(String(n.params.roomId)));
+    return nodes.filter(inRoom).length;
+  };
 
   return (
-    <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
-      <Layers className="mx-1 h-3.5 w-3.5 text-[var(--studio-muted)]" />
+    <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur max-w-[min(100%,420px)]">
+      <Layers className="mx-1 h-3.5 w-3.5 shrink-0 text-[var(--studio-muted)]" />
       {floors.map((f) => (
         <button
           key={f.id}
@@ -41,18 +35,24 @@ export function FloorSwitcher() {
               : 'text-[var(--studio-muted)] hover:bg-[var(--studio-hover)] hover:text-[var(--studio-text)]'
           }`}
           onClick={() => switchFloor(f.id)}
+          title={`${f.label} · ${countOnFloor(f.id)} ${t('devicesOnFloor')}`}
         >
           {f.label}
+          {floors.length > 1 && (
+            <span className="ms-1 opacity-70">({countOnFloor(f.id)})</span>
+          )}
         </button>
       ))}
-      <button
-        type="button"
-        className="rounded-lg p-1 text-[var(--studio-muted)] hover:text-cyan-300"
-        onClick={() => addFloor()}
-        title={t('addFloor')}
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
+      {floors.length < (project.floorCount ?? 5) && (
+        <button
+          type="button"
+          className="rounded-lg p-1 text-[var(--studio-muted)] hover:text-cyan-300"
+          onClick={() => addFloor()}
+          title={t('addFloor')}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
       {floors.length > 1 && (
         <button
           type="button"

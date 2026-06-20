@@ -47,7 +47,7 @@ export function runAutonomousPipeline(
   assumptions.push(...hvac.assumptions, ...lighting.assumptions);
 
   const starter = buildStarterDesign(project, locale, rooms);
-  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges);
+  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges, locale);
   let map: MapBackground | null = null;
   if (project.floorPlanSource === 'zero') {
     const { width, height } = floorPlanSizeForBuilding(project.buildingType);
@@ -73,6 +73,7 @@ export function runAutonomousPipeline(
     const entry = getCatalogEntry(n.catalogId);
     if (entry) controls[n.id] = defaultControlState(entry);
   }
+  Object.assign(controls, placed.controls);
 
   return {
     project,

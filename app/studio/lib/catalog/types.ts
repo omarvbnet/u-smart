@@ -241,6 +241,8 @@ export type SmartHomeSpec = CatalogEntryBase & {
   channelCurrentA: number | null;
   /** Bus current draw (mA). */
   busCurrentMa: number;
+  /** Bus PSU supply rating (mA) — only for Bus PSU devices. */
+  busSupplyMa?: number;
   voltage: number;
 };
 

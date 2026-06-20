@@ -4,6 +4,7 @@
 import { getCatalogEntry, type HvacSpec } from '../catalog';
 import type { DesignNode, DesignRoom } from '../model';
 import type { ProjectInfo } from '../project';
+import { primaryCoolingSystem } from '../project';
 import { calculateHvacLoads, type RoomHvacLoad } from './hvac-loads';
 
 export type VrfIndoorPick = {
@@ -71,6 +72,8 @@ const DIVERSITY = 0.85;
 const MAX_CONNECTION_RATIO = 130;
 
 function isVrfProject(project: ProjectInfo): boolean {
+  const cooling = primaryCoolingSystem(project);
+  if (cooling === 'vrf' || cooling === 'multi_split') return true;
   if (project.hvacMode === 'auto') return true;
   return project.hvacTypes.some((t) => t === 'vrf' || t === 'multi_split');
 }
@@ -300,6 +303,9 @@ export function placeVrfDistribution(
     let unitIdx = 0;
     for (const unit of row.indoorUnits) {
       for (let q = 0; q < unit.qty; q++) {
+        if (project.hvacUnitMode === 'fixed' && nodes.filter((n) => n.params.vrfRole === 'indoor').length >= project.hvacUnitCount) {
+          break;
+        }
         const pos = indoorPositionInRoom(room, unit.style, unitIdx);
         nodes.push({
           id: `${idPrefix}_${row.roomId}_${unitIdx}`,

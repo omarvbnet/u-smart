@@ -10,10 +10,12 @@ export type Declaration = { voltage: number; current: number; text: string };
 export function declarationFor(entry: CatalogEntry, params?: Record<string, number | string | boolean>): Declaration | null {
   switch (entry.domain) {
     case 'source': {
+      const ratedKva = Number(params?.ratedKva) || entry.ratedKva;
       const i = entry.phases === 3
-        ? (entry.ratedKva * 1000) / (SQRT3 * entry.voltage)
-        : (entry.ratedKva * 1000) / entry.voltage;
-      return mk(entry.voltage, i);
+        ? (ratedKva * 1000) / (SQRT3 * entry.voltage)
+        : (ratedKva * 1000) / entry.voltage;
+      const label = entry.sourceType === 'SOLAR_PV' ? `${ratedKva} kW PV` : undefined;
+      return mk(entry.voltage, i, label ? `${entry.voltage}V · ${ratedKva} kW` : undefined);
     }
     case 'protection':
       if (entry.protectionType === 'SPD') return { voltage: 400, current: 0, text: '400V · SPD' };
@@ -38,6 +40,10 @@ export function declarationFor(entry: CatalogEntry, params?: Record<string, numb
   }
 }
 
-function mk(voltage: number, current: number): Declaration {
-  return { voltage, current, text: `${voltage}V · ${current >= 10 ? current.toFixed(0) : current.toFixed(1)}A` };
+function mk(voltage: number, current: number, text?: string): Declaration {
+  return {
+    voltage,
+    current,
+    text: text ?? `${voltage}V · ${current >= 10 ? current.toFixed(0) : current.toFixed(1)}A`,
+  };
 }

@@ -8,7 +8,9 @@
  */
 import type { ResolvedNode, DesignEdge } from '../model';
 import type { ControlState } from '../controls';
+import type { SourceSpec } from '../catalog';
 import { declarationFor } from './declarations';
+import { SQRT3 } from './electrical';
 
 export type NodeSimState = {
   energised: boolean;
@@ -21,7 +23,9 @@ export function simulate(
   nodes: ResolvedNode[],
   edges: DesignEdge[],
   controls: Record<string, ControlState>,
+  options?: { busPowerOk?: boolean },
 ): Record<string, NodeSimState> {
+  const busPowerOk = options?.busPowerOk ?? true;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const adj = new Map<string, Set<string>>();
   for (const e of edges) {
@@ -37,7 +41,14 @@ export function simulate(
 
   // BFS energisation from each ON source. A path is blocked by an OPEN breaker.
   const energised = new Set<string>();
-  const sources = nodes.filter((n) => n.spec.domain === 'source' && (controls[n.id]?.on ?? true));
+  const sources = nodes.filter((n) => {
+    if (n.spec.domain !== 'source') return false;
+    const ctrl = controls[n.id] ?? {};
+    if (!(ctrl.on ?? true)) return false;
+    const spec = n.spec as SourceSpec;
+    if (spec.sourceType === 'SOLAR_PV' && (ctrl.level ?? 85) <= 0) return false;
+    return true;
+  });
   const queue: string[] = [];
   for (const s of sources) {
     energised.add(s.id);
@@ -70,10 +81,21 @@ export function simulate(
     const voltageV = decl?.voltage ?? 0;
 
     switch (n.spec.domain) {
-      case 'source':
-        active = ctrl.on ?? true;
-        currentA = active ? decl?.current ?? 0 : 0;
+      case 'source': {
+        const spec = n.spec as SourceSpec;
+        const ratedKva = Number(n.params.ratedKva) || spec.ratedKva;
+        const on = ctrl.on ?? true;
+        const irradiance = spec.sourceType === 'SOLAR_PV' ? (ctrl.level ?? 85) / 100 : 1;
+        active = on && irradiance > 0;
+        const effectiveKva = ratedKva * irradiance;
+        currentA =
+          active && effectiveKva > 0
+            ? spec.phases === 3
+              ? (effectiveKva * 1000) / (SQRT3 * spec.voltage)
+              : (effectiveKva * 1000) / spec.voltage
+            : 0;
         break;
+      }
       case 'protection':
         active = en && (ctrl.on ?? true) && n.spec.protectionType !== 'SPD';
         break;
@@ -88,13 +110,14 @@ export function simulate(
       case 'smarthome': {
         const on = ctrl.on ?? ctrl.active ?? false;
         const level = ctrl.level;
-        active = en && (on || (level != null && level > 0));
+        const channelOn = ctrl.channels?.some(Boolean) ?? false;
+        active = busPowerOk && en && (channelOn || on || (level != null && level > 0));
         currentA = active ? (decl?.current ?? 0) : 0;
         break;
       }
       case 'sensor':
-        active = en && (ctrl.active ?? false);
-        currentA = en ? decl?.current ?? 0 : 0;
+        active = busPowerOk && en && (ctrl.active ?? false);
+        currentA = busPowerOk && en ? decl?.current ?? 0 : 0;
         break;
       default:
         active = en;

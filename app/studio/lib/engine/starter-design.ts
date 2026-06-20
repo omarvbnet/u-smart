@@ -5,11 +5,14 @@ import type { DesignNode, DesignEdge, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import type { StudioLocale } from '../i18n';
 import { cableRunRouted } from './cable-routing';
-import { rerouteCableNode } from './cable-map';
-import { getCatalogEntry } from '../catalog';
+import { rerouteCableNode, labelAllDesignCables, formatCableLabel, conduitTypeForCable } from './cable-map';
+import { getCatalogEntry, type CableSpec } from '../catalog';
 import { placeLightingFixtures, placeHvacUnits, mergePlacementNodes } from './placement-layout';
 import { placeSocketOutlets, placeAppliances, mergeOutletNodes } from './outlet-placement';
 import { seedRoomsForBuilding } from './residential-layouts';
+import { seedRoomsForProject } from './floor-layout';
+import { placeSmartChannelSystem } from './smart-channel-layout';
+import type { ControlState } from '../controls';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -45,7 +48,8 @@ export function buildStarterDesign(
 
   const nodes: DesignNode[] = [];
   const edges: DesignEdge[] = [];
-  const targets = rooms.length > 0 ? rooms : seedRoomsForBuilding(bt, project.bedrooms);
+  const targets = rooms.length > 0 ? rooms : seedRoomsForProject(project);
+  const groundId = targets.find((r) => r.floorId)?.floorId ?? 'floor_0';
   const minRoomX = targets.length ? Math.min(...targets.map((r) => r.x)) : 0;
   const yBase = targets.length ? Math.min(...targets.map((r) => r.y)) + 40 : 200;
   let xSource = minRoomX - 200;
@@ -55,11 +59,16 @@ export function buildStarterDesign(
     const catalogId = SOURCE_CATALOG[src];
     if (!catalogId) return;
     const id = `src_${src}`;
-    nodes.push({ id, catalogId, label: src, x: xSource, y: yBase + i * 120, params: {} });
+    const params: DesignNode['params'] = { floorId: groundId };
+    if (src === 'solar') {
+      params.ratedKva = project.solarCapacityKw;
+      params.capacityKw = project.solarCapacityKw;
+    }
+    nodes.push({ id, catalogId, label: src === 'solar' ? `Solar ${project.solarCapacityKw} kW` : src, x: xSource, y: yBase + i * 120, floorId: groundId, params });
   });
 
   const mainId = 'panel_main';
-  nodes.push({ id: mainId, catalogId: 'load-distribution-board', label: 'Main DB', x: minRoomX - 80, y: yBase + 40, params: {} });
+  nodes.push({ id: mainId, catalogId: 'load-distribution-board', label: 'Main DB', x: minRoomX - 80, y: yBase + 40, floorId: groundId, params: {} });
 
   const primarySrc = nodes[0];
   if (primarySrc) {
@@ -80,16 +89,29 @@ export function buildStarterDesign(
     const loadY = cy;
     const run = cableRunRouted(mcbX, mcbY, loadX, loadY, targets);
 
-    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: mcbX, y: mcbY, params: {} });
+    const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec;
+    const conduitType = conduitTypeForCable(cableEntry);
+    const cableLabel = formatCableLabel(room.label, cableEntry, 0, conduitType);
+
+    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: mcbX, y: mcbY, floorId: room.floorId ?? groundId, params: {} });
     nodes.push({
       id: cableId,
       catalogId: 'cable-lv-cu-2.5',
-      label: `${room.label} cable`,
+      label: cableLabel,
       x: run.x,
       y: run.y,
-      params: { lengthM: run.lengthM, rotation: run.rotation },
+      floorId: room.floorId ?? groundId,
+      params: {
+        lengthM: run.lengthM,
+        rotation: run.rotation,
+        roomId: room.id,
+        roomLabel: room.label,
+        circuitIndex: 0,
+        conduitType,
+        showOnMap: true,
+      },
     });
-    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: loadX, y: loadY, params: { powerW: roomAreaW(room) } });
+    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: loadX, y: loadY, floorId: room.floorId ?? groundId, params: { powerW: roomAreaW(room) } });
 
     edges.push(edge(mainId, 'out', mcbId, 'line'));
     edges.push(edge(mcbId, 'load', cableId, 'a'));
@@ -112,14 +134,26 @@ export function buildStarterDesign(
     const mcbY = baseY;
     const hvacRun = cableRunRouted(mcbX, mcbY, hvacX, hvacY, targets);
 
+    const hvacCableEntry = getCatalogEntry('cable-lv-cu-4') as CableSpec;
+    const hvacConduit = conduitTypeForCable(hvacCableEntry);
+    const hvacLabel = formatCableLabel(room?.label ?? 'HVAC', hvacCableEntry, i, hvacConduit);
+
     nodes.push({ id: mcbId, catalogId: 'mcb-c16', label: 'HVAC MCB', x: mcbX, y: mcbY, params: {} });
     nodes.push({
       id: cableId,
       catalogId: 'cable-lv-cu-4',
-      label: 'HVAC cable',
+      label: hvacLabel,
       x: hvacRun.x,
       y: hvacRun.y,
-      params: { lengthM: hvacRun.lengthM, rotation: hvacRun.rotation },
+      params: {
+        lengthM: hvacRun.lengthM,
+        rotation: hvacRun.rotation,
+        roomId: room?.id,
+        roomLabel: room?.label ?? 'HVAC',
+        circuitIndex: i,
+        conduitType: hvacConduit,
+        showOnMap: true,
+      },
     });
     nodes.push({
       id: hvacId,
@@ -140,13 +174,24 @@ export function buildStarterDesign(
     protos.forEach((proto, i) => {
       const gwId = `gw_${proto}`;
       const catalogId = proto === 'KNX' ? 'knx-gateway' : 'hdl-gateway';
+      const psuId = proto === 'KNX' ? 'knx-buspsu' : 'hdl-buspsu';
       const room = targets[0];
+      const baseX = room ? room.x + 20 : 100;
+      const baseY = room ? room.y + room.height - 60 : 520 + i * 80;
       nodes.push({
         id: gwId,
         catalogId,
         label: `${proto} Gateway`,
-        x: room ? room.x + 20 : 100,
-        y: room ? room.y + room.height - 60 : 520 + i * 80,
+        x: baseX,
+        y: baseY,
+        params: {},
+      });
+      nodes.push({
+        id: `psu_${proto}`,
+        catalogId: psuId,
+        label: `${proto} Bus PSU 640mA`,
+        x: baseX + 48,
+        y: baseY + 36,
         params: {},
       });
     });
@@ -165,17 +210,26 @@ export function enhanceDesignPlacement(
   rooms: DesignRoom[],
   nodes: DesignNode[],
   edges: DesignEdge[],
-): { nodes: DesignNode[]; edges: DesignEdge[] } {
+  locale: StudioLocale = 'en',
+): { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } {
   let nextNodes = [...nodes];
+  let nextEdges = [...edges];
   const lights = placeLightingFixtures(rooms);
   nextNodes = mergePlacementNodes(nextNodes, lights, 'light');
   const hvacNodes = placeHvacUnits(rooms, project);
   nextNodes = mergePlacementNodes(nextNodes, hvacNodes, 'hvac');
   nextNodes = mergeOutletNodes(nextNodes, [...placeSocketOutlets(rooms), ...placeAppliances(rooms)]);
-  nextNodes = nextNodes.map((n) =>
-    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nextNodes, edges, rooms) : n,
-  );
-  return { nodes: nextNodes, edges };
+
+  let smartControls: Record<string, ControlState> = {};
+  if (project.smartBuilding && project.smartProtocol) {
+    const smart = placeSmartChannelSystem(project, rooms, nextNodes, nextEdges, locale);
+    nextNodes = smart.nodes;
+    nextEdges = smart.edges;
+    smartControls = smart.controls;
+  }
+
+  nextNodes = labelAllDesignCables(nextNodes, nextEdges, rooms);
+  return { nodes: nextNodes, edges: nextEdges, controls: smartControls };
 }
 
 function edge(source: string, sourceHandle: string, target: string, targetHandle: string): DesignEdge {
