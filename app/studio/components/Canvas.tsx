@@ -111,6 +111,7 @@ function CanvasInner() {
   const setFloorPlanTool = useStudio((s) => s.setFloorPlanTool);
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
   const canvasFitSeq = useStudio((s) => s.canvasFitSeq);
+  const suppressCanvasFit = useStudio((s) => s.suppressCanvasFit);
   const visualizationMode = useStudio((s) => s.visualizationMode);
   const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
   const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
@@ -421,6 +422,7 @@ function CanvasInner() {
   storeRfNodesRef.current = storeRfNodes;
 
   useEffect(() => {
+    if (suppressCanvasFit) return;
     if (nodes.length === 0 && rooms.length === 0 && !map) return;
     const timer = window.setTimeout(() => {
       const focus = nodesForCanvasFit(storeRfNodesRef.current, canvasViewMode);
@@ -433,7 +435,7 @@ function CanvasInner() {
       });
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [layoutKey, fitView, nodes.length, rooms.length, map, canvasViewMode, canvasFitSeq]);
+  }, [layoutKey, fitView, nodes.length, rooms.length, map, canvasViewMode, canvasFitSeq, suppressCanvasFit]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -548,15 +550,18 @@ function CanvasInner() {
       onMouseUp={onPaneMouseUp}
       onMouseLeave={onPaneMouseUp}
     >
-      <FloorPlanToolbar />
-      <div className="absolute top-3 z-10 ltr:right-3 rtl:left-3">
-        <FloorSwitcher />
+      <div className="pointer-events-none absolute inset-0 z-50">
+        <FloorPlanToolbar />
+        <div className="pointer-events-auto absolute top-14 ltr:right-3 rtl:left-3">
+          <FloorSwitcher />
+        </div>
+        <MapOverlayToolbar />
+        <VisualizationToolbar />
+        <DesignAssistantPanel />
+        <ClientExperienceBar />
       </div>
-      <MapOverlayToolbar />
-      <VisualizationToolbar />
-      <DesignAssistantPanel />
-      <ClientExperienceBar />
-      <ReactFlow
+      <div className="absolute inset-0 z-[1]">
+        <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
@@ -608,6 +613,7 @@ function CanvasInner() {
           maskColor="rgba(0,0,0,0.35)"
         />
       </ReactFlow>
+      </div>
 
       {drawPreview && drawPreview.w > 4 && (() => {
         const tl = flowToScreenPosition({ x: drawPreview.x, y: drawPreview.y });
@@ -646,12 +652,19 @@ export function Canvas() {
 
   if (visualizationMode === '3d') {
     return (
-      <div className="relative h-full w-full">
-        <VisualizationToolbar />
-        <MapOverlayToolbar />
-        <ClientExperienceBar />
-        <DesignAssistantPanel />
-        <Twin3DView />
+      <div className="relative h-full w-full min-h-0">
+        <div className="absolute inset-0 z-[1]">
+          <Twin3DView />
+        </div>
+        <div className="pointer-events-none absolute inset-0 z-50">
+          <VisualizationToolbar />
+          <div className="pointer-events-auto absolute top-14 ltr:right-3 rtl:left-3">
+            <FloorSwitcher />
+          </div>
+          <MapOverlayToolbar />
+          <ClientExperienceBar />
+          <DesignAssistantPanel />
+        </div>
       </div>
     );
   }

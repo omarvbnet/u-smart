@@ -2,11 +2,11 @@
  * Door / window placement on room layouts + HDL actuator pairing.
  */
 import { getCatalogEntry } from '../catalog';
-import type { DesignNode, DesignOpening, DesignRoom, BimModel } from '../model';
+import type { DesignNode, DesignOpening, DesignRoom, BimModel, DesignWall } from '../model';
 import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
 import { defaultControlState } from '../controls';
-import { orientOpeningOnWall, wallSegment } from './wall-layout';
+import { mergeEffectiveWalls, orientOpeningOnWall, wallSegment } from './wall-layout';
 
 export type CurtainStyle = 'none' | 'roll' | 'single' | 'double';
 
@@ -163,4 +163,24 @@ export function openingOpenPercent(
     if (opening.kind === 'door') return c?.on ? 100 : opening.openPercent ?? 0;
   }
   return opening.openPercent ?? 0;
+}
+
+/** Re-attach openings to their wall segments (position + rotation) for 3D / live wall edits. */
+export function resolveOpeningsOnWalls(openings: DesignOpening[], walls: DesignWall[]): DesignOpening[] {
+  return openings.map((o) => {
+    if (!o.wallId) return o;
+    const wall = walls.find((w) => w.id === o.wallId);
+    if (!wall) return o;
+    return orientOpeningOnWall(o, wall, o.along ?? 0.5);
+  });
+}
+
+export function resolveFloorOpenings(
+  bim: BimModel | null,
+  rooms: DesignRoom[],
+  floorId?: string,
+): DesignOpening[] {
+  const raw = bim?.openings.filter((o) => !o.floorId || o.floorId === floorId) ?? [];
+  const walls = mergeEffectiveWalls(bim, rooms, floorId);
+  return resolveOpeningsOnWalls(raw, walls);
 }

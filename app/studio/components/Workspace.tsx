@@ -30,6 +30,9 @@ export function Workspace() {
   const hydrate = useStudio((s) => s.hydrate);
   const loadDesign = useStudio((s) => s.loadDesign);
   const duplicateNode = useStudio((s) => s.duplicateNode);
+  const undo = useStudio((s) => s.undo);
+  const redo = useStudio((s) => s.redo);
+  const applyingFixes = useStudio((s) => s.applyingFixes);
   const project = useStudio((s) => s.project);
   const { issues } = useAnalysis();
   const [tab, setTab] = useState<Tab>('validation');
@@ -65,10 +68,16 @@ export function Workspace() {
     if (selectedId) setTab('properties');
   }, [selectedId]);
 
+  const selectedWallId = useStudio((s) => s.selectedWallId);
   const selectedRoomId = useStudio((s) => s.selectedRoomId);
   useEffect(() => {
-    if (selectedRoomId) setTab('properties');
-  }, [selectedRoomId]);
+    if (selectedRoomId || selectedWallId) setTab('properties');
+  }, [selectedRoomId, selectedWallId]);
+
+  const selectedOpeningId = useStudio((s) => s.selectedOpeningId);
+  useEffect(() => {
+    if (selectedOpeningId) setTab('properties');
+  }, [selectedOpeningId]);
 
   // Keyboard shortcuts (ignored while typing in form fields).
   useEffect(() => {
@@ -80,10 +89,18 @@ export function Workspace() {
         const id = useStudio.getState().selectedNodeId;
         if (id) duplicateNode(id);
       }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (!applyingFixes) undo();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (!applyingFixes) redo();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [duplicateNode]);
+  }, [duplicateNode, undo, redo, applyingFixes]);
 
   const criticalCount = issues.filter((i) => i.severity === 'critical').length;
 
@@ -129,7 +146,7 @@ export function Workspace() {
             <SimulationHud />
             <TwinChainPanel />
             {!clientMode && <BusMonitor />}
-            <div className="absolute top-3 ltr:right-3 rtl:left-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur">
+            <div className="absolute bottom-3 ltr:right-3 rtl:left-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur pointer-events-none">
               <span>{nodeCount} {t('nodes')}</span>
               <span className="opacity-40">·</span>
               <span>{edgeCount} {t('connections')}</span>

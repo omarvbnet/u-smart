@@ -10,6 +10,7 @@ import { placeVrfDistribution } from './vrf-distribution';
 import { routeCableSegments } from './cable-routing';
 import { getCatalogEntry, type HvacSpec, type CableSpec } from '../catalog';
 import { formatCableLabel, conduitTypeForCable } from './cable-map';
+import { placeHvacUnitsByLightCount } from './room-controls-layout';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -78,6 +79,10 @@ export function placeHvacUnits(
 
   if (useVrf) {
     return placeVrfDistribution(rooms, project);
+  }
+
+  if (!project.smartBuilding) {
+    return placeHvacUnitsByLightCount(rooms, project);
   }
 
   const catalogId = HVAC_CATALOG[cooling] ?? HVAC_CATALOG[types[0] ?? 'split'] ?? 'hvac-split-3.5';

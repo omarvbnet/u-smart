@@ -7,7 +7,7 @@ import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
 import { validatePlacement } from './engine/placement-validation';
-import { applyFixPatch, applyAllFixPatches } from './engine/apply-fix';
+import { applyFixPatch, runBatchedFixes } from './engine/apply-fix';
 import { CABLES } from './catalog/cables';
 import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -67,6 +67,7 @@ import {
   isVirtualRoomWall,
 } from './engine/wall-layout';
 import type { VisualizationMode, ExperienceMode } from './visualization/modes';
+import { cloneDesignSnapshot, HISTORY_LIMIT } from './history';
 
 export type Theme = 'dark' | 'light';
 export type FloorPlanTool = 'select' | 'draw-room' | 'place-door' | 'place-window';
@@ -121,6 +122,8 @@ type StudioState = {
   pendingMapImport: boolean;
   canvasViewMode: CanvasViewMode;
   canvasFitSeq: number;
+  suppressCanvasFit: boolean;
+  applyingFixes: boolean;
   visualizationMode: VisualizationMode;
   experienceMode: ExperienceMode;
   assistantOpen: boolean;
@@ -136,6 +139,11 @@ type StudioState = {
   editingCableRouteId: string | null;
   showCableRoutes3d: boolean;
   showOutletsOnMap: boolean;
+  historyPast: ReturnType<typeof cloneDesignSnapshot>[];
+  historyFuture: ReturnType<typeof cloneDesignSnapshot>[];
+
+  undo: () => void;
+  redo: () => void;
 
   setLocale: (l: StudioLocale) => void;
   setTheme: (t: Theme) => void;
@@ -334,6 +342,14 @@ function initialOutletsOnMap(): boolean {
   return window.localStorage.getItem('studio.outletsOnMap') !== '0';
 }
 
+function withHistory(s: StudioState, patch: Partial<StudioState>): Partial<StudioState> {
+  return {
+    ...patch,
+    historyPast: [...s.historyPast.slice(-(HISTORY_LIMIT - 1)), cloneDesignSnapshot(s)],
+    historyFuture: [],
+  };
+}
+
 export const useStudio = create<StudioState>((set, get) => ({
   locale: initialLocale(),
   theme: initialTheme(),
@@ -357,6 +373,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   pendingMapImport: false,
   canvasViewMode: initialCanvasViewMode(),
   canvasFitSeq: 0,
+  suppressCanvasFit: false,
+  applyingFixes: false,
   visualizationMode: initialVisualizationMode(),
   experienceMode: initialExperienceMode(),
   assistantOpen: false,
@@ -372,6 +390,42 @@ export const useStudio = create<StudioState>((set, get) => ({
   editingCableRouteId: null,
   showCableRoutes3d: initialCableRoutes3d(),
   showOutletsOnMap: initialOutletsOnMap(),
+  historyPast: [],
+  historyFuture: [],
+
+  undo: () =>
+    set((s) => {
+      if (!s.historyPast.length) return s;
+      const prev = s.historyPast[s.historyPast.length - 1]!;
+      const current = cloneDesignSnapshot(s);
+      return {
+        ...s,
+        ...prev,
+        historyPast: s.historyPast.slice(0, -1),
+        historyFuture: [current, ...s.historyFuture].slice(0, HISTORY_LIMIT),
+        selectedNodeId: null,
+        selectedRoomId: null,
+        selectedOpeningId: null,
+        selectedWallId: null,
+      };
+    }),
+
+  redo: () =>
+    set((s) => {
+      if (!s.historyFuture.length) return s;
+      const next = s.historyFuture[0]!;
+      const current = cloneDesignSnapshot(s);
+      return {
+        ...s,
+        ...next,
+        historyFuture: s.historyFuture.slice(1),
+        historyPast: [...s.historyPast, current].slice(-HISTORY_LIMIT),
+        selectedNodeId: null,
+        selectedRoomId: null,
+        selectedOpeningId: null,
+        selectedWallId: null,
+      };
+    }),
 
   setLocale: (l) => {
     persist('studio.locale', l);
@@ -404,11 +458,11 @@ export const useStudio = create<StudioState>((set, get) => ({
       if (entry.domain === 'cable') {
         nodes = nodes.map((n) => (n.id === node.id ? rerouteCableNode(n, nodes, s.edges, s.rooms) : n));
       }
-      return {
+      return withHistory(s, {
         nodes,
         selectedNodeId: node.id,
         controls: { ...s.controls, [node.id]: defaultControlState(entry) },
-      };
+      });
     });
   },
 
@@ -418,16 +472,17 @@ export const useStudio = create<StudioState>((set, get) => ({
       nodes = nodes.map((n) =>
         getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, s.edges, s.rooms) : n,
       );
-      return { nodes };
+      return withHistory(s, { nodes });
     }),
 
-  updateNodeLabel: (id, label) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, label } : n)) })),
+  updateNodeLabel: (id, label) =>
+    set((s) => withHistory(s, { nodes: s.nodes.map((n) => (n.id === id ? { ...n, label } : n)) })),
 
   replaceNodeCatalog: (id, catalogId) =>
     set((s) => {
       const entry = getCatalogEntry(catalogId);
       if (!entry) return s;
-      return {
+      return withHistory(s, {
         nodes: s.nodes.map((n) => {
           if (n.id !== id) return n;
           const params = { ...n.params };
@@ -439,7 +494,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           return { ...n, catalogId, label: defaultLabel(entry, s.locale), params };
         }),
         controls: { ...s.controls, [id]: defaultControlState(entry) },
-      };
+      });
     }),
 
   updateNodeParam: (id, key, value) =>
@@ -449,12 +504,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     set((s) => {
       const controls = { ...s.controls };
       delete controls[id];
-      return {
+      return withHistory(s, {
         nodes: s.nodes.filter((n) => n.id !== id),
         edges: s.edges.filter((e) => e.source !== id && e.target !== id),
         selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
         controls,
-      };
+      });
     }),
 
   select: (id) => set({ selectedNodeId: id, selectedRoomId: null, selectedOpeningId: null, selectedWallId: null }),
@@ -510,10 +565,10 @@ export const useStudio = create<StudioState>((set, get) => ({
         cableIds.size > 0
           ? s.nodes.map((n) => (cableIds.has(n.id) ? rerouteCableNode(n, s.nodes, edges, s.rooms) : n))
           : s.nodes;
-      return { edges, nodes };
+      return withHistory(s, { edges, nodes });
     }),
 
-  removeEdge: (id) => set((s) => ({ edges: s.edges.filter((e) => e.id !== id) })),
+  removeEdge: (id) => set((s) => withHistory(s, { edges: s.edges.filter((e) => e.id !== id) })),
 
   clear: () =>
     set({
@@ -533,6 +588,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       floorPlanTool: 'select',
       cloudProjectId: null,
       pendingMapImport: false,
+      historyPast: [],
+      historyFuture: [],
     }),
 
   loadSample: () => {
@@ -542,29 +599,48 @@ export const useStudio = create<StudioState>((set, get) => ({
       const entry = getCatalogEntry(n.catalogId);
       if (entry) controls[n.id] = defaultControlState(entry);
     }
-    set({ nodes, edges, designName: name, selectedNodeId: null, controls });
+    set({ nodes, edges, designName: name, selectedNodeId: null, controls, historyPast: [], historyFuture: [] });
   },
 
   applyFix: (fix) => {
     set((s) => {
       const patch = applyFixPatch(s, fix);
       if (!patch) return s;
-      return {
-        ...s,
+      return withHistory(s, {
         nodes: patch.nodes ?? s.nodes,
         edges: patch.edges ?? s.edges,
         controls: patch.controls ?? s.controls,
-      };
+      });
     });
   },
 
   applyAllFixes: (fixes) => {
-    if (!fixes.length) return;
-    set((s) => {
-      const next = applyAllFixPatches(s, fixes);
-      if (next.nodes === s.nodes && next.edges === s.edges && next.controls === s.controls) return s;
-      return { ...s, nodes: next.nodes, edges: next.edges, controls: next.controls };
-    });
+    if (!fixes.length || get().applyingFixes) return;
+    set((s) => withHistory(s, { applyingFixes: true, suppressCanvasFit: true }));
+    runBatchedFixes(
+      () => {
+        const s = get();
+        return {
+          locale: s.locale,
+          project: s.project,
+          nodes: s.nodes,
+          edges: s.edges,
+          controls: s.controls,
+        };
+      },
+      (next, done) => {
+        set((s) => ({
+          ...s,
+          nodes: next.nodes,
+          edges: next.edges,
+          controls: next.controls,
+          suppressCanvasFit: !done,
+          applyingFixes: !done,
+          canvasFitSeq: done ? s.canvasFitSeq + 1 : s.canvasFitSeq,
+        }));
+      },
+      fixes,
+    );
   },
 
   toggleSimulation: () => {
@@ -617,11 +693,11 @@ export const useStudio = create<StudioState>((set, get) => ({
       if (!src) return s;
       const entry = getCatalogEntry(src.catalogId);
       const copy: DesignNode = { ...src, id: uid('n'), x: src.x + 40, y: src.y + 40, params: { ...src.params } };
-      return {
+      return withHistory(s, {
         nodes: [...s.nodes, copy],
         selectedNodeId: copy.id,
         controls: { ...s.controls, [copy.id]: entry ? defaultControlState(entry) : {} },
-      };
+      });
     }),
 
   setDesignName: (name) => set({ designName: name }),
@@ -714,6 +790,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedRoomId: null,
       selectedOpeningId: null,
       selectedWallId: null,
+      historyPast: [],
+      historyFuture: [],
     });
   },
 
@@ -733,7 +811,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       zone: room.zone,
       floorId: room.floorId ?? get().activeFloorId,
     };
-    set((s) => ({ rooms: [...s.rooms, r], selectedRoomId: id, selectedNodeId: null }));
+    set((s) => withHistory(s, { rooms: [...s.rooms, r], selectedRoomId: id, selectedNodeId: null }));
   },
 
   addRoomTemplate: (label, zone, width, height) => {
@@ -752,7 +830,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       const project = s.project;
       const floors = buildFloorsFromCount(project.floorCount, project.buildingType);
       const rooms = seedRoomsForProject(project);
-      set({ floors, activeFloorId: floors[0]!.id, rooms, selectedRoomId: null });
+      set({ floors, activeFloorId: floors[0]!.id, rooms, selectedRoomId: null, historyPast: [], historyFuture: [] });
       return { ok: true, message: 'Default commercial layout applied.', changes: rooms.length };
     }
     const bedrooms = options?.bedrooms ?? s.project.bedrooms ?? defaultBedroomsForBuilding(bt);
@@ -832,6 +910,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedNodeId: null,
       selectedOpeningId: null,
       floorPlanTool: map ? 'select' : s.floorPlanTool,
+      historyPast: [],
+      historyFuture: [],
     });
     return {
       ok: true,
@@ -866,7 +946,8 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (picked) set({ selectedRoomId: picked.id });
   },
 
-  updateRoom: (id, patch) => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
+  updateRoom: (id, patch) =>
+    set((s) => withHistory(s, { rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
 
   moveRoom: (id, x, y) =>
     set((s) => {
@@ -875,12 +956,12 @@ export const useStudio = create<StudioState>((set, get) => ({
       const dx = x - room.x;
       const dy = y - room.y;
       const rooms = s.rooms.map((r) => (r.id === id ? { ...r, x, y } : r));
-      if (!s.bim) return { rooms };
+      if (!s.bim) return withHistory(s, { rooms });
       const walls = mergeEffectiveWalls(s.bim, rooms, s.activeFloorId);
       const openings = resnapOpeningsForRoom(s.bim.openings, id, walls).map((o) =>
         o.roomId === id && !o.wallId ? { ...o, x: o.x + dx, y: o.y + dy } : o,
       );
-      return { rooms, bim: { ...s.bim, openings } };
+      return withHistory(s, { rooms, bim: { ...s.bim, openings } });
     }),
 
   resizeRoom: (id, width, height) =>
@@ -888,17 +969,19 @@ export const useStudio = create<StudioState>((set, get) => ({
       const rooms = s.rooms.map((r) =>
         r.id === id ? { ...r, width: Math.max(60, width), height: Math.max(50, height) } : r,
       );
-      if (!s.bim) return { rooms };
+      if (!s.bim) return withHistory(s, { rooms });
       const walls = mergeEffectiveWalls(s.bim, rooms, s.activeFloorId);
       const openings = resnapOpeningsForRoom(s.bim.openings, id, walls);
-      return { rooms, bim: { ...s.bim, openings } };
+      return withHistory(s, { rooms, bim: { ...s.bim, openings } });
     }),
 
   removeRoom: (id) =>
-    set((s) => ({
-      rooms: s.rooms.filter((r) => r.id !== id),
-      selectedRoomId: s.selectedRoomId === id ? null : s.selectedRoomId,
-    })),
+    set((s) =>
+      withHistory(s, {
+        rooms: s.rooms.filter((r) => r.id !== id),
+        selectedRoomId: s.selectedRoomId === id ? null : s.selectedRoomId,
+      }),
+    ),
 
   selectRoom: (id) => set({ selectedRoomId: id, selectedNodeId: null, selectedOpeningId: null, selectedWallId: null }),
 
@@ -934,7 +1017,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         }
         const effWalls = mergeEffectiveWalls({ ...bim, wallMeta }, rooms, s.activeFloorId);
         const openings = room.id ? resnapOpeningsForRoom(bim.openings, room.id, effWalls) : bim.openings;
-        return { rooms, bim: { ...bim, wallMeta, openings } };
+        return withHistory(s, { rooms, bim: { ...bim, wallMeta, openings } });
       }
 
       if (!s.bim) return s;
@@ -961,7 +1044,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         target != null
           ? bim.openings.map((o) => (o.wallId === id ? orientOpeningOnWall(o, target, o.along ?? 0.5) : o))
           : bim.openings;
-      return { bim: { ...bim, openings } };
+      return withHistory(s, { bim: { ...bim, openings } });
     }),
 
   assignOpeningToWall: (openingId, wallId, along = 0.5) =>
@@ -978,21 +1061,21 @@ export const useStudio = create<StudioState>((set, get) => ({
           n.id === next.linkedNodeId ? { ...n, x: next.x - 28, y: next.y - 12, floorId: next.floorId } : n,
         );
       }
-      return {
+      return withHistory(s, {
         bim: { ...s.bim, openings: s.bim.openings.map((o) => (o.id === openingId ? next : o)) },
         nodes,
-      };
+      });
     }),
 
   updateOpening: (id, patch) =>
     set((s) => {
       if (!s.bim) return s;
-      return {
+      return withHistory(s, {
         bim: {
           ...s.bim,
           openings: s.bim.openings.map((o) => (o.id === id ? { ...o, ...patch } : o)),
         },
-      };
+      });
     }),
 
   moveOpening: (id, x, y) =>
@@ -1008,10 +1091,10 @@ export const useStudio = create<StudioState>((set, get) => ({
           n.id === next.linkedNodeId ? { ...n, x: next.x + (opening.kind === 'door' ? 24 : -28), y: next.y + (opening.kind === 'door' ? 8 : -20) } : n,
         );
       }
-      return {
+      return withHistory(s, {
         bim: { ...s.bim, openings: s.bim.openings.map((o) => (o.id === id ? next : o)) },
         nodes,
-      };
+      });
     }),
 
   removeOpening: (id) =>
@@ -1021,12 +1104,12 @@ export const useStudio = create<StudioState>((set, get) => ({
       const linked = opening?.linkedNodeId;
       const controls = { ...s.controls };
       if (linked) delete controls[linked];
-      return {
+      return withHistory(s, {
         bim: { ...s.bim, openings: s.bim.openings.filter((o) => o.id !== id) },
         nodes: linked ? s.nodes.filter((n) => n.id !== linked) : s.nodes,
         controls,
         selectedOpeningId: s.selectedOpeningId === id ? null : s.selectedOpeningId,
-      };
+      });
     }),
 
   setOpeningControl: (id, openPercent) => {
@@ -1084,6 +1167,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       simulating: false,
       simEnergyKwh: 0,
       floorPlanTool: file.map?.mode === 'blank' ? 'draw-room' : 'select',
+      historyPast: [],
+      historyFuture: [],
     });
   },
 

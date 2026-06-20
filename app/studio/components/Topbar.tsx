@@ -15,6 +15,7 @@ import type { DesignFile } from '../lib/store';
 import {
   FilePlus2, FolderOpen, Trash2, Play, Square, Moon, Sun, Languages,
   Map as MapIcon, Eye, EyeOff, FileDown, Loader2, FileBarChart2, Share2, FileJson, Upload, Cloud, Sheet, Grid3x3,
+  Undo2, Redo2,
 } from 'lucide-react';
 
 export function Topbar() {
@@ -37,6 +38,11 @@ export function Topbar() {
   const pendingMapImport = useStudio((s) => s.pendingMapImport);
   const clearPendingMapImport = useStudio((s) => s.clearPendingMapImport);
   const loadDesign = useStudio((s) => s.loadDesign);
+  const undo = useStudio((s) => s.undo);
+  const redo = useStudio((s) => s.redo);
+  const canUndo = useStudio((s) => s.historyPast.length > 0);
+  const canRedo = useStudio((s) => s.historyFuture.length > 0);
+  const applyingFixes = useStudio((s) => s.applyingFixes);
 
   const [langOpen, setLangOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -141,6 +147,15 @@ export function Topbar() {
       )}
 
       <div className="ms-auto flex items-center gap-1.5">
+        <button className={btn} onClick={undo} disabled={!canUndo || applyingFixes} title={t('undo')} aria-label={t('undo')}>
+          <Undo2 className="h-3.5 w-3.5" />
+          <span className="hidden 2xl:inline">{t('undo')}</span>
+        </button>
+        <button className={btn} onClick={redo} disabled={!canRedo || applyingFixes} title={t('redo')} aria-label={t('redo')}>
+          <Redo2 className="h-3.5 w-3.5" />
+          <span className="hidden 2xl:inline">{t('redo')}</span>
+        </button>
+
         <button className={btn} onClick={clear}>
           <FilePlus2 className="h-3.5 w-3.5" />
           <span className="hidden 2xl:inline">{t('newDesign')}</span>

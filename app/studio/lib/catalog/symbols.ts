@@ -32,7 +32,9 @@ export function engineeringSymbolFor(entry: CatalogEntry): EngineeringSymbolId {
   switch (entry.domain) {
     case 'load':
       if (entry.category === 'LIGHTING') {
-        const lt = (entry as { lightingType?: string }).lightingType;
+        const load = entry as { lightingType?: string; outletKind?: string };
+        if (load.outletKind === 'light_switch') return 'switch';
+        const lt = load.lightingType;
         if (lt === 'LINEAR') return 'lighting_linear';
         if (lt === 'SPOT') return 'lighting_spot';
         if (lt === 'MAGNETIC') return 'lighting_magnetic';

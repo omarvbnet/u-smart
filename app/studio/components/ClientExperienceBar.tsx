@@ -35,7 +35,7 @@ export function ClientExperienceBar() {
     'flex flex-col items-center gap-0.5 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 px-3 py-2 text-[9px] font-semibold text-[var(--studio-text)] backdrop-blur transition hover:border-cyan-400';
 
   return (
-    <div className="absolute bottom-14 inset-x-0 z-20 flex justify-center px-2">
+    <div className="pointer-events-auto absolute bottom-14 inset-x-0 z-20 flex justify-center px-2">
       <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-[var(--studio-panel)]/95 p-2 shadow-xl backdrop-blur">
         <span className="w-full text-center text-[10px] font-bold uppercase tracking-wider text-emerald-400">{t('clientExperienceMode')}</span>
         {!simulating && (

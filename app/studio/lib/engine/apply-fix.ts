@@ -7,6 +7,7 @@ import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
 import { defaultControlState, type ControlState } from '../controls';
 import { findMainPanel, psuCatalogIdsForProject } from './autofix';
+import { serializeRoutePoints } from './cable-map';
 import type { Fix } from './validation';
 
 export type FixableState = {
@@ -127,13 +128,23 @@ export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
     const mcbX = load.x - 36;
     const mcbY = load.y;
     const mcb: DesignNode = { id: mcbId, catalogId: 'mcb-c16', label: 'Auto MCB', x: mcbX, y: mcbY, params: {} };
+    const loadCx = load.x + 21;
+    const loadCy = load.y + 21;
     const cable: DesignNode = {
       id: cableId,
       catalogId: 'cable-lv-cu-2.5',
       label: 'Auto cable',
       x: mcbX,
       y: mcbY + 20,
-      params: { lengthM: 12, rotation: 0 },
+      params: {
+        lengthM: 12,
+        rotation: 0,
+        routePoints: serializeRoutePoints([
+          { x: mcbX + 20, y: mcbY + 9 },
+          { x: loadCx, y: loadCy },
+        ]),
+        showOnMap: false,
+      },
     };
     return {
       nodes: [...s.nodes, mcb, cable],
@@ -205,7 +216,7 @@ function fixKey(f: Fix): string {
     case 'addGrounding':
       return 'addGrounding';
     case 'addSource':
-      return `addSource:${f.catalogId}`;
+      return 'addSource';
     case 'addPsu':
       return 'addPsu';
     default:
@@ -213,9 +224,11 @@ function fixKey(f: Fix): string {
   }
 }
 
-/** Drop duplicate fixes; merge multiple Bus PSU adds into one batch. */
+/** Drop duplicate fixes; merge Bus PSU adds; one source/grounding per batch. */
 export function dedupeFixes(fixes: Fix[]): Fix[] {
-  const psuCount = fixes.filter((f): f is Extract<Fix, { kind: 'addPsu' }> => f.kind === 'addPsu').reduce((sum, f) => sum + f.count, 0);
+  const psuCount = fixes
+    .filter((f): f is Extract<Fix, { kind: 'addPsu' }> => f.kind === 'addPsu')
+    .reduce((sum, f) => sum + f.count, 0);
   const seen = new Set<string>();
   const out: Fix[] = [];
   let psuAdded = false;
@@ -236,11 +249,71 @@ export function dedupeFixes(fixes: Fix[]): Fix[] {
   return out;
 }
 
+const FIX_ORDER: Record<Fix['kind'], number> = {
+  addSource: 0,
+  addGrounding: 1,
+  addPsu: 2,
+  replaceCatalog: 3,
+  upgradeBreaker: 3,
+  replaceBreaker: 3,
+  resizeCable: 4,
+  setParam: 4,
+  moveNode: 5,
+  addCircuit: 6,
+};
+
+export function prioritizeFixes(fixes: Fix[], maxCircuits = 20): Fix[] {
+  const sorted = dedupeFixes(fixes).sort((a, b) => (FIX_ORDER[a.kind] ?? 9) - (FIX_ORDER[b.kind] ?? 9));
+  let circuits = 0;
+  return sorted.filter((f) => {
+    if (f.kind !== 'addCircuit') return true;
+    if (circuits >= maxCircuits) return false;
+    circuits += 1;
+    return true;
+  });
+}
+
 export function applyAllFixPatches(s: FixableState, fixes: Fix[]): FixableState {
-  let cur = s;
-  for (const fix of dedupeFixes(fixes)) {
-    const patch = applyFixPatch(cur, fix);
-    if (patch) cur = mergeFixableState(cur, patch);
+  let nodes = s.nodes;
+  let edges = s.edges;
+  let controls = s.controls;
+  for (const fix of prioritizeFixes(fixes)) {
+    const patch = applyFixPatch({ ...s, nodes, edges, controls }, fix);
+    if (!patch) continue;
+    if (patch.nodes) nodes = patch.nodes;
+    if (patch.edges) edges = patch.edges;
+    if (patch.controls) controls = patch.controls;
   }
-  return cur;
+  return { ...s, nodes, edges, controls };
+}
+
+const FIX_CHUNK_SIZE = 5;
+
+/** Apply fixes in small batches so the UI stays responsive. */
+export function runBatchedFixes(
+  getState: () => FixableState,
+  setState: (next: FixableState, done: boolean) => void,
+  fixes: Fix[],
+  onDone?: () => void,
+): void {
+  const queue = prioritizeFixes(fixes);
+  if (!queue.length) {
+    onDone?.();
+    return;
+  }
+  let index = 0;
+  const step = () => {
+    const batch = queue.slice(index, index + FIX_CHUNK_SIZE);
+    index += FIX_CHUNK_SIZE;
+    const done = index >= queue.length;
+    const s = getState();
+    const next = applyAllFixPatches(s, batch);
+    setState(next, done);
+    if (!done) {
+      window.requestAnimationFrame(step);
+    } else {
+      onDone?.();
+    }
+  };
+  window.requestAnimationFrame(step);
 }

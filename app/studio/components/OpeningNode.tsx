@@ -47,7 +47,6 @@ function OpeningNodeImpl({ data }: NodeProps) {
         height: opening.height,
         transform: opening.rotation ? `rotate(${opening.rotation}deg)` : undefined,
       }}
-      title={opening.kind}
     >
       <svg width={opening.width} height={opening.height} className="overflow-visible">
         <rect x={1} y={1} width={opening.width - 2} height={opening.height - 2} fill={fill} stroke={stroke} strokeWidth={2} rx={2} />

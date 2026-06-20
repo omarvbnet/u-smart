@@ -28,12 +28,13 @@ export function VisualizationToolbar() {
     }`;
 
   return (
-    <div className="absolute top-3 z-10 flex flex-wrap items-center gap-1.5 ltr:right-3 rtl:left-3 max-w-[calc(100%-1.5rem)]">
-      <div className="flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
+    <div className="pointer-events-none absolute top-3 z-50 flex max-w-[min(100%,42rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 px-2 ltr:left-1/2 rtl:left-1/2">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
         {MODES.map((m) => (
           <button
             key={m.id}
-            className={btn(mode === m.id)}
+            type="button"
+            className={`pointer-events-auto ${btn(mode === m.id)}`}
             onClick={() => setMode(m.id)}
             title={t(m.labelKey)}
           >
@@ -42,16 +43,17 @@ export function VisualizationToolbar() {
           </button>
         ))}
       </div>
-      <button className={btn(showLux)} onClick={toggleLux} title={t('luxHeatmap')}>
+      <button type="button" className={`pointer-events-auto ${btn(showLux)}`} onClick={toggleLux} title={t('luxHeatmap')}>
         <SunMedium className="h-3.5 w-3.5" />
         <span className="hidden md:inline">{t('luxHeatmap')}</span>
       </button>
-      <button className={btn(showLoad)} onClick={toggleLoad} title={t('loadHeatmap')}>
+      <button type="button" className={`pointer-events-auto ${btn(showLoad)}`} onClick={toggleLoad} title={t('loadHeatmap')}>
         <Zap className="h-3.5 w-3.5" />
         <span className="hidden md:inline">{t('loadHeatmap')}</span>
       </button>
       <button
-        className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[10px] font-semibold backdrop-blur transition ${
+        type="button"
+        className={`pointer-events-auto flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[10px] font-semibold backdrop-blur transition ${
           experienceMode === 'client'
             ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
             : 'border-[var(--studio-border)] bg-[var(--studio-panel)]/95 text-[var(--studio-muted)] hover:text-[var(--studio-text)]'

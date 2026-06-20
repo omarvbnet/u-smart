@@ -18,7 +18,6 @@ function WallNodeImpl({ data }: NodeProps) {
     <div
       className={`cursor-pointer ${ring}`}
       style={{ width: len, height: Math.max(wall.thickness * 2, 8) }}
-      title={outdoor ? 'Outdoor wall' : 'Wall'}
     >
       <div
         className={`h-full rounded-full ${barColor} ${outdoor ? 'shadow-[0_0_8px_rgba(16,185,129,0.35)]' : ''}`}

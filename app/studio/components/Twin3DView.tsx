@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Text, Environment } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStudio } from '../lib/store';
 import { getCatalogEntry, type LoadSpec } from '../lib/catalog';
@@ -11,7 +11,8 @@ import { useSimulation, useDigitalTwinSync } from './hooks';
 import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
 import type { DesignOpening, DesignGarden, DesignWall, CurtainStyle } from '../lib/model';
-import { openingOpenPercent } from '../lib/engine/opening-layout';
+import { openingOpenPercent, resolveFloorOpenings } from '../lib/engine/opening-layout';
+import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
 import {
   parseRoutePoints,
   computeCableRoute,
@@ -23,6 +24,11 @@ import type { CableSpec } from '../lib/catalog';
 
 function pxToM(v: number): number {
   return v / PX_PER_M;
+}
+
+/** Match WallMesh: plan wall angle → Three.js Y rotation. */
+function openingRotationY(opening: DesignOpening): number {
+  return -((opening.rotation ?? 0) * Math.PI) / 180;
 }
 
 function floorElevation(level: number): number {
@@ -79,6 +85,7 @@ function OpeningMesh({
   const cx = pxToM(opening.x);
   const cz = pxToM(opening.y);
   const w = pxToM(opening.width);
+  const rotY = openingRotationY(opening);
   const doorGroup = useRef<THREE.Group>(null);
   const curtainL = useRef<THREE.Mesh>(null);
   const curtainR = useRef<THREE.Mesh>(null);
@@ -106,7 +113,7 @@ function OpeningMesh({
 
   if (opening.kind === 'door') {
     return (
-      <group position={[cx, elevation, cz]}>
+      <group position={[cx, elevation, cz]} rotation={[0, rotY, 0]}>
         <mesh position={[0, 1.1, 0]} castShadow>
           <boxGeometry args={[w, 2.2, 0.08]} />
           <meshStandardMaterial color="#64748b" />
@@ -123,7 +130,7 @@ function OpeningMesh({
 
   const style: CurtainStyle = opening.curtainStyle ?? 'none';
   return (
-    <group position={[cx, elevation + 1.4, cz]}>
+    <group position={[cx, elevation + 1.4, cz]} rotation={[0, rotY, 0]}>
       <mesh castShadow>
         <boxGeometry args={[w, 1.2, 0.05]} />
         <meshStandardMaterial color="#38bdf8" transparent opacity={0.35} />
@@ -422,6 +429,18 @@ function SceneContent() {
     [rooms, activeFloorId],
   );
 
+  const sceneCenter = useMemo(() => {
+    if (!visibleRooms.length) return { x: 0, z: 0, span: 12 };
+    const minX = Math.min(...visibleRooms.map((r) => r.x));
+    const maxX = Math.max(...visibleRooms.map((r) => r.x + r.width));
+    const minY = Math.min(...visibleRooms.map((r) => r.y));
+    const maxY = Math.max(...visibleRooms.map((r) => r.y + r.height));
+    const cx = pxToM((minX + maxX) / 2);
+    const cz = pxToM((minY + maxY) / 2);
+    const span = Math.max(pxToM(maxX - minX), pxToM(maxY - minY), 8);
+    return { x: cx, z: cz, span };
+  }, [visibleRooms]);
+
   const metrics = useMemo(() => {
     if (!simulating) return null;
     return aggregateSimulation(resolveNodes(nodes, getCatalogEntry), sim);
@@ -437,8 +456,14 @@ function SceneContent() {
     [nodes, activeFloorId],
   );
 
-  const walls = bim?.walls.filter((w) => !w.floorId || w.floorId === activeFloorId) ?? [];
-  const openings = bim?.openings.filter((o) => !o.floorId || o.floorId === activeFloorId) ?? [];
+  const walls = useMemo(
+    () => mergeEffectiveWalls(bim, rooms, activeFloorId),
+    [bim, rooms, activeFloorId],
+  );
+  const openings = useMemo(
+    () => resolveFloorOpenings(bim, rooms, activeFloorId),
+    [bim, rooms, activeFloorId],
+  );
   const gardens = bim?.gardens?.filter((g) => !g.floorId || g.floorId === activeFloorId) ?? [];
 
   const cableRuns = useMemo(() => {
@@ -471,15 +496,15 @@ function SceneContent() {
   return (
     <>
       {metrics && (
-        <Text position={[-4, 4 + elevation, 0]} fontSize={0.22} color="#22d3ee" anchorX="left">
+        <Text position={[sceneCenter.x - 4, 4 + elevation, sceneCenter.z]} fontSize={0.22} color="#22d3ee" anchorX="left">
           {`${metrics.totalKw.toFixed(2)} kW · ${metrics.totalA.toFixed(1)} A · ${metrics.activeDevices} active${twinConnected ? ' · twin' : ''}`}
         </Text>
       )}
-      <ambientLight intensity={0.45} />
-      <directionalLight position={[8, 12 + elevation, 6]} intensity={0.9} castShadow />
-      <Environment preset="apartment" />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, elevation - 0.01, 0]} receiveShadow>
-        <planeGeometry args={[80, 80]} />
+      <ambientLight intensity={0.55} />
+      <hemisphereLight intensity={0.45} color="#f8fafc" groundColor="#334155" />
+      <directionalLight position={[8, 12 + elevation, 6]} intensity={0.85} castShadow />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[sceneCenter.x, elevation - 0.01, sceneCenter.z]} receiveShadow>
+        <planeGeometry args={[Math.max(40, sceneCenter.span * 2.5), Math.max(40, sceneCenter.span * 2.5)]} />
         <meshStandardMaterial color="#cbd5e1" />
       </mesh>
       {gardens.map((g) => (
@@ -536,18 +561,49 @@ function SceneContent() {
           />
         );
       })}
-      <OrbitControls makeDefault maxPolarAngle={Math.PI / 2.1} minDistance={2} maxDistance={40} target={[0, elevation, 0]} />
+      <PerspectiveCamera
+        makeDefault
+        position={[
+          sceneCenter.x + sceneCenter.span * 0.55,
+          elevation + sceneCenter.span * 0.45,
+          sceneCenter.z + sceneCenter.span * 0.55,
+        ]}
+        fov={48}
+        near={0.1}
+        far={500}
+      />
+      <OrbitControls
+        makeDefault
+        maxPolarAngle={Math.PI / 2.1}
+        minDistance={2}
+        maxDistance={Math.max(24, sceneCenter.span * 3)}
+        target={[sceneCenter.x, elevation + 1.4, sceneCenter.z]}
+      />
     </>
   );
 }
 
 /** Interactive 3D digital twin — rooms, equipment, typed lighting effects, BIM openings. */
 export function Twin3DView() {
+  const rooms = useStudio((s) => s.rooms);
+  const activeFloorId = useStudio((s) => s.activeFloorId);
+  const visibleRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
+
   return (
-    <div className="h-full w-full bg-[var(--studio-bg)]">
-      <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-[var(--studio-muted)]">Loading 3D twin…</div>}>
-        <Canvas shadows>
-          <PerspectiveCamera makeDefault position={[6, 8, 10]} fov={50} />
+    <div className="absolute inset-0 min-h-0 bg-[var(--studio-bg)]">
+      {visibleRooms.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6 text-center">
+          <div className="rounded-xl border border-dashed border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-6 py-4 text-sm text-[var(--studio-muted)]">
+            Add rooms on the 2D plan first, then switch back to 3D twin view.
+          </div>
+        </div>
+      )}
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center text-sm text-[var(--studio-muted)]">Loading 3D twin…</div>
+        }
+      >
+        <Canvas shadows dpr={[1, 1.5]} className="!h-full !w-full">
           <SceneContent />
         </Canvas>
       </Suspense>

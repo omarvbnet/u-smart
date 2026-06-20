@@ -55,7 +55,7 @@ export function FloorPlanToolbar() {
     }`;
 
   return (
-    <div className="absolute top-3 z-10 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]">
+    <div className="pointer-events-auto absolute top-3 z-40 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]">
       <div className="flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
         <button className={btn(tool === 'select')} onClick={() => setTool('select')} title={t('toolSelect')}>
           <MousePointer2 className="h-3.5 w-3.5" />

@@ -49,7 +49,6 @@ function RoomNodeImpl({ data, selected }: NodeProps) {
                   height: Math.max(6, room.height / 8 - 2),
                   background: loadHeatColor(c.wPerM2, loadHeatmap.targetWPerM2),
                 }}
-                title={`${c.wPerM2.toFixed(1)} W/m²`}
               />
             ))}
             <div className="absolute bottom-8 inset-x-0 text-center text-[8px] font-semibold text-orange-300 drop-shadow">
@@ -70,7 +69,6 @@ function RoomNodeImpl({ data, selected }: NodeProps) {
                   height: Math.max(6, room.height / 8 - 2),
                   background: luxColor(c.lux, luxHeatmap.targetLux),
                 }}
-                title={`${Math.round(c.lux)} lx`}
               />
             ))}
             <div className="absolute bottom-8 inset-x-0 text-center text-[8px] font-semibold text-emerald-300 drop-shadow">

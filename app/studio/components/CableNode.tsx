@@ -5,7 +5,6 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { getCatalogEntry, type CableSpec } from '../lib/catalog';
 import { cableLengthPx } from '../lib/node-layout';
 import { useStudio } from '../lib/store';
-import { NodeHoverCard } from './NodeHoverCard';
 import type { Severity } from '../lib/engine/validation';
 
 export type CableNodeData = {
@@ -37,7 +36,7 @@ function CableNodeImpl({ data, selected }: NodeProps) {
 
   return (
     <div
-      className="group relative"
+      className="relative"
       style={{
         width: lengthPx,
         height: 18,
@@ -75,23 +74,7 @@ function CableNodeImpl({ data, selected }: NodeProps) {
         )}
       </svg>
 
-      <div
-        className="absolute inset-0"
-        style={{ width: lengthPx, height: 18 }}
-        title={entry ? `${entry.model} · ${d.lengthM} m` : d.label}
-      />
-
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-[var(--studio-panel)]/90 px-1.5 py-0.5 text-[8px] font-semibold text-[var(--studio-text)] opacity-0 shadow group-hover:opacity-100">
-        {d.lengthM} m · {entry?.csaMm2 ?? '?'} mm²
-      </div>
-
-      <NodeHoverCard
-        nodeId={d.nodeId}
-        catalogId={d.catalogId}
-        label={d.label}
-        lengthM={d.lengthM}
-        rotation={d.rotation}
-      />
+      <div className="absolute inset-0" style={{ width: lengthPx, height: 18 }} />
     </div>
   );
 }

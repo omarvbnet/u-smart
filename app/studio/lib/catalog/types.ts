@@ -162,7 +162,7 @@ export type LoadSpec = CatalogEntryBase & {
   /** Track / linear length in mm. */
   lengthMm?: number;
   /** Map outlet / appliance kind (SOCKET or APPLIANCE category). */
-  outletKind?: 'socket' | 'double_socket' | 'washer' | 'dryer' | 'dishwasher' | 'oven' | 'fridge' | 'cooker' | 'water_heater';
+  outletKind?: 'socket' | 'double_socket' | 'washer' | 'dryer' | 'dishwasher' | 'oven' | 'fridge' | 'cooker' | 'water_heater' | 'light_switch' | 'tv';
 };
 
 /* ----------------------------- HVAC -------------------------------- */

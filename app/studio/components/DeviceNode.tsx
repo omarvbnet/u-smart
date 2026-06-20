@@ -8,7 +8,6 @@ import { footprintPx, physicalSpecFor } from '../lib/catalog/dimensions';
 import { useStudio } from '../lib/store';
 import { EntryImage } from './EntryImage';
 import { EngineeringSymbol } from './EngineeringSymbol';
-import { NodeHoverCard } from './NodeHoverCard';
 import type { Severity } from '../lib/engine/validation';
 
 export type DeviceNodeData = {
@@ -115,7 +114,6 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
           position={p.side === 'lead' ? leadPos : trailPos}
           style={{ top: `${p.topPct}%`, background: PORT_COLOR[p.port.kind], borderColor: 'var(--studio-bg)' }}
           className="!h-2.5 !w-2.5 !border-2"
-          title={p.port.label[d.rtl ? 'ar' : 'en']}
         />
       ))}
 
@@ -138,10 +136,6 @@ function DeviceNodeImpl({ data, selected }: NodeProps) {
         <div className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 rounded bg-amber-400/90 px-1 py-px text-[7px] font-bold text-amber-950">
           {d.declaration}
         </div>
-      )}
-
-      {experienceMode === 'engineer' && (
-        <NodeHoverCard nodeId={d.nodeId} catalogId={d.catalogId} label={d.label} />
       )}
     </div>
   );

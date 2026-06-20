@@ -35,7 +35,7 @@ export function MapOverlayToolbar() {
   const bottomClass = simulating ? 'bottom-48' : 'bottom-3';
 
   return (
-    <div className={`absolute ${bottomClass} z-30 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]`}>
+    <div className={`pointer-events-auto absolute ${bottomClass} z-30 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]`}>
       <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/98 p-1 shadow-lg backdrop-blur">
         <span className="px-2 text-[9px] font-semibold text-[var(--studio-muted)]">{mapLabel}</span>
         {MAP_OVERLAY_MODES.map((m) => {

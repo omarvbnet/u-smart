@@ -12,6 +12,7 @@ import { placeSocketOutlets, placeAppliances, mergeOutletNodes } from './outlet-
 import { seedRoomsForBuilding } from './residential-layouts';
 import { seedRoomsForProject } from './floor-layout';
 import { placeSmartChannelSystem } from './smart-channel-layout';
+import { placeRoomControls } from './room-controls-layout';
 import type { ControlState } from '../controls';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
@@ -227,6 +228,11 @@ export function enhanceDesignPlacement(
     nextEdges = smart.edges;
     smartControls = smart.controls;
   }
+
+  const roomControls = placeRoomControls(project, rooms, nextNodes, nextEdges, locale);
+  nextNodes = roomControls.nodes;
+  nextEdges = roomControls.edges;
+  smartControls = { ...smartControls, ...roomControls.controls };
 
   nextNodes = labelAllDesignCables(nextNodes, nextEdges, rooms);
   return { nodes: nextNodes, edges: nextEdges, controls: smartControls };

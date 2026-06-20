@@ -64,7 +64,11 @@ function IssueCard({ issue }: { issue: Issue }) {
 
           {issue.fix && (
             <button
-              onClick={() => applyFix(issue.fix!)}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                applyFix(issue.fix!);
+              }}
               className="flex items-center gap-1.5 rounded-md bg-cyan-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-400"
             >
               <Wrench className="h-3.5 w-3.5" />
@@ -81,7 +85,7 @@ export function ValidationPanel() {
   const t = useT();
   const { issues } = useAnalysis();
   const applyAllFixes = useStudio((s) => s.applyAllFixes);
-  const [fixingAll, setFixingAll] = useState(false);
+  const applyingFixes = useStudio((s) => s.applyingFixes);
 
   const fixable = issues.filter((i) => i.fix);
   const groups: { sev: Severity; key: 'critical' | 'warning' | 'recommendation' }[] = [
@@ -91,15 +95,8 @@ export function ValidationPanel() {
   ];
 
   const handleFixAll = () => {
-    if (fixingAll || fixable.length === 0) return;
-    setFixingAll(true);
-    window.setTimeout(() => {
-      try {
-        applyAllFixes(fixable.map((i) => i.fix!));
-      } finally {
-        setFixingAll(false);
-      }
-    }, 0);
+    if (applyingFixes || fixable.length === 0) return;
+    applyAllFixes(fixable.map((i) => i.fix!));
   };
 
   return (
@@ -109,11 +106,11 @@ export function ValidationPanel() {
         {fixable.length > 0 && (
           <button
             type="button"
-            disabled={fixingAll}
+            disabled={applyingFixes}
             onClick={handleFixAll}
             className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-60"
           >
-            {fixingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+            {applyingFixes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
             {t('fixAll')} ({fixable.length})
           </button>
         )}

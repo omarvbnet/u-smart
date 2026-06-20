@@ -30,7 +30,7 @@ export function DesignAssistantPanel() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="absolute bottom-16 z-20 flex items-center gap-2 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 px-3 py-2 text-xs font-semibold text-[var(--studio-text)] shadow-lg backdrop-blur ltr:right-3 rtl:left-3"
+        className="pointer-events-auto absolute bottom-16 z-20 flex items-center gap-2 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 px-3 py-2 text-xs font-semibold text-[var(--studio-text)] shadow-lg backdrop-blur ltr:right-3 rtl:left-3"
       >
         <Sparkles className="h-4 w-4 text-cyan-400" />
         {t('designAssistant')}
@@ -39,7 +39,7 @@ export function DesignAssistantPanel() {
   }
 
   return (
-    <div className="absolute bottom-16 z-20 flex w-[min(100%,340px)] flex-col rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/98 shadow-xl backdrop-blur ltr:right-3 rtl:left-3">
+    <div className="pointer-events-auto absolute bottom-16 z-20 flex w-[min(100%,340px)] flex-col rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/98 shadow-xl backdrop-blur ltr:right-3 rtl:left-3">
       <div className="flex items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
         <div className="flex items-center gap-2 text-xs font-bold text-[var(--studio-text)]">
           <MessageSquare className="h-4 w-4 text-cyan-400" />

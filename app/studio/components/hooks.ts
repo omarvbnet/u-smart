@@ -3,7 +3,7 @@
 import { computeLuxHeatmaps } from '../lib/engine/lux-heatmap';
 import { computeLoadHeatmaps } from '../lib/engine/load-heatmap';
 import { getTwinConnection } from '../lib/twin-stream';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useDeferredValue } from 'react';
 import { useStudio } from '../lib/store';
 import { createTranslator } from '../lib/i18n';
 import { getCatalogEntry, type CableSpec } from '../lib/catalog';
@@ -32,15 +32,21 @@ export function useAnalysis() {
   const rooms = useStudio((s) => s.rooms);
   const project = useStudio((s) => s.project);
   const activeFloorId = useStudio((s) => s.activeFloorId);
+  const deferredNodes = useDeferredValue(nodes);
+  const deferredEdges = useDeferredValue(edges);
 
   return useMemo(() => {
-    const resolved = resolveNodes(nodes, getCatalogEntry);
+    const resolved = resolveNodes(deferredNodes, getCatalogEntry);
     const activeRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
     const activeResolved = resolved.filter((n) => !n.floorId || n.floorId === activeFloorId);
-    const { issues: engIssues } = validateDesign(activeResolved, edges, CABLES as CableSpec[]);
-    const placeIssues = validatePlacement(nodes.filter((n) => !n.floorId || n.floorId === activeFloorId), activeRooms, getCatalogEntry);
+    const { issues: engIssues } = validateDesign(activeResolved, deferredEdges, CABLES as CableSpec[]);
+    const placeIssues = validatePlacement(
+      deferredNodes.filter((n) => !n.floorId || n.floorId === activeFloorId),
+      activeRooms,
+      getCatalogEntry,
+    );
     const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
-    const smartIssues = suggestSmartFixes(project, nodes, edges, activeRooms);
+    const smartIssues = suggestSmartFixes(project, deferredNodes, deferredEdges, activeRooms);
     const issues = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
     const quality = computeQuality(issues, resolved.length);
     const compliance = computeCompliance(issues);
@@ -51,8 +57,8 @@ export function useAnalysis() {
       arr.push(i);
       byNode.set(i.nodeId, arr);
     }
-    return { issues, quality, compliance, byNode };
-  }, [nodes, edges, rooms, project, activeFloorId]);
+    return { issues, quality, compliance, byNode, isStale: deferredNodes !== nodes || deferredEdges !== edges };
+  }, [deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
 }
 
 /** Live simulation state per node (energised / active / current). */
