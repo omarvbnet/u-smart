@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import type { Issue, Severity } from '../lib/engine/validation';
-import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb, Loader2 } from 'lucide-react';
 
 const SEVERITY_META: Record<Severity, { color: string; bg: string; border: string; icon: typeof AlertOctagon }> = {
   critical: { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30', icon: AlertOctagon },
@@ -80,7 +80,8 @@ function IssueCard({ issue }: { issue: Issue }) {
 export function ValidationPanel() {
   const t = useT();
   const { issues } = useAnalysis();
-  const applyFix = useStudio((s) => s.applyFix);
+  const applyAllFixes = useStudio((s) => s.applyAllFixes);
+  const [fixingAll, setFixingAll] = useState(false);
 
   const fixable = issues.filter((i) => i.fix);
   const groups: { sev: Severity; key: 'critical' | 'warning' | 'recommendation' }[] = [
@@ -89,16 +90,30 @@ export function ValidationPanel() {
     { sev: 'recommendation', key: 'recommendation' },
   ];
 
+  const handleFixAll = () => {
+    if (fixingAll || fixable.length === 0) return;
+    setFixingAll(true);
+    window.setTimeout(() => {
+      try {
+        applyAllFixes(fixable.map((i) => i.fix!));
+      } finally {
+        setFixingAll(false);
+      }
+    }, 0);
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-[var(--studio-border)] p-3">
         <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('validation')}</h2>
         {fixable.length > 0 && (
           <button
-            onClick={() => fixable.forEach((i) => applyFix(i.fix!))}
-            className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25"
+            type="button"
+            disabled={fixingAll}
+            onClick={handleFixAll}
+            className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-60"
           >
-            <Wrench className="h-3.5 w-3.5" />
+            {fixingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
             {t('fixAll')} ({fixable.length})
           </button>
         )}

@@ -20,6 +20,7 @@ type StoreApi = {
   updateProject: (patch: { smartProtocol?: 'HDL' | 'KNX' | 'BOTH' }) => void;
   setControl: (id: string, key: 'on' | 'level' | 'setpoint' | 'active', value: boolean | number) => void;
   applyFix: (fix: import('../engine/validation').Fix) => void;
+  applyAllFixes: (fixes: import('../engine/validation').Fix[]) => void;
   getIssues: () => import('../engine/validation').Issue[];
   placeEngineeringLayout: () => { ok: boolean; message: string; changes: number };
 };
@@ -156,11 +157,9 @@ export function executeDesignCommand(text: string, store: StoreApi): CommandResu
   }
 
   if (q.includes('fix all') || q.includes('auto fix') || q.includes('fix everything')) {
-    const issues = store.getIssues().filter((i) => i.fix);
-    for (const i of issues) {
-      if (i.fix) store.applyFix(i.fix);
-    }
-    return { ok: true, message: `Applied ${issues.length} automatic correction(s).`, changes: issues.length };
+    const fixes = store.getIssues().filter((i) => i.fix).map((i) => i.fix!);
+    store.applyAllFixes(fixes);
+    return { ok: true, message: `Applied ${fixes.length} automatic correction(s).`, changes: fixes.length };
   }
 
   if (q.includes('place fixtures') || q.includes('lighting layout') || q.includes('auto place lights')) {

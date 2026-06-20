@@ -7,7 +7,7 @@ import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
 import { validatePlacement } from './engine/placement-validation';
-import { suggestSmartFixes } from './engine/autofix';
+import { applyFixPatch, applyAllFixPatches } from './engine/apply-fix';
 import { CABLES } from './catalog/cables';
 import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -27,7 +27,7 @@ import {
 import { buildFloorsFromCount, seedRoomsForProject } from './engine/floor-layout';
 import { detectRoomsFromMap as detectRooms, detectBimFromMap } from './engine/plan-detect';
 import { getTwinConnection } from './twin-stream';
-import { psuCatalogIdsForProject, findMainPanel } from './engine/autofix';
+import { suggestSmartFixes, psuCatalogIdsForProject, findMainPanel } from './engine/autofix';
 import { aggregateSimulation } from './engine/sim-metrics';
 import { simulate } from './engine/simulate';
 import { executeDesignCommand as runDesignCommand } from './nl/design-commands';
@@ -158,6 +158,7 @@ type StudioState = {
   loadSample: () => void;
 
   applyFix: (fix: Fix) => void;
+  applyAllFixes: (fixes: Fix[]) => void;
   toggleSimulation: () => void;
 
   setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
@@ -546,131 +547,23 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   applyFix: (fix) => {
     set((s) => {
-      if (fix.kind === 'resizeCable') {
-        return { nodes: s.nodes.map((n) => (n.id === fix.nodeId ? { ...n, catalogId: fix.toCatalogId, label: defaultLabel(getCatalogEntry(fix.toCatalogId)!, s.locale) } : n)) };
-      }
-      if (fix.kind === 'replaceBreaker') {
-        const replacement = pickBreaker(fix.toRating);
-        if (!replacement) return s;
-        return { nodes: s.nodes.map((n) => (n.id === fix.nodeId ? { ...n, catalogId: replacement.id, label: defaultLabel(replacement, s.locale) } : n)) };
-      }
-      if (fix.kind === 'setParam') {
-        return { nodes: s.nodes.map((n) => (n.id === fix.nodeId ? { ...n, params: { ...n.params, [fix.key]: fix.value } } : n)) };
-      }
-      if (fix.kind === 'addGrounding') {
-        const spd = CATALOG.find((e) => e.domain === 'protection' && e.id === 'spd-t2');
-        if (!spd) return s;
-        const anchor = s.nodes.find((n) => getCatalogEntry(n.catalogId)?.domain === 'source');
-        const node: DesignNode = {
-          id: uid('n'),
-          catalogId: spd.id,
-          label: defaultLabel(spd, s.locale),
-          x: anchor ? anchor.x + 40 : 120,
-          y: anchor ? anchor.y + 140 : 120,
-          params: {},
-        };
-        return { nodes: [...s.nodes, node], controls: { ...s.controls, [node.id]: defaultControlState(spd) } };
-      }
-      if (fix.kind === 'moveNode') {
-        return { nodes: s.nodes.map((n) => (n.id === fix.nodeId ? { ...n, x: fix.x, y: fix.y } : n)) };
-      }
-      if (fix.kind === 'replaceCatalog') {
-        const replacement = getCatalogEntry(fix.toCatalogId);
-        if (!replacement) return s;
-        return {
-          nodes: s.nodes.map((n) =>
-            n.id === fix.nodeId ? { ...n, catalogId: fix.toCatalogId, label: defaultLabel(replacement, s.locale) } : n,
-          ),
-          controls: { ...s.controls, [fix.nodeId]: defaultControlState(replacement) },
-        };
-      }
-      if (fix.kind === 'addPsu') {
-        const ids = psuCatalogIdsForProject(s.project);
-        const added: DesignNode[] = [];
-        const controls = { ...s.controls };
-        const anchor = s.nodes.find((n) => getCatalogEntry(n.catalogId)?.domain === 'smarthome') ?? s.nodes[0];
-        let placed = 0;
-        while (placed < fix.count) {
-          const catId = ids[placed % ids.length]!;
-          const entry = getCatalogEntry(catId);
-          if (!entry) break;
-          const node: DesignNode = {
-            id: uid('n'),
-            catalogId: catId,
-            label: defaultLabel(entry, s.locale),
-            x: (anchor?.x ?? 0) + 50 + placed * 40,
-            y: (anchor?.y ?? 0) + 80,
-            params: {},
-          };
-          added.push(node);
-          controls[node.id] = defaultControlState(entry);
-          placed++;
-        }
-        return { nodes: [...s.nodes, ...added], controls };
-      }
-      if (fix.kind === 'addCircuit') {
-        const load = s.nodes.find((n) => n.id === fix.loadNodeId);
-        const panel = s.nodes.find((n) => n.id === fix.panelNodeId);
-        if (!load || !panel) return s;
-        const mcbId = uid('n');
-        const cableId = uid('n');
-        const mcbEntry = getCatalogEntry('mcb-c16');
-        const cableEntry = getCatalogEntry('cable-lv-cu-2.5');
-        if (!mcbEntry || !cableEntry) return s;
-        const mcbX = load.x - 36;
-        const mcbY = load.y;
-        const mcb: DesignNode = { id: mcbId, catalogId: 'mcb-c16', label: 'Auto MCB', x: mcbX, y: mcbY, params: {} };
-        const cable: DesignNode = {
-          id: cableId,
-          catalogId: 'cable-lv-cu-2.5',
-          label: 'Auto cable',
-          x: mcbX,
-          y: mcbY + 20,
-          params: { lengthM: 12, rotation: 0 },
-        };
-        return {
-          nodes: [...s.nodes, mcb, cable],
-          edges: [
-            ...s.edges,
-            { id: uid('e'), source: panel.id, sourceHandle: 'out', target: mcbId, targetHandle: 'line' },
-            { id: uid('e'), source: mcbId, sourceHandle: 'load', target: cableId, targetHandle: 'a' },
-            { id: uid('e'), source: cableId, sourceHandle: 'b', target: load.id, targetHandle: 'in' },
-          ],
-          controls: {
-            ...s.controls,
-            [mcbId]: defaultControlState(mcbEntry),
-          },
-        };
-      }
-      if (fix.kind === 'addSource') {
-        const entry = getCatalogEntry(fix.catalogId);
-        if (!entry) return s;
-        const panel = findMainPanelNodes(s.nodes)[0];
-        const srcId = uid('n');
-        const src: DesignNode = {
-          id: srcId,
-          catalogId: fix.catalogId,
-          label: defaultLabel(entry, s.locale),
-          x: (panel?.x ?? 0) - 160,
-          y: panel?.y ?? 120,
-          params: {},
-        };
-        const edges = panel
-          ? [...s.edges, { id: uid('e'), source: srcId, sourceHandle: 'out', target: panel.id, targetHandle: 'in' }]
-          : s.edges;
-        return { nodes: [...s.nodes, src], edges, controls: { ...s.controls, [srcId]: defaultControlState(entry) } };
-      }
-      if (fix.kind === 'upgradeBreaker') {
-        const replacement = getCatalogEntry(fix.toCatalogId);
-        if (!replacement) return s;
-        return {
-          nodes: s.nodes.map((n) =>
-            n.id === fix.nodeId ? { ...n, catalogId: fix.toCatalogId, label: defaultLabel(replacement, s.locale) } : n,
-          ),
-          controls: { ...s.controls, [fix.nodeId]: defaultControlState(replacement) },
-        };
-      }
-      return s;
+      const patch = applyFixPatch(s, fix);
+      if (!patch) return s;
+      return {
+        ...s,
+        nodes: patch.nodes ?? s.nodes,
+        edges: patch.edges ?? s.edges,
+        controls: patch.controls ?? s.controls,
+      };
+    });
+  },
+
+  applyAllFixes: (fixes) => {
+    if (!fixes.length) return;
+    set((s) => {
+      const next = applyAllFixPatches(s, fixes);
+      if (next.nodes === s.nodes && next.edges === s.edges && next.controls === s.controls) return s;
+      return { ...s, nodes: next.nodes, edges: next.edges, controls: next.controls };
     });
   },
 
@@ -1283,6 +1176,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       updateProject: s.updateProject,
       setControl: s.setControl,
       applyFix: s.applyFix,
+      applyAllFixes: s.applyAllFixes,
       getIssues: () => collectIssues(get()),
       placeEngineeringLayout: () => get().placeEngineeringLayout(),
     });
