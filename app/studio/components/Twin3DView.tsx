@@ -7,7 +7,9 @@ import * as THREE from 'three';
 import { useStudio } from '../lib/store';
 import { getCatalogEntry } from '../lib/catalog';
 import { physicalSpecFor, PX_PER_M } from '../lib/catalog/dimensions';
-import { useSimulation } from './hooks';
+import { useSimulation, useDigitalTwinSync } from './hooks';
+import { aggregateSimulation } from '../lib/engine/sim-metrics';
+import { resolveNodes } from '../lib/model';
 
 function pxToM(v: number): number {
   return v / PX_PER_M;
@@ -65,6 +67,12 @@ function SceneContent() {
   const nodes = useStudio((s) => s.nodes);
   const sim = useSimulation();
   const simulating = useStudio((s) => s.simulating);
+  const { twinConnected } = useDigitalTwinSync();
+
+  const metrics = useMemo(() => {
+    if (!simulating) return null;
+    return aggregateSimulation(resolveNodes(nodes, getCatalogEntry), sim);
+  }, [nodes, sim, simulating]);
 
   useFrame(() => {});
 
@@ -75,6 +83,11 @@ function SceneContent() {
 
   return (
     <>
+      {metrics && (
+        <Text position={[-4, 4, 0]} fontSize={0.22} color="#22d3ee" anchorX="left">
+          {`${metrics.totalKw.toFixed(2)} kW · ${metrics.totalA.toFixed(1)} A · ${metrics.activeDevices} active${twinConnected ? ' · twin' : ''}`}
+        </Text>
+      )}
       <ambientLight intensity={0.45} />
       <directionalLight position={[8, 12, 6]} intensity={0.9} castShadow />
       <Environment preset="apartment" />

@@ -9,6 +9,7 @@ import {
 import type { DesignEdge, DesignNode } from '@/app/studio/lib/model';
 import type { ControlState } from '@/app/studio/lib/controls';
 import { runTwinTick } from '@/app/studio/lib/engine/twin-events';
+import { persistSimulationSession } from '@/lib/studio-db-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +18,7 @@ type CreateBody = {
   nodes: DesignNode[];
   edges: DesignEdge[];
   controls: Record<string, ControlState>;
+  projectId?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -28,6 +30,9 @@ export async function POST(req: NextRequest) {
     const session = createTwinSession(body.nodes, body.edges, body.controls ?? {});
     const tick = runTwinTick(session.nodes, session.edges, session.controls);
     applyTwinSimState(session.id, tick.states, tick.metrics);
+    if (body.projectId) {
+      await persistSimulationSession(body.projectId, session.id, { metrics: tick.metrics }, true);
+    }
     return NextResponse.json({ sessionId: session.id });
   } catch (e) {
     console.error('[studio/simulation POST]', e);

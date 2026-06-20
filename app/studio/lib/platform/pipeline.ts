@@ -7,7 +7,7 @@ import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from '../blank-floor-
 import type { DesignEdge, DesignNode, DesignRoom } from '../model';
 import type { StudioLocale } from '../i18n';
 import type { ProjectInfo } from '../project';
-import { buildStarterDesign } from '../engine/starter-design';
+import { buildStarterDesign, enhanceDesignPlacement } from '../engine/starter-design';
 import { calculateHvacLoads, type HvacLoadReport } from '../engine/hvac-loads';
 import { calculateLightingDesign, type LightingDesignReport } from '../engine/lighting-design';
 import { buildSmartTopology, type SmartTopologyReport } from '../engine/smarthome-topology';
@@ -47,6 +47,7 @@ export function runAutonomousPipeline(
   assumptions.push(...hvac.assumptions, ...lighting.assumptions);
 
   const starter = buildStarterDesign(project, locale, rooms);
+  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges);
   let map: MapBackground | null = null;
   if (project.floorPlanSource === 'zero') {
     const { width, height } = floorPlanSizeForBuilding(project.buildingType);
@@ -61,14 +62,14 @@ export function runAutonomousPipeline(
     };
   }
 
-  const smart = buildSmartTopology(project, starter.nodes, starter.edges, rooms);
+  const smart = buildSmartTopology(project, placed.nodes, placed.edges, rooms);
   assumptions.push(...smart.assumptions);
 
-  const resolved = resolveNodes(starter.nodes, getCatalogEntry);
+  const resolved = resolveNodes(placed.nodes, getCatalogEntry);
   const boq = buildBoq(resolved);
 
   const controls: Record<string, ControlState> = {};
-  for (const n of starter.nodes) {
+  for (const n of placed.nodes) {
     const entry = getCatalogEntry(n.catalogId);
     if (entry) controls[n.id] = defaultControlState(entry);
   }
@@ -76,8 +77,8 @@ export function runAutonomousPipeline(
   return {
     project,
     designName: starter.name,
-    nodes: starter.nodes,
-    edges: starter.edges,
+    nodes: placed.nodes,
+    edges: placed.edges,
     rooms,
     controls,
     map,

@@ -4,17 +4,22 @@ import { create } from 'zustand';
 import { CATALOG, getCatalogEntry, type CatalogEntry } from './catalog';
 import type { DesignNode, DesignEdge, DesignRoom, BimModel } from './model';
 import { resolveNodes } from './model';
-import type { Fix } from './engine/validation';
+import type { Fix, Issue } from './engine/validation';
+import { validateDesign } from './engine/validation';
+import { validatePlacement } from './engine/placement-validation';
+import { suggestSmartFixes } from './engine/autofix';
+import { CABLES } from './catalog/cables';
+import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
 import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
-import { buildStarterDesign } from './engine/starter-design';
+import { buildStarterDesign, enhanceDesignPlacement } from './engine/starter-design';
 import { detectRoomsFromMap as detectRooms, detectBimFromMap } from './engine/plan-detect';
 import { getTwinConnection } from './twin-stream';
-import { psuCatalogId } from './engine/autofix';
+import { psuCatalogId, findMainPanel } from './engine/autofix';
 import { aggregateSimulation } from './engine/sim-metrics';
 import { simulate } from './engine/simulate';
 import { executeDesignCommand as runDesignCommand } from './nl/design-commands';
@@ -77,6 +82,7 @@ type StudioState = {
   autonomousAssumptions: string[];
   bim: BimModel | null;
   showLuxHeatmap: boolean;
+  showLoadHeatmap: boolean;
   twinSessionId: string | null;
   twinConnected: boolean;
 
@@ -147,6 +153,8 @@ type StudioState = {
   generateFromBrief: (text: string) => { ok: boolean; message: string; assumptions: string[] };
   setBim: (bim: BimModel | null) => void;
   toggleLuxHeatmap: () => void;
+  toggleLoadHeatmap: () => void;
+  placeEngineeringLayout: () => { ok: boolean; message: string; changes: number };
   analyzePlanFull: () => Promise<{ rooms: number; walls: number }>;
 };
 
@@ -196,6 +204,11 @@ function initialLuxHeatmap(): boolean {
   return window.localStorage.getItem('studio.luxHeatmap') === '1';
 }
 
+function initialLoadHeatmap(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('studio.loadHeatmap') === '1';
+}
+
 function defaultLabel(entry: CatalogEntry, locale: StudioLocale): string {
   return entry.name[locale] ?? entry.name.en;
 }
@@ -227,6 +240,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   autonomousAssumptions: [],
   bim: null,
   showLuxHeatmap: initialLuxHeatmap(),
+  showLoadHeatmap: initialLoadHeatmap(),
   twinSessionId: null,
   twinConnected: false,
 
@@ -418,6 +432,68 @@ export const useStudio = create<StudioState>((set, get) => ({
           controls[node.id] = defaultControlState(entry);
         }
         return { nodes: [...s.nodes, ...added], controls };
+      }
+      if (fix.kind === 'addCircuit') {
+        const load = s.nodes.find((n) => n.id === fix.loadNodeId);
+        const panel = s.nodes.find((n) => n.id === fix.panelNodeId);
+        if (!load || !panel) return s;
+        const mcbId = uid('n');
+        const cableId = uid('n');
+        const mcbEntry = getCatalogEntry('mcb-c16');
+        const cableEntry = getCatalogEntry('cable-lv-cu-2.5');
+        if (!mcbEntry || !cableEntry) return s;
+        const mcbX = load.x - 36;
+        const mcbY = load.y;
+        const mcb: DesignNode = { id: mcbId, catalogId: 'mcb-c16', label: 'Auto MCB', x: mcbX, y: mcbY, params: {} };
+        const cable: DesignNode = {
+          id: cableId,
+          catalogId: 'cable-lv-cu-2.5',
+          label: 'Auto cable',
+          x: mcbX,
+          y: mcbY + 20,
+          params: { lengthM: 12, rotation: 0 },
+        };
+        return {
+          nodes: [...s.nodes, mcb, cable],
+          edges: [
+            ...s.edges,
+            { id: uid('e'), source: panel.id, sourceHandle: 'out', target: mcbId, targetHandle: 'line' },
+            { id: uid('e'), source: mcbId, sourceHandle: 'load', target: cableId, targetHandle: 'a' },
+            { id: uid('e'), source: cableId, sourceHandle: 'b', target: load.id, targetHandle: 'in' },
+          ],
+          controls: {
+            ...s.controls,
+            [mcbId]: defaultControlState(mcbEntry),
+          },
+        };
+      }
+      if (fix.kind === 'addSource') {
+        const entry = getCatalogEntry(fix.catalogId);
+        if (!entry) return s;
+        const panel = findMainPanelNodes(s.nodes)[0];
+        const srcId = uid('n');
+        const src: DesignNode = {
+          id: srcId,
+          catalogId: fix.catalogId,
+          label: defaultLabel(entry, s.locale),
+          x: (panel?.x ?? 0) - 160,
+          y: panel?.y ?? 120,
+          params: {},
+        };
+        const edges = panel
+          ? [...s.edges, { id: uid('e'), source: srcId, sourceHandle: 'out', target: panel.id, targetHandle: 'in' }]
+          : s.edges;
+        return { nodes: [...s.nodes, src], edges, controls: { ...s.controls, [srcId]: defaultControlState(entry) } };
+      }
+      if (fix.kind === 'upgradeBreaker') {
+        const replacement = getCatalogEntry(fix.toCatalogId);
+        if (!replacement) return s;
+        return {
+          nodes: s.nodes.map((n) =>
+            n.id === fix.nodeId ? { ...n, catalogId: fix.toCatalogId, label: defaultLabel(replacement, s.locale) } : n,
+          ),
+          controls: { ...s.controls, [fix.nodeId]: defaultControlState(replacement) },
+        };
       }
       return s;
     });
@@ -709,6 +785,9 @@ export const useStudio = create<StudioState>((set, get) => ({
       moveNode: s.moveNode,
       updateProject: s.updateProject,
       setControl: s.setControl,
+      applyFix: s.applyFix,
+      getIssues: () => collectIssues(get()),
+      placeEngineeringLayout: () => get().placeEngineeringLayout(),
     });
   },
 
@@ -748,10 +827,29 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ showLuxHeatmap: next });
   },
 
+  toggleLoadHeatmap: () => {
+    const next = !get().showLoadHeatmap;
+    persist('studio.loadHeatmap', next ? '1' : '0');
+    set({ showLoadHeatmap: next });
+  },
+
   analyzePlanFull: async () => {
     const rooms = await get().detectRoomsFromMap();
     const bim = get().bim;
     return { rooms, walls: bim?.walls.length ?? 0 };
+  },
+
+  placeEngineeringLayout: () => {
+    const s = get();
+    const before = s.nodes.length;
+    const placed = enhanceDesignPlacement(s.project, s.rooms, s.nodes, s.edges);
+    set({ nodes: placed.nodes, edges: placed.edges });
+    const added = placed.nodes.length - before;
+    return {
+      ok: true,
+      message: `Engineering layout updated: ${added >= 0 ? added : 0} devices placed from lighting/HVAC calculations.`,
+      changes: Math.max(0, added),
+    };
   },
 }));
 
@@ -779,6 +877,19 @@ if (typeof window !== 'undefined') {
       }
     }, 700);
   });
+}
+
+function collectIssues(st: Pick<StudioState, 'nodes' | 'edges' | 'rooms' | 'project'>): Issue[] {
+  const resolved = resolveNodes(st.nodes, getCatalogEntry);
+  const { issues: eng } = validateDesign(resolved, st.edges, CABLES as CableSpec[]);
+  const place = validatePlacement(st.nodes, st.rooms, getCatalogEntry);
+  const smart = suggestSmartFixes(st.project, st.nodes, st.edges, st.rooms);
+  return [...eng, ...place, ...smart];
+}
+
+function findMainPanelNodes(nodes: DesignNode[]): DesignNode[] {
+  const p = findMainPanel(nodes);
+  return p ? [p] : [];
 }
 
 function pickBreaker(rating: number): CatalogEntry | undefined {

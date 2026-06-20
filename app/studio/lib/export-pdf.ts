@@ -14,7 +14,8 @@ import { CABLES } from './catalog/cables';
 import { declarationFor } from './engine/declarations';
 import { resolveNodes, type DesignNode, type DesignEdge } from './model';
 import { validateDesign } from './engine/validation';
-import { computeQuality } from './engine/quality';
+import { computeQuality, computeCompliance } from './engine/quality';
+import { buildLoadSchedule, buildCableSchedule } from './engine/reports';
 import { buildingTypeLabel, type ProjectInfo } from './project';
 
 export async function exportDesignPdf(opts: {
@@ -145,6 +146,77 @@ export async function exportDesignPdf(opts: {
     const tag = i.severity === 'critical' ? '[CRIT]' : i.severity === 'warning' ? '[WARN]' : '[REC ]';
     doc.text(`${tag} ${truncate(i.title.en, 50)} — ${truncate(i.detail.en, 90)}`, 12, y);
     y += 5.5;
+  });
+
+  // ---- Page 4: formal compliance certificate ----
+  doc.addPage();
+  header('Standards Compliance Certificate');
+  const complianceRows = computeCompliance(issues);
+  y = 32;
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Deterministic compliance summary (rule-based engine — not LLM estimates)', 12, y);
+  y += 10;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  complianceRows.forEach((row) => {
+    doc.text(`${row.standard}: ${row.percent}% compliant (${row.violations} open violations)`, 12, y);
+    y += 6;
+  });
+  y += 6;
+  doc.setFont('helvetica', 'italic');
+  doc.text(
+    'Assumptions and missing inputs must be confirmed before tender submission. Calculations reference IEC 60364, IEC 60898, ASHRAE, EN 12464-1 as applicable.',
+    12,
+    y,
+    { maxWidth: pageW - 24 },
+  );
+
+  // ---- Page 5: load schedule ----
+  doc.addPage();
+  header('Electrical Load Schedule');
+  const loadSched = buildLoadSchedule(resolved);
+  y = 28;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  ['Tag', 'Load', 'kW', 'A', 'Ph'].forEach((h, i) => doc.text(h, 12 + i * 52, y));
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  loadSched.rows.forEach((row) => {
+    if (y > pageH - 12) {
+      doc.addPage();
+      header('Load Schedule (cont.)');
+      y = 28;
+    }
+    doc.text(truncate(row.tag, 10), 12, y);
+    doc.text(truncate(row.name, 22), 64, y);
+    doc.text((row.powerW / 1000).toFixed(2), 116, y);
+    doc.text(row.current.toFixed(1), 168, y);
+    doc.text(String(row.phases), 220, y);
+    y += 5;
+  });
+
+  // ---- Page 6: cable schedule ----
+  doc.addPage();
+  header('Cable Schedule');
+  const cableSched = buildCableSchedule(resolved, opts.edges);
+  y = 28;
+  doc.setFont('helvetica', 'bold');
+  ['Tag', 'Type', 'CSA', 'Len m', 'Iz A'].forEach((h, i) => doc.text(h, 12 + i * 52, y));
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  cableSched.forEach((row) => {
+    if (y > pageH - 12) {
+      doc.addPage();
+      header('Cable Schedule (cont.)');
+      y = 28;
+    }
+    doc.text(truncate(row.tag, 10), 12, y);
+    doc.text(truncate(row.type, 18), 64, y);
+    doc.text(String(row.csa), 116, y);
+    doc.text(String(row.lengthM), 168, y);
+    doc.text(String(row.ampacity), 220, y);
+    y += 5;
   });
 
   const safe = (opts.designName || 'usmart-studio-design').replace(/[^\w-]+/g, '_');

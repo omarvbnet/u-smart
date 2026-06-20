@@ -19,6 +19,9 @@ type StoreApi = {
   moveNode: (id: string, x: number, y: number) => void;
   updateProject: (patch: { smartProtocol?: 'HDL' | 'KNX' | 'BOTH' }) => void;
   setControl: (id: string, key: 'on' | 'level' | 'setpoint' | 'active', value: boolean | number) => void;
+  applyFix: (fix: import('../engine/validation').Fix) => void;
+  getIssues: () => import('../engine/validation').Issue[];
+  placeEngineeringLayout: () => { ok: boolean; message: string; changes: number };
 };
 
 function norm(s: string): string {
@@ -152,9 +155,39 @@ export function executeDesignCommand(text: string, store: StoreApi): CommandResu
     return { ok: true, message: `Turned off ${changes} lighting load(s).`, changes };
   }
 
+  if (q.includes('fix all') || q.includes('auto fix') || q.includes('fix everything')) {
+    const issues = store.getIssues().filter((i) => i.fix);
+    for (const i of issues) {
+      if (i.fix) store.applyFix(i.fix);
+    }
+    return { ok: true, message: `Applied ${issues.length} automatic correction(s).`, changes: issues.length };
+  }
+
+  if (q.includes('place fixtures') || q.includes('lighting layout') || q.includes('auto place lights')) {
+    const r = store.placeEngineeringLayout();
+    return { ok: r.ok, message: r.message, changes: r.changes };
+  }
+
+  if (q.includes('start simulation') || q.includes('run simulation')) {
+    return { ok: true, message: 'Use the simulation play button in the toolbar to start the digital twin stream.', changes: 0 };
+  }
+
+  if (q.includes('reduce cost') || q.match(/cost.*(\d+)%/)) {
+    const pct = Number(q.match(/(\d+)%/)?.[1] ?? 15);
+    let saved = 0;
+    for (const n of s.nodes) {
+      const e = getCatalogEntry(n.catalogId);
+      if (e?.domain === 'load' && e.category === 'LIGHTING') {
+        store.setControl(n.id, 'level', Math.max(50, 100 - pct));
+        saved++;
+      }
+    }
+    return { ok: true, message: `Reduced lighting levels by ~${pct}% on ${saved} circuit(s).`, changes: saved };
+  }
+
   return {
     ok: false,
-    message: 'Command not recognized. Try: "Add two outdoor cameras", "Move distribution board to garage", "Replace HDL with KNX", "All lights on".',
+    message: 'Command not recognized. Try: "Fix all", "Place fixtures", "Add two outdoor cameras", "Move distribution board to garage", "Replace HDL with KNX", "All lights on".',
     changes: 0,
   };
 }
@@ -166,8 +199,11 @@ function parseCount(w: string): number {
 
 export const COMMAND_EXAMPLES = [
   'Design a smart villa with 5 bedrooms, VRF HVAC, KNX, solar and batteries, 450 m²',
+  'Fix all validation issues',
+  'Place fixtures from lighting design',
   'Add two outdoor cameras',
   'Move distribution board to garage',
   'Replace Buspro with KNX',
+  'Reduce project cost by 15%',
   'All lights on',
 ];

@@ -3,7 +3,7 @@
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import type { VisualizationMode } from '../lib/visualization/modes';
-import { Ruler, Box, Cuboid, Users, Wrench, SunMedium } from 'lucide-react';
+import { Ruler, Box, Cuboid, Users, Wrench, SunMedium, Zap } from 'lucide-react';
 
 const MODES: { id: VisualizationMode; icon: typeof Ruler; labelKey: string }[] = [
   { id: 'engineering', icon: Ruler, labelKey: 'vizEngineering' },
@@ -19,6 +19,8 @@ export function VisualizationToolbar() {
   const toggleExperience = useStudio((s) => s.toggleExperienceMode);
   const showLux = useStudio((s) => s.showLuxHeatmap);
   const toggleLux = useStudio((s) => s.toggleLuxHeatmap);
+  const showLoad = useStudio((s) => s.showLoadHeatmap);
+  const toggleLoad = useStudio((s) => s.toggleLoadHeatmap);
 
   const btn = (active: boolean) =>
     `flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition ${
@@ -43,6 +45,10 @@ export function VisualizationToolbar() {
       <button className={btn(showLux)} onClick={toggleLux} title={t('luxHeatmap')}>
         <SunMedium className="h-3.5 w-3.5" />
         <span className="hidden md:inline">{t('luxHeatmap')}</span>
+      </button>
+      <button className={btn(showLoad)} onClick={toggleLoad} title={t('loadHeatmap')}>
+        <Zap className="h-3.5 w-3.5" />
+        <span className="hidden md:inline">{t('loadHeatmap')}</span>
       </button>
       <button
         className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[10px] font-semibold backdrop-blur transition ${

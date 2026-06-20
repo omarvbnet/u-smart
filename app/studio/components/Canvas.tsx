@@ -36,7 +36,7 @@ import { declarationFor } from '../lib/engine/declarations';
 import { RTL_LOCALES } from '../lib/i18n';
 import { dropPosition, nodeFootprint, nodesForCanvasFit } from '../lib/node-layout';
 import type { PortKind } from '../lib/catalog';
-import { useLuxHeatmaps, useDigitalTwinSync } from './hooks';
+import { useLuxHeatmaps, useLoadHeatmaps, useDigitalTwinSync } from './hooks';
 
 const nodeTypes = {
   device: (p: NodeProps) => <DeviceNode {...p} />,
@@ -90,6 +90,7 @@ function CanvasInner() {
   const { byNode } = useAnalysis();
   const sim = useSimulation();
   const luxHeatmaps = useLuxHeatmaps();
+  const loadHeatmaps = useLoadHeatmaps();
   useDigitalTwinSync();
   const rtl = RTL_LOCALES.has(locale);
   const drawing = floorPlanTool === 'draw-room';
@@ -156,6 +157,7 @@ function CanvasInner() {
       }
     }
     const luxByRoom = new Map(luxHeatmaps.map((h) => [h.roomId, h]));
+    const loadByRoom = new Map(loadHeatmaps.map((h) => [h.roomId, h]));
     for (const r of rooms) {
       list.push({
         id: roomRfId(r.id),
@@ -169,6 +171,7 @@ function CanvasInner() {
           selected: r.id === selectedRoomId,
           areaM2: roomAreaM2(r.width, r.height),
           luxHeatmap: luxByRoom.get(r.id) ?? null,
+          loadHeatmap: loadByRoom.get(r.id) ?? null,
         } satisfies RoomNodeData,
         draggable: !drawing,
         selectable: !drawing,
@@ -223,7 +226,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps]);
+  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 

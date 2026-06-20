@@ -1,6 +1,7 @@
 'use client';
 
 import { computeLuxHeatmaps } from '../lib/engine/lux-heatmap';
+import { computeLoadHeatmaps } from '../lib/engine/load-heatmap';
 import { getTwinConnection } from '../lib/twin-stream';
 import { useEffect, useMemo } from 'react';
 import { useStudio } from '../lib/store';
@@ -109,4 +110,17 @@ export function useDigitalTwinSync() {
   }, [simulating]);
 
   return { twinConnected };
+}
+
+/** Per-room electrical load density heatmap. */
+export function useLoadHeatmaps() {
+  const nodes = useStudio((s) => s.nodes);
+  const rooms = useStudio((s) => s.rooms);
+  const show = useStudio((s) => s.showLoadHeatmap);
+
+  return useMemo(() => {
+    if (!show || !rooms.length) return [];
+    const resolved = resolveNodes(nodes, getCatalogEntry);
+    return computeLoadHeatmaps(rooms, resolved);
+  }, [nodes, rooms, show]);
 }

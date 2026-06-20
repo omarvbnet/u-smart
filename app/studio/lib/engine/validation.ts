@@ -22,7 +22,15 @@ import {
   prospectiveScKa,
   apparentKva,
 } from './electrical';
-import { suggestHvacFix } from './autofix';
+import {
+  suggestHvacFix,
+  suggestConnectToSource,
+  suggestProtectionFix,
+  suggestCoordinationFix,
+  suggestShortCircuitFix,
+  suggestPhaseFix,
+  suggestPanelOverloadFix,
+} from './autofix';
 
 export type Severity = 'critical' | 'warning' | 'recommendation';
 
@@ -35,7 +43,10 @@ export type Fix =
   | { kind: 'addGrounding' }
   | { kind: 'moveNode'; nodeId: string; x: number; y: number }
   | { kind: 'replaceCatalog'; nodeId: string; toCatalogId: string }
-  | { kind: 'addPsu'; count: number };
+  | { kind: 'addPsu'; count: number }
+  | { kind: 'addCircuit'; loadNodeId: string; panelNodeId: string }
+  | { kind: 'addSource'; catalogId: string }
+  | { kind: 'upgradeBreaker'; nodeId: string; toCatalogId: string };
 
 export type Issue = {
   id: string;
@@ -174,6 +185,7 @@ export function validateDesign(
         values: [{ label: t('التيار', 'Current', 'کارەبا', 'Akım'), value: `${Ib.toFixed(1)} A` }],
         standards: ['IEC 60364'],
         recommendation: t('وصّل الحمل بمصدر عبر قاطع وكابل.', 'Connect the load to a source via a breaker and cable.', 'بار ببەستەرەوە بە سەرچاوە لە ڕێگەی برەیکەر و کێبڵ.', 'Yükü bir kesici ve kablo ile kaynağa bağlayın.'),
+        fix: suggestConnectToSource(load.id, nodes),
       });
     }
 
@@ -194,6 +206,7 @@ export function validateDesign(
         values: [{ label: t('التيار التصميمي', 'Design current', 'کارەبای دیزاین', 'Tasarım akımı'), value: `${Ib.toFixed(1)} A` }],
         standards: ['IEC 60364', 'IEC 60898'],
         recommendation: t('أضف قاطعاً مناسباً للتيار التصميمي.', 'Add a breaker sized for the design current.', 'برەیکەرێک زیاد بکە بۆ کارەبای دیزاین.', 'Tasarım akımına uygun bir kesici ekleyin.'),
+        fix: suggestProtectionFix(load.id, nodes),
       });
     }
 
@@ -320,6 +333,7 @@ export function validateDesign(
             ],
             standards: ['IEC 60364'],
             recommendation: t('كبّر الكابل أو صغّر القاطع.', 'Increase cable or reduce breaker.', 'کێبڵ گەورە بکە یان برەیکەر بچووک بکە.', 'Kabloyu büyütün veya kesiciyi küçültün.'),
+            fix: suggestCoordinationFix(brNode.id, nodes, edges),
           });
         }
       }
@@ -345,6 +359,7 @@ export function validateDesign(
           ],
           standards: ['IEC 60947'],
           recommendation: t('اختر قاطعاً بقدرة قطع أعلى.', 'Select a breaker with higher Icu.', 'برەیکەرێک بە Icu بەرزتر هەڵبژێرە.', 'Daha yüksek Icu’lu kesici seçin.'),
+          fix: suggestShortCircuitFix(brNode.id),
         });
       }
 
@@ -360,6 +375,7 @@ export function validateDesign(
           values: [{ label: t('الأقطاب', 'Poles', 'جووتەکان', 'Kutuplar'), value: `${br.poles}P` }],
           standards: ['IEC 60364'],
           recommendation: t('استخدم قاطعاً 3 أو 4 أقطاب.', 'Use a 3- or 4-pole breaker.', 'برەیکەری 3 یان 4 جووت بەکاربهێنە.', '3 veya 4 kutuplu kesici kullanın.'),
+          fix: suggestPhaseFix(brNode.id),
         });
       }
     }
@@ -415,6 +431,7 @@ export function validateDesign(
         ],
         standards: ['IEC 60364'],
         recommendation: t('زد قدرة المصدر أو وزّع الأحمال.', 'Increase source capacity or split loads.', 'توانای سەرچاوە زیاد بکە یان بارەکان دابەش بکە.', 'Kaynak kapasitesini artırın veya yükleri bölün.'),
+        fix: suggestPanelOverloadFix(),
       });
     } else if (demandKva > totalKva * 0.8 && totalKva > 0) {
       issues.push({

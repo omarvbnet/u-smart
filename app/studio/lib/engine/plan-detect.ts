@@ -43,14 +43,20 @@ export async function detectRoomsFromMap(
       height: Math.max(50, (b.h / h) * mapHeight),
     }));
 
-  return scaled.map((r, i) => ({
-    label: ROOM_LABELS[i] ?? `Room ${i + 1}`,
-    zone: ZONE_BY_LABEL[ROOM_LABELS[i] ?? ''] ?? 'general',
-    x: r.x,
-    y: r.y,
-    width: r.width,
-    height: r.height,
-  }));
+  return scaled.map((r, i) => {
+    const aspect = r.width / Math.max(1, r.height);
+    const label = ROOM_LABELS[i] ?? `Room ${i + 1}`;
+    let zone = ZONE_BY_LABEL[label] ?? 'general';
+    if (aspect > 3.2 || aspect < 0.32) zone = 'corridor';
+    return {
+      label: zone === 'corridor' && !label.toLowerCase().includes('corridor') ? 'Corridor' : label,
+      zone,
+      x: r.x,
+      y: r.y,
+      width: r.width,
+      height: r.height,
+    };
+  });
 }
 
 /** Detect wall lines from raster floor plan for BIM model. */

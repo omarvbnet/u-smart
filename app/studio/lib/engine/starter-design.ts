@@ -4,7 +4,8 @@
 import type { DesignNode, DesignEdge, DesignRoom } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import type { StudioLocale } from '../i18n';
-import { cableRunBetween } from '../node-layout';
+import { cableRunRouted } from './cable-routing';
+import { placeLightingFixtures, placeHvacUnits, mergePlacementNodes } from './placement-layout';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -73,7 +74,7 @@ export function buildStarterDesign(
     const mcbY = room.y + 8;
     const loadX = cx - 20;
     const loadY = cy;
-    const run = cableRunBetween(mcbX, mcbY, loadX, loadY);
+    const run = cableRunRouted(mcbX, mcbY, loadX, loadY, targets);
 
     nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: mcbX, y: mcbY, params: {} });
     nodes.push({
@@ -105,7 +106,7 @@ export function buildStarterDesign(
     const hvacY = room ? room.y + 40 : 400 + i * 120;
     const mcbX = room ? room.x + 8 : minRoomX;
     const mcbY = baseY;
-    const hvacRun = cableRunBetween(mcbX, mcbY, hvacX, hvacY);
+    const hvacRun = cableRunRouted(mcbX, mcbY, hvacX, hvacY, targets);
 
     nodes.push({ id: mcbId, catalogId: 'mcb-c16', label: 'HVAC MCB', x: mcbX, y: mcbY, params: {} });
     nodes.push({
@@ -148,6 +149,21 @@ export function buildStarterDesign(
   }
 
   return { nodes, edges, name: names[locale] };
+}
+
+/** Replace single center lights with calculated fixture grid + reposition HVAC from loads. */
+export function enhanceDesignPlacement(
+  project: ProjectInfo,
+  rooms: DesignRoom[],
+  nodes: DesignNode[],
+  edges: DesignEdge[],
+): { nodes: DesignNode[]; edges: DesignEdge[] } {
+  let nextNodes = [...nodes];
+  const lights = placeLightingFixtures(rooms);
+  nextNodes = mergePlacementNodes(nextNodes, lights, 'light');
+  const hvacNodes = placeHvacUnits(rooms, project);
+  nextNodes = mergePlacementNodes(nextNodes, hvacNodes, 'hvac');
+  return { nodes: nextNodes, edges };
 }
 
 function edge(source: string, sourceHandle: string, target: string, targetHandle: string): DesignEdge {

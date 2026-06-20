@@ -2,7 +2,7 @@
  * Extended auto-fix suggestions — placement, HVAC sizing, smart topology.
  */
 import { CATALOG, getCatalogEntry, type HvacSpec } from '../catalog';
-import type { DesignNode, DesignRoom } from '../model';
+import type { DesignNode, DesignRoom, DesignEdge } from '../model';
 import type { ProjectInfo } from '../project';
 import type { Fix, Issue } from './validation';
 import { buildSmartTopology } from './smarthome-topology';
@@ -165,4 +165,77 @@ function suggestHvacUpsize(nodeId: string, totalKw: number): Fix | undefined {
   const pick = candidates[0];
   if (!pick) return undefined;
   return { kind: 'replaceCatalog', nodeId, toCatalogId: pick.id };
+}
+
+export function findMainPanel(nodes: DesignNode[]): DesignNode | undefined {
+  return (
+    nodes.find((n) => n.catalogId === 'load-distribution-board') ??
+    nodes.find((n) => {
+      const e = getCatalogEntry(n.catalogId);
+      return e?.domain === 'load' && (e as import('../catalog').LoadSpec).category === 'PANEL';
+    })
+  );
+}
+
+export function suggestConnectToSource(loadNodeId: string, nodes: DesignNode[]): Fix | undefined {
+  const panel = findMainPanel(nodes);
+  if (!panel) {
+    return { kind: 'addSource', catalogId: 'src-utility-400' };
+  }
+  return { kind: 'addCircuit', loadNodeId, panelNodeId: panel.id };
+}
+
+export function suggestProtectionFix(loadNodeId: string, nodes: DesignNode[]): Fix | undefined {
+  const panel = findMainPanel(nodes);
+  if (!panel) return suggestConnectToSource(loadNodeId, nodes);
+  return { kind: 'addCircuit', loadNodeId, panelNodeId: panel.id };
+}
+
+export function suggestCoordinationFix(breakerNodeId: string, nodes: DesignNode[], edges: DesignEdge[]): Fix | undefined {
+  const br = nodes.find((n) => n.id === breakerNodeId);
+  if (!br) return undefined;
+  const cable = nodes.find((n) => {
+    const e = getCatalogEntry(n.catalogId);
+    return e?.domain === 'cable' && edges.some((ed) => (ed.source === br.id && ed.target === n.id) || (ed.target === br.id && ed.source === n.id));
+  });
+  if (!cable) return undefined;
+  const entry = getCatalogEntry(cable.catalogId);
+  if (!entry || entry.domain !== 'cable') return undefined;
+  const brSpec = getCatalogEntry(br.catalogId);
+  if (!brSpec || brSpec.domain !== 'protection') return undefined;
+  const bigger = CATALOG.filter(
+    (e) => e.domain === 'cable' && (e as import('../catalog').CableSpec).csaMm2 > (entry as import('../catalog').CableSpec).csaMm2,
+  ).sort((a, b) => (a as import('../catalog').CableSpec).csaMm2 - (b as import('../catalog').CableSpec).csaMm2)[0];
+  if (bigger) return { kind: 'resizeCable', nodeId: cable.id, toCatalogId: bigger.id };
+  const rating = (brSpec as import('../catalog').ProtectionSpec).ratedCurrentA;
+  const lower = [16, 20, 25, 32, 40, 50, 63].filter((r) => r < rating).pop();
+  if (lower) return { kind: 'replaceBreaker', nodeId: breakerNodeId, toRating: lower };
+  return undefined;
+}
+
+export function suggestShortCircuitFix(nodeId: string): Fix | undefined {
+  const candidates = CATALOG.filter(
+    (e) => e.domain === 'protection' && (e as import('../catalog').ProtectionSpec).breakingCapacityKA >= 10,
+  ).sort(
+    (a, b) =>
+      (a as import('../catalog').ProtectionSpec).breakingCapacityKA -
+      (b as import('../catalog').ProtectionSpec).breakingCapacityKA,
+  );
+  const pick =
+    candidates.find((e) => (e as import('../catalog').ProtectionSpec).breakingCapacityKA >= 15) ??
+    candidates[candidates.length - 1];
+  if (!pick) return undefined;
+  return { kind: 'upgradeBreaker', nodeId, toCatalogId: pick.id };
+}
+
+export function suggestPhaseFix(nodeId: string): Fix | undefined {
+  const threePole = CATALOG.find(
+    (e) => e.domain === 'protection' && (e as import('../catalog').ProtectionSpec).poles >= 3,
+  );
+  if (!threePole) return undefined;
+  return { kind: 'upgradeBreaker', nodeId, toCatalogId: threePole.id };
+}
+
+export function suggestPanelOverloadFix(): Fix {
+  return { kind: 'addSource', catalogId: 'src-utility-400' };
 }
