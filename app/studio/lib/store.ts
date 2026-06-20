@@ -7,7 +7,7 @@ import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
 import { validatePlacement } from './engine/placement-validation';
-import { applyFixPatch, runBatchedFixes } from './engine/apply-fix';
+import { applyFixPatch, applyAllFixPatches, rerouteDesignCables, type FixableState } from './engine/apply-fix';
 import { CABLES } from './catalog/cables';
 import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -165,8 +165,8 @@ type StudioState = {
   clear: () => void;
   loadSample: () => void;
 
-  applyFix: (fix: Fix) => void;
-  applyAllFixes: (fixes: Fix[]) => void;
+  applyFix: (fix: Fix) => boolean;
+  applyAllFixes: (fixes: Fix[]) => number;
   toggleSimulation: () => void;
 
   setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
@@ -347,6 +347,33 @@ function withHistory(s: StudioState, patch: Partial<StudioState>): Partial<Studi
     ...patch,
     historyPast: [...s.historyPast.slice(-(HISTORY_LIMIT - 1)), cloneDesignSnapshot(s)],
     historyFuture: [],
+  };
+}
+
+function fixableFrom(s: StudioState): FixableState {
+  return {
+    locale: s.locale,
+    project: s.project,
+    nodes: s.nodes,
+    edges: s.edges,
+    controls: s.controls,
+    rooms: s.rooms,
+  };
+}
+
+function patchFromFix(s: StudioState, fix: Fix): Partial<StudioState> | null {
+  const patch = applyFixPatch(fixableFrom(s), fix);
+  if (!patch) return null;
+  const merged = {
+    ...fixableFrom(s),
+    nodes: patch.nodes ?? s.nodes,
+    edges: patch.edges ?? s.edges,
+    controls: patch.controls ?? s.controls,
+  };
+  return {
+    nodes: rerouteDesignCables(merged),
+    edges: merged.edges,
+    controls: merged.controls,
   };
 }
 
@@ -603,44 +630,26 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   applyFix: (fix) => {
-    set((s) => {
-      const patch = applyFixPatch(s, fix);
-      if (!patch) return s;
-      return withHistory(s, {
-        nodes: patch.nodes ?? s.nodes,
-        edges: patch.edges ?? s.edges,
-        controls: patch.controls ?? s.controls,
-      });
-    });
+    const s = get();
+    const designPatch = patchFromFix(s, fix);
+    if (!designPatch) return false;
+    set(withHistory(s, designPatch));
+    return true;
   },
 
   applyAllFixes: (fixes) => {
-    if (!fixes.length || get().applyingFixes) return;
-    set((s) => withHistory(s, { applyingFixes: true, suppressCanvasFit: true }));
-    runBatchedFixes(
-      () => {
-        const s = get();
-        return {
-          locale: s.locale,
-          project: s.project,
-          nodes: s.nodes,
-          edges: s.edges,
-          controls: s.controls,
-        };
-      },
-      (next, done) => {
-        set((s) => ({
-          ...s,
-          nodes: next.nodes,
-          edges: next.edges,
-          controls: next.controls,
-          suppressCanvasFit: !done,
-          applyingFixes: !done,
-          canvasFitSeq: done ? s.canvasFitSeq + 1 : s.canvasFitSeq,
-        }));
-      },
-      fixes,
+    if (!fixes.length) return 0;
+    const s = get();
+    const { state: next, applied } = applyAllFixPatches(fixableFrom(s), fixes);
+    if (!applied) return 0;
+    set(
+      withHistory(s, {
+        nodes: next.nodes,
+        edges: next.edges,
+        controls: next.controls,
+      }),
     );
+    return applied;
   },
 
   toggleSimulation: () => {

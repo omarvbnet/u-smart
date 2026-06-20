@@ -46,7 +46,8 @@ export type Fix =
   | { kind: 'addPsu'; count: number }
   | { kind: 'addCircuit'; loadNodeId: string; panelNodeId: string }
   | { kind: 'addSource'; catalogId: string }
-  | { kind: 'upgradeBreaker'; nodeId: string; toCatalogId: string };
+  | { kind: 'upgradeBreaker'; nodeId: string; toCatalogId: string }
+  | { kind: 'addRoomLighting'; roomId: string; catalogId: string; count: number };
 
 export type Issue = {
   id: string;

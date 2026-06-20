@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useStudio } from '../lib/store';
-import { useAnalysis, useSimulation, useT } from './hooks';
+import { useIssueByNode, useSimulation, useT } from './hooks';
 import { DeviceNode, type DeviceNodeData } from './DeviceNode';
 import { CableNode, type CableNodeData } from './CableNode';
 import { MapNode, type MapNodeData } from './MapNode';
@@ -117,7 +117,7 @@ function CanvasInner() {
   const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
   const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
 
-  const { byNode } = useAnalysis();
+  const byNode = useIssueByNode();
   const sim = useSimulation();
   const luxHeatmaps = useLuxHeatmaps();
   const loadHeatmaps = useLoadHeatmaps();

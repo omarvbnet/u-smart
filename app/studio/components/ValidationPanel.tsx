@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import type { Issue, Severity } from '../lib/engine/validation';
-import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb } from 'lucide-react';
 
 const SEVERITY_META: Record<Severity, { color: string; bg: string; border: string; icon: typeof AlertOctagon }> = {
   critical: { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30', icon: AlertOctagon },
@@ -12,13 +12,31 @@ const SEVERITY_META: Record<Severity, { color: string; bg: string; border: strin
   recommendation: { color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/30', icon: Lightbulb },
 };
 
-function IssueCard({ issue }: { issue: Issue }) {
+function IssueCard({
+  issue,
+  onFixed,
+  onFailed,
+}: {
+  issue: Issue;
+  onFixed: () => void;
+  onFailed: () => void;
+}) {
   const t = useT();
   const locale = useStudio((s) => s.locale);
   const select = useStudio((s) => s.select);
   const applyFix = useStudio((s) => s.applyFix);
   const [open, setOpen] = useState(issue.severity === 'critical');
+  const [busy, setBusy] = useState(false);
   const meta = SEVERITY_META[issue.severity];
+
+  const runFix = () => {
+    if (!issue.fix || busy) return;
+    setBusy(true);
+    const ok = applyFix(issue.fix);
+    setBusy(false);
+    if (ok) onFixed();
+    else onFailed();
+  };
 
   return (
     <div className={`rounded-lg border ${meta.border} ${meta.bg}`}>
@@ -65,14 +83,15 @@ function IssueCard({ issue }: { issue: Issue }) {
           {issue.fix && (
             <button
               type="button"
+              disabled={busy}
               onClick={(e) => {
                 e.stopPropagation();
-                applyFix(issue.fix!);
+                runFix();
               }}
-              className="flex items-center gap-1.5 rounded-md bg-cyan-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-400"
+              className="flex items-center gap-1.5 rounded-md bg-cyan-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-400 disabled:opacity-70"
             >
               <Wrench className="h-3.5 w-3.5" />
-              {t('fix')}
+              {busy ? t('fixing') : t('fix')}
             </button>
           )}
         </div>
@@ -85,9 +104,9 @@ export function ValidationPanel() {
   const t = useT();
   const { issues } = useAnalysis();
   const applyAllFixes = useStudio((s) => s.applyAllFixes);
-  const applyingFixes = useStudio((s) => s.applyingFixes);
+  const [status, setStatus] = useState<string | null>(null);
 
-  const fixable = issues.filter((i) => i.fix);
+  const fixable = useMemo(() => issues.filter((i) => i.fix), [issues]);
   const groups: { sev: Severity; key: 'critical' | 'warning' | 'recommendation' }[] = [
     { sev: 'critical', key: 'critical' },
     { sev: 'warning', key: 'warning' },
@@ -95,8 +114,10 @@ export function ValidationPanel() {
   ];
 
   const handleFixAll = () => {
-    if (applyingFixes || fixable.length === 0) return;
-    applyAllFixes(fixable.map((i) => i.fix!));
+    if (fixable.length === 0) return;
+    const applied = applyAllFixes(fixable.map((i) => i.fix!));
+    setStatus(applied > 0 ? t('fixAllDone').replace('{count}', String(applied)) : t('fixFailed'));
+    window.setTimeout(() => setStatus(null), 2500);
   };
 
   return (
@@ -106,15 +127,20 @@ export function ValidationPanel() {
         {fixable.length > 0 && (
           <button
             type="button"
-            disabled={applyingFixes}
             onClick={handleFixAll}
-            className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25"
           >
-            {applyingFixes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+            <Wrench className="h-3.5 w-3.5" />
             {t('fixAll')} ({fixable.length})
           </button>
         )}
       </div>
+
+      {status && (
+        <div className="border-b border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] font-medium text-emerald-300">
+          {status}
+        </div>
+      )}
 
       <div className="flex gap-2 border-b border-[var(--studio-border)] px-3 py-2 text-[11px]">
         {groups.map((g) => {
@@ -142,7 +168,18 @@ export function ValidationPanel() {
             return (
               <div key={g.key} className="space-y-2">
                 {list.map((issue) => (
-                  <IssueCard key={issue.id} issue={issue} />
+                  <IssueCard
+                    key={issue.id}
+                    issue={issue}
+                    onFixed={() => {
+                      setStatus(t('fixDone'));
+                      window.setTimeout(() => setStatus(null), 2000);
+                    }}
+                    onFailed={() => {
+                      setStatus(t('fixFailed'));
+                      window.setTimeout(() => setStatus(null), 2500);
+                    }}
+                  />
                 ))}
               </div>
             );

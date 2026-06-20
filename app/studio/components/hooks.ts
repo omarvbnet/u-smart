@@ -25,6 +25,40 @@ export function useT() {
   return useMemo(() => createTranslator(locale), [locale]);
 }
 
+/** Severity badges on canvas — skips quality/compliance scoring for speed. */
+export function useIssueByNode() {
+  const nodes = useStudio((s) => s.nodes);
+  const edges = useStudio((s) => s.edges);
+  const rooms = useStudio((s) => s.rooms);
+  const project = useStudio((s) => s.project);
+  const activeFloorId = useStudio((s) => s.activeFloorId);
+  const deferredNodes = useDeferredValue(nodes);
+  const deferredEdges = useDeferredValue(edges);
+
+  return useMemo(() => {
+    const resolved = resolveNodes(deferredNodes, getCatalogEntry);
+    const activeRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
+    const activeResolved = resolved.filter((n) => !n.floorId || n.floorId === activeFloorId);
+    const { issues: engIssues } = validateDesign(activeResolved, deferredEdges, CABLES as CableSpec[]);
+    const placeIssues = validatePlacement(
+      deferredNodes.filter((n) => !n.floorId || n.floorId === activeFloorId),
+      activeRooms,
+      getCatalogEntry,
+    );
+    const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
+    const smartIssues = suggestSmartFixes(project, deferredNodes, deferredEdges, activeRooms);
+    const issues = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
+    const byNode = new Map<string, Issue[]>();
+    for (const i of issues) {
+      if (!i.nodeId) continue;
+      const arr = byNode.get(i.nodeId) ?? [];
+      arr.push(i);
+      byNode.set(i.nodeId, arr);
+    }
+    return byNode;
+  }, [deferredNodes, deferredEdges, rooms, project, activeFloorId]);
+}
+
 /** Full validation + quality + compliance derived from the live design. */
 export function useAnalysis() {
   const nodes = useStudio((s) => s.nodes);

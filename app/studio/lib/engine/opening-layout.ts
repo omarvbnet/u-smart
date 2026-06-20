@@ -6,7 +6,7 @@ import type { DesignNode, DesignOpening, DesignRoom, BimModel, DesignWall } from
 import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
 import { defaultControlState } from '../controls';
-import { mergeEffectiveWalls, orientOpeningOnWall, wallSegment } from './wall-layout';
+import { mergeEffectiveWalls, orientOpeningOnWall, wallSegment, openingPlanPositionFor3d } from './wall-layout';
 
 export type CurtainStyle = 'none' | 'roll' | 'single' | 'double';
 
@@ -179,8 +179,30 @@ export function resolveFloorOpenings(
   bim: BimModel | null,
   rooms: DesignRoom[],
   floorId?: string,
+  options?: { smart?: boolean; synthesize?: boolean },
 ): DesignOpening[] {
-  const raw = bim?.openings.filter((o) => !o.floorId || o.floorId === floorId) ?? [];
+  const floorRooms = rooms.filter((r) => !floorId || !r.floorId || r.floorId === floorId);
+  let raw = bim?.openings.filter((o) => !o.floorId || o.floorId === floorId) ?? [];
+  if (!raw.length && options?.synthesize !== false && floorRooms.length > 0) {
+    raw = openingsForRooms(floorRooms, { smart: options?.smart, floorId });
+  }
   const walls = mergeEffectiveWalls(bim, rooms, floorId);
   return resolveOpeningsOnWalls(raw, walls);
+}
+
+export type Opening3dPlacement = { opening: DesignOpening; x: number; y: number };
+
+export function resolveFloorOpeningsFor3d(
+  bim: BimModel | null,
+  rooms: DesignRoom[],
+  floorId: string | undefined,
+  project: ProjectInfo | undefined,
+): Opening3dPlacement[] {
+  const walls = mergeEffectiveWalls(bim, rooms, floorId);
+  const openings = resolveFloorOpenings(bim, rooms, floorId, { smart: project?.smartBuilding, synthesize: true });
+  return openings.map((opening) => {
+    const wall = opening.wallId ? walls.find((w) => w.id === opening.wallId) : undefined;
+    const pos = openingPlanPositionFor3d(opening, wall, rooms);
+    return { opening, x: pos.x, y: pos.y };
+  });
 }

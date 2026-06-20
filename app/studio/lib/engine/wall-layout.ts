@@ -97,6 +97,47 @@ export function wallAngleDeg(w: DesignWall): number {
   return (Math.atan2(w.y2 - w.y1, w.x2 - w.x1) * 180) / Math.PI;
 }
 
+/** Unit normal pointing from wall center toward the room exterior (plan pixels). */
+export function outwardWallNormal(w: DesignWall, rooms: DesignRoom[]): { nx: number; ny: number } {
+  const dx = w.x2 - w.x1;
+  const dy = w.y2 - w.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  let nx = -dy / len;
+  let ny = dx / len;
+  if (w.roomId) {
+    const room = rooms.find((r) => r.id === w.roomId);
+    if (room) {
+      const cx = room.x + room.width / 2;
+      const cy = room.y + room.height / 2;
+      const mx = (w.x1 + w.x2) / 2;
+      const my = (w.y1 + w.y2) / 2;
+      const interior = (mx + nx - cx) ** 2 + (my + ny - cy) ** 2;
+      const exterior = (mx - nx - cx) ** 2 + (my - ny - cy) ** 2;
+      if (interior < exterior) {
+        nx = -nx;
+        ny = -ny;
+      }
+    }
+  }
+  return { nx, ny };
+}
+
+export function outwardWallOffset(w: DesignWall, rooms: DesignRoom[], distancePx: number): { dx: number; dy: number } {
+  const { nx, ny } = outwardWallNormal(w, rooms);
+  return { dx: nx * distancePx, dy: ny * distancePx };
+}
+
+export function openingPlanPositionFor3d(
+  opening: DesignOpening,
+  wall: DesignWall | undefined,
+  rooms: DesignRoom[],
+): { x: number; y: number } {
+  if (!wall) return { x: opening.x, y: opening.y };
+  const pad = Math.max(10, (wall.thickness ?? 6) * 3 + 6);
+  const off = outwardWallOffset(wall, rooms, pad);
+  return { x: opening.x + off.dx, y: opening.y + off.dy };
+}
+
 export function pointOnWall(w: DesignWall, t: number): { x: number; y: number } {
   const clamped = Math.max(0.04, Math.min(0.96, t));
   return {

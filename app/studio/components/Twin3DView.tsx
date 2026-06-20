@@ -11,8 +11,8 @@ import { useSimulation, useDigitalTwinSync } from './hooks';
 import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
 import type { DesignOpening, DesignGarden, DesignWall, CurtainStyle } from '../lib/model';
-import { openingOpenPercent, resolveFloorOpenings } from '../lib/engine/opening-layout';
 import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
+import { openingOpenPercent, resolveFloorOpeningsFor3d } from '../lib/engine/opening-layout';
 import {
   parseRoutePoints,
   computeCableRoute,
@@ -77,14 +77,18 @@ function OpeningMesh({
   opening,
   elevation,
   targetOpen,
+  planX,
+  planY,
 }: {
   opening: DesignOpening;
   elevation: number;
   targetOpen: number;
+  planX: number;
+  planY: number;
 }) {
-  const cx = pxToM(opening.x);
-  const cz = pxToM(opening.y);
-  const w = pxToM(opening.width);
+  const cx = pxToM(planX);
+  const cz = pxToM(planY);
+  const w = Math.max(pxToM(opening.width), 0.85);
   const rotY = openingRotationY(opening);
   const doorGroup = useRef<THREE.Group>(null);
   const curtainL = useRef<THREE.Mesh>(null);
@@ -113,15 +117,15 @@ function OpeningMesh({
 
   if (opening.kind === 'door') {
     return (
-      <group position={[cx, elevation, cz]} rotation={[0, rotY, 0]}>
-        <mesh position={[0, 1.1, 0]} castShadow>
-          <boxGeometry args={[w, 2.2, 0.08]} />
-          <meshStandardMaterial color="#64748b" />
+      <group position={[cx, elevation, cz]} rotation={[0, rotY, 0]} renderOrder={10}>
+        <mesh position={[0, 1.1, 0]} castShadow renderOrder={10}>
+          <boxGeometry args={[w, 2.2, 0.12]} />
+          <meshStandardMaterial color="#475569" />
         </mesh>
-        <group ref={doorGroup} position={[w / 2 - 0.05, 1.1, 0]}>
-          <mesh castShadow>
-            <boxGeometry args={[w * 0.92, 2.1, 0.06]} />
-            <meshStandardMaterial color="#d97706" />
+        <group ref={doorGroup} position={[w / 2 - 0.05, 1.1, 0.04]}>
+          <mesh castShadow renderOrder={11}>
+            <boxGeometry args={[w * 0.92, 2.05, 0.08]} />
+            <meshStandardMaterial color="#d97706" emissive="#92400e" emissiveIntensity={0.15} />
           </mesh>
         </group>
       </group>
@@ -130,10 +134,14 @@ function OpeningMesh({
 
   const style: CurtainStyle = opening.curtainStyle ?? 'none';
   return (
-    <group position={[cx, elevation + 1.4, cz]} rotation={[0, rotY, 0]}>
-      <mesh castShadow>
-        <boxGeometry args={[w, 1.2, 0.05]} />
-        <meshStandardMaterial color="#38bdf8" transparent opacity={0.35} />
+    <group position={[cx, elevation + 1.05, cz]} rotation={[0, rotY, 0]} renderOrder={10}>
+      <mesh castShadow renderOrder={10}>
+        <boxGeometry args={[w + 0.08, 1.35, 0.1]} />
+        <meshStandardMaterial color="#334155" />
+      </mesh>
+      <mesh position={[0, 0, 0.02]} renderOrder={11}>
+        <boxGeometry args={[w, 1.2, 0.04]} />
+        <meshStandardMaterial color="#38bdf8" transparent opacity={0.55} depthWrite={false} />
       </mesh>
       {style === 'roll' && (
         <mesh ref={rollRef} position={[0, 0.5, 0.04]}>
@@ -410,6 +418,7 @@ function SceneContent() {
   const rooms = useStudio((s) => s.rooms);
   const nodes = useStudio((s) => s.nodes);
   const bim = useStudio((s) => s.bim);
+  const project = useStudio((s) => s.project);
   const floors = useStudio((s) => s.floors);
   const activeFloorId = useStudio((s) => s.activeFloorId);
   const controls = useStudio((s) => s.controls);
@@ -460,9 +469,9 @@ function SceneContent() {
     () => mergeEffectiveWalls(bim, rooms, activeFloorId),
     [bim, rooms, activeFloorId],
   );
-  const openings = useMemo(
-    () => resolveFloorOpenings(bim, rooms, activeFloorId),
-    [bim, rooms, activeFloorId],
+  const openings3d = useMemo(
+    () => resolveFloorOpeningsFor3d(bim, rooms, activeFloorId, project),
+    [bim, rooms, activeFloorId, project],
   );
   const gardens = bim?.gardens?.filter((g) => !g.floorId || g.floorId === activeFloorId) ?? [];
 
@@ -510,14 +519,21 @@ function SceneContent() {
       {gardens.map((g) => (
         <GardenMesh key={g.id} garden={g} elevation={elevation} />
       ))}
+      {visibleRooms.map((r) => (
+        <RoomMesh key={r.id} x={r.x} y={r.y} w={r.width} h={r.height} label={r.label} elevation={elevation} />
+      ))}
       {walls.map((w) => (
         <WallMesh key={w.id} wall={w} elevation={elevation} />
       ))}
-      {openings.map((o) => (
-        <OpeningMesh key={o.id} opening={o} elevation={elevation} targetOpen={openingOpenPercent(o, controls)} />
-      ))}
-      {visibleRooms.map((r) => (
-        <RoomMesh key={r.id} x={r.x} y={r.y} w={r.width} h={r.height} label={r.label} elevation={elevation} />
+      {openings3d.map(({ opening, x, y }) => (
+        <OpeningMesh
+          key={opening.id}
+          opening={opening}
+          planX={x}
+          planY={y}
+          elevation={elevation}
+          targetOpen={openingOpenPercent(opening, controls)}
+        />
       ))}
       {cableRuns.map((run) => (
         <CableRun3D

@@ -18,6 +18,16 @@ export function validateLightingDesign(
   const issues: Issue[] = [];
 
   for (const row of report.rooms) {
+    const room = rooms.find((r) => r.id === row.roomId);
+    if (!room) continue;
+
+    const placed = nodes.filter((n) => {
+      if (n.spec.domain !== 'load' || (n.spec as LoadSpec).category !== 'LIGHTING') return false;
+      const cx = n.x + 20;
+      const cy = n.y + 20;
+      return cx >= room.x && cx <= room.x + room.width && cy >= room.y && cy <= room.y + room.height;
+    });
+
     if (!row.compliant) {
       issues.push({
         id: `light_lux_${row.roomId}`,
@@ -41,20 +51,19 @@ export function validateLightingDesign(
           'چرکەی زیاتر زیاد بکە.',
           'Linear veya ek armatür ekleyin.',
         ),
-        fix: { kind: 'setParam', nodeId: row.roomId, key: 'luxFix', value: row.fixturesRecommended + 1 },
+        fix:
+          placed.length < row.fixturesRecommended + 1
+            ? {
+                kind: 'addRoomLighting',
+                roomId: row.roomId,
+                catalogId: row.catalogId,
+                count: row.fixturesRecommended + 1,
+              }
+            : undefined,
       });
     }
 
-    const recommended = recommendFixtureType(rooms.find((r) => r.id === row.roomId)!);
-    const room = rooms.find((r) => r.id === row.roomId);
-    if (!room) continue;
-
-    const placed = nodes.filter((n) => {
-      if (n.spec.domain !== 'load' || (n.spec as LoadSpec).category !== 'LIGHTING') return false;
-      const cx = n.x + 20;
-      const cy = n.y + 20;
-      return cx >= room.x && cx <= room.x + room.width && cy >= room.y && cy <= room.y + room.height;
-    });
+    const recommended = recommendFixtureType(room);
 
     for (const n of placed) {
       const spec = n.spec as LoadSpec;
