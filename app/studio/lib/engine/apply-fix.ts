@@ -6,9 +6,21 @@ import type { DesignNode, DesignEdge, DesignRoom } from '../model';
 import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
 import { defaultControlState, type ControlState } from '../controls';
-import { findMainPanel, psuCatalogIdsForProject } from './autofix';
-import { rerouteCableNode, serializeRoutePoints } from './cable-map';
-import type { Fix } from './validation';
+import { findMainPanel, psuCatalogIdsForProject, suggestSmartFixes } from './autofix';
+import {
+  rerouteCableNode,
+  cableIdsLinkedToNode,
+  computeCableRoute,
+  applyRouteToCable,
+} from './cable-map';
+import { resolveNodes } from '../model';
+import { CABLES } from '../catalog/cables';
+import type { CableSpec, LoadSpec, HvacSpec } from '../catalog';
+import { loadCurrent, selectBreakerRating } from './electrical';
+import type { Fix, Issue } from './validation';
+import { validateDesign } from './validation';
+import { validatePlacement } from './placement-validation';
+import { validateLightingDesign } from './lighting-validation';
 
 export type FixableState = {
   locale: StudioLocale;
@@ -17,6 +29,7 @@ export type FixableState = {
   edges: DesignEdge[];
   controls: Record<string, ControlState>;
   rooms: DesignRoom[];
+  activeFloorId?: string;
 };
 
 export type FixPatch = Partial<Pick<FixableState, 'nodes' | 'edges' | 'controls'>>;
@@ -83,10 +96,116 @@ function placeRoomLightingNodes(room: DesignRoom, catalogId: string, count: numb
   return nodes;
 }
 
-export function rerouteDesignCables(s: FixableState): DesignNode[] {
-  return s.nodes.map((n) =>
-    getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, s.nodes, s.edges, s.rooms) : n,
-  );
+function loadDesignCurrentA(node: DesignNode): number {
+  const entry = getCatalogEntry(node.catalogId);
+  if (!entry) return 16;
+  if (entry.domain === 'load') {
+    const l = entry as LoadSpec;
+    return loadCurrent(l.powerW, l.voltage, l.phases, l.pf);
+  }
+  if (entry.domain === 'hvac') {
+    const h = entry as HvacSpec;
+    return loadCurrent(h.inputKw * 1000, h.voltage, h.phases, 0.9);
+  }
+  return 16;
+}
+
+function loadHasPowerPath(loadId: string, nodes: DesignNode[], edges: DesignEdge[]): boolean {
+  for (const e of edges) {
+    if (e.source !== loadId && e.target !== loadId) continue;
+    const otherId = e.source === loadId ? e.target : e.source;
+    const other = nodes.find((n) => n.id === otherId);
+    const dom = other ? getCatalogEntry(other.catalogId)?.domain : undefined;
+    if (dom === 'cable' || dom === 'protection' || dom === 'source') return true;
+  }
+  return false;
+}
+
+function mcbCatalogForCurrent(designA: number): { id: string; entry: CatalogEntry } | null {
+  const rating = selectBreakerRating(designA, 999) ?? Math.min(63, Math.max(6, Math.ceil(designA)));
+  const entry = pickBreaker(rating);
+  if (!entry) return null;
+  return { id: entry.id, entry };
+}
+
+/** Re-route cables and sync lengthM / routePoints used by validation. */
+export function finalizeFixableState(s: FixableState, affectedCableIds?: Set<string>): FixableState {
+  const rerouteAll = !affectedCableIds || affectedCableIds.size === 0;
+  const nodes = s.nodes.map((n) => {
+    if (getCatalogEntry(n.catalogId)?.domain !== 'cable') return n;
+    if (!rerouteAll && !affectedCableIds!.has(n.id)) return n;
+    return rerouteCableNode(n, s.nodes, s.edges, s.rooms);
+  });
+  return { ...s, nodes };
+}
+
+export function fixesFromIssues(issues: Issue[]): Fix[] {
+  return prioritizeFixes(issues.filter((i) => i.fix).map((i) => i.fix!));
+}
+
+export function collectFixableFixes(s: FixableState): Fix[] {
+  const activeFloorId = s.activeFloorId ?? 'floor_0';
+  const matchesFloor = <T extends { floorId?: string }>(item: T) =>
+    (item.floorId ?? 'floor_0') === activeFloorId;
+  const resolved = resolveNodes(s.nodes, getCatalogEntry);
+  const activeRooms = s.rooms.filter(matchesFloor);
+  const activeResolved = resolved.filter(matchesFloor);
+  const floorNodes = s.nodes.filter(matchesFloor);
+  const { issues: engIssues } = validateDesign(activeResolved, s.edges, CABLES as CableSpec[]);
+  const placeIssues = validatePlacement(floorNodes, activeRooms, getCatalogEntry);
+  const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
+  const smartIssues = suggestSmartFixes(s.project, s.nodes, s.edges, activeRooms);
+  return fixesFromIssues([...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues]);
+}
+
+function affectedCableIdsForFix(
+  fix: Fix,
+  patch: FixPatch,
+  state: FixableState,
+): Set<string> {
+  const ids = new Set<string>();
+  if (fix.kind === 'resizeCable') ids.add(fix.nodeId);
+  if (fix.kind === 'addCircuit') {
+    for (const n of patch.nodes ?? []) {
+      if (getCatalogEntry(n.catalogId)?.domain === 'cable') ids.add(n.id);
+    }
+  }
+  if (fix.kind === 'moveNode') {
+    for (const id of cableIdsLinkedToNode(fix.nodeId, state.nodes, state.edges)) ids.add(id);
+  }
+  return ids;
+}
+
+export function applyFixesUntilStable(
+  initial: FixableState,
+  seedFixes?: Fix[],
+  maxRounds = 8,
+): { state: FixableState; applied: number } {
+  let state = initial;
+  let totalApplied = 0;
+
+  for (let round = 0; round < maxRounds; round++) {
+    const fixes = round === 0 && seedFixes?.length ? prioritizeFixes(seedFixes) : collectFixableFixes(state);
+    if (!fixes.length) break;
+
+    let roundApplied = 0;
+    let affectedCables = new Set<string>();
+
+    for (const fix of fixes) {
+      const patch = applyFixPatch(state, fix);
+      if (!patch) continue;
+      state = mergeFixableState(state, patch);
+      for (const id of affectedCableIdsForFix(fix, patch, state)) affectedCables.add(id);
+      roundApplied++;
+    }
+
+    if (!roundApplied) break;
+
+    state = finalizeFixableState(state, affectedCables.size > 0 ? affectedCables : undefined);
+    totalApplied += roundApplied;
+  }
+
+  return { state, applied: totalApplied };
 }
 
 export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
@@ -102,10 +221,18 @@ export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
   }
   if (fix.kind === 'resizeCable') {
     const entry = getCatalogEntry(fix.toCatalogId);
-    if (!entry) return null;
+    const cableNode = s.nodes.find((n) => n.id === fix.nodeId);
+    if (!entry || !cableNode) return null;
+    const updated: DesignNode = {
+      ...cableNode,
+      catalogId: fix.toCatalogId,
+      label: defaultLabel(entry, s.locale),
+    };
+    const points = computeCableRoute(updated, s.nodes, s.edges, s.rooms);
+    const params = applyRouteToCable(updated, points, entry as CableSpec);
     return {
       nodes: s.nodes.map((n) =>
-        n.id === fix.nodeId ? { ...n, catalogId: fix.toCatalogId, label: defaultLabel(entry, s.locale) } : n,
+        n.id === fix.nodeId ? { ...updated, label: String(params.cableLabel ?? updated.label), params } : n,
       ),
     };
   }
@@ -170,13 +297,13 @@ export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
         catalogId: catId,
         label: defaultLabel(entry, s.locale),
         x: (anchor?.x ?? 0) + 50 + placed * 40,
-        y: (anchor?.y ?? 0) + 80,
+        y: (anchor?.y ?? 0) + 80 + placed * 48,
         params: { showOnMap: true },
       };
       added.push(node);
       controls[node.id] = defaultControlState(entry);
       const proto = (entry as SmartHomeSpec).protocol;
-      const gw = gatewayForProtocol(s.nodes, proto);
+      const gw = gatewayForProtocol([...s.nodes, ...added], proto);
       if (gw) {
         edges.push({
           id: uid('e'),
@@ -195,43 +322,53 @@ export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
     const load = s.nodes.find((n) => n.id === fix.loadNodeId);
     const panel = s.nodes.find((n) => n.id === fix.panelNodeId);
     if (!load || !panel) return null;
-    const already = s.edges.some((e) => e.target === load.id || e.source === load.id);
-    if (already) return null;
+    if (loadHasPowerPath(load.id, s.nodes, s.edges)) return null;
+
+    const designA = loadDesignCurrentA(load);
+    const mcbPick = mcbCatalogForCurrent(designA);
+    const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec | undefined;
+    if (!mcbPick || !cableEntry) return null;
+
     const mcbId = uid('n');
     const cableId = uid('n');
-    const mcbEntry = getCatalogEntry('mcb-c16');
-    const cableEntry = getCatalogEntry('cable-lv-cu-2.5');
-    if (!mcbEntry || !cableEntry) return null;
-    const mcbX = load.x - 36;
+    const mcbX = load.x - 48;
     const mcbY = load.y;
-    const mcb: DesignNode = { id: mcbId, catalogId: 'mcb-c16', label: 'Auto MCB', x: mcbX, y: mcbY, params: {} };
-    const loadCx = load.x + 21;
-    const loadCy = load.y + 21;
+    const mcb: DesignNode = {
+      id: mcbId,
+      catalogId: mcbPick.id,
+      label: defaultLabel(mcbPick.entry, s.locale),
+      x: mcbX,
+      y: mcbY,
+      floorId: load.floorId ?? panel.floorId,
+      params: { showOnMap: true },
+    };
     const cable: DesignNode = {
       id: cableId,
-      catalogId: 'cable-lv-cu-2.5',
-      label: 'Auto cable',
+      catalogId: cableEntry.id,
+      label: defaultLabel(cableEntry, s.locale),
       x: mcbX,
-      y: mcbY + 20,
-      params: {
-        lengthM: 12,
-        rotation: 0,
-        routePoints: serializeRoutePoints([
-          { x: mcbX + 20, y: mcbY + 9 },
-          { x: loadCx, y: loadCy },
-        ]),
-        showOnMap: false,
-      },
+      y: mcbY + 24,
+      floorId: load.floorId ?? panel.floorId,
+      params: { showOnMap: true },
+    };
+    const draftNodes = [...s.nodes, mcb, cable];
+    const draftEdges: DesignEdge[] = [
+      ...s.edges,
+      { id: uid('e'), source: panel.id, sourceHandle: 'out', target: mcbId, targetHandle: 'line' },
+      { id: uid('e'), source: mcbId, sourceHandle: 'load', target: cableId, targetHandle: 'a' },
+      { id: uid('e'), source: cableId, sourceHandle: 'b', target: load.id, targetHandle: 'in' },
+    ];
+    const points = computeCableRoute(cable, draftNodes, draftEdges, s.rooms);
+    const cableParams = applyRouteToCable(cable, points, cableEntry);
+    const routedCable: DesignNode = {
+      ...cable,
+      label: String(cableParams.cableLabel ?? cable.label),
+      params: cableParams,
     };
     return {
-      nodes: [...s.nodes, mcb, cable],
-      edges: [
-        ...s.edges,
-        { id: uid('e'), source: panel.id, sourceHandle: 'out', target: mcbId, targetHandle: 'line' },
-        { id: uid('e'), source: mcbId, sourceHandle: 'load', target: cableId, targetHandle: 'a' },
-        { id: uid('e'), source: cableId, sourceHandle: 'b', target: load.id, targetHandle: 'in' },
-      ],
-      controls: { ...s.controls, [mcbId]: defaultControlState(mcbEntry) },
+      nodes: [...s.nodes, mcb, routedCable],
+      edges: draftEdges,
+      controls: { ...s.controls, [mcbId]: defaultControlState(mcbPick.entry) },
     };
   }
   if (fix.kind === 'addSource') {
@@ -296,7 +433,7 @@ function fixKey(f: Fix): string {
     case 'addGrounding':
       return 'addGrounding';
     case 'addSource':
-      return 'addSource';
+      return `addSource:${f.catalogId}`;
     case 'addPsu':
       return 'addPsu';
     default:
@@ -313,7 +450,7 @@ export function dedupeFixes(fixes: Fix[]): Fix[] {
   const out: Fix[] = [];
   let psuAdded = false;
   let groundingAdded = false;
-  let sourceAdded = false;
+  const sourcesAdded = new Set<string>();
 
   for (const f of fixes) {
     if (f.kind === 'addPsu') {
@@ -328,8 +465,8 @@ export function dedupeFixes(fixes: Fix[]): Fix[] {
       groundingAdded = true;
     }
     if (f.kind === 'addSource') {
-      if (sourceAdded) continue;
-      sourceAdded = true;
+      if (sourcesAdded.has(f.catalogId)) continue;
+      sourcesAdded.add(f.catalogId);
     }
     const key = fixKey(f);
     if (seen.has(key)) continue;
@@ -365,14 +502,5 @@ export function prioritizeFixes(fixes: Fix[], maxCircuits = 200): Fix[] {
 }
 
 export function applyAllFixPatches(s: FixableState, fixes: Fix[]): { state: FixableState; applied: number } {
-  let state = s;
-  let applied = 0;
-  for (const fix of prioritizeFixes(fixes)) {
-    const patch = applyFixPatch(state, fix);
-    if (!patch) continue;
-    state = mergeFixableState(state, patch);
-    applied += 1;
-  }
-  if (!applied) return { state: s, applied: 0 };
-  return { state, applied };
+  return applyFixesUntilStable(s, fixes, 1);
 }

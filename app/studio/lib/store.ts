@@ -7,7 +7,13 @@ import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
 import { validatePlacement } from './engine/placement-validation';
-import { applyFixPatch, applyAllFixPatches, type FixableState } from './engine/apply-fix';
+import {
+  applyFixPatch,
+  applyFixesUntilStable,
+  finalizeFixableState,
+  mergeFixableState,
+  type FixableState,
+} from './engine/apply-fix';
 import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
 import { runWhenIdle } from './idle';
 import { CABLES } from './catalog/cables';
@@ -170,7 +176,7 @@ type StudioState = {
   loadSample: () => void;
 
   applyFix: (fix: Fix) => boolean;
-  applyAllFixes: (fixes: Fix[]) => number;
+  applyAllFixes: (fixes?: Fix[]) => number;
   toggleSimulation: () => void;
 
   setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
@@ -469,21 +475,31 @@ function fixableFrom(s: StudioState): FixableState {
     edges: s.edges,
     controls: s.controls,
     rooms: s.rooms,
+    activeFloorId: s.activeFloorId,
   };
 }
 
 function patchFromFix(s: StudioState, fix: Fix): Partial<StudioState> | null {
-  const patch = applyFixPatch(fixableFrom(s), fix);
+  const base = fixableFrom(s);
+  const patch = applyFixPatch(base, fix);
   if (!patch) return null;
+  const merged = mergeFixableState(base, patch);
+  const affected = new Set<string>();
+  if (fix.kind === 'resizeCable') affected.add(fix.nodeId);
+  if (fix.kind === 'addCircuit') {
+    for (const n of patch.nodes ?? []) {
+      if (getCatalogEntry(n.catalogId)?.domain === 'cable') affected.add(n.id);
+    }
+  }
+  if (fix.kind === 'moveNode') {
+    for (const id of cableIdsLinkedToNode(fix.nodeId, merged.nodes, merged.edges)) affected.add(id);
+  }
+  const finalized = finalizeFixableState(merged, affected.size > 0 ? affected : undefined);
   return {
-    nodes: patch.nodes ?? s.nodes,
-    edges: patch.edges ?? s.edges,
-    controls: patch.controls ?? s.controls,
+    nodes: finalized.nodes,
+    edges: finalized.edges,
+    controls: finalized.controls,
   };
-}
-
-function designHasCables(nodes: DesignNode[]): boolean {
-  return nodes.some((n) => getCatalogEntry(n.catalogId)?.domain === 'cable');
 }
 
 export const useStudio = create<StudioState>((set, get) => ({
@@ -748,30 +764,23 @@ export const useStudio = create<StudioState>((set, get) => ({
     const designPatch = patchFromFix(s, fix);
     if (!designPatch) return false;
     invalidateDesignAnalysisCache();
-    const nextNodes = designPatch.nodes ?? s.nodes;
-    const reroute = designHasCables(nextNodes);
-    set(withHistory(s, { ...designPatch, applyingFixes: reroute }));
-    if (reroute) scheduleDeferredCableReroute(get, set, { clearApplyingFixes: true });
-    else set({ applyingFixes: false });
+    set(withHistory(s, designPatch));
     return true;
   },
 
   applyAllFixes: (fixes) => {
-    if (!fixes.length) return 0;
     const s = get();
-    const { state: next, applied } = applyAllFixPatches(fixableFrom(s), fixes);
+    const { state: next, applied } = applyFixesUntilStable(fixableFrom(s), fixes, 8);
     if (!applied) return 0;
     invalidateDesignAnalysisCache();
-    const reroute = designHasCables(next.nodes);
     set(
       withHistory(s, {
         nodes: next.nodes,
         edges: next.edges,
         controls: next.controls,
-        applyingFixes: reroute,
+        applyingFixes: false,
       }),
     );
-    if (reroute) scheduleDeferredCableReroute(get, set, { clearApplyingFixes: true });
     return applied;
   },
 

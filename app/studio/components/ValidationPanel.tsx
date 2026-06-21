@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
 import { runWhenIdle } from '../lib/idle';
+import { collectFixableFixes } from '../lib/engine/apply-fix';
 import type { Issue, Severity } from '../lib/engine/validation';
 import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb } from 'lucide-react';
 
@@ -126,8 +127,26 @@ export function ValidationPanel() {
     runWhenIdle(() => {
       const applied = applyAllFixes(fixable.map((i) => i.fix!));
       setFixingAll(false);
-      setStatus(applied > 0 ? t('fixAllDone').replace('{count}', String(applied)) : t('fixFailed'));
-      window.setTimeout(() => setStatus(null), 2500);
+      if (applied > 0) {
+        const st = useStudio.getState();
+        const remaining = collectFixableFixes({
+          locale: st.locale,
+          project: st.project,
+          nodes: st.nodes,
+          edges: st.edges,
+          controls: st.controls,
+          rooms: st.rooms,
+          activeFloorId: st.activeFloorId,
+        }).length;
+        setStatus(
+          remaining > 0
+            ? t('fixAllPartial').replace('{applied}', String(applied)).replace('{remaining}', String(remaining))
+            : t('fixAllDone').replace('{count}', String(applied)),
+        );
+      } else {
+        setStatus(t('fixFailed'));
+      }
+      window.setTimeout(() => setStatus(null), 3500);
     });
   };
 
