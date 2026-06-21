@@ -101,7 +101,8 @@ function loadDesignCurrentA(node: DesignNode): number {
   if (!entry) return 16;
   if (entry.domain === 'load') {
     const l = entry as LoadSpec;
-    return loadCurrent(l.powerW, l.voltage, l.phases, l.pf);
+    const powerW = Number(node.params.powerW) || l.powerW;
+    return loadCurrent(powerW, l.voltage, l.phases, l.powerFactor);
   }
   if (entry.domain === 'hvac') {
     const h = entry as HvacSpec;
