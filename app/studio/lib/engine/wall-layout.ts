@@ -2,10 +2,17 @@
  * Wall geometry from rooms, outdoor envelope, and opening snap-to-wall placement.
  */
 import type { DesignOpening, DesignRoom, DesignWall, BimModel } from '../model';
+import { defaultWallColor } from '../wall-finishes';
 
 export type WallEdge = 'north' | 'south' | 'east' | 'west';
 
-export type WallMeta = { thickness?: number; heightM?: number };
+export type WallMeta = {
+  thickness?: number;
+  heightM?: number;
+  wallType?: DesignWall['wallType'];
+  decoration?: DesignWall['decoration'];
+  color?: string;
+};
 
 export function roomWallId(roomId: string, edge: WallEdge): string {
   return `rw_${roomId}_${edge}`;
@@ -20,6 +27,9 @@ export function wallSegment(room: DesignRoom, edge: WallEdge): DesignWall {
     thickness: 6,
     heightM: 2.8,
     layer: 'room',
+    wallType: 'drywall' as const,
+    decoration: 'paint' as const,
+    color: defaultWallColor('drywall', false),
   };
   switch (edge) {
     case 'north':
@@ -56,7 +66,14 @@ function markOutdoorWalls(walls: DesignWall[], rooms: DesignRoom[], floorId?: st
     if (w.edge === 'south' && Math.abs(w.y1 - maxY) < eps) outdoor = true;
     if (w.edge === 'west' && Math.abs(w.x1 - minX) < eps) outdoor = true;
     if (w.edge === 'east' && Math.abs(w.x1 - maxX) < eps) outdoor = true;
-    return { ...w, outdoor };
+    return outdoor
+      ? {
+          ...w,
+          outdoor: true,
+          wallType: w.wallType ?? 'concrete',
+          color: w.color ?? defaultWallColor('concrete', true),
+        }
+      : { ...w, outdoor };
   });
 }
 
@@ -69,6 +86,9 @@ export function applyWallMeta(walls: DesignWall[], meta?: Record<string, WallMet
       ...w,
       thickness: m.thickness ?? w.thickness,
       heightM: m.heightM ?? w.heightM,
+      wallType: m.wallType ?? w.wallType,
+      decoration: m.decoration ?? w.decoration,
+      color: m.color ?? w.color,
     };
   });
 }

@@ -34,7 +34,8 @@ import { MapOverlayToolbar } from './MapOverlayToolbar';
 import { VisualizationToolbar } from './VisualizationToolbar';
 import { DesignAssistantPanel } from './DesignAssistantPanel';
 import { ClientExperienceBar } from './ClientExperienceBar';
-import { Twin3DView } from './Twin3DView';
+import dynamic from 'next/dynamic';
+import { CanvasUiProvider } from './CanvasUiContext';
 import type { HvacSpec } from '../lib/catalog';
 import { getCatalogEntry } from '../lib/catalog';
 import { declarationFor } from '../lib/engine/declarations';
@@ -69,6 +70,13 @@ const nodeTypes = {
 const MAP_ID = '__map__';
 const roomRfId = (id: string) => `room_${id}`;
 
+const Twin3DView = dynamic(() => import('./Twin3DView').then((m) => m.Twin3DView), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-sm text-[var(--studio-muted)]">3D…</div>
+  ),
+});
+
 function roomAreaM2(w: number, h: number): number {
   return (w / 50) * (h / 50);
 }
@@ -93,7 +101,7 @@ function buildRoomDeviceStats(nodes: DesignNode[], rooms: DesignRoom[], activeFl
   const outlets = new Map<string, number>();
   const vrf = new Map<string, number>();
   for (const r of rooms) {
-    if (r.floorId && r.floorId !== activeFloorId) continue;
+    if ((r.floorId ?? 'floor_0') !== activeFloorId) continue;
     outlets.set(r.id, 0);
     vrf.set(r.id, 0);
   }
@@ -102,7 +110,7 @@ function buildRoomDeviceStats(nodes: DesignNode[], rooms: DesignRoom[], activeFl
     const entry = getCatalogEntry(n.catalogId);
     if (!entry) continue;
     for (const r of rooms) {
-      if (r.floorId && r.floorId !== activeFloorId) continue;
+      if ((r.floorId ?? 'floor_0') !== activeFloorId) continue;
       if (!nodeCenterInRoom(n, r)) continue;
       if (entry.category === 'SOCKET' || entry.category === 'APPLIANCE') {
         if (n.params.showOnMap !== false) outlets.set(r.id, (outlets.get(r.id) ?? 0) + 1);
@@ -155,12 +163,19 @@ function CanvasInner() {
   const canvasFitSeq = useStudio((s) => s.canvasFitSeq);
   const suppressCanvasFit = useStudio((s) => s.suppressCanvasFit);
   const visualizationMode = useStudio((s) => s.visualizationMode);
+  const experienceMode = useStudio((s) => s.experienceMode);
+  const simulating = useStudio((s) => s.simulating);
   const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
   const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
   const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
 
   const byNode = useIssueByNode();
   const sim = useSimulation();
+
+  const canvasUi = useMemo(
+    () => ({ simulating, visualizationMode, experienceMode }),
+    [simulating, visualizationMode, experienceMode],
+  );
   const luxHeatmaps = useLuxHeatmaps();
   const loadHeatmaps = useLoadHeatmaps();
   useDigitalTwinSync();
@@ -259,7 +274,7 @@ function CanvasInner() {
     const luxByRoom = new Map(luxHeatmaps.map((h) => [h.roomId, h]));
     const loadByRoom = new Map(loadHeatmaps.map((h) => [h.roomId, h]));
     for (const r of rooms) {
-      if (r.floorId && r.floorId !== activeFloorId) continue;
+      if ((r.floorId ?? 'floor_0') !== activeFloorId) continue;
       const outletCount = roomDeviceStats.outlets.get(r.id) ?? 0;
       const vrfUnitCount = roomDeviceStats.vrf.get(r.id) ?? 0;
       list.push({
@@ -392,7 +407,7 @@ function CanvasInner() {
       });
     }
     return list;
-  }, [nodes, rooms, bim, map, edges, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, roomDeviceStats]);
+  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, simulating, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, roomDeviceStats]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 
@@ -430,7 +445,7 @@ function CanvasInner() {
           style: { stroke: live ? '#22c55e' : EDGE_COLOR[kind], strokeWidth: live ? 2.5 : 2 },
         };
       }),
-    [edges, portKinds, sim, cableNodeIds],
+    [edges, portKinds, simulating, sim, cableNodeIds],
   );
 
   const isValidConnection = useCallback(
@@ -593,6 +608,7 @@ function CanvasInner() {
         <ClientExperienceBar />
       </div>
       <div className="absolute inset-0 z-[1]">
+        <CanvasUiProvider value={canvasUi}>
         <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -645,6 +661,7 @@ function CanvasInner() {
           maskColor="rgba(0,0,0,0.35)"
         />
       </ReactFlow>
+        </CanvasUiProvider>
       </div>
 
       {drawPreview && drawPreview.w > 4 && (() => {

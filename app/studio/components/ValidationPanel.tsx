@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
+import { runWhenIdle } from '../lib/idle';
 import type { Issue, Severity } from '../lib/engine/validation';
 import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb } from 'lucide-react';
 
@@ -23,6 +24,7 @@ function IssueCard({
 }) {
   const t = useT();
   const locale = useStudio((s) => s.locale);
+  const applyingFixes = useStudio((s) => s.applyingFixes);
   const select = useStudio((s) => s.select);
   const applyFix = useStudio((s) => s.applyFix);
   const [open, setOpen] = useState(issue.severity === 'critical');
@@ -30,12 +32,14 @@ function IssueCard({
   const meta = SEVERITY_META[issue.severity];
 
   const runFix = () => {
-    if (!issue.fix || busy) return;
+    if (!issue.fix || busy || applyingFixes) return;
     setBusy(true);
-    const ok = applyFix(issue.fix);
-    setBusy(false);
-    if (ok) onFixed();
-    else onFailed();
+    runWhenIdle(() => {
+      const ok = applyFix(issue.fix!);
+      setBusy(false);
+      if (ok) onFixed();
+      else onFailed();
+    });
   };
 
   return (
@@ -83,7 +87,7 @@ function IssueCard({
           {issue.fix && (
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || applyingFixes}
               onClick={(e) => {
                 e.stopPropagation();
                 runFix();
@@ -91,7 +95,7 @@ function IssueCard({
               className="flex items-center gap-1.5 rounded-md bg-cyan-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-400 disabled:opacity-70"
             >
               <Wrench className="h-3.5 w-3.5" />
-              {busy ? t('fixing') : t('fix')}
+              {busy || applyingFixes ? t('fixing') : t('fix')}
             </button>
           )}
         </div>
@@ -104,7 +108,9 @@ export function ValidationPanel() {
   const t = useT();
   const { issues } = useAnalysis();
   const applyAllFixes = useStudio((s) => s.applyAllFixes);
+  const applyingFixes = useStudio((s) => s.applyingFixes);
   const [status, setStatus] = useState<string | null>(null);
+  const [fixingAll, setFixingAll] = useState(false);
 
   const fixable = useMemo(() => issues.filter((i) => i.fix), [issues]);
   const groups: { sev: Severity; key: 'critical' | 'warning' | 'recommendation' }[] = [
@@ -114,11 +120,18 @@ export function ValidationPanel() {
   ];
 
   const handleFixAll = () => {
-    if (fixable.length === 0) return;
-    const applied = applyAllFixes(fixable.map((i) => i.fix!));
-    setStatus(applied > 0 ? t('fixAllDone').replace('{count}', String(applied)) : t('fixFailed'));
-    window.setTimeout(() => setStatus(null), 2500);
+    if (fixable.length === 0 || fixingAll || applyingFixes) return;
+    setFixingAll(true);
+    setStatus(t('fixing'));
+    runWhenIdle(() => {
+      const applied = applyAllFixes(fixable.map((i) => i.fix!));
+      setFixingAll(false);
+      setStatus(applied > 0 ? t('fixAllDone').replace('{count}', String(applied)) : t('fixFailed'));
+      window.setTimeout(() => setStatus(null), 2500);
+    });
   };
+
+  const busy = fixingAll || applyingFixes;
 
   return (
     <div className="flex h-full flex-col">
@@ -127,11 +140,12 @@ export function ValidationPanel() {
         {fixable.length > 0 && (
           <button
             type="button"
+            disabled={busy}
             onClick={handleFixAll}
-            className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25"
+            className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-60"
           >
             <Wrench className="h-3.5 w-3.5" />
-            {t('fixAll')} ({fixable.length})
+            {busy ? t('fixing') : `${t('fixAll')} (${fixable.length})`}
           </button>
         )}
       </div>

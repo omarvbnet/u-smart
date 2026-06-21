@@ -374,5 +374,5 @@ export function applyAllFixPatches(s: FixableState, fixes: Fix[]): { state: Fixa
     applied += 1;
   }
   if (!applied) return { state: s, applied: 0 };
-  return { state: { ...state, nodes: rerouteDesignCables(state) }, applied };
+  return { state, applied };
 }

@@ -5,6 +5,7 @@
  * store and the React Flow canvas both project from these structures.
  */
 import type { CatalogEntry } from './catalog';
+import type { WallType, WallDecoration, CeilingType, CeilingDecoration } from './wall-finishes';
 
 /** A room zone on the floor plan (drawn from zero or AI-detected). */
 export type DesignRoom = {
@@ -61,6 +62,12 @@ export type DesignWall = {
   edge?: 'north' | 'south' | 'east' | 'west';
   /** Exterior / outdoor-facing wall segment. */
   outdoor?: boolean;
+  /** Structural / finish type. */
+  wallType?: WallType;
+  /** Surface decoration (paint, tile, molding, …). */
+  decoration?: WallDecoration;
+  /** Plan + 3D color (hex). */
+  color?: string;
 };
 
 /** Curtain style for smart windows. */
@@ -113,8 +120,26 @@ export type BimModel = {
   walls: DesignWall[];
   openings: DesignOpening[];
   gardens?: DesignGarden[];
-  /** Overrides for generated room walls (thickness, height). */
-  wallMeta?: Record<string, { thickness?: number; heightM?: number }>;
+  /** Overrides for generated room walls (thickness, height, finish). */
+  wallMeta?: Record<
+    string,
+    {
+      thickness?: number;
+      heightM?: number;
+      wallType?: WallType;
+      decoration?: WallDecoration;
+      color?: string;
+    }
+  >;
+  /** Per-room ceiling finish for 3D + schedules. */
+  ceilingMeta?: Record<
+    string,
+    {
+      ceilingType?: CeilingType;
+      color?: string;
+      decoration?: CeilingDecoration;
+    }
+  >;
 };
 
 export type Design = {

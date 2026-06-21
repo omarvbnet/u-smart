@@ -12,6 +12,7 @@ import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
 import type { DesignOpening, DesignGarden, DesignWall, CurtainStyle } from '../lib/model';
 import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
+import { wall3dMaterial, ceiling3dMaterial, type CeilingMeta } from '../lib/wall-finishes';
 import { openingOpenPercent, resolveFloorOpeningsFor3d } from '../lib/engine/opening-layout';
 import {
   parseRoutePoints,
@@ -35,16 +36,37 @@ function floorElevation(level: number): number {
   return level * 3;
 }
 
-function RoomMesh({ x, y, w, h, label, elevation }: { x: number; y: number; w: number; h: number; label: string; elevation: number }) {
+function RoomMesh({
+  x,
+  y,
+  w,
+  h,
+  label,
+  elevation,
+  ceiling,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;
+  elevation: number;
+  ceiling?: CeilingMeta;
+}) {
   const cx = pxToM(x + w / 2);
   const cz = pxToM(y + h / 2);
   const mw = pxToM(w);
   const mh = pxToM(h);
+  const ceilMat = ceiling3dMaterial(ceiling);
   return (
     <group position={[cx, elevation, cz]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0.02, 0]}>
         <planeGeometry args={[mw, mh]} />
         <meshStandardMaterial color="#e2e8f0" transparent opacity={0.85} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 2.78, 0]}>
+        <planeGeometry args={[mw * 0.98, mh * 0.98]} />
+        <meshStandardMaterial color={ceilMat.color} roughness={ceilMat.roughness} />
       </mesh>
       <lineSegments position={[0, 1.4, 0]}>
         <edgesGeometry args={[new THREE.BoxGeometry(mw, 2.8, mh)]} />
@@ -176,10 +198,18 @@ function WallMesh({ wall, elevation }: { wall: DesignWall; elevation: number }) 
   const cx = pxToM((wall.x1 + wall.x2) / 2);
   const cz = pxToM((wall.y1 + wall.y2) / 2);
   const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);
+  const heightM = wall.heightM ?? 2.8;
+  const mat = wall3dMaterial(wall);
   return (
-    <mesh position={[cx, elevation + 1.4, cz]} rotation={[0, -angle, 0]} castShadow receiveShadow>
-      <boxGeometry args={[pxToM(len), 2.8, pxToM(Math.max(4, wall.thickness * 4))]} />
-      <meshStandardMaterial color="#94a3b8" />
+    <mesh position={[cx, elevation + heightM / 2, cz]} rotation={[0, -angle, 0]} castShadow receiveShadow>
+      <boxGeometry args={[pxToM(len), heightM, pxToM(Math.max(4, wall.thickness * 4))]} />
+      <meshStandardMaterial
+        color={mat.color}
+        roughness={mat.roughness}
+        metalness={mat.metalness}
+        transparent={mat.transparent}
+        opacity={mat.opacity}
+      />
     </mesh>
   );
 }
@@ -520,7 +550,16 @@ function SceneContent() {
         <GardenMesh key={g.id} garden={g} elevation={elevation} />
       ))}
       {visibleRooms.map((r) => (
-        <RoomMesh key={r.id} x={r.x} y={r.y} w={r.width} h={r.height} label={r.label} elevation={elevation} />
+        <RoomMesh
+          key={r.id}
+          x={r.x}
+          y={r.y}
+          w={r.width}
+          h={r.height}
+          label={r.label}
+          elevation={elevation}
+          ceiling={bim?.ceilingMeta?.[r.id]}
+        />
       ))}
       {walls.map((w) => (
         <WallMesh key={w.id} wall={w} elevation={elevation} />

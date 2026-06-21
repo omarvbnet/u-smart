@@ -19,6 +19,18 @@ import { EntryImage } from './EntryImage';
 import { Trash2, Zap, Plug, Copy, BedDouble, DoorOpen, AppWindow, BrickWall } from 'lucide-react';
 import { openingOpenPercent } from '../lib/engine/opening-layout';
 import { mergeEffectiveWalls, wallLabel, wallLengthM } from '../lib/engine/wall-layout';
+import {
+  WALL_TYPES,
+  WALL_DECORATIONS,
+  WALL_COLOR_SWATCHES,
+  CEILING_TYPES,
+  CEILING_DECORATIONS,
+  resolveWallColor,
+  type WallType,
+  type WallDecoration,
+  type CeilingType,
+  type CeilingDecoration,
+} from '../lib/wall-finishes';
 import { parseChannelAssignments } from '../lib/engine/smart-channel-layout';
 import type { SmartHomeSpec } from '../lib/catalog';
 import type { CurtainStyle } from '../lib/model';
@@ -41,6 +53,8 @@ export function PropertiesPanel() {
   const updateNodeLabel = useStudio((s) => s.updateNodeLabel);
   const replaceNodeCatalog = useStudio((s) => s.replaceNodeCatalog);
   const updateRoom = useStudio((s) => s.updateRoom);
+  const assignRoomToFloor = useStudio((s) => s.assignRoomToFloor);
+  const floors = useStudio((s) => s.floors);
   const removeNode = useStudio((s) => s.removeNode);
   const removeRoom = useStudio((s) => s.removeRoom);
   const rerouteCable = useStudio((s) => s.rerouteCable);
@@ -64,6 +78,7 @@ export function PropertiesPanel() {
   const removeOpening = useStudio((s) => s.removeOpening);
   const setOpeningControl = useStudio((s) => s.setOpeningControl);
   const updateWall = useStudio((s) => s.updateWall);
+  const updateRoomCeiling = useStudio((s) => s.updateRoomCeiling);
   const assignOpeningToWall = useStudio((s) => s.assignOpeningToWall);
 
   const floorWalls = useMemo(
@@ -133,6 +148,51 @@ export function PropertiesPanel() {
                 onChange={(e) => updateWall(selectedWall.id, { heightM: Number(e.target.value) })}
               />
             </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('wallType')}</span>
+            <select
+              className={input}
+              value={selectedWall.wallType ?? 'drywall'}
+              onChange={(e) => updateWall(selectedWall.id, { wallType: e.target.value as WallType })}
+            >
+              {WALL_TYPES.map((wt) => (
+                <option key={wt.id} value={wt.id}>{wt.label[locale]}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('wallDecoration')}</span>
+            <select
+              className={input}
+              value={selectedWall.decoration ?? 'paint'}
+              onChange={(e) => updateWall(selectedWall.id, { decoration: e.target.value as WallDecoration })}
+            >
+              {WALL_DECORATIONS.map((d) => (
+                <option key={d.id} value={d.id}>{d.label[locale]}</option>
+              ))}
+            </select>
+          </label>
+          <div>
+            <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('wallColor')}</span>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {WALL_COLOR_SWATCHES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  title={c}
+                  className={`h-6 w-6 rounded-md border-2 ${resolveWallColor(selectedWall) === c ? 'border-cyan-400' : 'border-transparent'}`}
+                  style={{ backgroundColor: c }}
+                  onClick={() => updateWall(selectedWall.id, { color: c })}
+                />
+              ))}
+            </div>
+            <input
+              className={input}
+              type="color"
+              value={resolveWallColor(selectedWall)}
+              onChange={(e) => updateWall(selectedWall.id, { color: e.target.value })}
+            />
           </div>
           <p className="text-[10px] text-[var(--studio-muted)]">{t('wallEditHint')}</p>
         </div>
@@ -285,6 +345,7 @@ export function PropertiesPanel() {
       'w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400';
     const chip =
       'rounded-lg border border-[var(--studio-border)] px-2 py-1 text-[9px] font-semibold text-[var(--studio-muted)] hover:border-cyan-400 hover:text-cyan-300';
+    const ceiling = bim?.ceilingMeta?.[room.id];
     return (
       <div className="flex h-full flex-col p-4">
         <h3 className="mb-3 text-sm font-bold text-[var(--studio-text)]">{t('roomProperties')}</h3>
@@ -301,6 +362,21 @@ export function PropertiesPanel() {
               ))}
             </select>
           </label>
+          {floors.length > 1 && (
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('roomFloor')}</span>
+              <select
+                className={input}
+                value={room.floorId ?? activeFloorId}
+                onChange={(e) => assignRoomToFloor(room.id, e.target.value)}
+              >
+                {floors.map((f) => (
+                  <option key={f.id} value={f.id}>{f.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-[var(--studio-muted)]">{t('roomFloorHint')}</p>
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg border border-[var(--studio-border)] p-2">
               <div className="text-[var(--studio-muted)]">W × H</div>
@@ -310,6 +386,43 @@ export function PropertiesPanel() {
               <div className="text-[var(--studio-muted)]">{t('roomArea')}</div>
               <div className="font-semibold">{areaM2} m²</div>
             </div>
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--studio-muted)]">{t('ceilingFinish')}</h4>
+            <label className="mb-2 block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('ceilingType')}</span>
+              <select
+                className={input}
+                value={ceiling?.ceilingType ?? 'flat'}
+                onChange={(e) => updateRoomCeiling(room.id, { ceilingType: e.target.value as CeilingType })}
+              >
+                {CEILING_TYPES.map((ct) => (
+                  <option key={ct.id} value={ct.id}>{ct.label[locale]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="mb-2 block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('ceilingDecoration')}</span>
+              <select
+                className={input}
+                value={ceiling?.decoration ?? 'paint'}
+                onChange={(e) => updateRoomCeiling(room.id, { decoration: e.target.value as CeilingDecoration })}
+              >
+                {CEILING_DECORATIONS.map((d) => (
+                  <option key={d.id} value={d.id}>{d.label[locale]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('ceilingColor')}</span>
+              <input
+                className={input}
+                type="color"
+                value={ceiling?.color ?? CEILING_TYPES.find((c) => c.id === (ceiling?.ceilingType ?? 'flat'))?.defaultColor ?? '#ffffff'}
+                onChange={(e) => updateRoomCeiling(room.id, { color: e.target.value })}
+              />
+            </label>
           </div>
 
           <div>

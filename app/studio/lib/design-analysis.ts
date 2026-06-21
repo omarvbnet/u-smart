@@ -20,8 +20,16 @@ export type DesignAnalysis = {
 };
 
 type CacheEntry = { key: string; result: DesignAnalysis };
+type InputRefs = {
+  nodes: DesignNode[];
+  edges: DesignEdge[];
+  rooms: DesignRoom[];
+  project: ProjectInfo;
+  activeFloorId: string;
+};
 
 let cache: CacheEntry | null = null;
+let lastInputs: InputRefs | null = null;
 
 function fingerprint(
   nodes: DesignNode[],
@@ -77,8 +85,23 @@ export function computeDesignAnalysis(
   project: ProjectInfo,
   activeFloorId: string,
 ): DesignAnalysis {
+  if (
+    cache &&
+    lastInputs &&
+    lastInputs.nodes === nodes &&
+    lastInputs.edges === edges &&
+    lastInputs.rooms === rooms &&
+    lastInputs.project === project &&
+    lastInputs.activeFloorId === activeFloorId
+  ) {
+    return cache.result;
+  }
+
   const key = fingerprint(nodes, edges, rooms, project, activeFloorId);
-  if (cache?.key === key) return cache.result;
+  if (cache?.key === key) {
+    lastInputs = { nodes, edges, rooms, project, activeFloorId };
+    return cache.result;
+  }
 
   const resolved = resolveNodes(nodes, getCatalogEntry);
   const activeRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
@@ -106,9 +129,11 @@ export function computeDesignAnalysis(
     compliance: computeCompliance(issues),
   };
   cache = { key, result };
+  lastInputs = { nodes, edges, rooms, project, activeFloorId };
   return result;
 }
 
 export function invalidateDesignAnalysisCache(): void {
   cache = null;
+  lastInputs = null;
 }

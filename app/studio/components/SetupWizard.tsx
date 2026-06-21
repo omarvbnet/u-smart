@@ -31,6 +31,7 @@ import {
 import { floorCountRange } from '../lib/engine/floor-layout';
 
 type FloorPlanChoice = 'zero' | 'import' | 'skip';
+type RoomDistribution = 'perFloor' | 'groundOnly';
 
 type Props = {
   onComplete: () => void;
@@ -43,6 +44,7 @@ export function SetupWizard({ onComplete }: Props) {
   const generatingProject = useStudio((s) => s.generatingProject);
   const [step, setStep] = useState(0);
   const [floorPlan, setFloorPlan] = useState<FloorPlanChoice>('zero');
+  const [roomDistribution, setRoomDistribution] = useState<RoomDistribution>('perFloor');
   const [projectBrief, setProjectBrief] = useState('');
   const [finishing, setFinishing] = useState(false);
   const [draft, setDraft] = useState<ProjectInfo>(() => useStudio.getState().project);
@@ -121,11 +123,11 @@ export function SetupWizard({ onComplete }: Props) {
     };
     onComplete();
     if (projectBrief.trim() && generate) {
-      completeWizard(finalized, { generateDesign: false, floorPlan: fp });
+      completeWizard(finalized, { generateDesign: false, floorPlan: fp, roomDistribution });
       generateFromBrief(projectBrief.trim());
       return;
     }
-    completeWizard(finalized, { generateDesign: generate, floorPlan: fp });
+    completeWizard(finalized, { generateDesign: generate, floorPlan: fp, roomDistribution });
   };
 
   const steps = [
@@ -464,6 +466,38 @@ export function SetupWizard({ onComplete }: Props) {
 
           {step === 5 && (
             <div className="space-y-3 text-sm text-[var(--studio-text)]">
+              {draft.floorCount > 1 && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-[var(--studio-text)]">{t('roomDistributionTitle')}</p>
+                  <p className="text-[10px] text-[var(--studio-muted)]">{t('roomDistributionHint')}</p>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--studio-border)] p-3">
+                    <input
+                      type="radio"
+                      name="roomDistribution"
+                      checked={roomDistribution === 'perFloor'}
+                      onChange={() => setRoomDistribution('perFloor')}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-xs font-semibold">{t('roomDistributionPerFloor')}</span>
+                      <span className="text-[10px] text-[var(--studio-muted)]">{t('roomDistributionPerFloorHint')}</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--studio-border)] p-3">
+                    <input
+                      type="radio"
+                      name="roomDistribution"
+                      checked={roomDistribution === 'groundOnly'}
+                      onChange={() => setRoomDistribution('groundOnly')}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-xs font-semibold">{t('roomDistributionGroundOnly')}</span>
+                      <span className="text-[10px] text-[var(--studio-muted)]">{t('roomDistributionGroundOnlyHint')}</span>
+                    </span>
+                  </label>
+                </div>
+              )}
               <Row label={t('buildingType')} value={BUILDING_TYPES.find((b) => b.id === draft.buildingType)?.label[locale] ?? ''} />
               <Row label={t('floorCount')} value={String(draft.floorCount)} />
               <Row label={t('smartBuilding')} value={draft.smartBuilding ? (draft.smartProtocol ?? '—') : t('no')} />

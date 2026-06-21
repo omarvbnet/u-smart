@@ -5,7 +5,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { getCatalogEntry, type ComponentPort, type PortKind } from '../lib/catalog';
 import { engineeringSymbolFor } from '../lib/catalog/symbols';
 import { footprintPx, physicalSpecFor } from '../lib/catalog/dimensions';
-import { useStudio } from '../lib/store';
+import { useCanvasUi } from './CanvasUiContext';
 import { EntryImage } from './EntryImage';
 import { EngineeringSymbol } from './EngineeringSymbol';
 import type { Severity } from '../lib/engine/validation';
@@ -55,9 +55,7 @@ export function layoutPorts(ports: ComponentPort[]): Placed[] {
 function DeviceNodeImpl({ data, selected }: NodeProps) {
   const d = data as DeviceNodeData;
   const entry = getCatalogEntry(d.catalogId);
-  const simulating = useStudio((s) => s.simulating);
-  const visualizationMode = useStudio((s) => s.visualizationMode);
-  const experienceMode = useStudio((s) => s.experienceMode);
+  const { simulating, visualizationMode, experienceMode } = useCanvasUi();
 
   if (!entry) {
     return <div className="rounded-lg border border-dashed border-orange-400 px-2 py-1 text-[9px] text-orange-400">?</div>;

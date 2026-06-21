@@ -7,7 +7,9 @@ import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
 import { validatePlacement } from './engine/placement-validation';
-import { applyFixPatch, applyAllFixPatches, rerouteDesignCables, type FixableState } from './engine/apply-fix';
+import { applyFixPatch, applyAllFixPatches, type FixableState } from './engine/apply-fix';
+import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
+import { runWhenIdle } from './idle';
 import { CABLES } from './catalog/cables';
 import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -183,7 +185,11 @@ type StudioState = {
   toggleStandard: (code: ProjectInfo['standards'][number]) => void;
   completeWizard: (
     project: ProjectInfo,
-    options: { generateDesign: boolean; floorPlan: FloorPlanSource | 'skip' },
+    options: {
+      generateDesign: boolean;
+      floorPlan: FloorPlanSource | 'skip';
+      roomDistribution?: 'perFloor' | 'groundOnly';
+    },
   ) => void;
   reopenWizard: () => void;
 
@@ -195,13 +201,32 @@ type StudioState = {
   duplicateRoom: (roomId: string) => void;
   addBedroomToLayout: (roomId?: string) => void;
   updateRoom: (id: string, patch: Partial<DesignRoom>) => void;
+  assignRoomToFloor: (roomId: string, floorId: string) => void;
   moveRoom: (id: string, x: number, y: number) => void;
   resizeRoom: (id: string, width: number, height: number) => void;
   removeRoom: (id: string) => void;
   selectRoom: (id: string | null) => void;
   selectOpening: (id: string | null) => void;
   selectWall: (id: string | null) => void;
-  updateWall: (id: string, patch: { lengthM?: number; thickness?: number; heightM?: number }) => void;
+  updateWall: (
+    id: string,
+    patch: {
+      lengthM?: number;
+      thickness?: number;
+      heightM?: number;
+      wallType?: import('./model').DesignWall['wallType'];
+      decoration?: import('./model').DesignWall['decoration'];
+      color?: string;
+    },
+  ) => void;
+  updateRoomCeiling: (
+    roomId: string,
+    patch: {
+      ceilingType?: import('./wall-finishes').CeilingType;
+      decoration?: import('./wall-finishes').CeilingDecoration;
+      color?: string;
+    },
+  ) => void;
   assignOpeningToWall: (openingId: string, wallId: string, along?: number) => void;
   updateOpening: (id: string, patch: Partial<DesignOpening>) => void;
   moveOpening: (id: string, x: number, y: number) => void;
@@ -257,28 +282,24 @@ const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(counter
 const CABLE_REROUTE_BATCH = 30;
 
 /** Spread cable geometry work across idle frames so project creation stays responsive. */
-function runWhenIdle(fn: () => void): void {
-  if (typeof window === 'undefined') {
-    fn();
-    return;
-  }
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(fn, { timeout: 2000 });
-  } else {
-    window.setTimeout(fn, 16);
-  }
-}
-
 function scheduleDeferredCableReroute(
   getState: () => StudioState,
   setState: (patch: Partial<StudioState>) => void,
+  opts?: { clearApplyingFixes?: boolean },
 ): void {
   if (typeof window === 'undefined') return;
   const run = () => {
     const s = getState();
-    if (!s.project.setupComplete || s.generatingProject) return;
+    if (!s.project.setupComplete || s.generatingProject) {
+      if (opts?.clearApplyingFixes) setState({ applyingFixes: false });
+      return;
+    }
     const cableIds = s.nodes.filter((n) => getCatalogEntry(n.catalogId)?.domain === 'cable').map((n) => n.id);
-    if (!cableIds.length) return;
+    if (!cableIds.length) {
+      if (opts?.clearApplyingFixes) setState({ applyingFixes: false });
+      invalidateDesignAnalysisCache();
+      return;
+    }
 
     let index = 0;
     let working = s.nodes;
@@ -286,7 +307,10 @@ function scheduleDeferredCableReroute(
     const step = () => {
       const batch = cableIds.slice(index, index + CABLE_REROUTE_BATCH);
       if (!batch.length) {
-        setState({ nodes: working });
+        setState({
+          nodes: working,
+          ...(opts?.clearApplyingFixes ? { applyingFixes: false } : {}),
+        });
         invalidateDesignAnalysisCache();
         return;
       }
@@ -306,7 +330,10 @@ function scheduleDeferredCableReroute(
       if (index < cableIds.length) {
         window.requestAnimationFrame(step);
       } else {
-        setState({ nodes: working });
+        setState({
+          nodes: working,
+          ...(opts?.clearApplyingFixes ? { applyingFixes: false } : {}),
+        });
         invalidateDesignAnalysisCache();
       }
     };
@@ -448,17 +475,15 @@ function fixableFrom(s: StudioState): FixableState {
 function patchFromFix(s: StudioState, fix: Fix): Partial<StudioState> | null {
   const patch = applyFixPatch(fixableFrom(s), fix);
   if (!patch) return null;
-  const merged = {
-    ...fixableFrom(s),
+  return {
     nodes: patch.nodes ?? s.nodes,
     edges: patch.edges ?? s.edges,
     controls: patch.controls ?? s.controls,
   };
-  return {
-    nodes: rerouteDesignCables(merged),
-    edges: merged.edges,
-    controls: merged.controls,
-  };
+}
+
+function designHasCables(nodes: DesignNode[]): boolean {
+  return nodes.some((n) => getCatalogEntry(n.catalogId)?.domain === 'cable');
 }
 
 export const useStudio = create<StudioState>((set, get) => ({
@@ -722,7 +747,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     const designPatch = patchFromFix(s, fix);
     if (!designPatch) return false;
-    set(withHistory(s, designPatch));
+    invalidateDesignAnalysisCache();
+    const nextNodes = designPatch.nodes ?? s.nodes;
+    const reroute = designHasCables(nextNodes);
+    set(withHistory(s, { ...designPatch, applyingFixes: reroute }));
+    if (reroute) scheduleDeferredCableReroute(get, set, { clearApplyingFixes: true });
+    else set({ applyingFixes: false });
     return true;
   },
 
@@ -731,13 +761,17 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     const { state: next, applied } = applyAllFixPatches(fixableFrom(s), fixes);
     if (!applied) return 0;
+    invalidateDesignAnalysisCache();
+    const reroute = designHasCables(next.nodes);
     set(
       withHistory(s, {
         nodes: next.nodes,
         edges: next.edges,
         controls: next.controls,
+        applyingFixes: reroute,
       }),
     );
+    if (reroute) scheduleDeferredCableReroute(get, set, { clearApplyingFixes: true });
     return applied;
   },
 
@@ -773,9 +807,13 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     const { width, height } = floorPlanSizeForBuilding(s.project.buildingType);
     const src = blankFloorPlanDataUrl(width, height);
-    const rooms = s.rooms.length > 0 ? s.rooms : seedRoomsForBuilding(s.project.buildingType, s.project.bedrooms);
+    const floors = buildFloorsFromCount(s.project.floorCount, s.project.buildingType);
+    const rooms =
+      s.rooms.length > 0 ? s.rooms : seedRoomsForProject({ ...s.project, floorPlanSource: 'zero' });
     set({
       map: { src, width, height, x: -width / 2, y: -height / 2, opacity: 1, mode: 'blank' },
+      floors,
+      activeFloorId: floors[0]!.id,
       rooms,
       floorPlanTool: 'draw-room',
       selectedRoomId: null,
@@ -821,7 +859,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     const floors = buildFloorsFromCount(mergedProject.floorCount, mergedProject.buildingType);
     let rooms = s.rooms;
     if (rooms.length === 0 || options.generateDesign) {
-      rooms = seedRoomsForProject(mergedProject);
+      if (options.roomDistribution === 'groundOnly' && mergedProject.floorCount > 1) {
+        const template = seedRoomsForBuilding(mergedProject.buildingType, mergedProject.bedrooms);
+        rooms = template.map((r) => ({ ...r, floorId: floors[0]!.id }));
+      } else {
+        rooms = seedRoomsForProject(mergedProject);
+      }
     }
     let map = s.map;
     let floorPlanTool = s.floorPlanTool;
@@ -1090,19 +1133,37 @@ export const useStudio = create<StudioState>((set, get) => ({
   updateRoom: (id, patch) =>
     set((s) => withHistory(s, { rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
 
+  assignRoomToFloor: (roomId, floorId) =>
+    set((s) => {
+      const room = s.rooms.find((r) => r.id === roomId);
+      if (!room || room.floorId === floorId) return s;
+      const rooms = s.rooms.map((r) => (r.id === roomId ? { ...r, floorId } : r));
+      const nodes = s.nodes.map((n) => (nodeBelongsToRoom(n, room) ? { ...n, floorId } : n));
+      let bim = s.bim;
+      if (bim) {
+        bim = {
+          ...bim,
+          openings: bim.openings.map((o) => (o.roomId === roomId ? { ...o, floorId } : o)),
+        };
+      }
+      return withHistory(s, { rooms, nodes, bim });
+    }),
+
   moveRoom: (id, x, y) =>
     set((s) => {
       const room = s.rooms.find((r) => r.id === id);
       if (!room) return s;
       const dx = x - room.x;
       const dy = y - room.y;
+      if (dx === 0 && dy === 0) return s;
       const rooms = s.rooms.map((r) => (r.id === id ? { ...r, x, y } : r));
-      if (!s.bim) return withHistory(s, { rooms });
+      const nodes = translateNodesForRoomMove(s.nodes, room, dx, dy);
+      if (!s.bim) return withHistory(s, { rooms, nodes });
       const walls = mergeEffectiveWalls(s.bim, rooms, s.activeFloorId);
       const openings = resnapOpeningsForRoom(s.bim.openings, id, walls).map((o) =>
-        o.roomId === id && !o.wallId ? { ...o, x: o.x + dx, y: o.y + dy } : o,
+        o.roomId === id && !o.wallId ? { ...o, x: o.x + dx, y: o.y + dy, floorId: room.floorId } : o,
       );
-      return withHistory(s, { rooms, bim: { ...s.bim, openings } });
+      return withHistory(s, { rooms, nodes, bim: { ...s.bim, openings } });
     }),
 
   resizeRoom: (id, width, height) =>
@@ -1149,11 +1210,14 @@ export const useStudio = create<StudioState>((set, get) => ({
         }
         const bim = s.bim ?? { walls: [], openings: [] };
         const wallMeta = { ...(bim.wallMeta ?? {}) };
-        if (patch.thickness != null || patch.heightM != null) {
+        if (patch.thickness != null || patch.heightM != null || patch.wallType != null || patch.decoration != null || patch.color != null) {
           wallMeta[id] = {
             ...wallMeta[id],
             ...(patch.thickness != null ? { thickness: patch.thickness } : {}),
             ...(patch.heightM != null ? { heightM: patch.heightM } : {}),
+            ...(patch.wallType != null ? { wallType: patch.wallType } : {}),
+            ...(patch.decoration != null ? { decoration: patch.decoration } : {}),
+            ...(patch.color != null ? { color: patch.color } : {}),
           };
         }
         const effWalls = mergeEffectiveWalls({ ...bim, wallMeta }, rooms, s.activeFloorId);
@@ -1178,6 +1242,18 @@ export const useStudio = create<StudioState>((set, get) => ({
             : w,
         );
       }
+      if (patch.wallType != null || patch.decoration != null || patch.color != null) {
+        nextWalls = nextWalls.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                ...(patch.wallType != null ? { wallType: patch.wallType } : {}),
+                ...(patch.decoration != null ? { decoration: patch.decoration } : {}),
+                ...(patch.color != null ? { color: patch.color } : {}),
+              }
+            : w,
+        );
+      }
       const bim = { ...s.bim, walls: nextWalls };
       const effWalls = mergeEffectiveWalls(bim, s.rooms, s.activeFloorId);
       const target = effWalls.find((w) => w.id === id);
@@ -1186,6 +1262,14 @@ export const useStudio = create<StudioState>((set, get) => ({
           ? bim.openings.map((o) => (o.wallId === id ? orientOpeningOnWall(o, target, o.along ?? 0.5) : o))
           : bim.openings;
       return withHistory(s, { bim: { ...bim, openings } });
+    }),
+
+  updateRoomCeiling: (roomId, patch) =>
+    set((s) => {
+      const bim = s.bim ?? { walls: [], openings: [] };
+      const prev = bim.ceilingMeta ?? {};
+      const ceilingMeta = { ...prev, [roomId]: { ...prev[roomId], ...patch } };
+      return withHistory(s, { bim: { ...bim, ceilingMeta } });
     }),
 
   assignOpeningToWall: (openingId, wallId, along = 0.5) =>
@@ -1617,12 +1701,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       nodes: s.nodes.map((n) => (n.id === cableId ? rerouteCableNode(n, s.nodes, s.edges, s.rooms) : n)),
     })),
 
-  rerouteAllCables: () =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
-        getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, s.nodes, s.edges, s.rooms) : n,
-      ),
-    })),
+  rerouteAllCables: () => scheduleDeferredCableReroute(get, set),
 
   updateCableRoutePoints: (cableId, points) =>
     set((s) => ({
@@ -1880,26 +1959,28 @@ if (typeof window !== 'undefined') {
 
     clearTimeout(timer);
     timer = setTimeout(() => {
-      const st = useStudio.getState();
-      if (st.generatingProject) return;
-      const file: DesignFile = {
-        version: 1,
-        designName: st.designName,
-        nodes: st.nodes,
-        edges: st.edges,
-        controls: st.controls,
-        map: st.map,
-        project: st.project,
-        rooms: st.rooms,
-        bim: st.bim ?? undefined,
-        floors: st.floors,
-        activeFloorId: st.activeFloorId,
-      };
-      try {
-        window.localStorage.setItem('studio.design', JSON.stringify(file));
-      } catch {
-        /* quota / serialization issues ignored */
-      }
+      runWhenIdle(() => {
+        const st = useStudio.getState();
+        if (st.generatingProject) return;
+        const file: DesignFile = {
+          version: 1,
+          designName: st.designName,
+          nodes: st.nodes,
+          edges: st.edges,
+          controls: st.controls,
+          map: st.map,
+          project: st.project,
+          rooms: st.rooms,
+          bim: st.bim ?? undefined,
+          floors: st.floors,
+          activeFloorId: st.activeFloorId,
+        };
+        try {
+          window.localStorage.setItem('studio.design', JSON.stringify(file));
+        } catch {
+          /* quota / serialization issues ignored */
+        }
+      });
     }, 900);
   });
 }
