@@ -20,7 +20,7 @@ type StoreApi = {
   updateProject: (patch: { smartProtocol?: 'HDL' | 'KNX' | 'BOTH' }) => void;
   setControl: (id: string, key: 'on' | 'level' | 'setpoint' | 'active', value: boolean | number) => void;
   applyFix: (fix: import('../engine/validation').Fix) => void;
-  applyAllFixes: (fixes: import('../engine/validation').Fix[]) => void;
+  applyAllFixes: (fixes: import('../engine/validation').Fix[]) => boolean;
   getIssues: () => import('../engine/validation').Issue[];
   placeEngineeringLayout: () => { ok: boolean; message: string; changes: number };
 };

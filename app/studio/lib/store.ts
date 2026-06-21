@@ -10,8 +10,13 @@ import { validatePlacement } from './engine/placement-validation';
 import {
   applyFixPatch,
   applyFixesUntilStable,
+  applyFixChunk,
+  collectFixableFixes,
   finalizeFixableState,
   mergeFixableState,
+  prioritizeFixes,
+  FIX_APPLY_BATCH,
+  FIX_MAX_ROUNDS,
   type FixableState,
 } from './engine/apply-fix';
 import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
@@ -133,6 +138,7 @@ type StudioState = {
   canvasFitSeq: number;
   suppressCanvasFit: boolean;
   applyingFixes: boolean;
+  fixBatchResult: { applied: number; remaining: number } | null;
   generatingProject: boolean;
   visualizationMode: VisualizationMode;
   experienceMode: ExperienceMode;
@@ -176,7 +182,7 @@ type StudioState = {
   loadSample: () => void;
 
   applyFix: (fix: Fix) => boolean;
-  applyAllFixes: (fixes?: Fix[]) => number;
+  applyAllFixes: (fixes?: Fix[]) => boolean;
   toggleSimulation: () => void;
 
   setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
@@ -348,6 +354,98 @@ function scheduleDeferredCableReroute(
   };
 
   runWhenIdle(run);
+}
+
+let fixJobSeq = 0;
+
+/** Apply validation fixes in small idle chunks so Fix all stays responsive. */
+function scheduleDeferredApplyAllFixes(
+  getState: () => StudioState,
+  setState: (patch: Partial<StudioState> | ((s: StudioState) => Partial<StudioState>)) => void,
+  seedFixes?: Fix[],
+): void {
+  const runSync = () => {
+    const s = getState();
+    const { state: next, applied } = applyFixesUntilStable(fixableFrom(s), seedFixes, FIX_MAX_ROUNDS);
+    if (!applied) {
+      setState({ applyingFixes: false, fixBatchResult: null });
+      return;
+    }
+    const remaining = collectFixableFixes({ ...next, activeFloorId: s.activeFloorId }).length;
+    setState({
+      ...withHistory(s, {
+        nodes: next.nodes,
+        edges: next.edges,
+        controls: next.controls,
+      }),
+      applyingFixes: false,
+      fixBatchResult: { applied, remaining },
+    });
+    invalidateDesignAnalysisCache();
+  };
+
+  if (typeof window === 'undefined') {
+    runSync();
+    return;
+  }
+
+  const jobId = ++fixJobSeq;
+  setState({ applyingFixes: true, fixBatchResult: null });
+  invalidateDesignAnalysisCache();
+
+  let state = fixableFrom(getState());
+  let totalApplied = 0;
+  let round = 0;
+  let queue = seedFixes?.length ? prioritizeFixes(seedFixes) : collectFixableFixes(state);
+  let needsCableReroute = false;
+
+  const finish = () => {
+    if (jobId !== fixJobSeq) return;
+    runWhenIdle(() => {
+      if (jobId !== fixJobSeq) return;
+      const s = getState();
+      const remaining = collectFixableFixes({ ...state, activeFloorId: s.activeFloorId }).length;
+      setState({
+        ...withHistory(s, {
+          nodes: state.nodes,
+          edges: state.edges,
+          controls: state.controls,
+        }),
+        applyingFixes: false,
+        fixBatchResult: { applied: totalApplied, remaining },
+      });
+      invalidateDesignAnalysisCache();
+      if (needsCableReroute) scheduleDeferredCableReroute(getState, setState);
+    });
+  };
+
+  const processChunk = () => {
+    if (jobId !== fixJobSeq) return;
+    if (!queue.length) {
+      round++;
+      if (round >= FIX_MAX_ROUNDS) {
+        finish();
+        return;
+      }
+      runWhenIdle(() => {
+        if (jobId !== fixJobSeq) return;
+        queue = collectFixableFixes({ ...state, activeFloorId: getState().activeFloorId });
+        if (!queue.length) finish();
+        else window.requestAnimationFrame(processChunk);
+      });
+      return;
+    }
+
+    const batch = queue.splice(0, FIX_APPLY_BATCH);
+    const result = applyFixChunk(state, batch);
+    state = result.state;
+    totalApplied += result.applied;
+    if (result.affectedCables.size > 0) needsCableReroute = true;
+
+    window.requestAnimationFrame(processChunk);
+  };
+
+  runWhenIdle(() => window.requestAnimationFrame(processChunk));
 }
 
 function persist(key: string, value: string) {
@@ -527,6 +625,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   canvasFitSeq: 0,
   suppressCanvasFit: false,
   applyingFixes: false,
+  fixBatchResult: null,
   generatingProject: false,
   visualizationMode: initialVisualizationMode(),
   experienceMode: initialExperienceMode(),
@@ -769,19 +868,9 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   applyAllFixes: (fixes) => {
-    const s = get();
-    const { state: next, applied } = applyFixesUntilStable(fixableFrom(s), fixes, 8);
-    if (!applied) return 0;
-    invalidateDesignAnalysisCache();
-    set(
-      withHistory(s, {
-        nodes: next.nodes,
-        edges: next.edges,
-        controls: next.controls,
-        applyingFixes: false,
-      }),
-    );
-    return applied;
+    if (get().applyingFixes) return false;
+    scheduleDeferredApplyAllFixes(get, set, fixes);
+    return true;
   },
 
   toggleSimulation: () => {
@@ -1970,7 +2059,7 @@ if (typeof window !== 'undefined') {
     timer = setTimeout(() => {
       runWhenIdle(() => {
         const st = useStudio.getState();
-        if (st.generatingProject) return;
+        if (st.generatingProject || st.applyingFixes) return;
         const file: DesignFile = {
           version: 1,
           designName: st.designName,

@@ -1,10 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useAnalysis, useT } from './hooks';
-import { runWhenIdle } from '../lib/idle';
-import { collectFixableFixes } from '../lib/engine/apply-fix';
 import type { Issue, Severity } from '../lib/engine/validation';
 import { CheckCircle2, ChevronRight, Wrench, AlertOctagon, AlertTriangle, Lightbulb } from 'lucide-react';
 
@@ -35,7 +33,7 @@ function IssueCard({
   const runFix = () => {
     if (!issue.fix || busy || applyingFixes) return;
     setBusy(true);
-    runWhenIdle(() => {
+    window.requestAnimationFrame(() => {
       const ok = applyFix(issue.fix!);
       setBusy(false);
       if (ok) onFixed();
@@ -110,8 +108,8 @@ export function ValidationPanel() {
   const { issues } = useAnalysis();
   const applyAllFixes = useStudio((s) => s.applyAllFixes);
   const applyingFixes = useStudio((s) => s.applyingFixes);
+  const fixBatchResult = useStudio((s) => s.fixBatchResult);
   const [status, setStatus] = useState<string | null>(null);
-  const [fixingAll, setFixingAll] = useState(false);
 
   const fixable = useMemo(() => issues.filter((i) => i.fix), [issues]);
   const groups: { sev: Severity; key: 'critical' | 'warning' | 'recommendation' }[] = [
@@ -120,37 +118,29 @@ export function ValidationPanel() {
     { sev: 'recommendation', key: 'recommendation' },
   ];
 
-  const handleFixAll = () => {
-    if (fixable.length === 0 || fixingAll || applyingFixes) return;
-    setFixingAll(true);
-    setStatus(t('fixing'));
-    runWhenIdle(() => {
-      const applied = applyAllFixes(fixable.map((i) => i.fix!));
-      setFixingAll(false);
-      if (applied > 0) {
-        const st = useStudio.getState();
-        const remaining = collectFixableFixes({
-          locale: st.locale,
-          project: st.project,
-          nodes: st.nodes,
-          edges: st.edges,
-          controls: st.controls,
-          rooms: st.rooms,
-          activeFloorId: st.activeFloorId,
-        }).length;
-        setStatus(
-          remaining > 0
-            ? t('fixAllPartial').replace('{applied}', String(applied)).replace('{remaining}', String(remaining))
-            : t('fixAllDone').replace('{count}', String(applied)),
-        );
-      } else {
-        setStatus(t('fixFailed'));
-      }
-      window.setTimeout(() => setStatus(null), 3500);
-    });
-  };
+  useEffect(() => {
+    if (applyingFixes || !fixBatchResult) return;
+    const { applied, remaining } = fixBatchResult;
+    if (applied > 0) {
+      setStatus(
+        remaining > 0
+          ? t('fixAllPartial').replace('{applied}', String(applied)).replace('{remaining}', String(remaining))
+          : t('fixAllDone').replace('{count}', String(applied)),
+      );
+    } else {
+      setStatus(t('fixFailed'));
+    }
+    useStudio.setState({ fixBatchResult: null });
+    const timer = window.setTimeout(() => setStatus(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [applyingFixes, fixBatchResult, t]);
 
-  const busy = fixingAll || applyingFixes;
+  const handleFixAll = () => {
+    if (fixable.length === 0 || applyingFixes) return;
+    setStatus(t('fixing'));
+    const started = applyAllFixes(fixable.map((i) => i.fix!));
+    if (!started) setStatus(t('fixFailed'));
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -159,12 +149,12 @@ export function ValidationPanel() {
         {fixable.length > 0 && (
           <button
             type="button"
-            disabled={busy}
+            disabled={applyingFixes}
             onClick={handleFixAll}
             className="flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-60"
           >
             <Wrench className="h-3.5 w-3.5" />
-            {busy ? t('fixing') : `${t('fixAll')} (${fixable.length})`}
+            {applyingFixes ? t('fixing') : `${t('fixAll')} (${fixable.length})`}
           </button>
         )}
       </div>
@@ -189,7 +179,12 @@ export function ValidationPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-        {issues.length === 0 ? (
+        {applyingFixes ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-cyan-300">
+            <Wrench className="h-7 w-7 animate-pulse" />
+            <span>{t('fixing')}</span>
+          </div>
+        ) : issues.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-emerald-400">
             <CheckCircle2 className="h-8 w-8" />
             <span>{t('noIssues')}</span>

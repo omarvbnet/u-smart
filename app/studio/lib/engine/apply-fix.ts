@@ -131,10 +131,10 @@ function mcbCatalogForCurrent(designA: number): { id: string; entry: CatalogEntr
 
 /** Re-route cables and sync lengthM / routePoints used by validation. */
 export function finalizeFixableState(s: FixableState, affectedCableIds?: Set<string>): FixableState {
-  const rerouteAll = !affectedCableIds || affectedCableIds.size === 0;
+  if (!affectedCableIds?.size) return s;
   const nodes = s.nodes.map((n) => {
     if (getCatalogEntry(n.catalogId)?.domain !== 'cable') return n;
-    if (!rerouteAll && !affectedCableIds!.has(n.id)) return n;
+    if (!affectedCableIds.has(n.id)) return n;
     return rerouteCableNode(n, s.nodes, s.edges, s.rooms);
   });
   return { ...s, nodes };
@@ -159,7 +159,7 @@ export function collectFixableFixes(s: FixableState): Fix[] {
   return fixesFromIssues([...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues]);
 }
 
-function affectedCableIdsForFix(
+export function affectedCableIdsForFix(
   fix: Fix,
   patch: FixPatch,
   state: FixableState,
@@ -180,7 +180,7 @@ function affectedCableIdsForFix(
 export function applyFixesUntilStable(
   initial: FixableState,
   seedFixes?: Fix[],
-  maxRounds = 8,
+  maxRounds = 2,
 ): { state: FixableState; applied: number } {
   let state = initial;
   let totalApplied = 0;
@@ -202,11 +202,33 @@ export function applyFixesUntilStable(
 
     if (!roundApplied) break;
 
-    state = finalizeFixableState(state, affectedCables.size > 0 ? affectedCables : undefined);
+    state = finalizeFixableState(state, affectedCables);
     totalApplied += roundApplied;
   }
 
   return { state, applied: totalApplied };
+}
+
+export const FIX_APPLY_BATCH = 4;
+export const FIX_MAX_ROUNDS = 3;
+
+/** Apply one chunk of fixes — used by the async fix-all scheduler. */
+export function applyFixChunk(
+  state: FixableState,
+  fixes: Fix[],
+): { state: FixableState; applied: number; affectedCables: Set<string> } {
+  let next = state;
+  let applied = 0;
+  const affectedCables = new Set<string>();
+  for (const fix of fixes) {
+    const patch = applyFixPatch(next, fix);
+    if (!patch) continue;
+    next = mergeFixableState(next, patch);
+    for (const id of affectedCableIdsForFix(fix, patch, next)) affectedCables.add(id);
+    applied++;
+  }
+  if (affectedCables.size > 0) next = finalizeFixableState(next, affectedCables);
+  return { state: next, applied, affectedCables };
 }
 
 export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
