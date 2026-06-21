@@ -318,42 +318,40 @@ function persist(key: string, value: string) {
   }
 }
 
-function initialLocale(): StudioLocale {
-  if (typeof window === 'undefined') return 'ar';
+function readStoredLocale(): StudioLocale | null {
+  if (typeof window === 'undefined') return null;
   const saved = window.localStorage.getItem('studio.locale');
   if (saved && (STUDIO_LOCALES as readonly string[]).includes(saved)) return saved as StudioLocale;
+  return null;
+}
+
+/** Stable defaults for SSR and the first client paint — prefs load in hydrate(). */
+function initialLocale(): StudioLocale {
   return 'ar';
 }
 
 function initialTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark';
-  return window.localStorage.getItem('studio.theme') === 'light' ? 'light' : 'dark';
+  return 'dark';
 }
 
 function initialCanvasViewMode(): CanvasViewMode {
-  if (typeof window === 'undefined') return 'content';
-  return window.localStorage.getItem('studio.canvasViewMode') === 'full' ? 'full' : 'content';
+  return 'content';
 }
 
 function initialVisualizationMode(): VisualizationMode {
-  if (typeof window === 'undefined') return 'engineering';
-  const v = window.localStorage.getItem('studio.visualizationMode');
-  return v === 'product' || v === '3d' ? v : 'engineering';
+  return 'engineering';
 }
 
 function initialExperienceMode(): ExperienceMode {
-  if (typeof window === 'undefined') return 'engineer';
-  return window.localStorage.getItem('studio.experienceMode') === 'client' ? 'client' : 'engineer';
+  return 'engineer';
 }
 
 function initialLuxHeatmap(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem('studio.luxHeatmap') === '1';
+  return false;
 }
 
 function initialLoadHeatmap(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem('studio.loadHeatmap') === '1';
+  return false;
 }
 
 function defaultLabel(entry: CatalogEntry, locale: StudioLocale): string {
@@ -382,20 +380,41 @@ function matchesFloor<T extends { floorId?: string }>(item: T, activeFloorId: st
 }
 
 function initialMapOverlayMode(): MapOverlayMode {
-  if (typeof window === 'undefined') return 'combined';
-  const v = window.localStorage.getItem('studio.mapOverlay');
-  if (v === 'plan' || v === 'cables' || v === 'pipes' || v === 'combined') return v;
   return 'combined';
 }
 
 function initialCableRoutes3d(): boolean {
-  if (typeof window === 'undefined') return true;
-  return window.localStorage.getItem('studio.cableRoutes3d') !== '0';
+  return true;
 }
 
 function initialOutletsOnMap(): boolean {
-  if (typeof window === 'undefined') return true;
-  return window.localStorage.getItem('studio.outletsOnMap') !== '0';
+  return true;
+}
+
+function readUiPreferences(): Partial<StudioState> {
+  if (typeof window === 'undefined') return {};
+  const prefs: Partial<StudioState> = {};
+  const locale = readStoredLocale();
+  if (locale) prefs.locale = locale;
+  const theme = window.localStorage.getItem('studio.theme');
+  if (theme === 'light' || theme === 'dark') prefs.theme = theme;
+  const canvasViewMode = window.localStorage.getItem('studio.canvasViewMode');
+  if (canvasViewMode === 'full' || canvasViewMode === 'content') prefs.canvasViewMode = canvasViewMode;
+  const visualizationMode = window.localStorage.getItem('studio.visualizationMode');
+  if (visualizationMode === 'product' || visualizationMode === '3d' || visualizationMode === 'engineering') {
+    prefs.visualizationMode = visualizationMode;
+  }
+  const experienceMode = window.localStorage.getItem('studio.experienceMode');
+  if (experienceMode === 'client' || experienceMode === 'engineer') prefs.experienceMode = experienceMode;
+  if (window.localStorage.getItem('studio.luxHeatmap') === '1') prefs.showLuxHeatmap = true;
+  if (window.localStorage.getItem('studio.loadHeatmap') === '1') prefs.showLoadHeatmap = true;
+  const mapOverlay = window.localStorage.getItem('studio.mapOverlay');
+  if (mapOverlay === 'plan' || mapOverlay === 'cables' || mapOverlay === 'pipes' || mapOverlay === 'combined') {
+    prefs.mapOverlayMode = mapOverlay;
+  }
+  if (window.localStorage.getItem('studio.cableRoutes3d') === '0') prefs.showCableRoutes3d = false;
+  if (window.localStorage.getItem('studio.outletsOnMap') === '0') prefs.showOutletsOnMap = false;
+  return prefs;
 }
 
 function withHistory(s: StudioState, patch: Partial<StudioState>): Partial<StudioState> {
@@ -860,7 +879,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
     const locale = s.locale;
     const activeFloorId = floors[0]!.id;
-    window.setTimeout(() => {
+    const runGeneration = () => {
       try {
         const result = generateProjectDesign(mergedProject, rooms, locale, activeFloorId);
         invalidateDesignAnalysisCache();
@@ -874,10 +893,17 @@ export const useStudio = create<StudioState>((set, get) => ({
           canvasFitSeq: get().canvasFitSeq + 1,
         });
         scheduleDeferredCableReroute(get, set);
-      } catch {
+      } catch (err) {
+        console.error('[U Smart Studio] project generation failed', err);
         set({ generatingProject: false });
       }
-    }, 0);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(runGeneration));
+    } else {
+      runGeneration();
+    }
   },
 
   reopenWizard: () => set((s) => ({ project: { ...s.project, setupComplete: false } })),
@@ -1259,6 +1285,8 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   hydrate: () => {
     if (typeof window === 'undefined') return;
+    const prefs = readUiPreferences();
+    if (Object.keys(prefs).length > 0) set(prefs);
     try {
       const raw = window.localStorage.getItem('studio.design');
       if (raw) {
@@ -1354,7 +1382,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   generateFromBrief: (text) => {
     set({ generatingProject: true });
-    window.setTimeout(() => {
+    const run = () => {
       try {
         const parsed = parseProjectBrief(text, get().project);
         const result = runAutonomousPipeline(parsed.project, parsed.rooms, get().locale);
@@ -1376,9 +1404,15 @@ export const useStudio = create<StudioState>((set, get) => ({
         });
         scheduleDeferredCableReroute(get, set);
       } catch (e) {
+        console.error('[U Smart Studio] brief generation failed', e);
         set({ generatingProject: false });
       }
-    }, 0);
+    };
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+    } else {
+      run();
+    }
     return { ok: true, message: 'Generating design…', assumptions: [] };
   },
 
@@ -1810,6 +1844,7 @@ if (typeof window !== 'undefined') {
     clearTimeout(timer);
     timer = setTimeout(() => {
       const st = useStudio.getState();
+      if (st.generatingProject) return;
       const file: DesignFile = {
         version: 1,
         designName: st.designName,

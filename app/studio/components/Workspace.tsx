@@ -118,6 +118,7 @@ export function Workspace() {
     <div
       data-studio-theme={theme}
       dir={rtl ? 'rtl' : 'ltr'}
+      suppressHydrationWarning
       className="studio-root flex h-screen flex-col overflow-hidden"
     >
       <Topbar />

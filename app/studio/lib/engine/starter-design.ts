@@ -5,7 +5,7 @@ import type { DesignNode, DesignEdge, DesignRoom, BimModel } from '../model';
 import type { ProjectInfo, HvacSystemType } from '../project';
 import type { StudioLocale } from '../i18n';
 import { cableRunRouted } from './cable-routing';
-import { labelCablesOnly, formatCableLabel, conduitTypeForCable } from './cable-map';
+import { labelCablesOnly, labelAllDesignCables, formatCableLabel, conduitTypeForCable } from './cable-map';
 import { getCatalogEntry, type CableSpec } from '../catalog';
 import { placeLightingFixtures, placeHvacUnits, mergePlacementNodes } from './placement-layout';
 import { placeSocketOutlets, placeAppliances, mergeOutletNodes } from './outlet-placement';
@@ -241,7 +241,9 @@ export function generateProjectDesign(
   bim: BimModel;
 } {
   const starter = buildStarterDesign(project, locale, rooms);
-  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges, locale);
+  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges, locale, {
+    deferCableRouting: true,
+  });
   const pack = buildBimOpenings(rooms, project, locale, activeFloorId);
   const nodes = mergeOpeningActuators(placed.nodes, pack.actuatorNodes);
   const controls = buildControlsForNodes(nodes, { ...placed.controls, ...pack.controls });
@@ -261,6 +263,7 @@ export function enhanceDesignPlacement(
   nodes: DesignNode[],
   edges: DesignEdge[],
   locale: StudioLocale = 'en',
+  options?: { deferCableRouting?: boolean },
 ): { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } {
   let nextNodes = [...nodes];
   let nextEdges = [...edges];
@@ -284,7 +287,9 @@ export function enhanceDesignPlacement(
   nextEdges = roomControls.edges;
   smartControls = { ...smartControls, ...roomControls.controls };
 
-  nextNodes = labelCablesOnly(nextNodes);
+  nextNodes = options?.deferCableRouting
+    ? labelCablesOnly(nextNodes)
+    : labelAllDesignCables(nextNodes, nextEdges, rooms);
   return { nodes: nextNodes, edges: nextEdges, controls: smartControls };
 }
 
