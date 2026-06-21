@@ -40,11 +40,15 @@ export function SetupWizard({ onComplete }: Props) {
   const t = useT();
   const locale = useStudio((s) => s.locale);
   const completeWizard = useStudio((s) => s.completeWizard);
+  const generatingProject = useStudio((s) => s.generatingProject);
   const [step, setStep] = useState(0);
   const [floorPlan, setFloorPlan] = useState<FloorPlanChoice>('zero');
   const [projectBrief, setProjectBrief] = useState('');
+  const [finishing, setFinishing] = useState(false);
   const [draft, setDraft] = useState<ProjectInfo>(() => useStudio.getState().project);
   const generateFromBrief = useStudio((s) => s.generateFromBrief);
+
+  const busy = finishing || generatingProject;
 
   const patch = (p: Partial<ProjectInfo>) => setDraft((d) => ({ ...d, ...p }));
 
@@ -106,6 +110,8 @@ export function SetupWizard({ onComplete }: Props) {
   };
 
   const finish = (generate: boolean) => {
+    if (busy) return;
+    setFinishing(true);
     const fp: FloorPlanSource | 'skip' = floorPlan;
     const finalized: ProjectInfo = {
       ...draft,
@@ -526,17 +532,26 @@ export function SetupWizard({ onComplete }: Props) {
           </button>
           {step < steps.length - 1 ? (
             <button
+              disabled={busy}
               onClick={() => setStep((s) => s + 1)}
-              className="flex items-center gap-1 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-white"
+              className="flex items-center gap-1 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
               {t('next')} <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
             <div className="flex gap-2">
-              <button onClick={() => finish(false)} className="rounded-lg border border-[var(--studio-border)] px-4 py-2 text-xs font-semibold">
+              <button
+                disabled={busy}
+                onClick={() => finish(false)}
+                className="rounded-lg border border-[var(--studio-border)] px-4 py-2 text-xs font-semibold disabled:opacity-50"
+              >
                 {t('wizardBlank')}
               </button>
-              <button onClick={() => finish(true)} className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-white">
+              <button
+                disabled={busy}
+                onClick={() => finish(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              >
                 <Sparkles className="h-4 w-4" /> {t('wizardGenerate')}
               </button>
             </div>

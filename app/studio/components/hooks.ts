@@ -34,9 +34,10 @@ function useDesignInputs() {
 /** Shared validation cache — one compute pass per design revision. */
 export function useDesignAnalysis() {
   const generatingProject = useStudio((s) => s.generatingProject);
+  const setupComplete = useStudio((s) => s.project.setupComplete);
   const { nodes, edges, rooms, project, activeFloorId, deferredNodes, deferredEdges } = useDesignInputs();
   return useMemo(() => {
-    if (generatingProject) {
+    if (generatingProject || !setupComplete) {
       return {
         issues: [],
         byNode: new Map<string, import('../lib/engine/validation').Issue[]>(),
@@ -47,7 +48,7 @@ export function useDesignAnalysis() {
     }
     const analysis = computeDesignAnalysis(deferredNodes, deferredEdges, rooms, project, activeFloorId);
     return { ...analysis, isStale: deferredNodes !== nodes || deferredEdges !== edges };
-  }, [generatingProject, deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
+  }, [generatingProject, setupComplete, deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
 }
 
 /** @deprecated use useDesignAnalysis — kept for existing imports */

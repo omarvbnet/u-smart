@@ -257,6 +257,18 @@ const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(counter
 const CABLE_REROUTE_BATCH = 30;
 
 /** Spread cable geometry work across idle frames so project creation stays responsive. */
+function runWhenIdle(fn: () => void): void {
+  if (typeof window === 'undefined') {
+    fn();
+    return;
+  }
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: 2000 });
+  } else {
+    window.setTimeout(fn, 16);
+  }
+}
+
 function scheduleDeferredCableReroute(
   getState: () => StudioState,
   setState: (patch: Partial<StudioState>) => void,
@@ -264,6 +276,7 @@ function scheduleDeferredCableReroute(
   if (typeof window === 'undefined') return;
   const run = () => {
     const s = getState();
+    if (!s.project.setupComplete || s.generatingProject) return;
     const cableIds = s.nodes.filter((n) => getCatalogEntry(n.catalogId)?.domain === 'cable').map((n) => n.id);
     if (!cableIds.length) return;
 
@@ -301,11 +314,7 @@ function scheduleDeferredCableReroute(
     window.requestAnimationFrame(step);
   };
 
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(run, { timeout: 1200 });
-  } else {
-    window.setTimeout(run, 16);
-  }
+  runWhenIdle(run);
 }
 
 function persist(key: string, value: string) {
@@ -694,6 +703,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       floorPlanTool: 'select',
       cloudProjectId: null,
       pendingMapImport: false,
+      generatingProject: false,
       historyPast: [],
       historyFuture: [],
     }),
@@ -850,19 +860,30 @@ export const useStudio = create<StudioState>((set, get) => ({
     };
 
     if (!options.generateDesign) {
-      let nodes = s.nodes;
-      let edges = s.edges;
-      let controls = s.controls;
-      let bim = s.bim;
-      if (rooms.length > 0) {
-        const pack = buildBimOpenings(rooms, mergedProject, s.locale, floors[0]!.id);
-        bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
-        if (mergedProject.smartBuilding) {
+      const applyBlankProject = () => {
+        let nodes = s.nodes;
+        let edges = s.edges;
+        let controls = s.controls;
+        let bim = s.bim;
+        if (rooms.length > 0 && mergedProject.smartBuilding) {
+          const pack = buildBimOpenings(rooms, mergedProject, s.locale, floors[0]!.id);
+          bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
           nodes = mergeOpeningActuators(nodes, pack.actuatorNodes);
           controls = { ...controls, ...pack.controls };
+        } else if (rooms.length > 0) {
+          const pack = buildBimOpenings(rooms, mergedProject, s.locale, floors[0]!.id);
+          bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
         }
+        set({ ...basePatch, nodes, edges, controls, bim, generatingProject: false });
+      };
+
+      const needsIdle = rooms.length > 8 && mergedProject.smartBuilding;
+      if (needsIdle) {
+        set({ ...basePatch, generatingProject: true, nodes: [], edges: [], controls: {}, bim: null });
+        runWhenIdle(applyBlankProject);
+      } else {
+        applyBlankProject();
       }
-      set({ ...basePatch, nodes, edges, controls, bim, generatingProject: false });
       return;
     }
 
@@ -900,13 +921,22 @@ export const useStudio = create<StudioState>((set, get) => ({
     };
 
     if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => window.requestAnimationFrame(runGeneration));
+      runWhenIdle(runGeneration);
     } else {
       runGeneration();
     }
   },
 
-  reopenWizard: () => set((s) => ({ project: { ...s.project, setupComplete: false } })),
+  reopenWizard: () =>
+    set((s) => ({
+      project: { ...s.project, setupComplete: false },
+      generatingProject: false,
+      simulating: false,
+      selectedNodeId: null,
+      selectedRoomId: null,
+      selectedOpeningId: null,
+      selectedWallId: null,
+    })),
 
   setFloorPlanTool: (tool) => set({ floorPlanTool: tool }),
 
@@ -1291,7 +1321,14 @@ export const useStudio = create<StudioState>((set, get) => ({
       const raw = window.localStorage.getItem('studio.design');
       if (raw) {
         const file = JSON.parse(raw) as DesignFile;
-        if (file && file.version === 1) get().loadDesign(file);
+        if (file && file.version === 1) {
+          const restored = normalizeProject(file.project);
+          if (restored.setupComplete) {
+            get().loadDesign(file);
+          } else {
+            set({ project: restored });
+          }
+        }
       }
       const cloudId = window.localStorage.getItem('studio.cloudProjectId');
       if (cloudId) set({ cloudProjectId: cloudId });
@@ -1409,7 +1446,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       }
     };
     if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+      runWhenIdle(run);
     } else {
       run();
     }
