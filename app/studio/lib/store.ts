@@ -13,6 +13,7 @@ import {
   collectFixableFixes,
   prioritizeFixes,
   applyFixStep,
+  finalizeFixableState,
   fixKey,
   type FixableState,
 } from './engine/apply-fix';
