@@ -6,25 +6,9 @@
  */
 import type { DesignRoom, BimModel } from '../model';
 import { extractBimFromRaster } from './bim-extract';
+import { classifyDetectedSpaces } from './plan-space-classify';
 
 export type DetectedRoom = Omit<DesignRoom, 'id'>;
-
-function labelRoomFromShape(
-  rank: number,
-  area: number,
-  totalArea: number,
-  aspect: number,
-): { label: string; zone: DesignRoom['zone'] } {
-  if (aspect > 3.2 || aspect < 0.32) return { label: 'Corridor', zone: 'corridor' };
-  const share = area / Math.max(1, totalArea);
-  if (rank === 0) return { label: 'Living', zone: 'general' };
-  if (share < 0.06) return { label: 'Bathroom', zone: 'bathroom' };
-  if (share < 0.09 && aspect < 1.4) return { label: 'Storage', zone: 'general' };
-  if (rank === 1 && share > 0.12) return { label: 'Kitchen', zone: 'kitchen' };
-  if (rank % 3 === 2) return { label: 'Office', zone: 'office' };
-  if (rank % 2 === 1) return { label: `Bedroom ${Math.ceil(rank / 2)}`, zone: 'bedroom' };
-  return { label: `Room ${rank + 1}`, zone: 'general' };
-}
 
 type BBox = { x: number; y: number; w: number; h: number; area: number };
 
@@ -36,22 +20,30 @@ export async function detectRoomsFromMap(
   mapWidth: number,
   mapHeight: number,
 ): Promise<DetectedRoom[]> {
-  const { data, w, h, threshold } = await rasterize(src, Math.min(1200, mapWidth));
+  const { data, w, h, threshold } = await rasterize(src, Math.min(1400, mapWidth));
   const boxes = findRoomRegions(data, w, h, threshold);
-  const ranked = boxes.sort((a, b) => b.area - a.area).slice(0, 20);
-  const totalArea = ranked.reduce((sum, b) => sum + b.area, 0);
+  const ranked = boxes.sort((a, b) => b.area - a.area).slice(0, 28);
   const scaled = ranked.map((b) => ({
     x: mapX + (b.x / w) * mapWidth,
     y: mapY + (b.y / h) * mapHeight,
-    width: Math.max(60, (b.w / w) * mapWidth),
-    height: Math.max(50, (b.h / h) * mapHeight),
+    width: Math.max(50, (b.w / w) * mapWidth),
+    height: Math.max(40, (b.h / h) * mapHeight),
     area: b.area,
   }));
 
+  const classified = classifyDetectedSpaces(scaled, mapX, mapY, mapWidth, mapHeight);
+
   return scaled.map((r, i) => {
-    const aspect = r.width / Math.max(1, r.height);
-    const { label, zone } = labelRoomFromShape(i, r.area, totalArea, aspect);
-    return { label, zone, x: r.x, y: r.y, width: r.width, height: r.height };
+    const c = classified[i]!;
+    return {
+      label: c.label,
+      zone: c.zone,
+      spaceKind: c.spaceKind,
+      x: r.x,
+      y: r.y,
+      width: r.width,
+      height: r.height,
+    };
   });
 }
 
@@ -74,7 +66,7 @@ function estimateLightThreshold(data: Uint8ClampedArray): number {
   }
   samples.sort((a, b) => a - b);
   const median = samples[Math.floor(samples.length / 2)] ?? 180;
-  return Math.min(210, Math.max(150, median + 18));
+  return Math.min(210, Math.max(145, median + 15));
 }
 
 async function rasterize(
@@ -110,7 +102,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 function findRoomRegions(data: Uint8ClampedArray, width: number, height: number, threshold: number): BBox[] {
   const visited = new Uint8Array(width * height);
   const boxes: BBox[] = [];
-  const minArea = (width * height) / 250;
+  const minArea = (width * height) / 320;
 
   const isFree = (x: number, y: number) => {
     if (x < 1 || y < 1 || x >= width - 1 || y >= height - 1) return false;
@@ -119,8 +111,8 @@ function findRoomRegions(data: Uint8ClampedArray, width: number, height: number,
     return lum > threshold;
   };
 
-  for (let y = 2; y < height - 2; y += 4) {
-    for (let x = 2; x < width - 2; x += 4) {
+  for (let y = 2; y < height - 2; y += 3) {
+    for (let x = 2; x < width - 2; x += 3) {
       const idx = y * width + x;
       if (visited[idx] || !isFree(x, y)) continue;
       const stack: [number, number][] = [[x, y]];
@@ -154,12 +146,12 @@ function findRoomRegions(data: Uint8ClampedArray, width: number, height: number,
         }
       }
 
-      const w = maxX - minX;
-      const h = maxY - minY;
+      const bw = maxX - minX;
+      const bh = maxY - minY;
       const area = count;
-      if (area < minArea || w < 20 || h < 20) continue;
-      if (w / h > 8 || h / w > 8) continue;
-      boxes.push({ x: minX, y: minY, w, h, area });
+      if (area < minArea || bw < 14 || bh < 14) continue;
+      if (bw / bh > 9 || bh / bw > 9) continue;
+      boxes.push({ x: minX, y: minY, w: bw, h: bh, area });
     }
   }
 
@@ -169,7 +161,7 @@ function findRoomRegions(data: Uint8ClampedArray, width: number, height: number,
 function mergeOverlapping(boxes: BBox[]): BBox[] {
   const out: BBox[] = [];
   for (const b of boxes.sort((a, c) => c.area - a.area)) {
-    const overlap = out.some((o) => iou(o, b) > 0.45);
+    const overlap = out.some((o) => iou(o, b) > 0.42);
     if (!overlap) out.push(b);
   }
   return out;

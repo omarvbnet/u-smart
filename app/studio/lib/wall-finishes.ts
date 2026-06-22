@@ -124,7 +124,7 @@ export function wall3dMaterial(
     decoration?: WallDecoration;
     outdoor?: boolean;
   },
-  opts?: { interiorView?: boolean },
+  opts?: { interiorView?: boolean; focusView?: boolean },
 ): {
   color: string;
   roughness: number;
@@ -136,6 +136,16 @@ export function wall3dMaterial(
   const color = resolveWallColor(w);
   const glass = w.wallType === 'glass';
   const stone = w.wallType === 'stone' || w.wallType === 'brick';
+  if (opts?.focusView) {
+    return {
+      color,
+      roughness: glass ? 0.08 : stone ? 0.88 : 0.7,
+      metalness: glass ? 0.25 : 0,
+      transparent: glass,
+      opacity: glass ? 0.42 : 0.92,
+      depthWrite: !glass,
+    };
+  }
   if (opts?.interiorView) {
     return {
       color,
@@ -158,7 +168,7 @@ export function wall3dMaterial(
 
 export function ceiling3dMaterial(
   meta: CeilingMeta | undefined,
-  opts?: { interiorView?: boolean },
+  opts?: { interiorView?: boolean; focusView?: boolean },
 ): { color: string; roughness: number; transparent: boolean; opacity: number; depthWrite: boolean } {
   const type = meta?.ceilingType ?? 'flat';
   const preset = CEILING_TYPES.find((c) => c.id === type);
@@ -166,6 +176,9 @@ export function ceiling3dMaterial(
     color: meta?.color ?? preset?.defaultColor ?? '#ffffff',
     roughness: type === 'acoustic' ? 0.95 : type === 'coffered' ? 0.6 : 0.85,
   };
+  if (opts?.focusView) {
+    return { ...base, transparent: false, opacity: 0.95, depthWrite: true };
+  }
   if (opts?.interiorView) {
     return { ...base, transparent: true, opacity: 0.22, depthWrite: false };
   }

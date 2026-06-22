@@ -1,8 +1,9 @@
 'use client';
 
-import { Suspense, useMemo, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Suspense, useMemo, useRef, useLayoutEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { useStudio } from '../lib/store';
 import { getCatalogEntry, type LoadSpec } from '../lib/catalog';
@@ -10,10 +11,17 @@ import { physicalSpecFor, PX_PER_M } from '../lib/catalog/dimensions';
 import { useSimulation, useDigitalTwinSync } from './hooks';
 import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
-import type { DesignOpening, DesignGarden, DesignWall, CurtainStyle } from '../lib/model';
+import type { DesignOpening, DesignGarden, DesignRoom, DesignWall, CurtainStyle } from '../lib/model';
 import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
 import { wall3dMaterial, ceiling3dMaterial, type CeilingMeta } from '../lib/wall-finishes';
 import { openingOpenPercent, resolveFloorOpeningsFor3d } from '../lib/engine/opening-layout';
+import {
+  parseTwin3dSpaceId,
+  nodeInRoom,
+  wallsForRoom,
+  sceneCenterForSpace,
+} from '../lib/engine/twin3d-spaces';
+import { Twin3DControls } from './Twin3DControls';
 import {
   parseRoutePoints,
   computeCableRoute,
@@ -45,6 +53,7 @@ function RoomMesh({
   elevation,
   ceiling,
   zone,
+  focusView,
 }: {
   x: number;
   y: number;
@@ -54,12 +63,13 @@ function RoomMesh({
   elevation: number;
   ceiling?: CeilingMeta;
   zone?: string;
+  focusView?: boolean;
 }) {
   const cx = pxToM(x + w / 2);
   const cz = pxToM(y + h / 2);
   const mw = pxToM(w);
   const mh = pxToM(h);
-  const ceilMat = ceiling3dMaterial(ceiling, { interiorView: true });
+  const ceilMat = ceiling3dMaterial(ceiling, focusView ? { focusView: true } : { interiorView: true });
   const floorTint =
     zone === 'kitchen'
       ? '#e7e5e4'
@@ -206,13 +216,13 @@ function OpeningMesh({
   );
 }
 
-function WallMesh({ wall, elevation }: { wall: DesignWall; elevation: number }) {
+function WallMesh({ wall, elevation, focusView }: { wall: DesignWall; elevation: number; focusView?: boolean }) {
   const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
   const cx = pxToM((wall.x1 + wall.x2) / 2);
   const cz = pxToM((wall.y1 + wall.y2) / 2);
   const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);
   const heightM = wall.heightM ?? 2.8;
-  const mat = wall3dMaterial(wall, { interiorView: true });
+  const mat = wall3dMaterial(wall, focusView ? { focusView: true } : { interiorView: true });
   return (
     <mesh position={[cx, elevation + heightM / 2, cz]} rotation={[0, -angle, 0]} castShadow receiveShadow>
       <boxGeometry args={[pxToM(len), heightM, pxToM(Math.max(4, wall.thickness * 4))]} />
@@ -459,6 +469,24 @@ function CableRun3D({
   );
 }
 
+function FocusCamera({ x, z, span, elevation }: { x: number; z: number; span: number; elevation: number }) {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+
+  useLayoutEffect(() => {
+    const dist = Math.max(3.5, span * 0.85);
+    camera.position.set(x + dist * 0.55, elevation + dist * 0.42, z + dist * 0.55);
+    if (controls) {
+      controls.target.set(x, elevation + 1.35, z);
+      controls.minDistance = 1.5;
+      controls.maxDistance = Math.max(12, span * 2.5);
+      controls.update();
+    }
+  }, [x, z, span, elevation, camera, controls]);
+
+  return null;
+}
+
 function SceneContent() {
   const rooms = useStudio((s) => s.rooms);
   const nodes = useStudio((s) => s.nodes);
@@ -471,19 +499,31 @@ function SceneContent() {
   const showCableRoutes3d = useStudio((s) => s.showCableRoutes3d);
   const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
   const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
+  const focusSpaceId = useStudio((s) => s.twin3dFocusSpaceId);
   const sim = useSimulation();
   const simulating = useStudio((s) => s.simulating);
   const { twinConnected } = useDigitalTwinSync();
 
   const floorLevel = floors.find((f) => f.id === activeFloorId)?.level ?? 0;
   const elevation = floorElevation(floorLevel);
+  const focus = focusSpaceId ? parseTwin3dSpaceId(focusSpaceId) : null;
+  const focusRoom = focus?.kind === 'room' ? rooms.find((r) => r.id === focus.entityId) : undefined;
+  const focusGarden =
+    focus?.kind === 'garden' ? bim?.gardens?.find((g) => g.id === focus.entityId) : undefined;
+  const isSpaceFocus = !!focusSpaceId;
 
-  const visibleRooms = useMemo(
-    () => rooms.filter((r) => !r.floorId || r.floorId === activeFloorId),
-    [rooms, activeFloorId],
-  );
+  const visibleRooms = useMemo(() => {
+    const floorRooms = rooms.filter((r) => !r.floorId || r.floorId === activeFloorId);
+    if (focusRoom) return [focusRoom];
+    if (focusGarden) return [];
+    return floorRooms;
+  }, [rooms, activeFloorId, focusRoom, focusGarden]);
 
   const sceneCenter = useMemo(() => {
+    if (focusSpaceId) {
+      const c = sceneCenterForSpace(focusSpaceId, rooms, bim?.gardens);
+      if (c) return c;
+    }
     if (!visibleRooms.length) return { x: 0, z: 0, span: 12 };
     const minX = Math.min(...visibleRooms.map((r) => r.x));
     const maxX = Math.max(...visibleRooms.map((r) => r.x + r.width));
@@ -493,7 +533,7 @@ function SceneContent() {
     const cz = pxToM((minY + maxY) / 2);
     const span = Math.max(pxToM(maxX - minX), pxToM(maxY - minY), 8);
     return { x: cx, z: cz, span };
-  }, [visibleRooms]);
+  }, [visibleRooms, focusSpaceId, rooms, bim?.gardens]);
 
   const metrics = useMemo(() => {
     if (!simulating) return null;
@@ -501,24 +541,46 @@ function SceneContent() {
   }, [nodes, sim, simulating]);
 
   const devices = useMemo(
-    () => nodes.filter((n) => {
-      const e = getCatalogEntry(n.catalogId);
-      if (!e || e.domain === 'cable') return false;
-      if (e.category === 'SOCKET' || e.category === 'APPLIANCE') return false;
-      return !n.floorId || n.floorId === activeFloorId;
-    }),
-    [nodes, activeFloorId],
+    () =>
+      nodes.filter((n) => {
+        const e = getCatalogEntry(n.catalogId);
+        if (!e || e.domain === 'cable') return false;
+        if (e.category === 'SOCKET' || e.category === 'APPLIANCE') return false;
+        if (n.floorId && n.floorId !== activeFloorId) return false;
+        if (focusRoom && !nodeInRoom(n, focusRoom)) return false;
+        if (focusGarden) return false;
+        return true;
+      }),
+    [nodes, activeFloorId, focusRoom, focusGarden],
   );
 
-  const walls = useMemo(
-    () => mergeEffectiveWalls(bim, rooms, activeFloorId),
-    [bim, rooms, activeFloorId],
-  );
-  const openings3d = useMemo(
-    () => resolveFloorOpeningsFor3d(bim, rooms, activeFloorId, project),
-    [bim, rooms, activeFloorId, project],
-  );
-  const gardens = bim?.gardens?.filter((g) => !g.floorId || g.floorId === activeFloorId) ?? [];
+  const walls = useMemo(() => {
+    if (focusRoom) return wallsForRoom(bim, rooms, focusRoom, activeFloorId);
+    if (focusGarden) return [];
+    return mergeEffectiveWalls(bim, rooms, activeFloorId);
+  }, [bim, rooms, activeFloorId, focusRoom, focusGarden]);
+
+  const openings3d = useMemo(() => {
+    const all = resolveFloorOpeningsFor3d(bim, rooms, activeFloorId, project);
+    if (!focusRoom) return all;
+    return all.filter(({ opening, x, y }) => {
+      if (opening.roomId === focusRoom.id) return true;
+      if (opening.wallId?.startsWith(`rw_${focusRoom.id}_`)) return true;
+      return (
+        x >= focusRoom.x &&
+        x <= focusRoom.x + focusRoom.width &&
+        y >= focusRoom.y &&
+        y <= focusRoom.y + focusRoom.height
+      );
+    });
+  }, [bim, rooms, activeFloorId, project, focusRoom]);
+
+  const gardens = useMemo(() => {
+    const all = bim?.gardens?.filter((g) => !g.floorId || g.floorId === activeFloorId) ?? [];
+    if (focusGarden) return [focusGarden];
+    if (focusRoom) return [];
+    return all;
+  }, [bim?.gardens, activeFloorId, focusGarden, focusRoom]);
 
   const cableRuns = useMemo(() => {
     if (!showCableRoutes3d || mapOverlayMode === 'plan') return [];
@@ -534,8 +596,18 @@ function SceneContent() {
         const entry = getCatalogEntry(n.catalogId) as CableSpec;
         const conduitType = (n.params.conduitType as ConduitType | undefined) ?? conduitTypeForCable(entry);
         return { id: n.id, points, conduitType, catalogId: n.catalogId, active: !!sim[n.id]?.active };
+      })
+      .filter((run) => {
+        if (!focusRoom) return true;
+        return run.points.some(
+          (p) =>
+            p.x >= focusRoom.x &&
+            p.x <= focusRoom.x + focusRoom.width &&
+            p.y >= focusRoom.y &&
+            p.y <= focusRoom.y + focusRoom.height,
+        );
       });
-  }, [nodes, edges, rooms, activeFloorId, showCableRoutes3d, mapOverlayMode, sim]);
+  }, [nodes, edges, rooms, activeFloorId, showCableRoutes3d, mapOverlayMode, sim, focusRoom]);
 
   const mapOutlets = useMemo(() => {
     if (!showOutletsOnMap) return [];
@@ -543,12 +615,20 @@ function SceneContent() {
       if (n.floorId && n.floorId !== activeFloorId) return false;
       if (n.params.showOnMap === false) return false;
       const e = getCatalogEntry(n.catalogId);
-      return e?.category === 'SOCKET' || e?.category === 'APPLIANCE';
+      if (e?.category !== 'SOCKET' && e?.category !== 'APPLIANCE') return false;
+      if (focusRoom) return nodeInRoom(n, focusRoom);
+      if (focusGarden) return false;
+      return true;
     });
-  }, [nodes, activeFloorId, showOutletsOnMap]);
+  }, [nodes, activeFloorId, showOutletsOnMap, focusRoom, focusGarden]);
+
+  const groundSize = isSpaceFocus ? Math.max(8, sceneCenter.span * 1.6) : Math.max(40, sceneCenter.span * 2.5);
 
   return (
     <>
+      {isSpaceFocus && (
+        <FocusCamera x={sceneCenter.x} z={sceneCenter.z} span={sceneCenter.span} elevation={elevation} />
+      )}
       {metrics && (
         <Text position={[sceneCenter.x - 4, 4 + elevation, sceneCenter.z]} fontSize={0.22} color="#22d3ee" anchorX="left">
           {`${metrics.totalKw.toFixed(2)} kW · ${metrics.totalA.toFixed(1)} A · ${metrics.activeDevices} active${twinConnected ? ' · twin' : ''}`}
@@ -558,7 +638,7 @@ function SceneContent() {
       <hemisphereLight intensity={0.45} color="#f8fafc" groundColor="#334155" />
       <directionalLight position={[8, 12 + elevation, 6]} intensity={0.85} castShadow />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[sceneCenter.x, elevation - 0.01, sceneCenter.z]} receiveShadow>
-        <planeGeometry args={[Math.max(40, sceneCenter.span * 2.5), Math.max(40, sceneCenter.span * 2.5)]} />
+        <planeGeometry args={[groundSize, groundSize]} />
         <meshStandardMaterial color="#cbd5e1" />
       </mesh>
       {gardens.map((g) => (
@@ -575,10 +655,11 @@ function SceneContent() {
           elevation={elevation}
           ceiling={bim?.ceilingMeta?.[r.id]}
           zone={r.zone}
+          focusView={isSpaceFocus}
         />
       ))}
       {walls.map((w) => (
-        <WallMesh key={w.id} wall={w} elevation={elevation} />
+        <WallMesh key={w.id} wall={w} elevation={elevation} focusView={isSpaceFocus} />
       ))}
       {openings3d.map(({ opening, x, y }) => (
         <OpeningMesh
@@ -632,17 +713,20 @@ function SceneContent() {
           />
         );
       })}
-      <PerspectiveCamera
-        makeDefault
-        position={[
-          sceneCenter.x + sceneCenter.span * 0.55,
-          elevation + sceneCenter.span * 0.45,
-          sceneCenter.z + sceneCenter.span * 0.55,
-        ]}
-        fov={48}
-        near={0.1}
-        far={500}
-      />
+      {!isSpaceFocus && (
+        <PerspectiveCamera
+          makeDefault
+          position={[
+            sceneCenter.x + sceneCenter.span * 0.55,
+            elevation + sceneCenter.span * 0.45,
+            sceneCenter.z + sceneCenter.span * 0.55,
+          ]}
+          fov={48}
+          near={0.1}
+          far={500}
+        />
+      )}
+      {isSpaceFocus && <PerspectiveCamera makeDefault fov={50} near={0.1} far={200} />}
       <OrbitControls
         makeDefault
         maxPolarAngle={Math.PI / 2.1}
@@ -678,6 +762,7 @@ export function Twin3DView() {
           <SceneContent />
         </Canvas>
       </Suspense>
+      <Twin3DControls />
     </div>
   );
 }

@@ -362,6 +362,12 @@ export function PropertiesPanel() {
               ))}
             </select>
           </label>
+          {room.spaceKind && (
+            <div className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-xs">
+              <span className="text-[var(--studio-muted)]">{t('roomSpaceKind')}: </span>
+              <span className="font-semibold text-[var(--studio-text)]">{room.spaceKind}</span>
+            </div>
+          )}
           {floors.length > 1 && (
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--studio-muted)]">{t('roomFloor')}</span>

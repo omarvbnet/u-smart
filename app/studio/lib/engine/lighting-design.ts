@@ -10,6 +10,7 @@ import {
   fixturesForRoom,
   achievedLux,
 } from './lighting-fixtures';
+import { IRAQ_DESIGN_ASSUMPTIONS } from './iraq-electrical';
 
 export type RoomLightingDesign = {
   roomId: string;
@@ -34,6 +35,7 @@ export type LightingDesignReport = {
 
 export function calculateLightingDesign(rooms: DesignRoom[]): LightingDesignReport {
   const assumptions = [
+    ...IRAQ_DESIGN_ASSUMPTIONS,
     'Target lux per EN 12464-1 maintained illuminance.',
     'Fixture types: downlight, linear, spot, magnetic track — datasheet values used for calculations.',
     'Maintenance factor 0.8 applied to lumen output.',

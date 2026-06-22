@@ -29,6 +29,8 @@ import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSourc
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
 import { buildStarterDesign, enhanceDesignPlacement, generateProjectDesign } from './engine/starter-design';
 import { inferFinishMetaFromPlan } from './engine/plan-layout';
+import { withIraqElectricalStandards } from './engine/iraq-electrical';
+import { parseTwin3dSpaceId } from './engine/twin3d-spaces';
 import { invalidateDesignAnalysisCache } from './design-analysis';
 import {
   seedRoomsForBuilding,
@@ -51,7 +53,7 @@ import { isBusPowerAdequate, busPowerStatus } from './engine/smarthome-topology'
 import { validateLightingDesign } from './engine/lighting-validation';
 import type { MapOverlayMode } from './engine/cable-map';
 import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, cableIdsLinkedToNode, type RoutePoint } from './engine/cable-map';
-import { wireRoomLoads } from './engine/placement-layout';
+import { attachRoomElectricalDistribution } from './engine/room-electrical-distribution';
 import {
   placeSocketOutlets,
   placeAppliances,
@@ -154,6 +156,9 @@ type StudioState = {
   editingCableRouteId: string | null;
   showCableRoutes3d: boolean;
   showOutletsOnMap: boolean;
+  /** When set, 3D twin isolates one room or garden (`garden:id`). */
+  twin3dFocusSpaceId: string | null;
+  twin3dShowMaterials: boolean;
   historyPast: ReturnType<typeof cloneDesignSnapshot>[];
   historyFuture: ReturnType<typeof cloneDesignSnapshot>[];
 
@@ -207,7 +212,13 @@ type StudioState = {
 
   setFloorPlanTool: (tool: FloorPlanTool) => void;
   addRoom: (room: Omit<DesignRoom, 'id'> & { id?: string }) => void;
-  addRoomTemplate: (label: string, zone: DesignRoom['zone'], width: number, height: number) => void;
+  addRoomTemplate: (
+    label: string,
+    zone: DesignRoom['zone'],
+    width: number,
+    height: number,
+    spaceKind?: DesignRoom['spaceKind'],
+  ) => void;
   seedDefaultRooms: () => void;
   applyBuildingLayout: (options?: { bedrooms?: number; engineering?: boolean; resetMap?: boolean }) => { ok: boolean; message: string; changes: number };
   duplicateRoom: (roomId: string) => void;
@@ -279,6 +290,8 @@ type StudioState = {
   updateCableRoutePoints: (cableId: string, points: RoutePoint[]) => void;
   toggleCableRoutes3d: () => void;
   toggleOutletsOnMap: () => void;
+  setTwin3dFocusSpace: (spaceId: string | null) => void;
+  setTwin3dShowMaterials: (show: boolean) => void;
   addOutletToRoom: (roomId: string, catalogId: OutletCatalogId) => void;
   placeRoomOutlets: (roomId?: string) => { added: number };
   placeRoomCables: (roomId?: string) => { added: number };
@@ -640,6 +653,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   editingCableRouteId: null,
   showCableRoutes3d: initialCableRoutes3d(),
   showOutletsOnMap: initialOutletsOnMap(),
+  twin3dFocusSpaceId: null,
+  twin3dShowMaterials: true,
   historyPast: [],
   historyFuture: [],
 
@@ -927,8 +942,9 @@ export const useStudio = create<StudioState>((set, get) => ({
       bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
 
       const pre = get();
-      if (rooms.length > 0 && pre.project.setupComplete) {
-        const result = generateProjectDesign(pre.project, rooms, pre.locale, activeFloorId);
+      const project = withIraqElectricalStandards(pre.project);
+      if (rooms.length > 0 && project.setupComplete) {
+        const result = generateProjectDesign(project, rooms, pre.locale, activeFloorId);
         const mergedBim: BimModel = {
           walls: bim.walls.length ? bim.walls : result.bim.walls,
           openings: [...(bim.openings ?? []), ...result.bim.openings],
@@ -938,6 +954,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         };
         set(
           withHistory(pre, {
+            project,
             rooms,
             bim: mergedBim,
             nodes: result.nodes,
@@ -1178,14 +1195,15 @@ export const useStudio = create<StudioState>((set, get) => ({
       width: room.width,
       height: room.height,
       zone: room.zone,
+      spaceKind: room.spaceKind,
       floorId: room.floorId ?? get().activeFloorId,
     };
     set((s) => withHistory(s, { rooms: [...s.rooms, r], selectedRoomId: id, selectedNodeId: null }));
   },
 
-  addRoomTemplate: (label, zone, width, height) => {
+  addRoomTemplate: (label, zone, width, height, spaceKind) => {
     const offset = get().rooms.length * 24;
-    get().addRoom({ label, zone, x: -120 + offset, y: -80 + offset, width, height });
+    get().addRoom({ label, zone, spaceKind, x: -120 + offset, y: -80 + offset, width, height });
   },
 
   seedDefaultRooms: () => {
@@ -1639,7 +1657,33 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
     const finishes = inferFinishMetaFromPlan(rooms, bim, s.activeFloorId);
     if (bim) bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
-    set({ rooms, bim, selectedRoomId: null });
+
+    const project = withIraqElectricalStandards(s.project);
+    if (rooms.length > 0 && project.setupComplete) {
+      const result = generateProjectDesign(project, rooms, s.locale, s.activeFloorId);
+      const mergedBim: BimModel = {
+        walls: bim?.walls ?? [],
+        openings: [...(bim?.openings ?? []), ...result.bim.openings],
+        gardens: bim?.gardens ?? result.bim.gardens,
+        wallMeta: finishes.wallMeta,
+        ceilingMeta: finishes.ceilingMeta,
+      };
+      set(
+        withHistory(s, {
+          project,
+          rooms,
+          bim: mergedBim,
+          nodes: result.nodes,
+          edges: result.edges,
+          controls: result.controls,
+          designName: result.designName,
+          canvasFitSeq: s.canvasFitSeq + 1,
+        }),
+      );
+      scheduleDeferredCableReroute(get, set);
+    } else {
+      set({ rooms, bim, selectedRoomId: null, project });
+    }
     return rooms.length;
   },
 
@@ -1652,7 +1696,11 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   setVisualizationMode: (mode) => {
     persist('studio.visualizationMode', mode);
-    set((s) => ({ visualizationMode: mode, canvasFitSeq: s.canvasFitSeq + 1 }));
+    set((s) => ({
+      visualizationMode: mode,
+      canvasFitSeq: s.canvasFitSeq + 1,
+      ...(mode !== '3d' ? { twin3dFocusSpaceId: null } : {}),
+    }));
   },
 
   setExperienceMode: (mode) => {
@@ -1912,6 +1960,15 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ showOutletsOnMap: next });
   },
 
+  setTwin3dFocusSpace: (spaceId) => {
+    const parsed = spaceId ? parseTwin3dSpaceId(spaceId) : null;
+    set({
+      twin3dFocusSpaceId: spaceId,
+      selectedRoomId: parsed?.kind === 'room' ? parsed.entityId : null,
+    });
+  },
+  setTwin3dShowMaterials: (show) => set({ twin3dShowMaterials: show }),
+
   addOutletToRoom: (roomId, catalogId) => {
     const s = get();
     const room = s.rooms.find((r) => r.id === roomId);
@@ -1952,63 +2009,16 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   placeRoomCables: (roomId) => {
     const s = get();
-    const panel =
-      s.nodes.find((n) => n.id === 'panel_main') ??
-      s.nodes.find((n) => n.catalogId === 'load-distribution-board');
-    if (!panel) return { added: 0 };
-
     const targets = roomId ? s.rooms.filter((r) => r.id === roomId) : s.rooms;
     if (!targets.length) return { added: 0 };
 
-    let nodes = [...s.nodes];
-    let edges = [...s.edges];
-    let added = 0;
-
-    const loadsInRoom = (room: DesignRoom) =>
-      nodes.filter((n) => {
-        const e = getCatalogEntry(n.catalogId);
-        if (!e) return false;
-        if (e.domain === 'cable' || e.domain === 'protection' || e.domain === 'source') return false;
-        if (e.domain !== 'load' && e.category !== 'SOCKET' && e.category !== 'APPLIANCE') return false;
-        if (n.params.roomId === room.id) return true;
-        const cx = n.x + 21;
-        const cy = n.y + 21;
-        return cx >= room.x && cx <= room.x + room.width && cy >= room.y && cy <= room.y + room.height;
-      });
-
-    for (const room of targets) {
-      const prefix = `cable_${room.id}`;
-      const removeIds = new Set(
-        nodes.filter((n) => n.id === prefix || n.id.startsWith(`${prefix}_`)).map((n) => n.id),
-      );
-      nodes = nodes.filter((n) => !removeIds.has(n.id));
-      edges = edges.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target));
-
-      const loads = loadsInRoom(room);
-      if (!loads.length) continue;
-
-      const before = nodes.length;
-      wireRoomLoads(
-        panel.id,
-        room,
-        loads,
-        s.rooms,
-        (src, sh, tgt, th) => ({ id: uid('e'), source: src, sourceHandle: sh, target: tgt, targetHandle: th }),
-        (n) => {
-          nodes.push(n);
-        },
-        (e) => {
-          edges.push(e);
-        },
-      );
-      added += nodes.length - before;
-    }
-
-    nodes = nodes.map((n) =>
-      getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, nodes, edges, s.rooms) : n,
+    const before = s.nodes.length;
+    const wired = attachRoomElectricalDistribution(s.project, targets, s.nodes, s.edges);
+    const nodes = wired.nodes.map((n) =>
+      getCatalogEntry(n.catalogId)?.domain === 'cable' ? rerouteCableNode(n, wired.nodes, wired.edges, s.rooms) : n,
     );
-    set({ nodes, edges });
-    return { added };
+    set({ nodes, edges: wired.edges });
+    return { added: Math.max(0, nodes.length - before) };
   },
 
   removeOutletsInRoom: (roomId) =>

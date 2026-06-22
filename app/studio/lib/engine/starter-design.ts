@@ -16,6 +16,8 @@ import { buildBimOpenings, mergeOpeningActuators } from './opening-layout';
 import { calculateLightingDesign, type LightingDesignReport } from './lighting-design';
 import type { ControlState } from '../controls';
 import { defaultControlState } from '../controls';
+import { withIraqElectricalStandards } from './iraq-electrical';
+import { attachRoomElectricalDistribution } from './room-electrical-distribution';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -40,6 +42,7 @@ export function buildStarterDesign(
   project: ProjectInfo,
   locale: StudioLocale,
   rooms: DesignRoom[],
+  options?: { skipRoomLoads?: boolean },
 ): { nodes: DesignNode[]; edges: DesignEdge[]; name: string } {
   const bt = project.buildingType;
   const names: Record<StudioLocale, string> = {
@@ -78,48 +81,50 @@ export function buildStarterDesign(
     edges.push(edge(primarySrc.id, 'out', mainId, 'in'));
   }
 
-  // Room-based lighting & socket loads placed on floor plan
-  targets.forEach((room) => {
-    const cx = room.x + room.width / 2;
-    const cy = room.y + room.height / 2;
-    const mcbId = `mcb_${room.id}`;
-    const cableId = `cable_${room.id}`;
-    const lightId = `load_${room.id}`;
+  // Room circuits are wired after lighting/socket placement (Iraq / IEC per-space distribution).
+  if (!options?.skipRoomLoads) {
+    targets.forEach((room) => {
+      const cx = room.x + room.width / 2;
+      const cy = room.y + room.height / 2;
+      const mcbId = `mcb_${room.id}`;
+      const cableId = `cable_${room.id}`;
+      const lightId = `load_${room.id}`;
 
-    const mcbX = room.x + 8;
-    const mcbY = room.y + 8;
-    const loadX = cx - 20;
-    const loadY = cy;
-    const run = cableRunRouted(mcbX, mcbY, loadX, loadY, targets);
+      const mcbX = room.x + 8;
+      const mcbY = room.y + 8;
+      const loadX = cx - 20;
+      const loadY = cy;
+      const run = cableRunRouted(mcbX, mcbY, loadX, loadY, targets);
 
-    const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec;
-    const conduitType = conduitTypeForCable(cableEntry);
-    const cableLabel = formatCableLabel(room.label, cableEntry, 0, conduitType);
+      const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec;
+      const conduitType = conduitTypeForCable(cableEntry);
+      const cableLabel = formatCableLabel(room.label, cableEntry, 0, conduitType);
 
-    nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: mcbX, y: mcbY, floorId: room.floorId ?? groundId, params: {} });
-    nodes.push({
-      id: cableId,
-      catalogId: 'cable-lv-cu-2.5',
-      label: cableLabel,
-      x: run.x,
-      y: run.y,
-      floorId: room.floorId ?? groundId,
-      params: {
-        lengthM: run.lengthM,
-        rotation: run.rotation,
-        roomId: room.id,
-        roomLabel: room.label,
-        circuitIndex: 0,
-        conduitType,
-        showOnMap: true,
-      },
+      nodes.push({ id: mcbId, catalogId: 'mcb-c10', label: `${room.label} MCB`, x: mcbX, y: mcbY, floorId: room.floorId ?? groundId, params: {} });
+      nodes.push({
+        id: cableId,
+        catalogId: 'cable-lv-cu-2.5',
+        label: cableLabel,
+        x: run.x,
+        y: run.y,
+        floorId: room.floorId ?? groundId,
+        params: {
+          lengthM: run.lengthM,
+          rotation: run.rotation,
+          roomId: room.id,
+          roomLabel: room.label,
+          circuitIndex: 0,
+          conduitType,
+          showOnMap: true,
+        },
+      });
+      nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: loadX, y: loadY, floorId: room.floorId ?? groundId, params: { powerW: roomAreaW(room) } });
+
+      edges.push(edge(mainId, 'out', mcbId, 'line'));
+      edges.push(edge(mcbId, 'load', cableId, 'a'));
+      edges.push(edge(cableId, 'b', lightId, 'in'));
     });
-    nodes.push({ id: lightId, catalogId: 'load-lighting', label: room.label, x: loadX, y: loadY, floorId: room.floorId ?? groundId, params: { powerW: roomAreaW(room) } });
-
-    edges.push(edge(mainId, 'out', mcbId, 'line'));
-    edges.push(edge(mcbId, 'load', cableId, 'a'));
-    edges.push(edge(cableId, 'b', lightId, 'in'));
-  });
+  }
 
   // HVAC from wizard
   const hvacTypes = project.hvacMode === 'auto' ? pickAutoHvac(project.buildingType) : project.hvacTypes;
@@ -240,16 +245,18 @@ export function generateProjectDesign(
   designName: string;
   bim: BimModel;
 } {
-  const starter = buildStarterDesign(project, locale, rooms);
-  const placed = enhanceDesignPlacement(project, rooms, starter.nodes, starter.edges, locale, {
+  const proj = withIraqElectricalStandards(project);
+  const starter = buildStarterDesign(proj, locale, rooms, { skipRoomLoads: true });
+  const placed = enhanceDesignPlacement(proj, rooms, starter.nodes, starter.edges, locale, {
     deferCableRouting: true,
   });
-  const pack = buildBimOpenings(rooms, project, locale, activeFloorId);
-  const nodes = mergeOpeningActuators(placed.nodes, pack.actuatorNodes);
+  const wired = attachRoomElectricalDistribution(proj, rooms, placed.nodes, placed.edges);
+  const pack = buildBimOpenings(rooms, proj, locale, activeFloorId);
+  const nodes = mergeOpeningActuators(wired.nodes, pack.actuatorNodes);
   const controls = buildControlsForNodes(nodes, { ...placed.controls, ...pack.controls });
   return {
     nodes,
-    edges: placed.edges,
+    edges: wired.edges,
     controls,
     designName: starter.name,
     bim: { walls: [], openings: pack.bim.openings, gardens: [] },

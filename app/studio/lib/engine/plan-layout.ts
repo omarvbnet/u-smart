@@ -1,7 +1,7 @@
 /**
  * Infer wall / ceiling finishes from detected room zones after plan import.
  */
-import type { BimModel, DesignRoom } from '../model';
+import type { BimModel, DesignRoom, RoomSpaceKind } from '../model';
 import type { CeilingDecoration, CeilingType, WallDecoration, WallType } from '../wall-finishes';
 import { mergeEffectiveWalls } from './wall-layout';
 
@@ -15,6 +15,19 @@ type CeilingMetaEntry = {
   ceilingType?: CeilingType;
   decoration?: CeilingDecoration;
   color?: string;
+};
+
+const SPACE_WALL: Partial<Record<RoomSpaceKind, WallMetaEntry>> = {
+  garage: { wallType: 'concrete', decoration: 'none', color: '#64748b' },
+  wc: { wallType: 'drywall', decoration: 'tile', color: '#e0f2fe' },
+  bathroom: { wallType: 'drywall', decoration: 'tile', color: '#e0f2fe' },
+  hall: { wallType: 'partition', decoration: 'paint', color: '#e2e8f0' },
+  corridor: { wallType: 'partition', decoration: 'paint', color: '#cbd5e1' },
+  dining: { wallType: 'drywall', decoration: 'paint', color: '#fafaf9' },
+  living: { wallType: 'drywall', decoration: 'paint', color: '#f8fafc' },
+  laundry: { wallType: 'drywall', decoration: 'tile', color: '#f1f5f9' },
+  utility: { wallType: 'concrete', decoration: 'none', color: '#94a3b8' },
+  kitchen: { wallType: 'drywall', decoration: 'tile', color: '#f1f5f9' },
 };
 
 const ZONE_WALL: Record<DesignRoom['zone'], WallMetaEntry> = {
@@ -67,9 +80,11 @@ export function inferFinishMetaFromPlan(
       continue;
     }
     const zonePreset = ZONE_WALL[room.zone] ?? ZONE_WALL.general;
+    const spacePreset = room.spaceKind ? SPACE_WALL[room.spaceKind] : undefined;
     wallMeta[wall.id] = {
       ...zonePreset,
-      wallType: room.zone === 'corridor' ? 'glass' : zonePreset.wallType,
+      ...spacePreset,
+      wallType: room.spaceKind === 'hall' || room.spaceKind === 'corridor' ? 'glass' : (spacePreset?.wallType ?? zonePreset.wallType),
     };
   }
 

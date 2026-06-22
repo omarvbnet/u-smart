@@ -7,6 +7,25 @@
 import type { CatalogEntry } from './catalog';
 import type { WallType, WallDecoration, CeilingType, CeilingDecoration } from './wall-finishes';
 
+/** Semantic space type from plan detection or user template. */
+export type RoomSpaceKind =
+  | 'living'
+  | 'dining'
+  | 'kitchen'
+  | 'bedroom'
+  | 'bathroom'
+  | 'wc'
+  | 'hall'
+  | 'corridor'
+  | 'garage'
+  | 'utility'
+  | 'laundry'
+  | 'office'
+  | 'storage'
+  | 'mechanical'
+  | 'lightwell'
+  | 'other';
+
 /** A room zone on the floor plan (drawn from zero or AI-detected). */
 export type DesignRoom = {
   id: string;
@@ -17,6 +36,8 @@ export type DesignRoom = {
   height: number;
   /** Zone classification for load / HVAC rules. */
   zone: 'general' | 'bedroom' | 'kitchen' | 'bathroom' | 'office' | 'corridor' | 'mechanical';
+  /** Semantic type from plan detection (garage, WC, hall, dining, …). */
+  spaceKind?: RoomSpaceKind;
   floorId?: string;
 };
 

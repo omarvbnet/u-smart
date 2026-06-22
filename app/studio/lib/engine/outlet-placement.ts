@@ -3,6 +3,7 @@
  */
 import type { LoadSpec } from '../catalog';
 import type { DesignNode, DesignRoom } from '../model';
+import { iraqSocketsForRoom } from './iraq-electrical';
 
 export type OutletCatalogId =
   | 'outlet-socket-single'
@@ -27,29 +28,43 @@ export const OUTLET_PALETTE: { id: OutletCatalogId; label: string }[] = [
   { id: 'outlet-water-heater', label: 'Water heater' },
 ];
 
-/** Minimum socket outlets by zone (EN/IEC residential guidance). */
+/** Minimum socket outlets by zone — Iraq / IEC 60364 residential spacing. */
 export function socketsRequiredForRoom(room: DesignRoom): number {
-  const areaM2 = (room.width / 50) * (room.height / 50);
-  switch (room.zone) {
-    case 'kitchen':
-      return Math.max(4, Math.ceil(areaM2 / 4));
-    case 'bathroom':
-      return Math.max(2, Math.ceil(areaM2 / 6));
-    case 'bedroom':
-      return Math.max(3, Math.ceil(areaM2 / 5));
-    case 'office':
-      return Math.max(4, Math.ceil(areaM2 / 4));
-    case 'corridor':
-      return Math.max(1, Math.ceil(areaM2 / 8));
-    case 'mechanical':
+  switch (room.spaceKind) {
+    case 'wc':
+      return 1;
+    case 'garage':
       return 2;
+    case 'hall':
+    case 'corridor':
+      return Math.max(2, iraqSocketsForRoom(room));
+    case 'laundry':
+    case 'utility':
+      return 3;
+    case 'dining':
+      return Math.max(4, iraqSocketsForRoom(room));
     default:
-      return Math.max(3, Math.ceil(areaM2 / 5));
+      break;
   }
+  return iraqSocketsForRoom(room);
 }
 
 /** Recommended fixed appliances per room zone. */
 export function appliancesForRoom(room: DesignRoom): OutletCatalogId[] {
+  switch (room.spaceKind) {
+    case 'kitchen':
+      return ['outlet-fridge', 'outlet-cooker', 'outlet-oven', 'outlet-dishwasher'];
+    case 'bathroom':
+      return ['outlet-water-heater', 'outlet-washer'];
+    case 'laundry':
+      return ['outlet-washer', 'outlet-dryer'];
+    case 'garage':
+      return [];
+    case 'wc':
+      return [];
+    default:
+      break;
+  }
   switch (room.zone) {
     case 'kitchen':
       return ['outlet-fridge', 'outlet-cooker', 'outlet-oven', 'outlet-dishwasher'];

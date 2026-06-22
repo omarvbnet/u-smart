@@ -7,12 +7,17 @@ import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
 import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3, Maximize2, Focus, TreePine, DoorOpen, AppWindow } from 'lucide-react';
 
 const ROOM_TEMPLATES = [
-  { label: 'Living', zone: 'general' as const, w: 280, h: 200 },
-  { label: 'Kitchen', zone: 'kitchen' as const, w: 180, h: 140 },
-  { label: 'Bedroom', zone: 'bedroom' as const, w: 200, h: 160 },
-  { label: 'Bathroom', zone: 'bathroom' as const, w: 120, h: 100 },
-  { label: 'Office', zone: 'office' as const, w: 180, h: 150 },
-  { label: 'Corridor', zone: 'corridor' as const, w: 320, h: 80 },
+  { label: 'Living Room', zone: 'general' as const, spaceKind: 'living' as const, w: 280, h: 200 },
+  { label: 'Dining Room', zone: 'general' as const, spaceKind: 'dining' as const, w: 200, h: 180 },
+  { label: 'Kitchen', zone: 'kitchen' as const, spaceKind: 'kitchen' as const, w: 180, h: 140 },
+  { label: 'Bedroom', zone: 'bedroom' as const, spaceKind: 'bedroom' as const, w: 200, h: 160 },
+  { label: 'Bathroom', zone: 'bathroom' as const, spaceKind: 'bathroom' as const, w: 120, h: 100 },
+  { label: 'WC', zone: 'bathroom' as const, spaceKind: 'wc' as const, w: 80, h: 80 },
+  { label: 'Hall', zone: 'corridor' as const, spaceKind: 'hall' as const, w: 320, h: 100 },
+  { label: 'Garage', zone: 'mechanical' as const, spaceKind: 'garage' as const, w: 240, h: 200 },
+  { label: 'Office', zone: 'office' as const, spaceKind: 'office' as const, w: 180, h: 150 },
+  { label: 'Laundry', zone: 'mechanical' as const, spaceKind: 'laundry' as const, w: 120, h: 100 },
+  { label: 'Corridor', zone: 'corridor' as const, spaceKind: 'corridor' as const, w: 320, h: 80 },
 ];
 
 export function FloorPlanToolbar() {
@@ -137,7 +142,7 @@ export function FloorPlanToolbar() {
           <button
             key={tm.label}
             className="rounded-lg px-2 py-1 text-[9px] font-medium text-[var(--studio-muted)] hover:bg-[var(--studio-hover)] hover:text-[var(--studio-text)]"
-            onClick={() => addRoomTemplate(tm.label, tm.zone, tm.w, tm.h)}
+            onClick={() => addRoomTemplate(tm.label, tm.zone, tm.w, tm.h, tm.spaceKind)}
           >
             + {tm.label}
           </button>

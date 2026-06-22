@@ -53,8 +53,10 @@ export function placeLightingFixtures(
         y: room.y + padY + rowIdx * cellH + cellH / 2 - 21,
         floorId: room.floorId,
         params: {
+          roomId: room.id,
           powerW: Math.round(row.powerW / count),
           lightingType: row.fixtureType,
+          showOnMap: true,
         },
       });
     }
