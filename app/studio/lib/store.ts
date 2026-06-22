@@ -18,7 +18,7 @@ import {
   type FixableState,
 } from './engine/apply-fix';
 import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
-import { runWhenIdle } from './idle';
+import { runWhenIdle, runAsyncWhenIdle, yieldToMain } from './idle';
 import { CABLES } from './catalog/cables';
 import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -27,7 +27,7 @@ import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
-import { buildStarterDesign, enhanceDesignPlacement, generateProjectDesign } from './engine/starter-design';
+import { buildStarterDesign, enhanceDesignPlacement, generateProjectDesignAsync } from './engine/starter-design';
 import { inferFinishMetaFromPlan } from './engine/plan-layout';
 import { withIraqElectricalStandards } from './engine/iraq-electrical';
 import { parseTwin3dSpaceId } from './engine/twin3d-spaces';
@@ -927,24 +927,17 @@ export const useStudio = create<StudioState>((set, get) => ({
 
     try {
       const detected = await detectRooms(src, mapX, mapY, width, height);
+      await yieldToMain();
       let rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: activeFloorId }));
 
       let bim: BimModel = cadBim ?? s0.bim ?? { walls: [], openings: [] };
-      if (!bim.walls.length) {
-        try {
-          bim = await detectBimFromMap(src, mapX, mapY, width, height);
-        } catch {
-          /* raster BIM optional */
-        }
-      }
-
+      const pre = get();
+      const project = withIraqElectricalStandards(pre.project);
       const finishes = inferFinishMetaFromPlan(rooms, bim, activeFloorId);
       bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
 
-      const pre = get();
-      const project = withIraqElectricalStandards(pre.project);
       if (rooms.length > 0 && project.setupComplete) {
-        const result = generateProjectDesign(project, rooms, pre.locale, activeFloorId);
+        const result = await generateProjectDesignAsync(project, rooms, pre.locale, activeFloorId);
         const mergedBim: BimModel = {
           walls: bim.walls.length ? bim.walls : result.bim.walls,
           openings: [...(bim.openings ?? []), ...result.bim.openings],
@@ -967,6 +960,24 @@ export const useStudio = create<StudioState>((set, get) => ({
           }),
         );
         scheduleDeferredCableReroute(get, set);
+        if (!cadBim?.walls.length && !s0.bim?.walls.length) {
+          void runAsyncWhenIdle(async () => {
+            try {
+              const rasterBim = await detectBimFromMap(src, mapX, mapY, width, height);
+              if (!rasterBim.walls.length) return;
+              const st = get();
+              set({
+                bim: {
+                  ...(st.bim ?? { walls: [], openings: [] }),
+                  walls: rasterBim.walls,
+                  openings: [...(st.bim?.openings ?? []), ...rasterBim.openings],
+                },
+              });
+            } catch {
+              /* optional */
+            }
+          });
+        }
       } else if (rooms.length > 0) {
         const pack = buildBimOpenings(rooms, pre.project, pre.locale, activeFloorId);
         const nodes = mergeOpeningActuators(pre.nodes, pack.actuatorNodes);
@@ -1146,23 +1157,25 @@ export const useStudio = create<StudioState>((set, get) => ({
     const locale = s.locale;
     const activeFloorId = floors[0]!.id;
     const runGeneration = () => {
-      try {
-        const result = generateProjectDesign(mergedProject, rooms, locale, activeFloorId);
-        invalidateDesignAnalysisCache();
-        set({
-          nodes: result.nodes,
-          edges: result.edges,
-          controls: result.controls,
-          designName: result.designName,
-          bim: result.bim,
-          generatingProject: false,
-          canvasFitSeq: get().canvasFitSeq + 1,
-        });
-        scheduleDeferredCableReroute(get, set);
-      } catch (err) {
-        console.error('[U Smart Studio] project generation failed', err);
-        set({ generatingProject: false });
-      }
+      void runAsyncWhenIdle(async () => {
+        try {
+          const result = await generateProjectDesignAsync(mergedProject, rooms, locale, activeFloorId);
+          invalidateDesignAnalysisCache();
+          set({
+            nodes: result.nodes,
+            edges: result.edges,
+            controls: result.controls,
+            designName: result.designName,
+            bim: result.bim,
+            generatingProject: false,
+            canvasFitSeq: get().canvasFitSeq + 1,
+          });
+          scheduleDeferredCableReroute(get, set);
+        } catch (err) {
+          console.error('[U Smart Studio] project generation failed', err);
+          set({ generatingProject: false });
+        }
+      });
     };
 
     if (typeof window !== 'undefined') {
@@ -1645,46 +1658,66 @@ export const useStudio = create<StudioState>((set, get) => ({
   detectRoomsFromMap: async () => {
     const s = get();
     if (!s.map?.src || s.map.mode === 'blank') return 0;
-    const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
-    const rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: s.activeFloorId }));
-    let bim = s.bim;
-    if (!bim || bim.walls.length === 0) {
-      try {
-        bim = await detectBimFromMap(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
-      } catch {
-        /* optional */
-      }
-    }
-    const finishes = inferFinishMetaFromPlan(rooms, bim, s.activeFloorId);
-    if (bim) bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
+    set({ generatingProject: true });
+    try {
+      const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
+      await yieldToMain();
+      const rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: s.activeFloorId }));
+      let bim = s.bim;
+      const finishes = inferFinishMetaFromPlan(rooms, bim, s.activeFloorId);
+      if (bim) bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
 
-    const project = withIraqElectricalStandards(s.project);
-    if (rooms.length > 0 && project.setupComplete) {
-      const result = generateProjectDesign(project, rooms, s.locale, s.activeFloorId);
-      const mergedBim: BimModel = {
-        walls: bim?.walls ?? [],
-        openings: [...(bim?.openings ?? []), ...result.bim.openings],
-        gardens: bim?.gardens ?? result.bim.gardens,
-        wallMeta: finishes.wallMeta,
-        ceilingMeta: finishes.ceilingMeta,
-      };
-      set(
-        withHistory(s, {
-          project,
-          rooms,
-          bim: mergedBim,
-          nodes: result.nodes,
-          edges: result.edges,
-          controls: result.controls,
-          designName: result.designName,
-          canvasFitSeq: s.canvasFitSeq + 1,
-        }),
-      );
-      scheduleDeferredCableReroute(get, set);
-    } else {
-      set({ rooms, bim, selectedRoomId: null, project });
+      const project = withIraqElectricalStandards(s.project);
+      if (rooms.length > 0 && project.setupComplete) {
+        const result = await generateProjectDesignAsync(project, rooms, s.locale, s.activeFloorId);
+        const mergedBim: BimModel = {
+          walls: bim?.walls ?? [],
+          openings: [...(bim?.openings ?? []), ...result.bim.openings],
+          gardens: bim?.gardens ?? result.bim.gardens,
+          wallMeta: finishes.wallMeta,
+          ceilingMeta: finishes.ceilingMeta,
+        };
+        set(
+          withHistory(s, {
+            project,
+            rooms,
+            bim: mergedBim,
+            nodes: result.nodes,
+            edges: result.edges,
+            controls: result.controls,
+            designName: result.designName,
+            generatingProject: false,
+            canvasFitSeq: s.canvasFitSeq + 1,
+          }),
+        );
+        scheduleDeferredCableReroute(get, set);
+        if (!bim?.walls.length) {
+          void runAsyncWhenIdle(async () => {
+            try {
+              const rasterBim = await detectBimFromMap(s.map!.src, s.map!.x, s.map!.y, s.map!.width, s.map!.height);
+              if (!rasterBim.walls.length) return;
+              const st = get();
+              set({
+                bim: {
+                  ...(st.bim ?? { walls: [], openings: [] }),
+                  walls: rasterBim.walls,
+                  openings: [...(st.bim?.openings ?? []), ...rasterBim.openings],
+                },
+              });
+            } catch {
+              /* optional */
+            }
+          });
+        }
+      } else {
+        set({ rooms, bim, selectedRoomId: null, project, generatingProject: false });
+      }
+      return rooms.length;
+    } catch (err) {
+      console.error('[U Smart Studio] room detection failed', err);
+      set({ generatingProject: false });
+      return 0;
     }
-    return rooms.length;
   },
 
   setCanvasViewMode: (mode) => {

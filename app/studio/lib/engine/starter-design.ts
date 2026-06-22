@@ -17,7 +17,8 @@ import { calculateLightingDesign, type LightingDesignReport } from './lighting-d
 import type { ControlState } from '../controls';
 import { defaultControlState } from '../controls';
 import { withIraqElectricalStandards } from './iraq-electrical';
-import { attachRoomElectricalDistribution } from './room-electrical-distribution';
+import { attachRoomElectricalDistribution, attachRoomElectricalDistributionAsync } from './room-electrical-distribution';
+import { yieldToMain } from '../idle';
 
 const HVAC_CATALOG: Record<HvacSystemType, string> = {
   split: 'hvac-split-3.5',
@@ -250,7 +251,40 @@ export function generateProjectDesign(
   const placed = enhanceDesignPlacement(proj, rooms, starter.nodes, starter.edges, locale, {
     deferCableRouting: true,
   });
-  const wired = attachRoomElectricalDistribution(proj, rooms, placed.nodes, placed.edges);
+  const wired = attachRoomElectricalDistribution(proj, rooms, placed.nodes, placed.edges, {
+    deferCableRouting: true,
+  });
+  const pack = buildBimOpenings(rooms, proj, locale, activeFloorId);
+  const nodes = mergeOpeningActuators(wired.nodes, pack.actuatorNodes);
+  const controls = buildControlsForNodes(nodes, { ...placed.controls, ...pack.controls });
+  return {
+    nodes,
+    edges: wired.edges,
+    controls,
+    designName: starter.name,
+    bim: { walls: [], openings: pack.bim.openings, gardens: [] },
+  };
+}
+
+/** Time-sliced project generation — keeps the tab responsive during wizard / map import. */
+export async function generateProjectDesignAsync(
+  project: ProjectInfo,
+  rooms: DesignRoom[],
+  locale: StudioLocale,
+  activeFloorId?: string,
+): Promise<ReturnType<typeof generateProjectDesign>> {
+  await yieldToMain();
+  const proj = withIraqElectricalStandards(project);
+  const starter = buildStarterDesign(proj, locale, rooms, { skipRoomLoads: true });
+  await yieldToMain();
+  const placed = enhanceDesignPlacement(proj, rooms, starter.nodes, starter.edges, locale, {
+    deferCableRouting: true,
+  });
+  await yieldToMain();
+  const wired = await attachRoomElectricalDistributionAsync(proj, rooms, placed.nodes, placed.edges, {
+    deferCableRouting: true,
+  });
+  await yieldToMain();
   const pack = buildBimOpenings(rooms, proj, locale, activeFloorId);
   const nodes = mergeOpeningActuators(wired.nodes, pack.actuatorNodes);
   const controls = buildControlsForNodes(nodes, { ...placed.controls, ...pack.controls });

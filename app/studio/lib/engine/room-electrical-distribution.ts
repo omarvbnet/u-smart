@@ -22,6 +22,7 @@ import { placeSmartChannelSystem } from './smart-channel-layout';
 import { placeRoomControls } from './room-controls-layout';
 import type { ControlState } from '../controls';
 import { defaultControlState } from '../controls';
+import { yieldIfBusy } from '../idle';
 
 const LIGHT_CATALOG = /^(load-lighting|load-downlight|load-linear|load-spot|load-magnetic)$/;
 
@@ -109,6 +110,7 @@ function wireCircuitGroup(
   rooms: DesignRoom[],
   nodes: DesignNode[],
   edges: DesignEdge[],
+  deferCableRouting?: boolean,
 ): void {
   const designA = Math.max(1, designCurrentW(group.loads));
   const cableCatalogId = cableCatalogIdForCurrent(designA);
@@ -132,7 +134,11 @@ function wireCircuitGroup(
 
   group.loads.forEach((load, idx) => {
     const cableId = `cable_${room.id}_${group.suffix}_${idx}`;
-    const segs = routeCableSegments(mcbX, mcbY, load.x + 21, load.y + 21, rooms);
+    const lx = load.x + 21;
+    const ly = load.y + 21;
+    const segs = deferCableRouting
+      ? [{ x: mcbX, y: mcbY, lengthM: Math.max(3, Math.round(Math.hypot(lx - mcbX, ly - mcbY) / 50)), rotation: 0 }]
+      : routeCableSegments(mcbX, mcbY, lx, ly, rooms);
     const seg = segs[0]!;
     const conduitType = conduitTypeForCable(cableEntry);
     const label = formatCableLabel(room.label, cableEntry, idx, conduitType);
@@ -165,6 +171,7 @@ export function attachRoomElectricalDistribution(
   rooms: DesignRoom[],
   nodes: DesignNode[],
   edges: DesignEdge[],
+  options?: { deferCableRouting?: boolean },
 ): { nodes: DesignNode[]; edges: DesignEdge[] } {
   const panel =
     nodes.find((n) => n.id === 'panel_main') ??
@@ -181,7 +188,39 @@ export function attachRoomElectricalDistribution(
   for (const room of rooms) {
     const groups = circuitGroupsForRoom(room, nextNodes);
     for (const group of groups) {
-      wireCircuitGroup(panel.id, room, group, rooms, nextNodes, nextEdges);
+      wireCircuitGroup(panel.id, room, group, rooms, nextNodes, nextEdges, options?.deferCableRouting);
+    }
+  }
+
+  return { nodes: nextNodes, edges: nextEdges };
+}
+
+/** Time-sliced variant — yields between rooms so map import / wizard generation stay responsive. */
+export async function attachRoomElectricalDistributionAsync(
+  project: ProjectInfo,
+  rooms: DesignRoom[],
+  nodes: DesignNode[],
+  edges: DesignEdge[],
+  options?: { deferCableRouting?: boolean },
+): Promise<{ nodes: DesignNode[]; edges: DesignEdge[] }> {
+  const panel =
+    nodes.find((n) => n.id === 'panel_main') ??
+    nodes.find((n) => n.catalogId === 'load-distribution-board');
+  if (!panel) return { nodes, edges };
+
+  const roomIds = new Set(rooms.map((r) => r.id));
+  let nextNodes = [...nodes];
+  let nextEdges = [...edges];
+  const stripped = stripRoomCircuits(nextNodes, nextEdges, roomIds);
+  nextNodes = stripped.nodes;
+  nextEdges = stripped.edges;
+
+  let frameStart = typeof performance !== 'undefined' ? performance.now() : 0;
+  for (const room of rooms) {
+    frameStart = await yieldIfBusy(frameStart);
+    const groups = circuitGroupsForRoom(room, nextNodes);
+    for (const group of groups) {
+      wireCircuitGroup(panel.id, room, group, rooms, nextNodes, nextEdges, options?.deferCableRouting);
     }
   }
 

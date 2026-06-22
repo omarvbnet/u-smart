@@ -51,11 +51,14 @@ async function renderPdfFirstPage(file: File): Promise<{ src: string; width: num
   const buffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
   const page = await doc.getPage(1);
-  const viewport = page.getViewport({ scale: 2 });
+  const base = page.getViewport({ scale: 1 });
+  const maxDim = 2200;
+  const scale = Math.min(2, maxDim / Math.max(base.width, base.height));
+  const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   const ctx = canvas.getContext('2d')!;
   await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-  return { src: canvas.toDataURL('image/png'), width: viewport.width / 2, height: viewport.height / 2 };
+  return { src: canvas.toDataURL('image/png'), width: viewport.width / scale, height: viewport.height / scale };
 }

@@ -5,6 +5,7 @@
  * image and returns room bounding boxes aligned to the canvas map layer.
  */
 import type { DesignRoom, BimModel } from '../model';
+import { yieldIfBusy } from '../idle';
 import { extractBimFromRaster } from './bim-extract';
 import { classifyDetectedSpaces } from './plan-space-classify';
 
@@ -20,8 +21,8 @@ export async function detectRoomsFromMap(
   mapWidth: number,
   mapHeight: number,
 ): Promise<DetectedRoom[]> {
-  const { data, w, h, threshold } = await rasterize(src, Math.min(1400, mapWidth));
-  const boxes = findRoomRegions(data, w, h, threshold);
+  const { data, w, h, threshold } = await rasterize(src, Math.min(1000, mapWidth));
+  const boxes = await findRoomRegions(data, w, h, threshold);
   const ranked = boxes.sort((a, b) => b.area - a.area).slice(0, 28);
   const scaled = ranked.map((b) => ({
     x: mapX + (b.x / w) * mapWidth,
@@ -98,11 +99,17 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Flood-fill light pixels to find room-like regions. */
-function findRoomRegions(data: Uint8ClampedArray, width: number, height: number, threshold: number): BBox[] {
+/** Flood-fill light pixels to find room-like regions (time-sliced to avoid freezing the tab). */
+async function findRoomRegions(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  threshold: number,
+): Promise<BBox[]> {
   const visited = new Uint8Array(width * height);
   const boxes: BBox[] = [];
-  const minArea = (width * height) / 320;
+  const minArea = (width * height) / 280;
+  let frameStart = typeof performance !== 'undefined' ? performance.now() : 0;
 
   const isFree = (x: number, y: number) => {
     if (x < 1 || y < 1 || x >= width - 1 || y >= height - 1) return false;
@@ -111,8 +118,10 @@ function findRoomRegions(data: Uint8ClampedArray, width: number, height: number,
     return lum > threshold;
   };
 
-  for (let y = 2; y < height - 2; y += 3) {
-    for (let x = 2; x < width - 2; x += 3) {
+  const scanStep = width > 800 ? 5 : 4;
+  for (let y = 2; y < height - 2; y += scanStep) {
+    for (let x = 2; x < width - 2; x += scanStep) {
+      frameStart = await yieldIfBusy(frameStart);
       const idx = y * width + x;
       if (visited[idx] || !isFree(x, y)) continue;
       const stack: [number, number][] = [[x, y]];
@@ -143,6 +152,9 @@ function findRoomRegions(data: Uint8ClampedArray, width: number, height: number,
           if (!isFree(nx, ny)) continue;
           visited[ni] = 1;
           stack.push([nx, ny]);
+        }
+        if (stack.length > 0 && stack.length % 4096 === 0) {
+          frameStart = await yieldIfBusy(frameStart);
         }
       }
 
