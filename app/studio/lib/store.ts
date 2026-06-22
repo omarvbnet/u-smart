@@ -54,7 +54,8 @@ import { isBusPowerAdequate, busPowerStatus } from './engine/smarthome-topology'
 import { validateLightingDesign } from './engine/lighting-validation';
 import type { MapOverlayMode } from './engine/cable-map';
 import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, cableIdsLinkedToNode, type RoutePoint } from './engine/cable-map';
-import { attachRoomElectricalDistribution } from './engine/room-electrical-distribution';
+import { attachRoomElectricalDistribution, attachRoomElectricalDistributionAsync } from './engine/room-electrical-distribution';
+import { placeSmartChannelSystem } from './engine/smart-channel-layout';
 import {
   placeSocketOutlets,
   placeAppliances,
@@ -308,6 +309,62 @@ let counter = 0;
 const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(counter++).toString(36)}`;
 
 const CABLE_REROUTE_BATCH = 30;
+const NODE_APPLY_BATCH = 72;
+
+type DeferredDesignWork = {
+  deferredElectrical?: boolean;
+  deferredSmart?: boolean;
+};
+
+function waitForCanvasBoot(get: () => StudioState): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (!get().canvasBooting) return Promise.resolve();
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (!get().canvasBooting) resolve();
+      else requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+async function runDeferredProjectWork(
+  get: () => StudioState,
+  set: (patch: Partial<StudioState>) => void,
+  deferred?: DeferredDesignWork,
+): Promise<void> {
+  await waitForCanvasBoot(get);
+  const s = get();
+  if (!s.project.setupComplete || s.generatingProject) return;
+
+  if (deferred?.deferredSmart && s.project.smartBuilding && s.project.smartProtocol) {
+    const proj = withIraqElectricalStandards(s.project);
+    const smart = placeSmartChannelSystem(proj, s.rooms, s.nodes, s.edges, s.locale);
+    set({ nodes: smart.nodes, edges: smart.edges, controls: { ...s.controls, ...smart.controls } });
+    await yieldToMain();
+  }
+
+  if (deferred?.deferredElectrical) {
+    const proj = withIraqElectricalStandards(s.project);
+    const wired = await attachRoomElectricalDistributionAsync(proj, s.rooms, get().nodes, get().edges, {
+      deferCableRouting: true,
+    });
+    set({ nodes: wired.nodes, edges: wired.edges });
+  }
+
+  scheduleDeferredCableReroute(get, set);
+}
+
+function scheduleDeferredProjectWork(
+  get: () => StudioState,
+  set: (patch: Partial<StudioState>) => void,
+  deferred?: DeferredDesignWork,
+): void {
+  if (typeof window === 'undefined') return;
+  runWhenIdle(() => {
+    void runDeferredProjectWork(get, set, deferred);
+  });
+}
 
 /** Spread cable geometry work across idle frames so project creation stays responsive. */
 function scheduleDeferredCableReroute(
@@ -579,34 +636,65 @@ function withHistory(s: StudioState, patch: Partial<StudioState>): Partial<Studi
   };
 }
 
-/** Commit a generated design and defer mounting the canvas when the graph is large. */
+/** Commit a generated design in batches so the canvas can paint between chunks. */
 async function finalizeProjectGeneration(
   get: () => StudioState,
   set: (patch: Partial<StudioState>) => void,
   pre: StudioState,
   patch: Partial<StudioState>,
+  deferred?: DeferredDesignWork,
 ): Promise<void> {
-  const nodeCount = patch.nodes?.length ?? pre.nodes.length;
-  const heavy = nodeCount > 350 || isBulkGeneration(patch.rooms ?? pre.rooms);
+  const fullNodes = patch.nodes ?? [];
+  const fullEdges = patch.edges ?? [];
+  const fullControls = patch.controls ?? {};
+  const nodeCount = fullNodes.length;
+  const heavy = nodeCount > 120 || isBulkGeneration(patch.rooms ?? pre.rooms);
 
-  set(
-    withHistory(pre, {
-      ...patch,
-      generatingProject: false,
-      suppressCanvasFit: false,
-      canvasBooting: heavy,
-      canvasFitSeq: pre.canvasFitSeq + 1,
-      ...(heavy ? { mapOverlayMode: 'plan' as MapOverlayMode } : {}),
-    }),
-  );
+  const shell: Partial<StudioState> = {
+    ...patch,
+    nodes: [],
+    edges: [],
+    controls: {},
+    generatingProject: false,
+    suppressCanvasFit: false,
+    canvasBooting: heavy,
+    canvasFitSeq: pre.canvasFitSeq + 1,
+    ...(heavy ? { mapOverlayMode: 'plan' as MapOverlayMode, showOutletsOnMap: false } : {}),
+  };
 
-  scheduleDeferredCableReroute(get, set);
+  set(pre.historyPast.length === 0 ? shell : withHistory(pre, shell));
+  await yieldToMain();
 
-  if (heavy && typeof window !== 'undefined') {
-    await yieldToMain();
-    await yieldToMain();
-    runWhenIdle(() => set({ canvasBooting: false }));
+  if (!nodeCount) {
+    set({ canvasBooting: false });
+    scheduleDeferredProjectWork(get, set, deferred);
+    return;
   }
+
+  const batchSize = heavy ? NODE_APPLY_BATCH : nodeCount;
+  for (let i = 0; i < nodeCount; i += batchSize) {
+    const end = Math.min(nodeCount, i + batchSize);
+    const nodes = fullNodes.slice(0, end);
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    const edges =
+      end >= nodeCount ? fullEdges : fullEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+    const controls: Record<string, ControlState> = {};
+    for (const n of nodes) {
+      const c = fullControls[n.id];
+      if (c) controls[n.id] = c;
+    }
+    set({ nodes, edges, controls });
+    await yieldToMain();
+  }
+
+  if (heavy) {
+    await yieldToMain();
+    runWhenIdle(() => set({ canvasBooting: false, showOutletsOnMap: true }));
+  } else {
+    set({ canvasBooting: false });
+  }
+
+  scheduleDeferredProjectWork(get, set, deferred);
 }
 
 function fixableFrom(s: StudioState): FixableState {
@@ -980,15 +1068,24 @@ export const useStudio = create<StudioState>((set, get) => ({
           wallMeta: finishes.wallMeta,
           ceilingMeta: finishes.ceilingMeta,
         };
-        await finalizeProjectGeneration(get, set, pre, {
-          project,
-          rooms,
-          bim: mergedBim,
-          nodes: result.nodes,
-          edges: result.edges,
-          controls: result.controls,
-          designName: result.designName,
-        });
+        await finalizeProjectGeneration(
+          get,
+          set,
+          pre,
+          {
+            project,
+            rooms,
+            bim: mergedBim,
+            nodes: result.nodes,
+            edges: result.edges,
+            controls: result.controls,
+            designName: result.designName,
+          },
+          {
+            deferredElectrical: (result as { deferredElectrical?: boolean }).deferredElectrical,
+            deferredSmart: (result as { deferredSmart?: boolean }).deferredSmart,
+          },
+        );
         if (!cadBim?.walls.length && !s0.bim?.walls.length) {
           void runAsyncWhenIdle(async () => {
             try {
@@ -1162,7 +1259,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         set({ ...basePatch, nodes, edges, controls, bim, generatingProject: false });
       };
 
-      const needsIdle = rooms.length > 8 && mergedProject.smartBuilding;
+      const needsIdle = rooms.length > 4 || mergedProject.smartBuilding;
       if (needsIdle) {
         set({ ...basePatch, generatingProject: true, nodes: [], edges: [], controls: {}, bim: null });
         runWhenIdle(applyBlankProject);
@@ -1190,13 +1287,22 @@ export const useStudio = create<StudioState>((set, get) => ({
         try {
           const result = await generateProjectDesignAsync(mergedProject, rooms, locale, activeFloorId);
           invalidateDesignAnalysisCache();
-          await finalizeProjectGeneration(get, set, get(), {
-            nodes: result.nodes,
-            edges: result.edges,
-            controls: result.controls,
-            designName: result.designName,
-            bim: result.bim,
-          });
+          await finalizeProjectGeneration(
+            get,
+            set,
+            get(),
+            {
+              nodes: result.nodes,
+              edges: result.edges,
+              controls: result.controls,
+              designName: result.designName,
+              bim: result.bim,
+            },
+            {
+              deferredElectrical: (result as { deferredElectrical?: boolean }).deferredElectrical,
+              deferredSmart: (result as { deferredSmart?: boolean }).deferredSmart,
+            },
+          );
         } catch (err) {
           console.error('[U Smart Studio] project generation failed', err);
           set({ generatingProject: false, canvasBooting: false });
@@ -1704,15 +1810,24 @@ export const useStudio = create<StudioState>((set, get) => ({
           wallMeta: finishes.wallMeta,
           ceilingMeta: finishes.ceilingMeta,
         };
-        await finalizeProjectGeneration(get, set, s, {
-          project,
-          rooms,
-          bim: mergedBim,
-          nodes: result.nodes,
-          edges: result.edges,
-          controls: result.controls,
-          designName: result.designName,
-        });
+        await finalizeProjectGeneration(
+          get,
+          set,
+          s,
+          {
+            project,
+            rooms,
+            bim: mergedBim,
+            nodes: result.nodes,
+            edges: result.edges,
+            controls: result.controls,
+            designName: result.designName,
+          },
+          {
+            deferredElectrical: (result as { deferredElectrical?: boolean }).deferredElectrical,
+            deferredSmart: (result as { deferredSmart?: boolean }).deferredSmart,
+          },
+        );
         if (!bim?.walls.length) {
           void runAsyncWhenIdle(async () => {
             try {

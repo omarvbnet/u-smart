@@ -19,7 +19,7 @@ export function yieldToMain(): Promise<void> {
   });
 }
 
-const FRAME_BUDGET_MS = 10;
+const FRAME_BUDGET_MS = 8;
 
 /** Return a fresh timestamp after yielding when the current frame budget is exceeded. */
 export async function yieldIfBusy(frameStartMs: number, budgetMs = FRAME_BUDGET_MS): Promise<number> {
