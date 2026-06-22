@@ -137,18 +137,20 @@ export async function persistSimulationSession(
 }
 
 async function ensureLocalTwinHostProject(): Promise<void> {
-  const d = db();
-  if (!d.studioProject) return;
-  const existing = await d.studioProject.findFirst({ where: { id: LOCAL_TWIN_PROJECT_ID } });
-  if (existing) return;
-  await d.studioProject.create({
-    data: {
-      id: LOCAL_TWIN_PROJECT_ID,
-      name: 'Local twin sessions',
-      buildingType: 'VILLA',
-      status: 'DRAFT',
-    },
-  });
+  try {
+    const existing = await prisma.studioProject.findFirst({ where: { id: LOCAL_TWIN_PROJECT_ID } });
+    if (existing) return;
+    await prisma.studioProject.create({
+      data: {
+        id: LOCAL_TWIN_PROJECT_ID,
+        name: 'Local twin sessions',
+        buildingType: 'VILLA',
+        status: 'DRAFT',
+      },
+    });
+  } catch (e) {
+    console.error('[studio/twin-session] ensure host project failed', e);
+  }
 }
 
 /** Persist twin session so any serverless instance can restore the SSE stream. */
@@ -158,50 +160,55 @@ export async function persistTwinSessionSnapshot(
   state: PersistedTwinSession,
   active: boolean,
 ): Promise<void> {
-  const d = db();
-  if (!d.studioSimulationSession) return;
-  const hostProjectId = projectId ?? LOCAL_TWIN_PROJECT_ID;
-  if (!projectId) await ensureLocalTwinHostProject();
+  try {
+    const hostProjectId = projectId ?? LOCAL_TWIN_PROJECT_ID;
+    if (!projectId) await ensureLocalTwinHostProject();
 
-  if (!active) {
-    await d.studioSimulationSession.updateMany({
+    if (!active) {
+      await prisma.studioSimulationSession.updateMany({
+        where: { id: sessionId },
+        data: { active: false, endedAt: new Date() },
+      });
+      return;
+    }
+
+    await prisma.studioSimulationSession.upsert({
       where: { id: sessionId },
-      data: { active: false, endedAt: new Date() },
+      create: {
+        id: sessionId,
+        projectId: hostProjectId,
+        active: true,
+        stateJson: state as object,
+      },
+      update: {
+        active: true,
+        stateJson: state as object,
+        endedAt: null,
+      },
     });
-    return;
+  } catch (e) {
+    console.error('[studio/twin-session] persist failed', sessionId, e);
   }
-
-  await d.studioSimulationSession.upsert({
-    where: { id: sessionId },
-    create: {
-      id: sessionId,
-      projectId: hostProjectId,
-      active: true,
-      stateJson: state as object,
-    },
-    update: {
-      active: true,
-      stateJson: state as object,
-      endedAt: null,
-    },
-  });
 }
 
 export async function loadTwinSessionSnapshot(sessionId: string): Promise<PersistedTwinSession | null> {
-  const d = db();
-  if (!d.studioSimulationSession) return null;
-  const row = await d.studioSimulationSession.findUnique({ where: { id: sessionId } });
-  if (!row?.active || !row.stateJson || typeof row.stateJson !== 'object') return null;
-  const data = row.stateJson as Partial<PersistedTwinSession>;
-  if (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.controls) return null;
-  return {
-    nodes: data.nodes,
-    edges: data.edges,
-    controls: data.controls,
-    states: data.states ?? {},
-    metrics: data.metrics ?? { totalKw: 0, totalA: 0, activeDevices: 0, energisedDevices: 0 },
-    active: true,
-  };
+  try {
+    const row = await prisma.studioSimulationSession.findUnique({ where: { id: sessionId } });
+    if (!row?.active || !row.stateJson || typeof row.stateJson !== 'object') return null;
+    const data = row.stateJson as Partial<PersistedTwinSession>;
+    if (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.controls) return null;
+    return {
+      nodes: data.nodes,
+      edges: data.edges,
+      controls: data.controls,
+      states: data.states ?? {},
+      metrics: data.metrics ?? { totalKw: 0, totalA: 0, activeDevices: 0, energisedDevices: 0 },
+      active: true,
+    };
+  } catch (e) {
+    console.error('[studio/twin-session] load failed', sessionId, e);
+    return null;
+  }
 }
 
 export async function recordStudioReport(

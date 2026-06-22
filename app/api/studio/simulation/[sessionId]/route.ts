@@ -2,15 +2,17 @@ import { NextRequest } from 'next/server';
 import {
   applyTwinControl,
   applyTwinSimState,
+  ensureTwinSessionFromDesign,
   getOrRestoreTwinSession,
   getTwinSession,
   stopTwinSession,
-  subscribeTwinSession,
   toPersistedTwinSession,
-  type TwinEvent,
 } from '@/lib/studio-simulation-hub';
 import { processTwinControl, runTwinTick } from '@/app/studio/lib/engine/twin-events';
 import { persistTwinSessionSnapshot } from '@/lib/studio-db-sync';
+import { twinSessionSseResponse } from '@/lib/twin-sse-stream';
+import type { DesignEdge, DesignNode } from '@/app/studio/lib/model';
+import type { ControlState } from '@/app/studio/lib/controls';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,63 +21,38 @@ type ControlBody = {
   nodeId: string;
   key: string;
   value: boolean | number;
+  nodes?: DesignNode[];
+  edges?: DesignEdge[];
+  controls?: Record<string, ControlState>;
 };
 
 /** Server-Sent Events stream — WebSocket-compatible event payloads for digital twin. */
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await ctx.params;
   const session = await getOrRestoreTwinSession(sessionId);
-  if (!session || !session.active) {
+  if (!session?.active) {
     return new Response('Session not found', { status: 404 });
   }
-
-  const encoder = new TextEncoder();
-  let unsubscribe: (() => void) | null = null;
-  let tickTimer: ReturnType<typeof setInterval> | null = null;
-
-  const stream = new ReadableStream({
-    start(controller) {
-      const send = (event: TwinEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-      };
-
-      unsubscribe = subscribeTwinSession(sessionId, send);
-      if (!unsubscribe) {
-        controller.close();
-        return;
-      }
-
-      tickTimer = setInterval(() => {
-        const s = getTwinSession(sessionId);
-        if (!s || !s.active) return;
-        const tick = runTwinTick(s.nodes, s.edges, s.controls);
-        applyTwinSimState(sessionId, tick.states, tick.metrics);
-      }, 1000);
-    },
-    cancel() {
-      if (tickTimer) clearInterval(tickTimer);
-      unsubscribe?.();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-    },
-  });
+  return twinSessionSseResponse(sessionId);
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await ctx.params;
-  const session = await getOrRestoreTwinSession(sessionId);
-  if (!session || !session.active) {
-    return Response.json({ error: 'Session not found' }, { status: 404 });
-  }
 
   try {
     const body = (await req.json()) as ControlBody;
+    let session = await getOrRestoreTwinSession(sessionId);
+    if (!session?.active && body.nodes && body.edges) {
+      session = await ensureTwinSessionFromDesign(sessionId, {
+        nodes: body.nodes,
+        edges: body.edges,
+        controls: body.controls ?? {},
+      });
+    }
+    if (!session?.active) {
+      return Response.json({ error: 'Session not found' }, { status: 404 });
+    }
+
     const { chain, telegram } = processTwinControl(session.nodes, session.edges, body.nodeId, body.key, body.value);
     const snap = applyTwinControl(sessionId, body.nodeId, body.key, body.value, chain, telegram);
     const tick = runTwinTick(session.nodes, session.edges, session.controls);

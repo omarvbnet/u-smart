@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Digital twin real-time connection — EventSource (SSE) with WebSocket-style API.
- * Next.js route handlers stream twin events; clients subscribe to panel→actuator→circuit chains.
+ * Digital twin real-time connection — fetch SSE stream (serverless-safe).
+ * Session create + event stream share one POST so Vercel instances stay consistent.
  */
 import type { TwinEvent, TwinMetrics } from '@/lib/studio-simulation-hub';
 import type { NodeSimState } from './engine/simulate';
@@ -27,8 +27,7 @@ let singleton: DigitalTwinConnection | null = null;
 
 export class DigitalTwinConnection {
   private sessionId: string | null = null;
-  private source: EventSource | null = null;
-  private sseRetries = 0;
+  private streamAbort: AbortController | null = null;
   private design: { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } | null = null;
   private state: TwinLiveState = {
     connection: 'idle',
@@ -63,58 +62,66 @@ export class DigitalTwinConnection {
   async start(nodes: DesignNode[], edges: DesignEdge[], controls: Record<string, ControlState>): Promise<boolean> {
     await this.stop();
     this.design = { nodes, edges, controls };
-    this.sseRetries = 0;
     this.patch({ connection: 'connecting' });
+    this.streamAbort = new AbortController();
+
     try {
-      const res = await fetch('/api/studio/simulation', {
+      const res = await fetch('/api/studio/simulation/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes, edges, controls }),
+        signal: this.streamAbort.signal,
       });
-      if (!res.ok) throw new Error('session create failed');
-      const { sessionId } = (await res.json()) as { sessionId: string };
-      this.sessionId = sessionId;
-      this.openEventSource(sessionId);
+      if (!res.ok || !res.body) throw new Error('twin stream failed');
+
+      this.patch({ connection: 'connected' });
+      void this.consumeSseStream(res.body);
       return true;
-    } catch {
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return false;
       this.patch({ connection: 'error', sessionId: null });
       return false;
     }
   }
 
-  private openEventSource(sessionId: string) {
-    if (this.source) {
-      this.source.close();
-      this.source = null;
+  private async consumeSseStream(body: ReadableStream<Uint8Array>) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let split = buffer.indexOf('\n\n');
+        while (split >= 0) {
+          const chunk = buffer.slice(0, split);
+          buffer = buffer.slice(split + 2);
+          const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+          if (line) {
+            try {
+              const event = JSON.parse(line.slice(6)) as TwinEvent;
+              this.handleEvent(event);
+            } catch {
+              /* ignore malformed chunk */
+            }
+          }
+          split = buffer.indexOf('\n\n');
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        this.patch({ connection: 'error' });
+      }
     }
-    this.source = new EventSource(`/api/studio/simulation/${sessionId}`);
-    this.source.onopen = () => {
-      this.sseRetries = 0;
-      this.patch({ connection: 'connected', sessionId });
-    };
-    this.source.onerror = () => {
-      if (this.sseRetries < 4 && this.sessionId === sessionId) {
-        this.sseRetries += 1;
-        window.setTimeout(() => {
-          if (this.sessionId === sessionId) this.openEventSource(sessionId);
-        }, 600 * this.sseRetries);
-        return;
-      }
-      this.patch({ connection: 'error' });
-    };
-    this.source.onmessage = (msg) => {
-      try {
-        const event = JSON.parse(msg.data) as TwinEvent;
-        this.handleEvent(event);
-      } catch {
-        /* ignore */
-      }
-    };
   }
 
   private handleEvent(event: TwinEvent) {
     switch (event.type) {
       case 'connected':
+        this.sessionId = event.sessionId;
         this.patch({ connection: 'connected', sessionId: event.sessionId });
         break;
       case 'sim':
@@ -135,12 +142,19 @@ export class DigitalTwinConnection {
   }
 
   async pushControl(nodeId: string, key: string, value: boolean | number): Promise<boolean> {
-    if (!this.sessionId) return false;
+    if (!this.sessionId || !this.design) return false;
     try {
       const res = await fetch(`/api/studio/simulation/${this.sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId, key, value }),
+        body: JSON.stringify({
+          nodeId,
+          key,
+          value,
+          nodes: this.design.nodes,
+          edges: this.design.edges,
+          controls: this.design.controls,
+        }),
       });
       return res.ok;
     } catch {
@@ -149,6 +163,7 @@ export class DigitalTwinConnection {
   }
 
   async syncDesign(nodes: DesignNode[], edges: DesignEdge[], controls: Record<string, ControlState>) {
+    this.design = { nodes, edges, controls };
     if (!this.sessionId) return;
     await fetch('/api/studio/simulation', {
       method: 'PUT',
@@ -158,17 +173,17 @@ export class DigitalTwinConnection {
   }
 
   async stop() {
-    if (this.source) {
-      this.source.close();
-      this.source = null;
+    if (this.streamAbort) {
+      this.streamAbort.abort();
+      this.streamAbort = null;
     }
-    if (this.sessionId) {
-      await fetch(`/api/studio/simulation/${this.sessionId}`, { method: 'DELETE' }).catch(() => {});
-      await fetch(`/api/studio/simulation?sessionId=${this.sessionId}`, { method: 'DELETE' }).catch(() => {});
+    const ending = this.sessionId;
+    if (ending) {
+      await fetch(`/api/studio/simulation/${ending}`, { method: 'DELETE' }).catch(() => {});
+      await fetch(`/api/studio/simulation?sessionId=${ending}`, { method: 'DELETE' }).catch(() => {});
     }
     this.sessionId = null;
     this.design = null;
-    this.sseRetries = 0;
     this.patch({
       connection: 'idle',
       sessionId: null,

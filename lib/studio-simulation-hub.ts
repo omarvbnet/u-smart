@@ -148,6 +148,34 @@ export async function getOrRestoreTwinSession(id: string): Promise<Session | und
   return rehydrateTwinSession(id, persisted);
 }
 
+/** Create or restore a session from the current design (serverless-safe). */
+export async function ensureTwinSessionFromDesign(
+  sessionId: string | null | undefined,
+  design: {
+    nodes: DesignNode[];
+    edges: DesignEdge[];
+    controls: Record<string, ControlState>;
+  },
+): Promise<Session> {
+  if (sessionId) {
+    const restored = await getOrRestoreTwinSession(sessionId);
+    if (restored?.active) return restored;
+    return rehydrateTwinSession(sessionId, {
+      nodes: design.nodes,
+      edges: design.edges,
+      controls: design.controls,
+      states: {},
+      metrics: emptyMetrics(),
+      active: true,
+    });
+  }
+
+  const snap = createTwinSession(design.nodes, design.edges, design.controls);
+  const session = hub().get(snap.id);
+  if (!session) throw new Error('Failed to create twin session');
+  return session;
+}
+
 export function snapshot(session: Session): TwinSessionSnapshot {
   return {
     id: session.id,
