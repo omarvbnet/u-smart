@@ -300,6 +300,10 @@ export function generateProjectDesign(
   };
 }
 
+function roomsOnFloor(rooms: DesignRoom[], floorId: string): DesignRoom[] {
+  return rooms.filter((r) => (r.floorId ?? 'floor_0') === floorId);
+}
+
 /** Time-sliced project generation — keeps the tab responsive during wizard / map import. */
 export async function generateProjectDesignAsync(
   project: ProjectInfo,
@@ -309,14 +313,20 @@ export async function generateProjectDesignAsync(
   options?: GenerateDesignOptions,
 ): Promise<ReturnType<typeof generateProjectDesign>> {
   const initialBoot = options?.initialBoot ?? true;
+  const floorId = activeFloorId ?? rooms[0]?.floorId ?? 'floor_0';
+  const bootOnActiveFloorOnly = initialBoot && rooms.length > 6;
+  const placementRooms = bootOnActiveFloorOnly ? roomsOnFloor(rooms, floorId) : rooms;
+  const deferredFloorPlacement = bootOnActiveFloorOnly && placementRooms.length < rooms.length;
+
   await yieldToMain();
   const proj = withIraqElectricalStandards(project);
   const starter = buildStarterDesign(proj, locale, rooms, { skipRoomLoads: true });
   await yieldToMain();
-  const placed = await enhanceDesignPlacementAsync(proj, rooms, starter.nodes, starter.edges, locale, {
+  const placed = await enhanceDesignPlacementAsync(proj, placementRooms, starter.nodes, starter.edges, locale, {
     deferCableRouting: true,
     initialBoot,
     skipSmartChannels: initialBoot,
+    skipRoomControls: initialBoot,
   });
   await yieldToMain();
 
@@ -342,7 +352,14 @@ export async function generateProjectDesignAsync(
     bim: { walls: [], openings: pack.bim.openings, gardens: [] },
     deferredElectrical: initialBoot,
     deferredSmart: initialBoot && !!(proj.smartBuilding && proj.smartProtocol),
-  } as ReturnType<typeof generateProjectDesign> & { deferredElectrical?: boolean; deferredSmart?: boolean };
+    deferredRoomControls: initialBoot,
+    deferredFloorPlacement,
+  } as ReturnType<typeof generateProjectDesign> & {
+    deferredElectrical?: boolean;
+    deferredSmart?: boolean;
+    deferredRoomControls?: boolean;
+    deferredFloorPlacement?: boolean;
+  };
 }
 
 /** Replace single center lights with calculated fixture grid + reposition HVAC from loads. */
@@ -352,9 +369,15 @@ export async function enhanceDesignPlacementAsync(
   nodes: DesignNode[],
   edges: DesignEdge[],
   locale: StudioLocale = 'en',
-  options?: { deferCableRouting?: boolean; initialBoot?: boolean; skipSmartChannels?: boolean },
+  options?: {
+    deferCableRouting?: boolean;
+    initialBoot?: boolean;
+    skipSmartChannels?: boolean;
+    skipRoomControls?: boolean;
+  },
 ): Promise<{ nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> }> {
   const initialBoot = options?.initialBoot ?? false;
+  const skipRoomControls = options?.skipRoomControls ?? false;
   const compact = useCompactPlacement(rooms, initialBoot);
   const placementOpts = compact
     ? { maxPerRoom: BULK_MAX_FIXTURES_PER_ROOM, maxSockets: BULK_MAX_SOCKETS_PER_ROOM }
@@ -367,28 +390,21 @@ export async function enhanceDesignPlacementAsync(
   const lightingReport = calculateLightingDesign(rooms);
   await yieldIfBusy(frameStart);
 
-  for (const row of lightingReport.rooms) {
-    frameStart = await yieldIfBusy(frameStart);
-    const room = rooms.find((r) => r.id === row.roomId);
-    if (!room) continue;
-    const capped = placementOpts?.maxPerRoom
-      ? { ...row, fixturesRecommended: Math.min(row.fixturesRecommended, placementOpts.maxPerRoom) }
-      : row;
-    const lights = placeLightingFixtures([room], 'light', { ...lightingReport, rooms: [capped] });
-    nextNodes = mergePlacementNodes(nextNodes, lights, 'light');
-  }
+  frameStart = await yieldIfBusy(frameStart);
+  const lights = placeLightingFixtures(rooms, 'light', lightingReport, {
+    maxPerRoom: placementOpts?.maxPerRoom,
+  });
+  nextNodes = mergePlacementNodes(nextNodes, lights, 'light');
 
   frameStart = await yieldIfBusy(frameStart);
   const hvacNodes = placeHvacUnits(rooms, project);
   nextNodes = mergePlacementNodes(nextNodes, hvacNodes, 'hvac');
 
   frameStart = await yieldIfBusy(frameStart);
-  for (const room of rooms) {
-    frameStart = await yieldIfBusy(frameStart);
-    const sockets = placeSocketOutlets([room], 'outlet', { maxPerRoom: placementOpts?.maxSockets });
-    const appliances = placeAppliances([room]);
-    nextNodes = mergeOutletNodes(nextNodes, [...sockets, ...appliances]);
-  }
+  nextNodes = mergeOutletNodes(nextNodes, [
+    ...placeSocketOutlets(rooms, 'outlet', { maxPerRoom: placementOpts?.maxSockets }),
+    ...placeAppliances(rooms),
+  ]);
 
   let smartControls: Record<string, ControlState> = {};
   if (project.smartBuilding && project.smartProtocol && !options?.skipSmartChannels) {
@@ -400,11 +416,13 @@ export async function enhanceDesignPlacementAsync(
     smartControls = smart.controls;
   }
 
-  frameStart = await yieldIfBusy(frameStart);
-  const roomControls = placeRoomControls(project, rooms, nextNodes, nextEdges, locale, lightingReport);
-  nextNodes = roomControls.nodes;
-  nextEdges = roomControls.edges;
-  smartControls = { ...smartControls, ...roomControls.controls };
+  if (!skipRoomControls) {
+    frameStart = await yieldIfBusy(frameStart);
+    const roomControls = placeRoomControls(project, rooms, nextNodes, nextEdges, locale, lightingReport);
+    nextNodes = roomControls.nodes;
+    nextEdges = roomControls.edges;
+    smartControls = { ...smartControls, ...roomControls.controls };
+  }
 
   nextNodes = options?.deferCableRouting
     ? labelCablesOnly(nextNodes)

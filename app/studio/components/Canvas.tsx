@@ -168,6 +168,7 @@ function CanvasInner() {
   const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
   const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
   const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
+  const canvasBooting = useStudio((s) => s.canvasBooting);
 
   const byNode = useIssueByNode();
   const sim = useSimulation();
@@ -298,7 +299,7 @@ function CanvasInner() {
         zIndex: -1,
       });
     }
-    if (mapOverlayMode !== 'plan') {
+    if (!canvasBooting && mapOverlayMode !== 'plan') {
       for (const n of nodes) {
         if (n.floorId && n.floorId !== activeFloorId) continue;
         const entry = getCatalogEntry(n.catalogId);
@@ -351,63 +352,65 @@ function CanvasInner() {
         });
       }
     }
-    for (const n of nodes) {
-      if (n.floorId && n.floorId !== activeFloorId) continue;
-      const entry = getCatalogEntry(n.catalogId);
-      if (!entry) continue;
-      if (
-        !showOutletsOnMap &&
-        (entry.category === 'SOCKET' || entry.category === 'APPLIANCE') &&
-        n.params.showOnMap !== false
-      ) {
-        continue;
-      }
-      const issues = byNode.get(n.id) ?? [];
-      const severity = issues.some((i) => i.severity === 'critical')
-        ? 'critical'
-        : issues.some((i) => i.severity === 'warning')
-          ? 'warning'
-          : issues.some((i) => i.severity === 'recommendation')
-            ? 'recommendation'
-            : null;
-      const s = sim[n.id];
-      const footprint = nodeFootprint(entry, n.params, visualizationMode);
-      const isCable = entry.domain === 'cable';
+    if (!canvasBooting) {
+      for (const n of nodes) {
+        if (n.floorId && n.floorId !== activeFloorId) continue;
+        const entry = getCatalogEntry(n.catalogId);
+        if (!entry) continue;
+        if (
+          !showOutletsOnMap &&
+          (entry.category === 'SOCKET' || entry.category === 'APPLIANCE') &&
+          n.params.showOnMap !== false
+        ) {
+          continue;
+        }
+        const issues = byNode.get(n.id) ?? [];
+        const severity = issues.some((i) => i.severity === 'critical')
+          ? 'critical'
+          : issues.some((i) => i.severity === 'warning')
+            ? 'warning'
+            : issues.some((i) => i.severity === 'recommendation')
+              ? 'recommendation'
+              : null;
+        const s = sim[n.id];
+        const footprint = nodeFootprint(entry, n.params, visualizationMode);
+        const isCable = entry.domain === 'cable';
 
-      list.push({
-        id: n.id,
-        type: isCable ? 'cable' : 'device',
-        position: { x: n.x, y: n.y },
-        style: { width: footprint.width, height: footprint.height },
-        width: footprint.width,
-        height: footprint.height,
-        zIndex: isCable ? 1 : 2,
-        selected: n.id === selectedId,
-        data: isCable
-          ? ({
-              nodeId: n.id,
-              catalogId: n.catalogId,
-              label: n.label,
-              lengthM: Number(n.params.lengthM ?? 20),
-              rotation: Number(n.params.rotation ?? 0),
-              severity,
-              energised: s?.energised ?? false,
-              active: s?.active ?? false,
-            } satisfies CableNodeData)
-          : ({
-              nodeId: n.id,
-              catalogId: n.catalogId,
-              label: n.label,
-              severity,
-              rtl,
-              declaration: showDeclarations ? declarationFor(entry, n.params)?.text ?? null : null,
-              energised: s?.energised ?? false,
-              active: s?.active ?? false,
-            } satisfies DeviceNodeData),
-      });
+        list.push({
+          id: n.id,
+          type: isCable ? 'cable' : 'device',
+          position: { x: n.x, y: n.y },
+          style: { width: footprint.width, height: footprint.height },
+          width: footprint.width,
+          height: footprint.height,
+          zIndex: isCable ? 1 : 2,
+          selected: n.id === selectedId,
+          data: isCable
+            ? ({
+                nodeId: n.id,
+                catalogId: n.catalogId,
+                label: n.label,
+                lengthM: Number(n.params.lengthM ?? 20),
+                rotation: Number(n.params.rotation ?? 0),
+                severity,
+                energised: s?.energised ?? false,
+                active: s?.active ?? false,
+              } satisfies CableNodeData)
+            : ({
+                nodeId: n.id,
+                catalogId: n.catalogId,
+                label: n.label,
+                severity,
+                rtl,
+                declaration: showDeclarations ? declarationFor(entry, n.params)?.text ?? null : null,
+                energised: s?.energised ?? false,
+                active: s?.active ?? false,
+              } satisfies DeviceNodeData),
+        });
+      }
     }
     return list;
-  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, simulating, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, roomDeviceStats]);
+  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, simulating, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, roomDeviceStats, canvasBooting]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 

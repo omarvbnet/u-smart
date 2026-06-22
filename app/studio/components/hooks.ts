@@ -79,10 +79,11 @@ function useDesignInputs() {
 export function useDesignAnalysis() {
   const generatingProject = useStudio((s) => s.generatingProject);
   const applyingFixes = useStudio((s) => s.applyingFixes);
+  const canvasBooting = useStudio((s) => s.canvasBooting);
   const setupComplete = useStudio((s) => s.project.setupComplete);
   const { nodes, edges, rooms, project, activeFloorId, deferredNodes, deferredEdges } = useDesignInputs();
   return useMemo(() => {
-    if (generatingProject || applyingFixes || !setupComplete) {
+    if (generatingProject || applyingFixes || canvasBooting || !setupComplete) {
       return {
         issues: [],
         byNode: new Map<string, import('../lib/engine/validation').Issue[]>(),
@@ -93,7 +94,7 @@ export function useDesignAnalysis() {
     }
     const analysis = computeDesignAnalysis(deferredNodes, deferredEdges, rooms, project, activeFloorId);
     return { ...analysis, isStale: deferredNodes !== nodes || deferredEdges !== edges };
-  }, [generatingProject, applyingFixes, setupComplete, deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
+  }, [generatingProject, applyingFixes, canvasBooting, setupComplete, deferredNodes, deferredEdges, nodes, edges, rooms, project, activeFloorId]);
 }
 
 /** @deprecated use useDesignAnalysis — kept for existing imports */

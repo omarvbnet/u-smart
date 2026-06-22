@@ -28,7 +28,7 @@ import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
-import { buildStarterDesign, enhanceDesignPlacement, generateProjectDesignAsync } from './engine/starter-design';
+import { buildStarterDesign, enhanceDesignPlacement, enhanceDesignPlacementAsync, generateProjectDesignAsync } from './engine/starter-design';
 import { inferFinishMetaFromPlan } from './engine/plan-layout';
 import { withIraqElectricalStandards } from './engine/iraq-electrical';
 import { parseTwin3dSpaceId } from './engine/twin3d-spaces';
@@ -55,6 +55,8 @@ import { validateLightingDesign } from './engine/lighting-validation';
 import type { MapOverlayMode } from './engine/cable-map';
 import { rerouteCableNode, parseRoutePoints, computeCableRoute, applyRouteToCable, cableIdsLinkedToNode, type RoutePoint } from './engine/cable-map';
 import { attachRoomElectricalDistribution, attachRoomElectricalDistributionAsync } from './engine/room-electrical-distribution';
+import { placeRoomControls } from './engine/room-controls-layout';
+import { calculateLightingDesign } from './engine/lighting-design';
 import { placeSmartChannelSystem } from './engine/smart-channel-layout';
 import {
   placeSocketOutlets,
@@ -314,7 +316,23 @@ const NODE_APPLY_BATCH = 72;
 type DeferredDesignWork = {
   deferredElectrical?: boolean;
   deferredSmart?: boolean;
+  deferredRoomControls?: boolean;
+  deferredFloorPlacement?: boolean;
 };
+
+function deferredWorkFromResult(result: {
+  deferredElectrical?: boolean;
+  deferredSmart?: boolean;
+  deferredRoomControls?: boolean;
+  deferredFloorPlacement?: boolean;
+}): DeferredDesignWork {
+  return {
+    deferredElectrical: result.deferredElectrical,
+    deferredSmart: result.deferredSmart,
+    deferredRoomControls: result.deferredRoomControls,
+    deferredFloorPlacement: result.deferredFloorPlacement,
+  };
+}
 
 function waitForCanvasBoot(get: () => StudioState): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -334,19 +352,49 @@ async function runDeferredProjectWork(
   deferred?: DeferredDesignWork,
 ): Promise<void> {
   await waitForCanvasBoot(get);
-  const s = get();
+  let s = get();
   if (!s.project.setupComplete || s.generatingProject) return;
+
+  if (deferred?.deferredFloorPlacement) {
+    const otherRooms = s.rooms.filter((r) => (r.floorId ?? 'floor_0') !== s.activeFloorId);
+    if (otherRooms.length) {
+      const proj = withIraqElectricalStandards(s.project);
+      const expanded = await enhanceDesignPlacementAsync(proj, otherRooms, s.nodes, s.edges, s.locale, {
+        deferCableRouting: true,
+        initialBoot: true,
+        skipSmartChannels: true,
+        skipRoomControls: true,
+      });
+      set({ nodes: expanded.nodes, edges: expanded.edges, controls: { ...s.controls, ...expanded.controls } });
+      await yieldToMain();
+      s = get();
+    }
+  }
 
   if (deferred?.deferredSmart && s.project.smartBuilding && s.project.smartProtocol) {
     const proj = withIraqElectricalStandards(s.project);
     const smart = placeSmartChannelSystem(proj, s.rooms, s.nodes, s.edges, s.locale);
     set({ nodes: smart.nodes, edges: smart.edges, controls: { ...s.controls, ...smart.controls } });
     await yieldToMain();
+    s = get();
+  }
+
+  if (deferred?.deferredRoomControls) {
+    const proj = withIraqElectricalStandards(s.project);
+    const lightingReport = calculateLightingDesign(s.rooms);
+    const roomControls = placeRoomControls(proj, s.rooms, s.nodes, s.edges, s.locale, lightingReport);
+    set({
+      nodes: roomControls.nodes,
+      edges: roomControls.edges,
+      controls: { ...s.controls, ...roomControls.controls },
+    });
+    await yieldToMain();
+    s = get();
   }
 
   if (deferred?.deferredElectrical) {
     const proj = withIraqElectricalStandards(s.project);
-    const wired = await attachRoomElectricalDistributionAsync(proj, s.rooms, get().nodes, get().edges, {
+    const wired = await attachRoomElectricalDistributionAsync(proj, s.rooms, s.nodes, s.edges, {
       deferCableRouting: true,
     });
     set({ nodes: wired.nodes, edges: wired.edges });
@@ -1081,10 +1129,7 @@ export const useStudio = create<StudioState>((set, get) => ({
             controls: result.controls,
             designName: result.designName,
           },
-          {
-            deferredElectrical: (result as { deferredElectrical?: boolean }).deferredElectrical,
-            deferredSmart: (result as { deferredSmart?: boolean }).deferredSmart,
-          },
+          deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
         );
         if (!cadBim?.walls.length && !s0.bim?.walls.length) {
           void runAsyncWhenIdle(async () => {
@@ -1298,10 +1343,7 @@ export const useStudio = create<StudioState>((set, get) => ({
               designName: result.designName,
               bim: result.bim,
             },
-            {
-              deferredElectrical: (result as { deferredElectrical?: boolean }).deferredElectrical,
-              deferredSmart: (result as { deferredSmart?: boolean }).deferredSmart,
-            },
+            deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
           );
         } catch (err) {
           console.error('[U Smart Studio] project generation failed', err);
@@ -1724,14 +1766,15 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   loadDesign: (file) => {
     const { floors, activeFloorId } = normalizeFloors(file.floors);
-    set({
+    const nodes = (file.nodes ?? []).map((n) => ({ ...n, floorId: n.floorId ?? floors[0]!.id }));
+    const patch: Partial<StudioState> = {
       designName: file.designName ?? '',
       project: normalizeProject(file.project),
       rooms: (file.rooms ?? []).map((r) => ({ ...r, floorId: r.floorId ?? floors[0]!.id })),
       bim: file.bim ?? null,
       floors,
       activeFloorId: file.activeFloorId && floors.some((f) => f.id === file.activeFloorId) ? file.activeFloorId : activeFloorId,
-      nodes: (file.nodes ?? []).map((n) => ({ ...n, floorId: n.floorId ?? floors[0]!.id })),
+      nodes,
       edges: file.edges ?? [],
       controls: file.controls ?? {},
       map: file.map ?? null,
@@ -1743,7 +1786,17 @@ export const useStudio = create<StudioState>((set, get) => ({
       floorPlanTool: file.map?.mode === 'blank' ? 'draw-room' : 'select',
       historyPast: [],
       historyFuture: [],
-    });
+    };
+
+    const nodeCount = nodes.length;
+    const heavy = nodeCount > 120 || isBulkGeneration(patch.rooms ?? []);
+    if (heavy && typeof window !== 'undefined') {
+      invalidateDesignAnalysisCache();
+      void finalizeProjectGeneration(get, set, get(), patch);
+      return;
+    }
+
+    set(patch);
   },
 
   hydrate: () => {
@@ -1823,10 +1876,7 @@ export const useStudio = create<StudioState>((set, get) => ({
             controls: result.controls,
             designName: result.designName,
           },
-          {
-            deferredElectrical: (result as { deferredElectrical?: boolean }).deferredElectrical,
-            deferredSmart: (result as { deferredSmart?: boolean }).deferredSmart,
-          },
+          deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
         );
         if (!bim?.walls.length) {
           void runAsyncWhenIdle(async () => {
@@ -2328,7 +2378,7 @@ if (typeof window !== 'undefined') {
     timer = setTimeout(() => {
       runWhenIdle(() => {
         const st = useStudio.getState();
-        if (st.generatingProject || st.applyingFixes) return;
+        if (st.generatingProject || st.applyingFixes || st.canvasBooting) return;
         const file: DesignFile = {
           version: 1,
           designName: st.designName,
