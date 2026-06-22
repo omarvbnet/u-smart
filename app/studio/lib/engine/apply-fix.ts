@@ -6,7 +6,7 @@ import type { DesignNode, DesignEdge, DesignRoom } from '../model';
 import type { ProjectInfo } from '../project';
 import type { StudioLocale } from '../i18n';
 import { defaultControlState, type ControlState } from '../controls';
-import { findMainPanel, psuCatalogIdsForProject, suggestSmartFixes } from './autofix';
+import { findMainPanel, psuCatalogIdsForProject, suggestSmartFixes, loadReachablePanel } from './autofix';
 import {
   rerouteCableNode,
   cableIdsLinkedToNode,
@@ -112,22 +112,95 @@ function loadDesignCurrentA(node: DesignNode): number {
   return 16;
 }
 
-function loadHasPowerPath(loadId: string, nodes: DesignNode[], edges: DesignEdge[]): boolean {
-  for (const e of edges) {
-    if (e.source !== loadId && e.target !== loadId) continue;
-    const otherId = e.source === loadId ? e.target : e.source;
-    const other = nodes.find((n) => n.id === otherId);
-    const dom = other ? getCatalogEntry(other.catalogId)?.domain : undefined;
-    if (dom === 'cable' || dom === 'protection' || dom === 'source') return true;
-  }
-  return false;
-}
-
 function mcbCatalogForCurrent(designA: number): { id: string; entry: CatalogEntry } | null {
   const rating = selectBreakerRating(designA, 999) ?? Math.min(63, Math.max(6, Math.ceil(designA)));
   const entry = pickBreaker(rating);
   if (!entry) return null;
   return { id: entry.id, entry };
+}
+
+function backboneAnchor(s: FixableState): { x: number; y: number } {
+  const panel = findMainPanel(s.nodes);
+  if (panel) return { x: panel.x, y: panel.y };
+  const loads = s.nodes.filter((n) => {
+    const e = getCatalogEntry(n.catalogId);
+    return e?.domain === 'load' && (e as LoadSpec).category !== 'PANEL';
+  });
+  if (loads.length) {
+    const ax = loads.reduce((sum, n) => sum + n.x, 0) / loads.length;
+    const ay = loads.reduce((sum, n) => sum + n.y, 0) / loads.length;
+    return { x: ax - 200, y: ay };
+  }
+  const room = s.rooms[0];
+  if (room) return { x: room.x - 80, y: room.y + 40 };
+  return { x: 80, y: 120 };
+}
+
+/** Create utility source + main DB and link them when missing (manual / partial designs). */
+export function ensureMainPanelAndSource(
+  s: FixableState,
+  sourceCatalogId = 'src-utility-400',
+): FixPatch {
+  const nodes = [...s.nodes];
+  const edges = [...s.edges];
+  const controls = { ...s.controls };
+  let changed = false;
+
+  let panel = findMainPanel(nodes);
+  let source = nodes.find((n) => getCatalogEntry(n.catalogId)?.domain === 'source');
+  const anchor = backboneAnchor(s);
+
+  if (!panel) {
+    const panelEntry = getCatalogEntry('load-distribution-board');
+    if (!panelEntry) return {};
+    panel = {
+      id: nodes.some((n) => n.id === 'panel_main') ? uid('panel') : 'panel_main',
+      catalogId: 'load-distribution-board',
+      label: defaultLabel(panelEntry, s.locale),
+      x: anchor.x,
+      y: anchor.y,
+      floorId: s.activeFloorId,
+      params: { showOnMap: true },
+    };
+    nodes.push(panel);
+    controls[panel.id] = defaultControlState(panelEntry);
+    changed = true;
+  }
+
+  if (!source) {
+    const srcEntry = getCatalogEntry(sourceCatalogId);
+    if (!srcEntry) return changed ? { nodes, edges, controls } : {};
+    source = {
+      id: uid('src'),
+      catalogId: sourceCatalogId,
+      label: defaultLabel(srcEntry, s.locale),
+      x: panel!.x - 160,
+      y: panel!.y,
+      floorId: s.activeFloorId,
+      params: { showOnMap: true },
+    };
+    nodes.push(source);
+    controls[source.id] = defaultControlState(srcEntry);
+    changed = true;
+  }
+
+  const linked = edges.some(
+    (e) =>
+      (e.source === source!.id && e.target === panel!.id) ||
+      (e.target === source!.id && e.source === panel!.id),
+  );
+  if (!linked) {
+    edges.push({
+      id: uid('e'),
+      source: source!.id,
+      sourceHandle: 'out',
+      target: panel!.id,
+      targetHandle: 'in',
+    });
+    changed = true;
+  }
+
+  return changed ? { nodes, edges, controls } : {};
 }
 
 /** Re-route cables and sync lengthM / routePoints used by validation. */
@@ -348,16 +421,24 @@ export function applyFixPatch(
     if (!added.length) return null;
     return { nodes: [...s.nodes, ...added], edges, controls };
   }
+  if (fix.kind === 'ensureBackbone') {
+    const patch = ensureMainPanelAndSource(s, fix.sourceCatalogId ?? 'src-utility-400');
+    return patch.nodes?.length || patch.edges?.length ? patch : null;
+  }
   if (fix.kind === 'addCircuit') {
-    const load = s.nodes.find((n) => n.id === fix.loadNodeId);
-    const panel = s.nodes.find((n) => n.id === fix.panelNodeId);
-    if (!load || !panel) return null;
-    if (loadHasPowerPath(load.id, s.nodes, s.edges)) return null;
+    const infra = ensureMainPanelAndSource(s);
+    const working = infra.nodes?.length || infra.edges?.length ? mergeFixableState(s, infra) : s;
+    const load = working.nodes.find((n) => n.id === fix.loadNodeId);
+    const panel = findMainPanel(working.nodes) ?? working.nodes.find((n) => n.id === fix.panelNodeId);
+    if (!load || !panel) return infra.nodes?.length || infra.edges?.length ? infra : null;
+    if (loadReachablePanel(load.id, working.nodes, working.edges)) {
+      return infra.nodes?.length || infra.edges?.length ? infra : null;
+    }
 
     const designA = loadDesignCurrentA(load);
     const mcbPick = mcbCatalogForCurrent(designA);
     const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec | undefined;
-    if (!mcbPick || !cableEntry) return null;
+    if (!mcbPick || !cableEntry) return infra.nodes?.length || infra.edges?.length ? infra : null;
 
     const mcbId = uid('n');
     const cableId = uid('n');
@@ -366,24 +447,24 @@ export function applyFixPatch(
     const mcb: DesignNode = {
       id: mcbId,
       catalogId: mcbPick.id,
-      label: defaultLabel(mcbPick.entry, s.locale),
+      label: defaultLabel(mcbPick.entry, working.locale),
       x: mcbX,
       y: mcbY,
-      floorId: load.floorId ?? panel.floorId,
+      floorId: load.floorId ?? panel.floorId ?? working.activeFloorId,
       params: { showOnMap: true },
     };
     const cable: DesignNode = {
       id: cableId,
       catalogId: cableEntry.id,
-      label: defaultLabel(cableEntry, s.locale),
+      label: defaultLabel(cableEntry, working.locale),
       x: mcbX,
       y: mcbY + 24,
-      floorId: load.floorId ?? panel.floorId,
+      floorId: load.floorId ?? panel.floorId ?? working.activeFloorId,
       params: { showOnMap: true },
     };
-    const draftNodes = [...s.nodes, mcb, cable];
+    const draftNodes = [...working.nodes, mcb, cable];
     const draftEdges: DesignEdge[] = [
-      ...s.edges,
+      ...working.edges,
       { id: uid('e'), source: panel.id, sourceHandle: 'out', target: mcbId, targetHandle: 'line' },
       { id: uid('e'), source: mcbId, sourceHandle: 'load', target: cableId, targetHandle: 'a' },
       { id: uid('e'), source: cableId, sourceHandle: 'b', target: load.id, targetHandle: 'in' },
@@ -394,12 +475,12 @@ export function applyFixPatch(
         params: { showOnMap: true, lengthM: 0, conduitType: conduitTypeForCable(cableEntry) },
       };
       return {
-        nodes: [...s.nodes, mcb, routedCable],
+        nodes: [...working.nodes, mcb, routedCable],
         edges: draftEdges,
-        controls: { ...s.controls, [mcbId]: defaultControlState(mcbPick.entry) },
+        controls: { ...working.controls, [mcbId]: defaultControlState(mcbPick.entry) },
       };
     }
-    const points = computeCableRoute(cable, draftNodes, draftEdges, s.rooms);
+    const points = computeCableRoute(cable, draftNodes, draftEdges, working.rooms);
     const cableParams = applyRouteToCable(cable, points, cableEntry);
     const routedCable: DesignNode = {
       ...cable,
@@ -407,29 +488,14 @@ export function applyFixPatch(
       params: cableParams,
     };
     return {
-      nodes: [...s.nodes, mcb, routedCable],
+      nodes: [...working.nodes, mcb, routedCable],
       edges: draftEdges,
-      controls: { ...s.controls, [mcbId]: defaultControlState(mcbPick.entry) },
+      controls: { ...working.controls, [mcbId]: defaultControlState(mcbPick.entry) },
     };
   }
   if (fix.kind === 'addSource') {
-    if (s.nodes.some((n) => n.catalogId === fix.catalogId)) return null;
-    const entry = getCatalogEntry(fix.catalogId);
-    if (!entry) return null;
-    const panel = findMainPanel(s.nodes);
-    const srcId = uid('n');
-    const src: DesignNode = {
-      id: srcId,
-      catalogId: fix.catalogId,
-      label: defaultLabel(entry, s.locale),
-      x: (panel?.x ?? 0) - 160,
-      y: panel?.y ?? 120,
-      params: {},
-    };
-    const edges = panel
-      ? [...s.edges, { id: uid('e'), source: srcId, sourceHandle: 'out', target: panel.id, targetHandle: 'in' }]
-      : s.edges;
-    return { nodes: [...s.nodes, src], edges, controls: { ...s.controls, [srcId]: defaultControlState(entry) } };
+    const patch = ensureMainPanelAndSource(s, fix.catalogId);
+    return patch.nodes?.length || patch.edges?.length ? patch : null;
   }
   if (fix.kind === 'upgradeBreaker') {
     const replacement = getCatalogEntry(fix.toCatalogId);
@@ -479,6 +545,8 @@ export function fixKey(f: Fix): string {
       return `upgradeBreaker:${f.nodeId}`;
     case 'addCircuit':
       return `addCircuit:${f.loadNodeId}`;
+    case 'ensureBackbone':
+      return 'ensureBackbone';
     case 'addRoomLighting':
       return `addRoomLighting:${f.roomId}`;
     case 'addGrounding':
@@ -501,6 +569,7 @@ export function dedupeFixes(fixes: Fix[]): Fix[] {
   const out: Fix[] = [];
   let psuAdded = false;
   let groundingAdded = false;
+  let backboneAdded = false;
   const sourcesAdded = new Set<string>();
 
   for (const f of fixes) {
@@ -515,6 +584,10 @@ export function dedupeFixes(fixes: Fix[]): Fix[] {
       if (groundingAdded) continue;
       groundingAdded = true;
     }
+    if (f.kind === 'ensureBackbone') {
+      if (backboneAdded) continue;
+      backboneAdded = true;
+    }
     if (f.kind === 'addSource') {
       if (sourcesAdded.has(f.catalogId)) continue;
       sourcesAdded.add(f.catalogId);
@@ -528,6 +601,7 @@ export function dedupeFixes(fixes: Fix[]): Fix[] {
 }
 
 const FIX_ORDER: Record<Fix['kind'], number> = {
+  ensureBackbone: 0,
   addSource: 0,
   addGrounding: 1,
   addPsu: 2,

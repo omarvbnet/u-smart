@@ -217,6 +217,7 @@ function suggestHvacUpsize(nodeId: string, totalKw: number): Fix | undefined {
 
 export function findMainPanel(nodes: DesignNode[]): DesignNode | undefined {
   return (
+    nodes.find((n) => n.id === 'panel_main') ??
     nodes.find((n) => n.catalogId === 'load-distribution-board') ??
     nodes.find((n) => {
       const e = getCatalogEntry(n.catalogId);
@@ -225,17 +226,52 @@ export function findMainPanel(nodes: DesignNode[]): DesignNode | undefined {
   );
 }
 
-export function suggestConnectToSource(loadNodeId: string, nodes: DesignNode[]): Fix | undefined {
-  const panel = findMainPanel(nodes);
-  if (!panel) {
-    return { kind: 'addSource', catalogId: 'src-utility-400' };
+function buildAdjacency(edges: DesignEdge[]): Map<string, Set<string>> {
+  const adj = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    if (!adj.has(a)) adj.set(a, new Set());
+    adj.get(a)!.add(b);
+  };
+  for (const e of edges) {
+    link(e.source, e.target);
+    link(e.target, e.source);
   }
-  return { kind: 'addCircuit', loadNodeId, panelNodeId: panel.id };
+  return adj;
 }
 
-export function suggestProtectionFix(loadNodeId: string, nodes: DesignNode[]): Fix | undefined {
+/** True when the load can reach the main distribution board through edges. */
+export function loadReachablePanel(loadId: string, nodes: DesignNode[], edges: DesignEdge[]): boolean {
   const panel = findMainPanel(nodes);
-  if (!panel) return suggestConnectToSource(loadNodeId, nodes);
+  if (!panel) return false;
+  const adj = buildAdjacency(edges);
+  const seen = new Set<string>([loadId]);
+  const queue = [loadId];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === panel.id) return true;
+    for (const next of adj.get(cur) ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+export function suggestConnectToSource(loadNodeId: string, nodes: DesignNode[], edges: DesignEdge[]): Fix | undefined {
+  const panel = findMainPanel(nodes);
+  if (!panel) return { kind: 'ensureBackbone' };
+  if (!loadReachablePanel(loadNodeId, nodes, edges)) {
+    return { kind: 'addCircuit', loadNodeId, panelNodeId: panel.id };
+  }
+  return { kind: 'ensureBackbone' };
+}
+
+export function suggestProtectionFix(loadNodeId: string, nodes: DesignNode[], edges: DesignEdge[]): Fix | undefined {
+  const panel = findMainPanel(nodes);
+  if (!panel) return { kind: 'ensureBackbone' };
+  if (loadReachablePanel(loadNodeId, nodes, edges)) return undefined;
   return { kind: 'addCircuit', loadNodeId, panelNodeId: panel.id };
 }
 

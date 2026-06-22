@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { CATALOG, getCatalogEntry, type CatalogEntry } from './catalog';
 import type { DesignNode, DesignEdge, DesignRoom, BimModel, DesignFloor, DesignGarden, DesignOpening } from './model';
+import { normalizeBim } from './model';
 import { resolveNodes } from './model';
 import type { Fix, Issue } from './engine/validation';
 import { validateDesign } from './engine/validation';
@@ -495,7 +496,7 @@ function scheduleDeferredCableReroute(
 }
 
 let fixJobSeq = 0;
-const FIX_ALL_CAP = 48;
+const FIX_ALL_CAP = 120;
 
 /** Re-validate and apply fixes in batches — keeps the canvas responsive. */
 function scheduleDeferredApplyAllFixes(
@@ -1881,7 +1882,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       designName: file.designName ?? '',
       project: normalizeProject(file.project),
       rooms: (file.rooms ?? []).map((r) => ({ ...r, floorId: r.floorId ?? floors[0]!.id })),
-      bim: file.bim ?? null,
+      bim: normalizeBim(file.bim),
       floors,
       activeFloorId: file.activeFloorId && floors.some((f) => f.id === file.activeFloorId) ? file.activeFloorId : activeFloorId,
       nodes,
@@ -1928,6 +1929,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       }
       const cloudId = window.localStorage.getItem('studio.cloudProjectId');
       if (cloudId) set({ cloudProjectId: cloudId });
+      const cur = get();
+      if (cur.bim) set({ bim: normalizeBim(cur.bim) });
     } catch {
       /* ignore corrupt autosave */
     }

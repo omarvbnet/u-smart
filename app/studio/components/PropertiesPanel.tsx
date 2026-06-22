@@ -99,6 +99,14 @@ export function PropertiesPanel() {
   );
   const roomVrf = selectedRoomId ? vrfAssignmentForRoom(vrfReport, selectedRoomId) : undefined;
 
+  if (selectedWallId && !selectedWall) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[var(--studio-muted)]">
+        {t('noSelection')}
+      </div>
+    );
+  }
+
   if (selectedWallId && selectedWall) {
     const input =
       'w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-bg)] px-3 py-2 text-sm text-[var(--studio-text)] outline-none focus:border-cyan-400';

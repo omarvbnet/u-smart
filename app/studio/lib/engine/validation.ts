@@ -45,6 +45,7 @@ export type Fix =
   | { kind: 'replaceCatalog'; nodeId: string; toCatalogId: string }
   | { kind: 'addPsu'; count: number }
   | { kind: 'addCircuit'; loadNodeId: string; panelNodeId: string }
+  | { kind: 'ensureBackbone'; sourceCatalogId?: string }
   | { kind: 'addSource'; catalogId: string }
   | { kind: 'upgradeBreaker'; nodeId: string; toCatalogId: string }
   | { kind: 'addRoomLighting'; roomId: string; catalogId: string; count: number };
@@ -164,13 +165,38 @@ export function validateDesign(
 
   // ---- Per-circuit checks ----
   for (const load of loads) {
+    if (load.spec.domain === 'load' && (load.spec as LoadSpec).category === 'PANEL') continue;
     const circuit = traceCircuit(load, byId, adj);
     if (!circuit) continue;
     circuits.push(circuit);
     const Ib = circuit.current;
 
-    // No source reachable.
-    if (!circuit.source) {
+    const noSource = !circuit.source;
+    const noProtection = circuit.breakers.length === 0;
+    if (noSource && noProtection) {
+      issues.push({
+        id: `${load.id}-no-circuit`,
+        severity: 'critical',
+        code: 'NO_CIRCUIT',
+        nodeId: load.id,
+        title: t('لا يوجد مصدر طاقة', 'No power source', 'هیچ سەرچاوەی وزە نییە', 'Güç kaynağı yok'),
+        detail: t(
+          'هذا الحمل غير موصول بلوحة التوزيع والمصدر عبر قاطع وكابل.',
+          'This load is not wired to a distribution board and source via breaker and cable.',
+          'ئەم بارە بە تابلۆ و سەرچاوە و برەیکەر و کێبڵ نەبەستراوەتەوە.',
+          'Bu yük dağıtım panosu ve kaynağa kesici ve kablo ile bağlı değil.',
+        ),
+        values: [{ label: t('التيار', 'Current', 'کارەبا', 'Akım'), value: `${Ib.toFixed(1)} A` }],
+        standards: ['IEC 60364', 'IEC 60898'],
+        recommendation: t(
+          'وصّل الحمل بلوحة التوزيع والمصدر عبر قاطع وكابل.',
+          'Wire the load to the DB and source via a breaker and cable.',
+          'بار ببەستەرەوە بە تابلۆ و سەرچاوە.',
+          'Yükü pano ve kaynağa kesici ve kablo ile bağlayın.',
+        ),
+        fix: suggestConnectToSource(load.id, nodes, edges),
+      });
+    } else if (noSource) {
       issues.push({
         id: `${load.id}-no-source`,
         severity: 'critical',
@@ -178,20 +204,17 @@ export function validateDesign(
         nodeId: load.id,
         title: t('لا يوجد مصدر طاقة', 'No power source', 'هیچ سەرچاوەی وزە نییە', 'Güç kaynağı yok'),
         detail: t(
-          'هذا الحمل غير موصول بأي مصدر طاقة.',
-          'This load is not connected to any power source.',
-          'ئەم بارە بە هیچ سەرچاوەیەکی وزە نەبەستراوەتەوە.',
-          'Bu yük herhangi bir güç kaynağına bağlı değil.',
+          'اللوحة أو الحمل غير موصول بمصدر الطاقة.',
+          'The distribution path is not connected to a power source.',
+          'ڕێڕەوەکە بە سەرچاوەی وزە نەبەستراوەتەوە.',
+          'Dağıtım yolu güç kaynağına bağlı değil.',
         ),
         values: [{ label: t('التيار', 'Current', 'کارەبا', 'Akım'), value: `${Ib.toFixed(1)} A` }],
         standards: ['IEC 60364'],
-        recommendation: t('وصّل الحمل بمصدر عبر قاطع وكابل.', 'Connect the load to a source via a breaker and cable.', 'بار ببەستەرەوە بە سەرچاوە لە ڕێگەی برەیکەر و کێبڵ.', 'Yükü bir kesici ve kablo ile kaynağa bağlayın.'),
-        fix: suggestConnectToSource(load.id, nodes),
+        recommendation: t('وصّل لوحة التوزيع بالمصدر.', 'Connect the DB to the utility source.', 'تابلۆ بە سەرچاوە ببەستە.', 'Panoyu kaynağa bağlayın.'),
+        fix: suggestConnectToSource(load.id, nodes, edges),
       });
-    }
-
-    // No protection.
-    if (circuit.breakers.length === 0) {
+    } else if (noProtection) {
       issues.push({
         id: `${load.id}-no-protection`,
         severity: 'critical',
@@ -207,7 +230,7 @@ export function validateDesign(
         values: [{ label: t('التيار التصميمي', 'Design current', 'کارەبای دیزاین', 'Tasarım akımı'), value: `${Ib.toFixed(1)} A` }],
         standards: ['IEC 60364', 'IEC 60898'],
         recommendation: t('أضف قاطعاً مناسباً للتيار التصميمي.', 'Add a breaker sized for the design current.', 'برەیکەرێک زیاد بکە بۆ کارەبای دیزاین.', 'Tasarım akımına uygun bir kesici ekleyin.'),
-        fix: suggestProtectionFix(load.id, nodes),
+        fix: suggestProtectionFix(load.id, nodes, edges),
       });
     }
 

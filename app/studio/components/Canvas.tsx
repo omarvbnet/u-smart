@@ -249,7 +249,8 @@ function CanvasInner() {
       }
     }
     if (bim) {
-      for (const o of bim.openings) {
+      const planOpenings = bim.openings ?? [];
+      for (const o of planOpenings) {
         if (o.floorId && o.floorId !== activeFloorId) continue;
         list.push({
           id: `open_${o.id}`,

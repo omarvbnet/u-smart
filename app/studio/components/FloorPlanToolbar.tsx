@@ -96,7 +96,7 @@ export function FloorPlanToolbar({ docked = false }: { docked?: boolean }) {
             <span className="hidden sm:inline">{t('detectRooms')}</span>
           </button>
         )}
-        {(effectiveWalls.length > 0 || (bim && bim.walls.length > 0)) && (
+        {(effectiveWalls.length > 0 || (bim?.walls?.length ?? 0) > 0) && (
           <span className="rounded-lg border border-slate-500/40 px-2 py-1 text-[9px] text-[var(--studio-muted)]">
             {effectiveWalls.length} {t('wallsDetected')}
             {outdoorWalls > 0 && ` · ${outdoorWalls} ${t('outdoorWall')}`}

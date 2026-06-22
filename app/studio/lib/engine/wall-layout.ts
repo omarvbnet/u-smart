@@ -315,7 +315,8 @@ export function openingGapAlongWall(opening: DesignOpening, wall: DesignWall): {
   const len = wallLength(wall);
   if (len < 1) return { start: 0.5, end: 0.5 };
   const along = opening.along ?? 0.5;
-  const half = Math.min(0.46, (opening.width / 2) / len);
+  const width = Number(opening.width) || (opening.kind === 'door' ? 76 : 96);
+  const half = Math.min(0.46, (width / 2) / len);
   return {
     start: Math.max(0.02, along - half),
     end: Math.min(0.98, along + half),
@@ -360,7 +361,8 @@ export function wallSegmentsWithGaps(wall: DesignWall, openings: DesignOpening[]
     segments.push(wallSubsegment(wall, cursor, 0.98, String(segIdx++)));
   }
 
-  return segments.filter((s) => wallLength(s) > 6);
+  const built = segments.filter((s) => wallLength(s) > 6);
+  return built.length > 0 ? built : [wall];
 }
 
 export function parentWallId(wallOrSegmentId: string): string {

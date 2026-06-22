@@ -165,6 +165,44 @@ export type BimModel = {
   hiddenWallIds?: string[];
 };
 
+/** Ensure partial/corrupt BIM payloads from storage or imports never crash the client. */
+export function normalizeOpening(o: Partial<DesignOpening> & { id: string; kind: 'door' | 'window' }): DesignOpening {
+  return {
+    id: o.id,
+    kind: o.kind,
+    x: Number(o.x) || 0,
+    y: Number(o.y) || 0,
+    width: Number(o.width) || (o.kind === 'door' ? 76 : 96),
+    height: Number(o.height) || (o.kind === 'door' ? 18 : 16),
+    rotation: o.rotation,
+    wallId: o.wallId,
+    along: o.along,
+    layer: o.layer,
+    floorId: o.floorId,
+    roomId: o.roomId,
+    linkedNodeId: o.linkedNodeId,
+    smartEnabled: o.smartEnabled,
+    curtainStyle: o.curtainStyle,
+    openPercent: o.openPercent,
+  };
+}
+
+export function normalizeBim(bim: BimModel | null | undefined): BimModel | null {
+  if (!bim) return null;
+  return {
+    walls: Array.isArray(bim.walls) ? bim.walls.map((w) => ({ ...w })) : [],
+    openings: Array.isArray(bim.openings)
+      ? bim.openings
+          .filter((o): o is DesignOpening => !!o?.id && (o.kind === 'door' || o.kind === 'window'))
+          .map((o) => normalizeOpening(o))
+      : [],
+    gardens: Array.isArray(bim.gardens) ? bim.gardens.map((g) => ({ ...g })) : [],
+    wallMeta: bim.wallMeta,
+    ceilingMeta: bim.ceilingMeta,
+    hiddenWallIds: Array.isArray(bim.hiddenWallIds) ? [...bim.hiddenWallIds] : [],
+  };
+}
+
 export type Design = {
   id: string;
   name: string;

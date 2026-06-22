@@ -1,4 +1,5 @@
 import type { DesignNode, DesignEdge, DesignRoom, BimModel, DesignFloor } from './model';
+import { normalizeBim } from './model';
 import type { ControlState } from './controls';
 
 export const HISTORY_LIMIT = 35;
@@ -37,14 +38,7 @@ export function cloneDesignSnapshot(s: {
       Object.entries(s.controls).map(([k, v]) => [k, { ...v, channels: v.channels ? [...v.channels] : undefined }]),
     ),
     rooms: s.rooms.map((r) => ({ ...r })),
-    bim: s.bim
-      ? {
-          walls: s.bim.walls.map((w) => ({ ...w })),
-          openings: s.bim.openings.map((o) => ({ ...o })),
-          gardens: s.bim.gardens?.map((g) => ({ ...g })) ?? [],
-          wallMeta: s.bim.wallMeta ? { ...s.bim.wallMeta } : undefined,
-        }
-      : null,
+    bim: normalizeBim(s.bim),
     floors: s.floors.map((f) => ({ ...f })),
     activeFloorId: s.activeFloorId,
     designName: s.designName,

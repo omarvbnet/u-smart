@@ -141,7 +141,7 @@ export function syncOpeningsFromControls(
   bim: BimModel | null,
   controls: Record<string, { on?: boolean; level?: number }>,
 ): BimModel | null {
-  if (!bim?.openings.length) return bim;
+  if (!bim?.openings?.length) return bim;
   const openings = bim.openings.map((o) => {
     if (!o.linkedNodeId) return o;
     const c = controls[o.linkedNodeId];
@@ -182,7 +182,7 @@ export function resolveFloorOpenings(
   options?: { smart?: boolean; synthesize?: boolean },
 ): DesignOpening[] {
   const floorRooms = rooms.filter((r) => !floorId || !r.floorId || r.floorId === floorId);
-  let raw = bim?.openings.filter((o) => !o.floorId || o.floorId === floorId) ?? [];
+  let raw = bim?.openings?.filter((o) => !o.floorId || o.floorId === floorId) ?? [];
   if (!raw.length && options?.synthesize !== false && floorRooms.length > 0) {
     raw = openingsForRooms(floorRooms, { smart: options?.smart, floorId });
   }
