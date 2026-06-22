@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
-import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3, Maximize2, Focus, TreePine, DoorOpen, AppWindow } from 'lucide-react';
+import { Square, MousePointer2, LayoutTemplate, Trash2, Scan, Grid3x3, Maximize2, Focus, TreePine, DoorOpen, AppWindow, BrickWall } from 'lucide-react';
 
 const ROOM_TEMPLATES = [
   { label: 'Living Room', zone: 'general' as const, spaceKind: 'living' as const, w: 280, h: 200 },
@@ -74,6 +74,9 @@ export function FloorPlanToolbar({ docked = false }: { docked?: boolean }) {
         </button>
         <button className={btn(tool === 'draw-room')} onClick={() => setTool('draw-room')} title={t('toolDrawRoom')}>
           <Square className="h-3.5 w-3.5" />
+        </button>
+        <button className={btn(tool === 'draw-wall')} onClick={() => setTool('draw-wall')} title={t('toolDrawWall')}>
+          <BrickWall className="h-3.5 w-3.5" />
         </button>
         {!map && (
           <button className={btn(false)} onClick={createMapFromZero} title={t('createMapFromZero')}>

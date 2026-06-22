@@ -5,7 +5,7 @@ import { type NodeProps } from '@xyflow/react';
 import type { DesignWall } from '../lib/model';
 import { wallPlanStyle } from '../lib/wall-finishes';
 
-export type WallNodeData = { wall: DesignWall; selected?: boolean };
+export type WallNodeData = { wall: DesignWall; wallId?: string; selected?: boolean };
 
 function WallNodeImpl({ data }: NodeProps) {
   const { wall, selected } = data as WallNodeData;

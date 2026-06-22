@@ -161,6 +161,8 @@ export type BimModel = {
       decoration?: CeilingDecoration;
     }
   >;
+  /** Room perimeter wall ids hidden by the user (virtual walls only). */
+  hiddenWallIds?: string[];
 };
 
 export type Design = {

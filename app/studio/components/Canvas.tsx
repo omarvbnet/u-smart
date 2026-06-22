@@ -49,7 +49,7 @@ import {
 import type { CableSpec } from '../lib/catalog';
 import { useLuxHeatmaps, useLoadHeatmaps, useDigitalTwinSync } from './hooks';
 import { openingOpenPercent } from '../lib/engine/opening-layout';
-import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
+import { mergeEffectiveWalls, wallSegmentsWithGaps, parentWallId } from '../lib/engine/wall-layout';
 
 const nodeTypes = {
   device: (p: NodeProps) => <DeviceNode {...p} />,
@@ -120,6 +120,7 @@ function CanvasInner() {
   const draggingIds = useRef<Set<string>>(new Set());
   const drawStart = useRef<{ x: number; y: number } | null>(null);
   const [drawPreview, setDrawPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [wallDrawPreview, setWallDrawPreview] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const { screenToFlowPosition, flowToScreenPosition, fitView } = useReactFlow();
   const t = useT();
 
@@ -142,6 +143,8 @@ function CanvasInner() {
   const moveRoom = useStudio((s) => s.moveRoom);
   const resizeRoom = useStudio((s) => s.resizeRoom);
   const moveWall = useStudio((s) => s.moveWall);
+  const removeWall = useStudio((s) => s.removeWall);
+  const addWall = useStudio((s) => s.addWall);
   const moveMap = useStudio((s) => s.moveMap);
   const connect = useStudio((s) => s.connect);
   const removeNode = useStudio((s) => s.removeNode);
@@ -151,6 +154,7 @@ function CanvasInner() {
   const selectWall = useStudio((s) => s.selectWall);
   const moveOpening = useStudio((s) => s.moveOpening);
   const addOpening = useStudio((s) => s.addOpening);
+  const removeOpening = useStudio((s) => s.removeOpening);
   const addRoom = useStudio((s) => s.addRoom);
   const setFloorPlanTool = useStudio((s) => s.setFloorPlanTool);
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
@@ -177,6 +181,8 @@ function CanvasInner() {
   useDigitalTwinSync();
   const rtl = RTL_LOCALES.has(locale);
   const drawing = floorPlanTool === 'draw-room';
+  const drawingWall = floorPlanTool === 'draw-wall';
+  const drawingAny = drawing || drawingWall;
   const placingOpening = floorPlanTool === 'place-door' || floorPlanTool === 'place-window';
 
   const portKinds = useMemo(() => {
@@ -222,17 +228,23 @@ function CanvasInner() {
       });
     }
     if (effectiveWalls.length > 0) {
+      const planOpenings = bim?.openings ?? [];
       for (const w of effectiveWalls) {
-        const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
-        list.push({
-          id: `wall_${w.id}`,
-          type: 'wall',
-          position: { x: w.x1, y: w.y1 },
-          style: { width: len, height: Math.max(w.thickness * 2, 8) },
-          data: { wall: w, selected: w.id === selectedWallId } satisfies WallNodeData,
-          draggable: !drawing && cadWallIds.has(w.id),
-          selectable: !drawing,
-          zIndex: 0,
+        const segments = wallSegmentsWithGaps(w, planOpenings);
+        segments.forEach((seg, i) => {
+          const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+          const nodeId = segments.length > 1 ? `wall_${w.id}__${i}` : `wall_${w.id}`;
+          list.push({
+            id: nodeId,
+            type: 'wall',
+            position: { x: seg.x1, y: seg.y1 },
+            style: { width: len, height: Math.max(seg.thickness * 2, 8) },
+            data: { wall: seg, wallId: w.id, selected: w.id === selectedWallId } satisfies WallNodeData,
+            draggable: !drawingAny && cadWallIds.has(w.id),
+            selectable: !drawingAny,
+            deletable: !drawingAny,
+            zIndex: 0,
+          });
         });
       }
     }
@@ -249,8 +261,9 @@ function CanvasInner() {
             openPercent: openingOpenPercent(o, controls),
             selected: o.id === selectedOpeningId,
           } satisfies OpeningNodeData,
-          draggable: !drawing,
-          selectable: !drawing,
+          draggable: !drawingAny,
+          selectable: !drawingAny,
+          deletable: !drawingAny,
           zIndex: 2,
         });
       }
@@ -495,7 +508,7 @@ function CanvasInner() {
             draggingIds.current.delete(c.id);
             if (c.id === MAP_ID) moveMap(c.position.x, c.position.y);
             else if (c.id.startsWith('room_')) moveRoom(c.id.slice(5), c.position.x, c.position.y);
-            else if (c.id.startsWith('wall_')) moveWall(c.id.slice(5), c.position.x, c.position.y);
+            else if (c.id.startsWith('wall_')) moveWall(parentWallId(c.id.slice(5)), c.position.x, c.position.y);
             else if (c.id.startsWith('open_')) {
               const opening = bim?.openings.find((o) => o.id === c.id.slice(5));
               if (opening && c.position) {
@@ -507,11 +520,13 @@ function CanvasInner() {
           resizeRoom(c.id.slice(5), c.dimensions.width, c.dimensions.height);
         } else if (c.type === 'remove') {
           draggingIds.current.delete(c.id);
-          if (c.id !== MAP_ID && !c.id.startsWith('room_')) removeNode(c.id);
+          if (c.id.startsWith('wall_')) removeWall(parentWallId(c.id.slice(5)));
+          else if (c.id.startsWith('open_')) removeOpening(c.id.slice(5));
+          else if (c.id !== MAP_ID && !c.id.startsWith('room_')) removeNode(c.id);
         }
       }
     },
-    [onRfNodesChange, moveNode, moveRoom, moveWall, moveOpening, resizeRoom, moveMap, removeNode, bim?.openings],
+    [onRfNodesChange, moveNode, moveRoom, moveWall, removeWall, removeOpening, moveOpening, resizeRoom, moveMap, removeNode, bim?.openings],
   );
 
   const onConnect = useCallback(
@@ -548,31 +563,48 @@ function CanvasInner() {
         setFloorPlanTool('select');
         return;
       }
-      if (!drawing || e.button !== 0) return;
+      if ((!drawing && !drawingWall) || e.button !== 0) return;
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      if (drawingWall) {
+        drawStart.current = pos;
+        setWallDrawPreview({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y });
+        return;
+      }
       drawStart.current = pos;
       setDrawPreview({ x: pos.x, y: pos.y, w: 0, h: 0 });
     },
-    [drawing, placingOpening, floorPlanTool, screenToFlowPosition, addOpening, setFloorPlanTool],
+    [drawing, drawingWall, placingOpening, floorPlanTool, screenToFlowPosition, addOpening, setFloorPlanTool],
   );
 
   const onPaneMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (!drawStart.current) return;
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      if (drawingWall) {
+        setWallDrawPreview({ x1: drawStart.current.x, y1: drawStart.current.y, x2: pos.x, y2: pos.y });
+        return;
+      }
       const x = Math.min(drawStart.current.x, pos.x);
       const y = Math.min(drawStart.current.y, pos.y);
       const w = Math.abs(pos.x - drawStart.current.x);
       const h = Math.abs(pos.y - drawStart.current.y);
       setDrawPreview({ x, y, w, h });
     },
-    [screenToFlowPosition],
+    [screenToFlowPosition, drawingWall],
   );
 
   const onPaneMouseUp = useCallback(() => {
+    if (drawingWall && drawStart.current && wallDrawPreview) {
+      addWall(wallDrawPreview.x1, wallDrawPreview.y1, wallDrawPreview.x2, wallDrawPreview.y2);
+      drawStart.current = null;
+      setWallDrawPreview(null);
+      setFloorPlanTool('select');
+      return;
+    }
     if (!drawStart.current || !drawPreview) {
       drawStart.current = null;
       setDrawPreview(null);
+      setWallDrawPreview(null);
       return;
     }
     if (drawPreview.w >= 40 && drawPreview.h >= 30) {
@@ -588,12 +620,12 @@ function CanvasInner() {
     drawStart.current = null;
     setDrawPreview(null);
     setFloorPlanTool('select');
-  }, [drawPreview, addRoom, rooms.length, setFloorPlanTool]);
+  }, [drawPreview, wallDrawPreview, drawingWall, addRoom, addWall, rooms.length, setFloorPlanTool]);
 
   return (
     <div
       ref={wrapper}
-      className={`relative h-full w-full ${drawing || placingOpening ? 'cursor-crosshair' : ''}`}
+      className={`relative h-full w-full ${drawingAny || placingOpening ? 'cursor-crosshair' : ''}`}
       onMouseDown={onPaneMouseDown}
       onMouseMove={onPaneMouseMove}
       onMouseUp={onPaneMouseUp}
@@ -621,12 +653,12 @@ function CanvasInner() {
           if (n.id === MAP_ID) return;
           if (n.id.startsWith('room_')) selectRoom(n.id.slice(5));
           else if (n.id.startsWith('open_')) selectOpening(n.id.slice(5));
-          else if (n.id.startsWith('wall_')) selectWall(n.id.slice(5));
+          else if (n.id.startsWith('wall_')) selectWall((n.data as WallNodeData).wallId ?? parentWallId(n.id.slice(5)));
           else if (n.id.startsWith('route_')) select(n.id.slice(6));
           else select(n.id);
         }}
         onPaneClick={() => {
-          if (!drawing) {
+          if (!drawingAny) {
             select(null);
             selectRoom(null);
             selectOpening(null);
@@ -636,7 +668,7 @@ function CanvasInner() {
         onEdgesDelete={(eds) => eds.forEach((e) => useStudio.getState().removeEdge(e.id))}
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={['Backspace', 'Delete']}
-        panOnDrag={!drawing}
+        panOnDrag={!drawingAny}
         minZoom={0.15}
         maxZoom={2}
       >
@@ -656,6 +688,23 @@ function CanvasInner() {
       </ReactFlow>
         </CanvasUiProvider>
       </div>
+
+      {wallDrawPreview && (() => {
+        const a = flowToScreenPosition({ x: wallDrawPreview.x1, y: wallDrawPreview.y1 });
+        const b = flowToScreenPosition({ x: wallDrawPreview.x2, y: wallDrawPreview.y2 });
+        const left = wrapper.current ? a.x - wrapper.current.getBoundingClientRect().left : a.x;
+        const top = wrapper.current ? a.y - wrapper.current.getBoundingClientRect().top : a.y;
+        const w = b.x - a.x;
+        const h = b.y - a.y;
+        const len = Math.hypot(w, h);
+        const angle = (Math.atan2(h, w) * 180) / Math.PI;
+        return (
+          <div
+            className="pointer-events-none absolute origin-left rounded-full bg-slate-400/80"
+            style={{ left, top, width: len, height: 6, transform: `rotate(${angle}deg)` }}
+          />
+        );
+      })()}
 
       {drawPreview && drawPreview.w > 4 && (() => {
         const tl = flowToScreenPosition({ x: drawPreview.x, y: drawPreview.y });

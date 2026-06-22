@@ -93,16 +93,21 @@ export function applyWallMeta(walls: DesignWall[], meta?: Record<string, WallMet
   });
 }
 
-/** CAD walls when present; otherwise room perimeter walls. */
+/** CAD walls when present; otherwise room perimeter walls. User-drawn walls always included. */
 export function mergeEffectiveWalls(bim: BimModel | null, rooms: DesignRoom[], floorId?: string): DesignWall[] {
-  const cad = (bim?.walls ?? []).filter((w) => !floorId || !w.floorId || w.floorId === floorId);
-  if (cad.length > 0) {
-    return applyWallMeta(
-      cad.map((w) => ({ ...w, outdoor: w.outdoor ?? true })),
-      bim?.wallMeta,
-    );
+  const hidden = new Set(bim?.hiddenWallIds ?? []);
+  const floorFilter = (w: DesignWall) => !floorId || !w.floorId || w.floorId === floorId;
+  const cadAll = (bim?.walls ?? []).filter(floorFilter);
+  const userWalls = cadAll.filter(isUserDrawnWall);
+  const importedWalls = cadAll
+    .filter((w) => !isUserDrawnWall(w))
+    .map((w) => ({ ...w, outdoor: w.outdoor ?? true }));
+  const roomWalls = wallsFromRooms(rooms, floorId).filter((w) => !hidden.has(w.id));
+
+  if (importedWalls.length > 0) {
+    return applyWallMeta([...importedWalls, ...userWalls], bim?.wallMeta);
   }
-  return applyWallMeta(wallsFromRooms(rooms, floorId), bim?.wallMeta);
+  return applyWallMeta([...roomWalls, ...userWalls], bim?.wallMeta);
 }
 
 export function wallLength(w: DesignWall): number {
@@ -291,4 +296,74 @@ export function wallLabel(w: DesignWall, rooms: DesignRoom[]): string {
 
 export function isVirtualRoomWall(wallId: string): boolean {
   return wallId.startsWith('rw_');
+}
+
+export function isUserDrawnWall(w: DesignWall): boolean {
+  return w.layer === 'user' || w.id.startsWith('uw_');
+}
+
+export function pointOnWallFraction(w: DesignWall, t: number): { x: number; y: number } {
+  const f = Math.max(0, Math.min(1, t));
+  return {
+    x: w.x1 + (w.x2 - w.x1) * f,
+    y: w.y1 + (w.y2 - w.y1) * f,
+  };
+}
+
+/** Along-wall gap (0–1) occupied by a door/window opening. */
+export function openingGapAlongWall(opening: DesignOpening, wall: DesignWall): { start: number; end: number } {
+  const len = wallLength(wall);
+  if (len < 1) return { start: 0.5, end: 0.5 };
+  const along = opening.along ?? 0.5;
+  const half = Math.min(0.46, (opening.width / 2) / len);
+  return {
+    start: Math.max(0.02, along - half),
+    end: Math.min(0.98, along + half),
+  };
+}
+
+function wallSubsegment(w: DesignWall, t0: number, t1: number, suffix: string): DesignWall {
+  const a = pointOnWallFraction(w, t0);
+  const b = pointOnWallFraction(w, t1);
+  return { ...w, id: `${w.id}__seg${suffix}`, x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+}
+
+/** Split a wall into segments with gaps where doors/windows are mounted. */
+export function wallSegmentsWithGaps(wall: DesignWall, openings: DesignOpening[]): DesignWall[] {
+  const onWall = openings.filter((o) => o.wallId === wall.id);
+  if (!onWall.length) return [wall];
+
+  const gaps = onWall
+    .map((o) => openingGapAlongWall(o, wall))
+    .sort((a, b) => a.start - b.start);
+
+  const merged: { start: number; end: number }[] = [];
+  for (const g of gaps) {
+    const last = merged[merged.length - 1];
+    if (last && g.start <= last.end + 0.01) {
+      last.end = Math.max(last.end, g.end);
+    } else {
+      merged.push({ ...g });
+    }
+  }
+
+  const segments: DesignWall[] = [];
+  let cursor = 0.02;
+  let segIdx = 0;
+  for (const gap of merged) {
+    if (gap.start > cursor + 0.03) {
+      segments.push(wallSubsegment(wall, cursor, gap.start, String(segIdx++)));
+    }
+    cursor = Math.max(cursor, gap.end);
+  }
+  if (cursor < 0.98) {
+    segments.push(wallSubsegment(wall, cursor, 0.98, String(segIdx++)));
+  }
+
+  return segments.filter((s) => wallLength(s) > 6);
+}
+
+export function parentWallId(wallOrSegmentId: string): string {
+  const i = wallOrSegmentId.indexOf('__seg');
+  return i >= 0 ? wallOrSegmentId.slice(0, i) : wallOrSegmentId;
 }

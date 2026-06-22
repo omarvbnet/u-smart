@@ -85,13 +85,15 @@ import {
   setWallLength,
   roomPatchForWallLength,
   isVirtualRoomWall,
+  isUserDrawnWall,
   translateWall,
 } from './engine/wall-layout';
+import { defaultWallColor } from './wall-finishes';
 import type { VisualizationMode, ExperienceMode } from './visualization/modes';
 import { cloneDesignSnapshot, HISTORY_LIMIT } from './history';
 
 export type Theme = 'dark' | 'light';
-export type FloorPlanTool = 'select' | 'draw-room' | 'place-door' | 'place-window';
+export type FloorPlanTool = 'select' | 'draw-room' | 'draw-wall' | 'place-door' | 'place-window';
 /** `content` = zoom to rooms & elements; `full` = include the entire map layer. */
 export type CanvasViewMode = 'content' | 'full';
 
@@ -242,6 +244,8 @@ type StudioState = {
   selectOpening: (id: string | null) => void;
   selectWall: (id: string | null) => void;
   moveWall: (id: string, x1: number, y1: number) => void;
+  removeWall: (id: string) => void;
+  addWall: (x1: number, y1: number, x2: number, y2: number) => void;
   updateWall: (
     id: string,
     patch: {
@@ -1626,6 +1630,66 @@ export const useStudio = create<StudioState>((set, get) => ({
         return o;
       });
       return withHistory(s, { bim: { ...s.bim, walls, openings } });
+    }),
+
+  removeWall: (id) =>
+    set((s) => {
+      const wallId = id;
+      const bim = s.bim ?? { walls: [], openings: [] };
+      const openings = bim.openings.filter((o) => o.wallId !== wallId);
+      if (isVirtualRoomWall(wallId)) {
+        const hiddenWallIds = [...(bim.hiddenWallIds ?? []), wallId];
+        return withHistory(s, {
+          bim: { ...bim, hiddenWallIds, openings },
+          selectedWallId: s.selectedWallId === wallId ? null : s.selectedWallId,
+        });
+      }
+      return withHistory(s, {
+        bim: { ...bim, walls: bim.walls.filter((w) => w.id !== wallId), openings },
+        selectedWallId: s.selectedWallId === wallId ? null : s.selectedWallId,
+      });
+    }),
+
+  addWall: (x1, y1, x2, y2) =>
+    set((s) => {
+      let sx = x1;
+      let sy = y1;
+      let ex = x2;
+      let ey = y2;
+      const dx = ex - sx;
+      const dy = ey - sy;
+      const len = Math.hypot(dx, dy);
+      if (len < 20) return s;
+      // Snap nearly horizontal / vertical strokes
+      if (Math.abs(dy) < Math.abs(dx) * 0.18) {
+        ey = sy;
+      } else if (Math.abs(dx) < Math.abs(dy) * 0.18) {
+        ex = sx;
+      }
+      const wall: import('./model').DesignWall = {
+        id: uid('uw'),
+        x1: sx,
+        y1: sy,
+        x2: ex,
+        y2: ey,
+        thickness: 6,
+        heightM: 2.8,
+        layer: 'user',
+        floorId: s.activeFloorId,
+        wallType: 'concrete',
+        decoration: 'paint',
+        color: defaultWallColor('concrete', false),
+        outdoor: false,
+      };
+      const bim: BimModel = {
+        walls: [...(s.bim?.walls ?? []), wall],
+        openings: s.bim?.openings ?? [],
+        gardens: s.bim?.gardens,
+        wallMeta: s.bim?.wallMeta,
+        ceilingMeta: s.bim?.ceilingMeta,
+        hiddenWallIds: s.bim?.hiddenWallIds,
+      };
+      return withHistory(s, { bim, selectedWallId: wall.id, selectedRoomId: null, selectedOpeningId: null });
     }),
 
   updateWall: (id, patch) =>

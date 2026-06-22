@@ -80,6 +80,7 @@ export function PropertiesPanel() {
   const removeOpening = useStudio((s) => s.removeOpening);
   const setOpeningControl = useStudio((s) => s.setOpeningControl);
   const updateWall = useStudio((s) => s.updateWall);
+  const removeWall = useStudio((s) => s.removeWall);
   const updateRoomCeiling = useStudio((s) => s.updateRoomCeiling);
   const assignOpeningToWall = useStudio((s) => s.assignOpeningToWall);
 
@@ -197,6 +198,13 @@ export function PropertiesPanel() {
             />
           </div>
           <p className="text-[10px] text-[var(--studio-muted)]">{t('wallEditHint')}</p>
+          <button
+            type="button"
+            onClick={() => removeWall(selectedWall.id)}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 py-2 text-sm text-red-400"
+          >
+            <Trash2 className="h-4 w-4" /> {t('deleteWall')}
+          </button>
         </div>
       </div>
     );

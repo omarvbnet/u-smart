@@ -13,7 +13,7 @@ import { useSimulation, useDigitalTwinSync } from './hooks';
 import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
 import type { DesignOpening, DesignGarden, DesignRoom, DesignWall, CurtainStyle } from '../lib/model';
-import { mergeEffectiveWalls } from '../lib/engine/wall-layout';
+import { mergeEffectiveWalls, wallSegmentsWithGaps } from '../lib/engine/wall-layout';
 import { wall3dMaterial, ceiling3dMaterial, type CeilingMeta } from '../lib/wall-finishes';
 import { openingOpenPercent, resolveFloorOpeningsFor3d } from '../lib/engine/opening-layout';
 import {
@@ -593,9 +593,12 @@ function SceneContent() {
   );
 
   const walls = useMemo(() => {
-    if (focusRoom) return wallsForRoom(bim, rooms, focusRoom, activeFloorId);
-    if (focusGarden) return [];
-    return mergeEffectiveWalls(bim, rooms, activeFloorId);
+    let base: DesignWall[];
+    if (focusRoom) base = wallsForRoom(bim, rooms, focusRoom, activeFloorId);
+    else if (focusGarden) base = [];
+    else base = mergeEffectiveWalls(bim, rooms, activeFloorId);
+    const openings = bim?.openings ?? [];
+    return base.flatMap((w) => wallSegmentsWithGaps(w, openings));
   }, [bim, rooms, activeFloorId, focusRoom, focusGarden]);
 
   const openings3d = useMemo(() => {
