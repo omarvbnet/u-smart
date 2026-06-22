@@ -128,10 +128,16 @@ export function isOutletCatalog(entry: LoadSpec | undefined): boolean {
   return !!entry && (entry.category === 'SOCKET' || entry.category === 'APPLIANCE');
 }
 
-export function placeSocketOutlets(rooms: DesignRoom[], idPrefix = 'outlet'): DesignNode[] {
+export function placeSocketOutlets(
+  rooms: DesignRoom[],
+  idPrefix = 'outlet',
+  options?: { maxPerRoom?: number },
+): DesignNode[] {
   const nodes: DesignNode[] = [];
   for (const room of rooms) {
-    const count = socketsRequiredForRoom(room);
+    const count = options?.maxPerRoom
+      ? Math.min(socketsRequiredForRoom(room), options.maxPerRoom)
+      : socketsRequiredForRoom(room);
     const positions = socketWallPositions(room, count);
     positions.forEach((pos, i) => {
       nodes.push({

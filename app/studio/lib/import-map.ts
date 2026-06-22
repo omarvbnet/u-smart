@@ -33,11 +33,28 @@ function readImage(file: File): Promise<{ src: string; width: number; height: nu
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const src = reader.result as string;
+      const raw = reader.result as string;
       const img = new Image();
-      img.onload = () => resolve({ src, width: img.naturalWidth, height: img.naturalHeight });
+      img.onload = () => {
+        const maxDim = 1400;
+        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+        if (scale >= 1) {
+          resolve({ src: raw, width: img.naturalWidth, height: img.naturalHeight });
+          return;
+        }
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ src: canvas.toDataURL('image/jpeg', 0.82), width: w, height: h });
+      };
       img.onerror = reject;
-      img.src = src;
+      img.src = raw;
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -52,13 +69,16 @@ async function renderPdfFirstPage(file: File): Promise<{ src: string; width: num
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
   const page = await doc.getPage(1);
   const base = page.getViewport({ scale: 1 });
-  const maxDim = 2200;
-  const scale = Math.min(2, maxDim / Math.max(base.width, base.height));
+  const maxDim = 1400;
+  const scale = Math.min(1.5, maxDim / Math.max(base.width, base.height));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
   const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-  return { src: canvas.toDataURL('image/png'), width: viewport.width / scale, height: viewport.height / scale };
+  const src = canvas.toDataURL('image/jpeg', 0.82);
+  return { src, width: viewport.width / scale, height: viewport.height / scale };
 }

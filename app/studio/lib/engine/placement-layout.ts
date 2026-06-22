@@ -27,6 +27,7 @@ export function placeLightingFixtures(
   rooms: DesignRoom[],
   idPrefix = 'light',
   report?: LightingDesignReport,
+  options?: { maxPerRoom?: number },
 ): DesignNode[] {
   const lighting = report ?? calculateLightingDesign(rooms);
   const nodes: DesignNode[] = [];
@@ -34,7 +35,7 @@ export function placeLightingFixtures(
   for (const row of lighting.rooms) {
     const room = rooms.find((r) => r.id === row.roomId);
     if (!room) continue;
-    const count = row.fixturesRecommended;
+    const count = options?.maxPerRoom ? Math.min(row.fixturesRecommended, options.maxPerRoom) : row.fixturesRecommended;
     const cols = Math.ceil(Math.sqrt(count));
     const rows = Math.ceil(count / cols);
     const padX = room.width * 0.15;

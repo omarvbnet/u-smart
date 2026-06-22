@@ -99,13 +99,23 @@ export function useAutonomousReports() {
   const rooms = useStudio((s) => s.rooms);
   const project = useStudio((s) => s.project);
   const assumptions = useStudio((s) => s.autonomousAssumptions);
+  const canvasBooting = useStudio((s) => s.canvasBooting);
+  const generatingProject = useStudio((s) => s.generatingProject);
 
   return useMemo(() => {
+    if (canvasBooting || generatingProject || !project.setupComplete) {
+      return {
+        hvac: { rooms: [], totalCoolingKw: 0, totalHeatingKw: 0, recommendedSystems: [] as const },
+        lighting: { rooms: [], totalPowerW: 0, totalFixtures: 0, assumptions: [] },
+        smart: { modules: [], busSegments: [], issues: [] },
+        assumptions,
+      };
+    }
     const hvac = calculateHvacLoads(rooms, project.buildingType);
     const lighting = calculateLightingDesign(rooms);
     const smart = buildSmartTopology(project, nodes, edges, rooms);
     return { hvac, lighting, smart, assumptions };
-  }, [nodes, edges, rooms, project, assumptions]);
+  }, [nodes, edges, rooms, project, assumptions, canvasBooting, generatingProject]);
 }
 
 /** Per-room lux heatmap grids for canvas overlay. */

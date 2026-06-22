@@ -21,7 +21,7 @@ export async function detectRoomsFromMap(
   mapWidth: number,
   mapHeight: number,
 ): Promise<DetectedRoom[]> {
-  const { data, w, h, threshold } = await rasterize(src, Math.min(1000, mapWidth));
+  const { data, w, h, threshold } = await rasterize(src, Math.min(800, mapWidth));
   const boxes = await findRoomRegions(data, w, h, threshold);
   const ranked = boxes.sort((a, b) => b.area - a.area).slice(0, 28);
   const scaled = ranked.map((b) => ({
@@ -153,7 +153,7 @@ async function findRoomRegions(
           visited[ni] = 1;
           stack.push([nx, ny]);
         }
-        if (stack.length > 0 && stack.length % 4096 === 0) {
+        if (stack.length > 0 && stack.length % 2048 === 0) {
           frameStart = await yieldIfBusy(frameStart);
         }
       }

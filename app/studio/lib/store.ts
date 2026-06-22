@@ -19,6 +19,7 @@ import {
 } from './engine/apply-fix';
 import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
 import { runWhenIdle, runAsyncWhenIdle, yieldToMain } from './idle';
+import { isBulkGeneration } from './engine/bulk-generation';
 import { CABLES } from './catalog/cables';
 import type { CableSpec } from './catalog';
 import { STUDIO_LOCALES, type StudioLocale } from './i18n';
@@ -141,6 +142,8 @@ type StudioState = {
   applyingFixes: boolean;
   fixBatchResult: { applied: number; remaining: number } | null;
   generatingProject: boolean;
+  /** Delays mounting the heavy canvas until after the first paint following bulk generation. */
+  canvasBooting: boolean;
   visualizationMode: VisualizationMode;
   experienceMode: ExperienceMode;
   assistantOpen: boolean;
@@ -576,6 +579,36 @@ function withHistory(s: StudioState, patch: Partial<StudioState>): Partial<Studi
   };
 }
 
+/** Commit a generated design and defer mounting the canvas when the graph is large. */
+async function finalizeProjectGeneration(
+  get: () => StudioState,
+  set: (patch: Partial<StudioState>) => void,
+  pre: StudioState,
+  patch: Partial<StudioState>,
+): Promise<void> {
+  const nodeCount = patch.nodes?.length ?? pre.nodes.length;
+  const heavy = nodeCount > 350 || isBulkGeneration(patch.rooms ?? pre.rooms);
+
+  set(
+    withHistory(pre, {
+      ...patch,
+      generatingProject: false,
+      suppressCanvasFit: false,
+      canvasBooting: heavy,
+      canvasFitSeq: pre.canvasFitSeq + 1,
+      ...(heavy ? { mapOverlayMode: 'plan' as MapOverlayMode } : {}),
+    }),
+  );
+
+  scheduleDeferredCableReroute(get, set);
+
+  if (heavy && typeof window !== 'undefined') {
+    await yieldToMain();
+    await yieldToMain();
+    runWhenIdle(() => set({ canvasBooting: false }));
+  }
+}
+
 function fixableFrom(s: StudioState): FixableState {
   return {
     locale: s.locale,
@@ -638,6 +671,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   applyingFixes: false,
   fixBatchResult: null,
   generatingProject: false,
+  canvasBooting: false,
   visualizationMode: initialVisualizationMode(),
   experienceMode: initialExperienceMode(),
   assistantOpen: false,
@@ -910,6 +944,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   importMapAndAnalyze: async (file) => {
     const { importMapFile } = await import('./import-map');
     const { src, width, height, bim: cadBim } = await importMapFile(file);
+    await yieldToMain();
     const s0 = get();
     const mapX = -width / 2;
     const mapY = -height / 2;
@@ -945,21 +980,15 @@ export const useStudio = create<StudioState>((set, get) => ({
           wallMeta: finishes.wallMeta,
           ceilingMeta: finishes.ceilingMeta,
         };
-        set(
-          withHistory(pre, {
-            project,
-            rooms,
-            bim: mergedBim,
-            nodes: result.nodes,
-            edges: result.edges,
-            controls: result.controls,
-            designName: result.designName,
-            generatingProject: false,
-            suppressCanvasFit: false,
-            canvasFitSeq: pre.canvasFitSeq + 1,
-          }),
-        );
-        scheduleDeferredCableReroute(get, set);
+        await finalizeProjectGeneration(get, set, pre, {
+          project,
+          rooms,
+          bim: mergedBim,
+          nodes: result.nodes,
+          edges: result.edges,
+          controls: result.controls,
+          designName: result.designName,
+        });
         if (!cadBim?.walls.length && !s0.bim?.walls.length) {
           void runAsyncWhenIdle(async () => {
             try {
@@ -1003,7 +1032,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       return { rooms: rooms.length, walls: get().bim?.walls.length ?? 0 };
     } catch (err) {
       console.error('[U Smart Studio] map analysis failed', err);
-      set({ generatingProject: false, suppressCanvasFit: false });
+      set({ generatingProject: false, canvasBooting: false, suppressCanvasFit: false });
       return { rooms: 0, walls: 0 };
     }
   },
@@ -1161,19 +1190,16 @@ export const useStudio = create<StudioState>((set, get) => ({
         try {
           const result = await generateProjectDesignAsync(mergedProject, rooms, locale, activeFloorId);
           invalidateDesignAnalysisCache();
-          set({
+          await finalizeProjectGeneration(get, set, get(), {
             nodes: result.nodes,
             edges: result.edges,
             controls: result.controls,
             designName: result.designName,
             bim: result.bim,
-            generatingProject: false,
-            canvasFitSeq: get().canvasFitSeq + 1,
           });
-          scheduleDeferredCableReroute(get, set);
         } catch (err) {
           console.error('[U Smart Studio] project generation failed', err);
-          set({ generatingProject: false });
+          set({ generatingProject: false, canvasBooting: false });
         }
       });
     };
@@ -1189,6 +1215,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     set((s) => ({
       project: { ...s.project, setupComplete: false },
       generatingProject: false,
+      canvasBooting: false,
       simulating: false,
       selectedNodeId: null,
       selectedRoomId: null,
@@ -1677,20 +1704,15 @@ export const useStudio = create<StudioState>((set, get) => ({
           wallMeta: finishes.wallMeta,
           ceilingMeta: finishes.ceilingMeta,
         };
-        set(
-          withHistory(s, {
-            project,
-            rooms,
-            bim: mergedBim,
-            nodes: result.nodes,
-            edges: result.edges,
-            controls: result.controls,
-            designName: result.designName,
-            generatingProject: false,
-            canvasFitSeq: s.canvasFitSeq + 1,
-          }),
-        );
-        scheduleDeferredCableReroute(get, set);
+        await finalizeProjectGeneration(get, set, s, {
+          project,
+          rooms,
+          bim: mergedBim,
+          nodes: result.nodes,
+          edges: result.edges,
+          controls: result.controls,
+          designName: result.designName,
+        });
         if (!bim?.walls.length) {
           void runAsyncWhenIdle(async () => {
             try {
@@ -1715,7 +1737,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       return rooms.length;
     } catch (err) {
       console.error('[U Smart Studio] room detection failed', err);
-      set({ generatingProject: false });
+      set({ generatingProject: false, canvasBooting: false });
       return 0;
     }
   },
