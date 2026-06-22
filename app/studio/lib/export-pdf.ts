@@ -14,8 +14,9 @@ import {
   buildDeviceRegister,
   buildRoomRegister,
 } from './engine/reports';
-import { buildingTypeLabel, type ProjectInfo } from './project';
+import { buildingTypeLabel, isManualDesign, type ProjectInfo } from './project';
 import { resolveNodes, type DesignNode, type DesignEdge, type DesignRoom, type DesignFloor } from './model';
+import type { SourceSpec } from './catalog';
 import type { jsPDF } from 'jspdf';
 
 export type FloorMapCapture = { floorId: string; floorLabel: string; dataUrl: string };
@@ -96,6 +97,60 @@ export async function exportDesignPdf(opts: {
     if (cap !== mapCaptures[mapCaptures.length - 1]) doc.addPage();
   }
 
+  // ---- Electrical summary (totals + per-item) ----
+  doc.addPage();
+  header('Electrical Summary');
+  const sourceNode = resolved.find((n) => n.spec.domain === 'source');
+  const supplyVoltage =
+    sourceNode && sourceNode.spec.domain === 'source'
+      ? (sourceNode.spec as SourceSpec).voltage
+      : loadSched.rows[0]?.voltage ?? 230;
+  let sumY = 28;
+  doc.setTextColor(20, 20, 20);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Project totals', 12, sumY);
+  sumY += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(`Supply voltage: ${supplyVoltage} V`, 12, sumY);
+  sumY += 6;
+  doc.text(`Total connected load: ${loadSched.totalKw.toFixed(2)} kW`, 12, sumY);
+  sumY += 6;
+  doc.text(`Total design current: ${loadSched.totalA.toFixed(1)} A`, 12, sumY);
+  sumY += 6;
+  doc.text(`Map devices: ${devices.length}   Load items: ${loadSched.rows.length}   Cables: ${cableSched.length}`, 12, sumY);
+  sumY += 10;
+  if (opts.project && isManualDesign(opts.project)) {
+    doc.setFontSize(9);
+    doc.setTextColor(90, 100, 120);
+    doc.text('Manual design — devices and connections placed by user.', 12, sumY);
+    sumY += 8;
+  }
+  doc.setTextColor(20, 20, 20);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Per-item electrical data', 12, sumY);
+  sumY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const edgeConn = (nodeId: string) =>
+    opts.edges.filter((e) => e.source === nodeId || e.target === nodeId).length;
+  loadSched.rows.forEach((r) => {
+    if (sumY > pageH - 14) {
+      doc.addPage();
+      header('Electrical Summary (cont.)');
+      sumY = 28;
+    }
+    const conns = edgeConn(r.nodeId);
+    doc.text(
+      `${truncate(r.label, 18)} · ${truncate(r.name, 22)} · ${(r.powerW / 1000).toFixed(2)} kW · ${r.voltage} V · ${r.current.toFixed(1)} A · ${r.phases}φ · conn ${conns}`,
+      12,
+      sumY,
+    );
+    sumY += 5;
+  });
+
   // ---- Room summary ----
   doc.addPage();
   header('Room & Space Register');
@@ -120,7 +175,7 @@ export async function exportDesignPdf(opts: {
     pageH,
     header,
     28,
-    ['#', 'Floor', 'Room', 'Label', 'Type', 'Model', 'X', 'Y', 'V', 'A', 'Details'],
+    ['#', 'Floor', 'Room', 'Label', 'Type', 'Model', 'X', 'Y', 'V', 'A', 'Conn', 'Details'],
     devices.map((d, i) => [
       String(i + 1),
       truncate(d.floor, 10),
@@ -132,7 +187,8 @@ export async function exportDesignPdf(opts: {
       String(d.mapY),
       d.voltage,
       d.current,
-      truncate(d.cableLabel !== '—' ? d.cableLabel : d.declaration, 22),
+      String(opts.edges.filter((e) => e.source === d.nodeId || e.target === d.nodeId).length),
+      truncate(d.cableLabel !== '—' ? d.cableLabel : d.declaration, 20),
     ]),
   );
 
@@ -163,6 +219,13 @@ export async function exportDesignPdf(opts: {
   // ---- Load schedule ----
   doc.addPage();
   header('Electrical Load Schedule');
+  doc.setFontSize(9);
+  doc.setTextColor(70, 80, 100);
+  doc.text(
+    `Totals: ${loadSched.totalKw.toFixed(2)} kW · ${loadSched.totalA.toFixed(1)} A · ${supplyVoltage} V supply`,
+    12,
+    24,
+  );
   drawTable(
     doc,
     pageW,

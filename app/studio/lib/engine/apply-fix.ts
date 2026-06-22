@@ -148,7 +148,7 @@ export function fixesFromIssues(issues: Issue[]): Fix[] {
 export function collectFixableFixes(s: FixableState): Fix[] {
   const activeFloorId = s.activeFloorId ?? 'floor_0';
   const matchesFloor = <T extends { floorId?: string }>(item: T) =>
-    (item.floorId ?? 'floor_0') === activeFloorId;
+    !item.floorId || item.floorId === activeFloorId;
   const resolved = resolveNodes(s.nodes, getCatalogEntry);
   const activeRooms = s.rooms.filter(matchesFloor);
   const activeResolved = resolved.filter(matchesFloor);

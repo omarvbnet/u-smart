@@ -20,7 +20,7 @@ const ROOM_TEMPLATES = [
   { label: 'Corridor', zone: 'corridor' as const, spaceKind: 'corridor' as const, w: 320, h: 80 },
 ];
 
-export function FloorPlanToolbar() {
+export function FloorPlanToolbar({ docked = false }: { docked?: boolean }) {
   const t = useT();
   const tool = useStudio((s) => s.floorPlanTool);
   const map = useStudio((s) => s.map);
@@ -34,6 +34,7 @@ export function FloorPlanToolbar() {
   const rooms = useStudio((s) => s.rooms);
   const nodes = useStudio((s) => s.nodes);
   const experienceMode = useStudio((s) => s.experienceMode);
+  const manualDesign = useStudio((s) => s.project.designMode === 'manual');
   const clientMode = experienceMode === 'client';
   const canvasViewMode = useStudio((s) => s.canvasViewMode);
   const setCanvasViewMode = useStudio((s) => s.setCanvasViewMode);
@@ -60,7 +61,13 @@ export function FloorPlanToolbar() {
     }`;
 
   return (
-    <div className="pointer-events-auto absolute top-3 z-40 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]">
+    <div
+      className={
+        docked
+          ? 'flex flex-wrap items-center gap-1.5'
+          : 'pointer-events-auto absolute top-3 z-40 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]'
+      }
+    >
       <div className="flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
         <button className={btn(tool === 'select')} onClick={() => setTool('select')} title={t('toolSelect')}>
           <MousePointer2 className="h-3.5 w-3.5" />
@@ -74,13 +81,13 @@ export function FloorPlanToolbar() {
             <span className="hidden sm:inline">{t('createMapFromZero')}</span>
           </button>
         )}
-        {!clientMode && (
+        {!clientMode && !manualDesign && (
           <button className={btn(false)} onClick={seedDefaultRooms} title={t('toolLayout')}>
             <LayoutTemplate className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('toolLayout')}</span>
           </button>
         )}
-        {!clientMode && map?.src && map.mode !== 'blank' && (
+        {!clientMode && !manualDesign && map?.src && map.mode !== 'blank' && (
           <button className={btn(false)} onClick={() => void runDetect()} disabled={detecting} title={t('detectRooms')}>
             <Scan className={`h-3.5 w-3.5 ${detecting ? 'animate-pulse' : ''}`} />
             <span className="hidden sm:inline">{t('detectRooms')}</span>

@@ -7,11 +7,15 @@ import type { RoomLuxHeatmap } from '../lib/engine/lux-heatmap';
 import { luxColor } from '../lib/engine/lux-heatmap';
 import type { RoomLoadHeatmap } from '../lib/engine/load-heatmap';
 import { loadHeatColor } from '../lib/engine/load-heatmap';
+import type { SpaceDimensions } from '../lib/engine/room-dimensions';
+import { SpaceDimensionLabels } from './SpaceDimensionLabels';
 
 export type RoomNodeData = {
   room: DesignRoom;
   selected: boolean;
   areaM2: number;
+  dimensions?: SpaceDimensions;
+  showDimensions?: boolean;
   luxHeatmap?: RoomLuxHeatmap | null;
   loadHeatmap?: RoomLoadHeatmap | null;
   outletCount?: number;
@@ -20,7 +24,8 @@ export type RoomNodeData = {
 
 function RoomNodeImpl({ data, selected }: NodeProps) {
   const d = data as RoomNodeData;
-  const { room, areaM2, luxHeatmap, loadHeatmap, outletCount, vrfUnitCount } = d;
+  const { room, areaM2, dimensions, showDimensions, luxHeatmap, loadHeatmap, outletCount, vrfUnitCount } = d;
+  const dims = dimensions ?? { widthM: room.width / 50, depthM: room.height / 50, areaM2 };
 
   return (
     <>
@@ -36,6 +41,7 @@ function RoomNodeImpl({ data, selected }: NodeProps) {
           ${selected ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-500/60 bg-slate-500/5'}`}
         style={{ minWidth: room.width, minHeight: room.height }}
       >
+        {showDimensions && <SpaceDimensionLabels dims={dims} showSummary={!luxHeatmap && !loadHeatmap} />}
         {loadHeatmap && (
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
             {loadHeatmap.cells.map((c, i) => (
@@ -78,7 +84,12 @@ function RoomNodeImpl({ data, selected }: NodeProps) {
         )}
         <div className="absolute inset-x-0 top-2 px-2 text-center">
           <div className="truncate text-xs font-bold text-[var(--studio-text)]">{room.label}</div>
-          <div className="text-[9px] text-[var(--studio-muted)]">{areaM2.toFixed(1)} m²</div>
+          {!showDimensions && (
+            <div className="text-[9px] text-[var(--studio-muted)]">{areaM2.toFixed(1)} m²</div>
+          )}
+          {room.spaceKind && (
+            <div className="truncate text-[8px] uppercase tracking-wide text-slate-400/90">{room.spaceKind.replace(/_/g, ' ')}</div>
+          )}
         </div>
         <div className="absolute bottom-1.5 inset-x-0 flex items-center justify-center gap-2 text-[8px] uppercase tracking-wider text-[var(--studio-muted)] opacity-70">
           <span>{room.zone}</span>

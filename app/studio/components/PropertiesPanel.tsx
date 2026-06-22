@@ -19,6 +19,7 @@ import { EntryImage } from './EntryImage';
 import { Trash2, Zap, Plug, Copy, BedDouble, DoorOpen, AppWindow, BrickWall } from 'lucide-react';
 import { openingOpenPercent } from '../lib/engine/opening-layout';
 import { mergeEffectiveWalls, wallLabel, wallLengthM } from '../lib/engine/wall-layout';
+import { roomDimensions, formatSpaceDimensions } from '../lib/engine/room-dimensions';
 import {
   WALL_TYPES,
   WALL_DECORATIONS,
@@ -75,6 +76,7 @@ export function PropertiesPanel() {
   const control = useStudio((s) => (s.selectedNodeId ? s.controls[s.selectedNodeId] : undefined));
   const setControl = useStudio((s) => s.setControl);
   const updateOpening = useStudio((s) => s.updateOpening);
+  const moveOpening = useStudio((s) => s.moveOpening);
   const removeOpening = useStudio((s) => s.removeOpening);
   const setOpeningControl = useStudio((s) => s.setOpeningControl);
   const updateWall = useStudio((s) => s.updateWall);
@@ -239,6 +241,26 @@ export function PropertiesPanel() {
           )}
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">X</span>
+              <input
+                className={input}
+                type="number"
+                value={Math.round(opening.x)}
+                onChange={(e) => moveOpening(opening.id, Number(e.target.value), opening.y)}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-[var(--studio-muted)]">Y</span>
+              <input
+                className={input}
+                type="number"
+                value={Math.round(opening.y)}
+                onChange={(e) => moveOpening(opening.id, opening.x, Number(e.target.value))}
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
               <span className="mb-1 block text-xs text-[var(--studio-muted)]">W</span>
               <input className={input} type="number" value={Math.round(opening.width)} onChange={(e) => updateOpening(opening.id, { width: Number(e.target.value) })} />
             </label>
@@ -331,7 +353,8 @@ export function PropertiesPanel() {
   }
 
   if (selectedRoomId && room) {
-    const areaM2 = ((room.width / 50) * (room.height / 50)).toFixed(1);
+    const dims = roomDimensions(room);
+    const areaM2 = dims.areaM2.toFixed(1);
     const isOutlet = (id: string) => {
       const e = getCatalogEntry(id);
       return e?.category === 'SOCKET' || e?.category === 'APPLIANCE';
@@ -384,13 +407,17 @@ export function PropertiesPanel() {
             </label>
           )}
           <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg border border-[var(--studio-border)] p-2 col-span-2">
+              <div className="text-[var(--studio-muted)]">{t('showSpaceDimensions')}</div>
+              <div className="font-semibold tabular-nums">{formatSpaceDimensions(dims)}</div>
+            </div>
             <div className="rounded-lg border border-[var(--studio-border)] p-2">
-              <div className="text-[var(--studio-muted)]">W × H</div>
-              <div className="font-semibold">{Math.round(room.width)} × {Math.round(room.height)} px</div>
+              <div className="text-[var(--studio-muted)]">Plan</div>
+              <div className="font-semibold tabular-nums">{Math.round(room.width)} × {Math.round(room.height)} px</div>
             </div>
             <div className="rounded-lg border border-[var(--studio-border)] p-2">
               <div className="text-[var(--studio-muted)]">{t('roomArea')}</div>
-              <div className="font-semibold">{areaM2} m²</div>
+              <div className="font-semibold tabular-nums">{areaM2} m²</div>
             </div>
           </div>
 

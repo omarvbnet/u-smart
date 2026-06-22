@@ -12,7 +12,7 @@ const MODE_META: Record<MapOverlayMode, { icon: typeof Map; labelKey: string }> 
   combined: { icon: Layers3, labelKey: 'mapCombined' },
 };
 
-export function MapOverlayToolbar() {
+export function MapOverlayToolbar({ docked = false }: { docked?: boolean }) {
   const t = useT();
   const mode = useStudio((s) => s.mapOverlayMode);
   const map = useStudio((s) => s.map);
@@ -23,6 +23,7 @@ export function MapOverlayToolbar() {
   const showOutlets = useStudio((s) => s.showOutletsOnMap);
   const toggleOutlets = useStudio((s) => s.toggleOutletsOnMap);
   const placeAllOutlets = useStudio((s) => s.placeRoomOutlets);
+  const manualDesign = useStudio((s) => s.project.designMode === 'manual');
   const visualizationMode = useStudio((s) => s.visualizationMode);
   const simulating = useStudio((s) => s.simulating);
 
@@ -32,10 +33,15 @@ export function MapOverlayToolbar() {
     }`;
 
   const mapLabel = map?.mode === 'blank' ? t('mapTypeBlank') : map ? t('mapTypeImage') : t('mapTypeNone');
-  const bottomClass = simulating ? 'bottom-48' : 'bottom-3';
 
   return (
-    <div className={`pointer-events-auto absolute ${bottomClass} z-30 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]`}>
+    <div
+      className={
+        docked
+          ? 'flex flex-wrap items-center gap-1.5'
+          : `pointer-events-auto absolute ${simulating ? 'bottom-48' : 'bottom-3'} z-30 flex flex-wrap items-center gap-1.5 ltr:left-3 rtl:right-3 max-w-[calc(100%-1.5rem)]`
+      }
+    >
       <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/98 p-1 shadow-lg backdrop-blur">
         <span className="px-2 text-[9px] font-semibold text-[var(--studio-muted)]">{mapLabel}</span>
         {MAP_OVERLAY_MODES.map((m) => {
@@ -52,10 +58,12 @@ export function MapOverlayToolbar() {
           <Plug className="h-3.5 w-3.5" />
           <span>{t('showOutletsOnMap')}</span>
         </button>
-        <button type="button" className={btn(false)} onClick={() => placeAllOutlets()} title={t('autoPlaceOutlets')}>
-          <Plug className="h-3.5 w-3.5 text-amber-400" />
-          <span>{t('autoPlaceAllOutlets')}</span>
-        </button>
+        {!manualDesign && (
+          <button type="button" className={btn(false)} onClick={() => placeAllOutlets()} title={t('autoPlaceOutlets')}>
+            <Plug className="h-3.5 w-3.5 text-amber-400" />
+            <span>{t('autoPlaceAllOutlets')}</span>
+          </button>
+        )}
         <button type="button" className={btn(false)} onClick={() => rerouteAll()} title={t('rerouteAllCables')}>
           <Cable className="h-3.5 w-3.5" />
           <span>{t('rerouteAllCables')}</span>

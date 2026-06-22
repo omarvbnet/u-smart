@@ -111,23 +111,30 @@ export function SetupWizard({ onComplete }: Props) {
     }));
   };
 
-  const finish = (generate: boolean) => {
+  const finish = (mode: 'blank' | 'generate' | 'manual') => {
     if (busy) return;
     setFinishing(true);
     const fp: FloorPlanSource | 'skip' = floorPlan;
+    const manualMode = mode === 'manual' || (mode === 'blank' && floorPlan === 'zero');
     const finalized: ProjectInfo = {
       ...draft,
       hvacTypes: effectiveHvacTypes(draft),
       setupComplete: true,
       floorPlanSource: fp === 'zero' ? 'zero' : fp === 'import' ? 'import' : 'none',
+      designMode: manualMode ? 'manual' : 'assisted',
     };
     onComplete();
-    if (projectBrief.trim() && generate) {
-      completeWizard(finalized, { generateDesign: false, floorPlan: fp, roomDistribution });
+    if (projectBrief.trim() && mode === 'generate') {
+      completeWizard(finalized, { generateDesign: false, floorPlan: fp, roomDistribution, manualMode: false });
       generateFromBrief(projectBrief.trim());
       return;
     }
-    completeWizard(finalized, { generateDesign: generate, floorPlan: fp, roomDistribution });
+    completeWizard(finalized, {
+      generateDesign: mode === 'generate',
+      floorPlan: fp,
+      roomDistribution,
+      manualMode,
+    });
   };
 
   const steps = [
@@ -466,7 +473,13 @@ export function SetupWizard({ onComplete }: Props) {
 
           {step === 5 && (
             <div className="space-y-3 text-sm text-[var(--studio-text)]">
-              {draft.floorCount > 1 && (
+              {floorPlan === 'zero' && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                  <p className="text-xs font-semibold text-cyan-200">{t('wizardManualProject')}</p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-[var(--studio-muted)]">{t('wizardManualProjectHint')}</p>
+                </div>
+              )}
+              {draft.floorCount > 1 && floorPlan !== 'zero' && (
                 <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 space-y-3">
                   <p className="text-xs font-semibold text-[var(--studio-text)]">{t('roomDistributionTitle')}</p>
                   <p className="text-[10px] text-[var(--studio-muted)]">{t('roomDistributionHint')}</p>
@@ -573,21 +586,42 @@ export function SetupWizard({ onComplete }: Props) {
               {t('next')} <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
-            <div className="flex gap-2">
-              <button
-                disabled={busy}
-                onClick={() => finish(false)}
-                className="rounded-lg border border-[var(--studio-border)] px-4 py-2 text-xs font-semibold disabled:opacity-50"
-              >
-                {t('wizardBlank')}
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => finish(true)}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-              >
-                <Sparkles className="h-4 w-4" /> {t('wizardGenerate')}
-              </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {floorPlan === 'zero' ? (
+                <>
+                  <button
+                    disabled={busy}
+                    onClick={() => finish('manual')}
+                    className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    <PenLine className="h-4 w-4" /> {t('wizardManualProject')}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => finish('generate')}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-4 w-4" /> {t('wizardGenerate')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    disabled={busy}
+                    onClick={() => finish('blank')}
+                    className="rounded-lg border border-[var(--studio-border)] px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {t('wizardBlank')}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => finish('generate')}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    <Sparkles className="h-4 w-4" /> {t('wizardGenerate')}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

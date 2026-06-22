@@ -218,6 +218,27 @@ export function snapOpening(opening: DesignOpening, walls: DesignWall[], px: num
   return orientOpeningOnWall(opening, hit.wall, hit.t);
 }
 
+/** Link imported openings to the nearest wall segments. */
+export function snapOpeningsToWalls(openings: DesignOpening[], walls: DesignWall[]): DesignOpening[] {
+  return openings.map((o) => {
+    if (o.wallId) {
+      const wall = walls.find((w) => w.id === o.wallId);
+      if (wall) return orientOpeningOnWall(o, wall, o.along ?? 0.5);
+    }
+    const hit = nearestWall(walls, o.x, o.y, 80);
+    if (hit) return orientOpeningOnWall(o, hit.wall, hit.t);
+    return o;
+  });
+}
+
+export function isCadWall(wallId: string, bim: BimModel | null): boolean {
+  return !!bim?.walls.some((w) => w.id === wallId);
+}
+
+export function translateWall(w: DesignWall, dx: number, dy: number): DesignWall {
+  return { ...w, x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy };
+}
+
 export function resnapOpeningsForRoom(
   openings: DesignOpening[],
   roomId: string,

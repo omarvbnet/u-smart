@@ -81,17 +81,16 @@ export function WorkspaceEditor() {
           )}
         </div>
         <div className="relative min-h-0 flex-1">
-          {applyingFixes ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--studio-bg)] text-center">
+          <SimulationProvider>
+            <Canvas />
+            <SimulationHud />
+          </SimulationProvider>
+          {applyingFixes && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/45 text-center backdrop-blur-sm">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
               <p className="text-sm font-semibold text-[var(--studio-text)]">{t('fixing')}</p>
               <p className="max-w-xs text-xs text-[var(--studio-muted)]">{t('fixingHint')}</p>
             </div>
-          ) : (
-            <SimulationProvider>
-              <Canvas />
-              <SimulationHud />
-            </SimulationProvider>
           )}
           <TwinChainPanel />
           {!clientMode && <BusMonitor />}

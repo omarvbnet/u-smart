@@ -12,7 +12,8 @@ import {
   mergeFixableState,
   collectFixableFixes,
   prioritizeFixes,
-  applyFixStep,
+  applyFixChunk,
+  FIX_APPLY_BATCH,
   finalizeFixableState,
   fixKey,
   type FixableState,
@@ -26,7 +27,7 @@ import { STUDIO_LOCALES, type StudioLocale } from './i18n';
 import { buildSampleDesign } from './sample';
 import { defaultControlState, type ControlState } from './controls';
 import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
-import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
+import { defaultProject, normalizeProject, isManualDesign, type ProjectInfo, type FloorPlanSource, type DesignMode } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
 import { buildStarterDesign, enhanceDesignPlacement, enhanceDesignPlacementAsync, generateProjectDesignAsync } from './engine/starter-design';
 import { inferFinishMetaFromPlan } from './engine/plan-layout';
@@ -41,7 +42,7 @@ import {
   villaGardenBounds,
 } from './engine/residential-layouts';
 import { buildFloorsFromCount, seedRoomsForProject } from './engine/floor-layout';
-import { detectRoomsFromMap as detectRooms, detectBimFromMap } from './engine/plan-detect';
+import { analyzeImportedMap } from './map-import-analyze';
 import { getTwinConnection } from './twin-stream';
 import { suggestSmartFixes, psuCatalogIdsForProject, findMainPanel } from './engine/autofix';
 import { aggregateSimulation } from './engine/sim-metrics';
@@ -84,6 +85,7 @@ import {
   setWallLength,
   roomPatchForWallLength,
   isVirtualRoomWall,
+  translateWall,
 } from './engine/wall-layout';
 import type { VisualizationMode, ExperienceMode } from './visualization/modes';
 import { cloneDesignSnapshot, HISTORY_LIMIT } from './history';
@@ -162,6 +164,7 @@ type StudioState = {
   editingCableRouteId: string | null;
   showCableRoutes3d: boolean;
   showOutletsOnMap: boolean;
+  showSpaceDimensions: boolean;
   /** When set, 3D twin isolates one room or garden (`garden:id`). */
   twin3dFocusSpaceId: string | null;
   twin3dShowMaterials: boolean;
@@ -212,6 +215,7 @@ type StudioState = {
       generateDesign: boolean;
       floorPlan: FloorPlanSource | 'skip';
       roomDistribution?: 'perFloor' | 'groundOnly';
+      manualMode?: boolean;
     },
   ) => void;
   reopenWizard: () => void;
@@ -237,6 +241,7 @@ type StudioState = {
   selectRoom: (id: string | null) => void;
   selectOpening: (id: string | null) => void;
   selectWall: (id: string | null) => void;
+  moveWall: (id: string, x1: number, y1: number) => void;
   updateWall: (
     id: string,
     patch: {
@@ -296,6 +301,7 @@ type StudioState = {
   updateCableRoutePoints: (cableId: string, points: RoutePoint[]) => void;
   toggleCableRoutes3d: () => void;
   toggleOutletsOnMap: () => void;
+  toggleSpaceDimensions: () => void;
   setTwin3dFocusSpace: (spaceId: string | null) => void;
   setTwin3dShowMaterials: (show: boolean) => void;
   addOutletToRoom: (roomId: string, catalogId: OutletCatalogId) => void;
@@ -487,83 +493,87 @@ function scheduleDeferredCableReroute(
 let fixJobSeq = 0;
 const FIX_ALL_CAP = 48;
 
-/** Re-validate and apply one fix per frame so each issue is resolved against current state. */
+/** Re-validate and apply fixes in batches — keeps the canvas responsive. */
 function scheduleDeferredApplyAllFixes(
   getState: () => StudioState,
   setState: (patch: Partial<StudioState>) => void,
+  seedFixes?: Fix[],
 ): void {
   const jobId = ++fixJobSeq;
   setState({ applyingFixes: true, fixBatchResult: null, suppressCanvasFit: true });
   invalidateDesignAnalysisCache();
 
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    setState({ applyingFixes: false, suppressCanvasFit: false });
+    return;
+  }
 
   window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
+    if (jobId !== fixJobSeq) return;
+    const preFix = getState();
+    let state = fixableFrom(preFix);
+    let totalApplied = 0;
+    const skipped = new Set<string>();
+    const affectedCables = new Set<string>();
+    let pendingSeed = seedFixes?.length ? prioritizeFixes(seedFixes) : null;
+
+    const nextFixes = (): Fix[] => {
+      const list = pendingSeed ?? collectFixableFixes(state);
+      pendingSeed = null;
+      return prioritizeFixes(list).filter((f) => !skipped.has(fixKey(f)));
+    };
+
+    const commitResult = (remaining: number) => {
       if (jobId !== fixJobSeq) return;
-
-      let state = fixableFrom(getState());
-      let totalApplied = 0;
-      const skipped = new Set<string>();
-
-      const commitResult = (remaining: number) => {
+      state = finalizeFixableState(state, affectedCables.size > 0 ? affectedCables : undefined);
+      setState({
+        nodes: state.nodes,
+        edges: state.edges,
+        controls: state.controls,
+        applyingFixes: false,
+        suppressCanvasFit: false,
+        fixBatchResult: { applied: totalApplied, remaining },
+      });
+      invalidateDesignAnalysisCache();
+      runWhenIdle(() => {
         if (jobId !== fixJobSeq) return;
-        const preFix = getState();
-        window.requestAnimationFrame(() => {
-          if (jobId !== fixJobSeq) return;
-          setState({
-            nodes: state.nodes,
-            edges: state.edges,
-            controls: state.controls,
-            applyingFixes: false,
-            suppressCanvasFit: false,
-            fixBatchResult: { applied: totalApplied, remaining },
-          });
-          invalidateDesignAnalysisCache();
-          runWhenIdle(() => {
-            if (jobId !== fixJobSeq) return;
-            const cur = getState();
-            setState({
-              historyPast: [...cur.historyPast.slice(-(HISTORY_LIMIT - 1)), cloneDesignSnapshot(preFix)],
-              historyFuture: [],
-            });
-          });
+        const cur = getState();
+        setState({
+          historyPast: [...cur.historyPast.slice(-(HISTORY_LIMIT - 1)), cloneDesignSnapshot(preFix)],
+          historyFuture: [],
         });
-      };
+      });
+      if (affectedCables.size > 0) scheduleDeferredCableReroute(getState, setState);
+    };
 
-      const processOne = () => {
-        if (jobId !== fixJobSeq) return;
-        if (totalApplied >= FIX_ALL_CAP) {
-          runWhenIdle(() => {
-            if (jobId !== fixJobSeq) return;
-            const st = getState();
-            const remaining = collectFixableFixes({ ...state, activeFloorId: st.activeFloorId }).length;
-            commitResult(remaining);
-          });
-          return;
-        }
+    const processBatch = () => {
+      if (jobId !== fixJobSeq) return;
+      if (totalApplied >= FIX_ALL_CAP) {
+        const remaining = collectFixableFixes({ ...state, activeFloorId: getState().activeFloorId }).length;
+        commitResult(remaining);
+        return;
+      }
 
-        const fixes = prioritizeFixes(collectFixableFixes(state)).filter((f) => !skipped.has(fixKey(f)));
-        if (!fixes.length) {
-          const st = getState();
-          const remaining = collectFixableFixes({ ...state, activeFloorId: st.activeFloorId }).length;
-          commitResult(remaining);
-          return;
-        }
+      const fixes = nextFixes();
+      const chunk = fixes.slice(0, FIX_APPLY_BATCH);
+      if (!chunk.length) {
+        const remaining = collectFixableFixes({ ...state, activeFloorId: getState().activeFloorId }).length;
+        commitResult(remaining);
+        return;
+      }
 
-        const fix = fixes[0]!;
-        const result = applyFixStep(state, fix);
-        if (result.applied) {
-          state = result.state;
-          totalApplied++;
-        } else {
-          skipped.add(fixKey(fix));
-        }
-        window.requestAnimationFrame(processOne);
-      };
+      const { state: next, applied, affectedCables: aff } = applyFixChunk(state, chunk);
+      if (!applied) {
+        for (const f of chunk) skipped.add(fixKey(f));
+      } else {
+        state = next;
+        totalApplied += applied;
+        for (const id of aff) affectedCables.add(id);
+      }
+      window.requestAnimationFrame(processBatch);
+    };
 
-      window.requestAnimationFrame(processOne);
-    });
+    window.requestAnimationFrame(processBatch);
   });
 }
 
@@ -650,6 +660,10 @@ function initialOutletsOnMap(): boolean {
   return true;
 }
 
+function initialSpaceDimensions(): boolean {
+  return true;
+}
+
 function readUiPreferences(): Partial<StudioState> {
   if (typeof window === 'undefined') return {};
   const prefs: Partial<StudioState> = {};
@@ -673,6 +687,7 @@ function readUiPreferences(): Partial<StudioState> {
   }
   if (window.localStorage.getItem('studio.cableRoutes3d') === '0') prefs.showCableRoutes3d = false;
   if (window.localStorage.getItem('studio.outletsOnMap') === '0') prefs.showOutletsOnMap = false;
+  if (window.localStorage.getItem('studio.spaceDimensions') === '0') prefs.showSpaceDimensions = false;
   return prefs;
 }
 
@@ -823,6 +838,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   editingCableRouteId: null,
   showCableRoutes3d: initialCableRoutes3d(),
   showOutletsOnMap: initialOutletsOnMap(),
+  showSpaceDimensions: initialSpaceDimensions(),
   twin3dFocusSpaceId: null,
   twin3dShowMaterials: true,
   historyPast: [],
@@ -1052,8 +1068,7 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   applyAllFixes: (fixes) => {
     if (get().applyingFixes) return false;
-    void fixes;
-    scheduleDeferredApplyAllFixes(get, set);
+    scheduleDeferredApplyAllFixes(get, set, fixes);
     return true;
   },
 
@@ -1097,77 +1112,36 @@ export const useStudio = create<StudioState>((set, get) => ({
     invalidateDesignAnalysisCache();
 
     try {
-      const detected = await detectRooms(src, mapX, mapY, width, height);
-      await yieldToMain();
-      let rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: activeFloorId }));
-
-      let bim: BimModel = cadBim ?? s0.bim ?? { walls: [], openings: [] };
+      const { rooms, bim } = await analyzeImportedMap({
+        src,
+        width,
+        height,
+        mapX,
+        mapY,
+        activeFloorId,
+        cadBim,
+      });
       const pre = get();
-      const project = withIraqElectricalStandards(pre.project);
-      const finishes = inferFinishMetaFromPlan(rooms, bim, activeFloorId);
-      bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
+      const project = { ...pre.project, floorPlanSource: 'import' as FloorPlanSource };
 
-      if (rooms.length > 0 && project.setupComplete) {
-        const result = await generateProjectDesignAsync(project, rooms, pre.locale, activeFloorId);
-        const mergedBim: BimModel = {
-          walls: bim.walls.length ? bim.walls : result.bim.walls,
-          openings: [...(bim.openings ?? []), ...result.bim.openings],
-          gardens: bim.gardens ?? result.bim.gardens,
-          wallMeta: finishes.wallMeta,
-          ceilingMeta: finishes.ceilingMeta,
-        };
-        await finalizeProjectGeneration(
-          get,
-          set,
-          pre,
-          {
-            project,
-            rooms,
-            bim: mergedBim,
-            nodes: result.nodes,
-            edges: result.edges,
-            controls: result.controls,
-            designName: result.designName,
-          },
-          deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
-        );
-        if (!cadBim?.walls.length && !s0.bim?.walls.length) {
-          void runAsyncWhenIdle(async () => {
-            try {
-              const rasterBim = await detectBimFromMap(src, mapX, mapY, width, height);
-              if (!rasterBim.walls.length) return;
-              const st = get();
-              set({
-                bim: {
-                  ...(st.bim ?? { walls: [], openings: [] }),
-                  walls: rasterBim.walls,
-                  openings: [...(st.bim?.openings ?? []), ...rasterBim.openings],
-                },
-              });
-            } catch {
-              /* optional */
-            }
-          });
-        }
-      } else if (rooms.length > 0) {
-        const pack = buildBimOpenings(rooms, pre.project, pre.locale, activeFloorId);
-        const nodes = mergeOpeningActuators(pre.nodes, pack.actuatorNodes);
-        set(
-          withHistory(pre, {
-            rooms,
-            bim: {
-              ...bim,
-              openings: [...(bim.openings ?? []), ...pack.bim.openings],
-            },
-            nodes,
-            controls: { ...pre.controls, ...pack.controls },
-            generatingProject: false,
-            suppressCanvasFit: false,
-            canvasFitSeq: pre.canvasFitSeq + 1,
-          }),
-        );
+      const mapPatch: Partial<StudioState> = {
+        project,
+        rooms,
+        bim,
+        nodes: [],
+        edges: [],
+        controls: {},
+        selectedNodeId: null,
+        selectedRoomId: null,
+        selectedOpeningId: null,
+        selectedWallId: null,
+        canvasFitSeq: pre.canvasFitSeq + 1,
+      };
+
+      if (rooms.length > 0 || bim.walls.length > 0) {
+        await finalizeProjectGeneration(get, set, pre, mapPatch);
       } else {
-        set({ bim, generatingProject: false, suppressCanvasFit: false });
+        set({ ...mapPatch, generatingProject: false, suppressCanvasFit: false });
       }
 
       invalidateDesignAnalysisCache();
@@ -1239,8 +1213,56 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     const floorPlanSource: FloorPlanSource =
       options.floorPlan === 'zero' ? 'zero' : options.floorPlan === 'import' ? 'import' : 'none';
-    const mergedProject = { ...project, floorPlanSource };
+    const manualMode = options.manualMode === true;
+    const designMode: DesignMode = manualMode ? 'manual' : 'assisted';
+    const mergedProject = { ...project, floorPlanSource, designMode, setupComplete: true };
     const floors = buildFloorsFromCount(mergedProject.floorCount, mergedProject.buildingType);
+
+    if (manualMode) {
+      let map = s.map;
+      let floorPlanTool: FloorPlanTool = 'draw-room';
+      let pendingMapImport = false;
+      if (options.floorPlan === 'zero') {
+        const { width, height } = floorPlanSizeForBuilding(mergedProject.buildingType);
+        map = {
+          src: blankFloorPlanDataUrl(width, height),
+          width,
+          height,
+          x: -width / 2,
+          y: -height / 2,
+          opacity: 1,
+          mode: 'blank',
+        };
+      } else if (options.floorPlan === 'import') {
+        pendingMapImport = true;
+        floorPlanTool = 'select';
+      } else {
+        floorPlanTool = 'select';
+      }
+      set({
+        project: mergedProject,
+        floors,
+        activeFloorId: floors[0]!.id,
+        rooms: [],
+        nodes: [],
+        edges: [],
+        controls: {},
+        bim: { walls: [], openings: [], gardens: [] },
+        map,
+        floorPlanTool,
+        pendingMapImport,
+        selectedNodeId: null,
+        selectedRoomId: null,
+        selectedOpeningId: null,
+        selectedWallId: null,
+        generatingProject: false,
+        canvasBooting: false,
+        historyPast: [],
+        historyFuture: [],
+      });
+      return;
+    }
+
     let rooms = s.rooms;
     if (rooms.length === 0 || options.generateDesign) {
       if (options.roomDistribution === 'groundOnly' && mergedProject.floorCount > 1) {
@@ -1395,10 +1417,14 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   seedDefaultRooms: () => {
+    if (isManualDesign(get().project)) return;
     get().applyBuildingLayout({ engineering: false, resetMap: true });
   },
 
   applyBuildingLayout: (options) => {
+    if (isManualDesign(get().project)) {
+      return { ok: false, message: 'Manual project: draw rooms and place devices yourself.', changes: 0 };
+    }
     const s = get();
     const bt = s.project.buildingType;
     if (!isResidentialBuilding(bt)) {
@@ -1581,6 +1607,26 @@ export const useStudio = create<StudioState>((set, get) => ({
   selectOpening: (id) => set({ selectedOpeningId: id, selectedNodeId: null, selectedRoomId: null, selectedWallId: null }),
 
   selectWall: (id) => set({ selectedWallId: id, selectedNodeId: null, selectedRoomId: null, selectedOpeningId: null }),
+
+  moveWall: (id, x1, y1) =>
+    set((s) => {
+      if (!s.bim) return s;
+      const wall = s.bim.walls.find((w) => w.id === id);
+      if (!wall) return s;
+      const dx = x1 - wall.x1;
+      const dy = y1 - wall.y1;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return s;
+      const walls = s.bim.walls.map((w) => (w.id === id ? translateWall(w, dx, dy) : w));
+      const moved = walls.find((w) => w.id === id)!;
+      const openings = s.bim.openings.map((o) => {
+        if (o.wallId === id) return orientOpeningOnWall(o, moved, o.along ?? 0.5);
+        if (Math.hypot(o.x - wall.x1, o.y - wall.y1) < 120) {
+          return { ...o, x: o.x + dx, y: o.y + dy };
+        }
+        return o;
+      });
+      return withHistory(s, { bim: { ...s.bim, walls, openings } });
+    }),
 
   updateWall: (id, patch) =>
     set((s) => {
@@ -1844,65 +1890,32 @@ export const useStudio = create<StudioState>((set, get) => ({
   detectRoomsFromMap: async () => {
     const s = get();
     if (!s.map?.src || s.map.mode === 'blank') return 0;
-    set({ generatingProject: true });
+    set({ generatingProject: true, suppressCanvasFit: true });
     try {
-      const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
-      await yieldToMain();
-      const rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: s.activeFloorId }));
-      let bim = s.bim;
-      const finishes = inferFinishMetaFromPlan(rooms, bim, s.activeFloorId);
-      if (bim) bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
-
-      const project = withIraqElectricalStandards(s.project);
-      if (rooms.length > 0 && project.setupComplete) {
-        const result = await generateProjectDesignAsync(project, rooms, s.locale, s.activeFloorId);
-        const mergedBim: BimModel = {
-          walls: bim?.walls ?? [],
-          openings: [...(bim?.openings ?? []), ...result.bim.openings],
-          gardens: bim?.gardens ?? result.bim.gardens,
-          wallMeta: finishes.wallMeta,
-          ceilingMeta: finishes.ceilingMeta,
-        };
-        await finalizeProjectGeneration(
-          get,
-          set,
-          s,
-          {
-            project,
-            rooms,
-            bim: mergedBim,
-            nodes: result.nodes,
-            edges: result.edges,
-            controls: result.controls,
-            designName: result.designName,
-          },
-          deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
-        );
-        if (!bim?.walls.length) {
-          void runAsyncWhenIdle(async () => {
-            try {
-              const rasterBim = await detectBimFromMap(s.map!.src, s.map!.x, s.map!.y, s.map!.width, s.map!.height);
-              if (!rasterBim.walls.length) return;
-              const st = get();
-              set({
-                bim: {
-                  ...(st.bim ?? { walls: [], openings: [] }),
-                  walls: rasterBim.walls,
-                  openings: [...(st.bim?.openings ?? []), ...rasterBim.openings],
-                },
-              });
-            } catch {
-              /* optional */
-            }
-          });
-        }
-      } else {
-        set({ rooms, bim, selectedRoomId: null, project, generatingProject: false });
-      }
+      const { rooms, bim } = await analyzeImportedMap({
+        src: s.map.src,
+        width: s.map.width,
+        height: s.map.height,
+        mapX: s.map.x,
+        mapY: s.map.y,
+        activeFloorId: s.activeFloorId,
+        cadBim: null,
+      });
+      const pre = get();
+      await finalizeProjectGeneration(get, set, pre, {
+        rooms,
+        bim,
+        nodes: [],
+        edges: [],
+        controls: {},
+        selectedRoomId: null,
+        selectedNodeId: null,
+        canvasFitSeq: pre.canvasFitSeq + 1,
+      });
       return rooms.length;
     } catch (err) {
       console.error('[U Smart Studio] room detection failed', err);
-      set({ generatingProject: false, canvasBooting: false });
+      set({ generatingProject: false, canvasBooting: false, suppressCanvasFit: false });
       return 0;
     }
   },
@@ -1957,6 +1970,9 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   generateFromBrief: (text) => {
+    if (isManualDesign(get().project)) {
+      return { ok: false, message: 'Manual project: place devices from the palette.', assumptions: [] };
+    }
     set({ generatingProject: true });
     const run = () => {
       try {
@@ -2013,6 +2029,9 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   placeEngineeringLayout: () => {
+    if (isManualDesign(get().project)) {
+      return { ok: false, message: 'Manual project: place devices from the palette.', changes: 0 };
+    }
     const s = get();
     const before = s.nodes.length;
     const placed = enhanceDesignPlacement(s.project, s.rooms, s.nodes, s.edges, s.locale);
@@ -2180,6 +2199,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ showOutletsOnMap: next });
   },
 
+  toggleSpaceDimensions: () => {
+    const next = !get().showSpaceDimensions;
+    persist('studio.spaceDimensions', next ? '1' : '0');
+    set({ showSpaceDimensions: next });
+  },
+
   setTwin3dFocusSpace: (spaceId) => {
     const parsed = spaceId ? parseTwin3dSpaceId(spaceId) : null;
     set({
@@ -2213,6 +2238,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   placeRoomOutlets: (roomId) => {
+    if (isManualDesign(get().project)) return { added: 0 };
     const s = get();
     const targets = roomId ? s.rooms.filter((r) => r.id === roomId) : s.rooms;
     const sockets = placeSocketOutlets(targets);
@@ -2323,6 +2349,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
 
   placeVrfLayout: () => {
+    if (isManualDesign(get().project)) return { added: 0 };
     const s = get();
     const placed = placeVrfDistribution(s.rooms, s.project);
     const filtered = s.nodes.filter((n) => {

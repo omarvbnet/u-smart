@@ -28,12 +28,7 @@ import { WallNode, type WallNodeData } from './WallNode';
 import { OpeningNode, type OpeningNodeData } from './OpeningNode';
 import { GardenNode, type GardenNodeData } from './GardenNode';
 import { CableRouteNode, type CableRouteNodeData } from './CableRouteNode';
-import { FloorPlanToolbar } from './FloorPlanToolbar';
-import { FloorSwitcher } from './FloorSwitcher';
-import { MapOverlayToolbar } from './MapOverlayToolbar';
-import { VisualizationToolbar } from './VisualizationToolbar';
-import { DesignAssistantPanel } from './DesignAssistantPanel';
-import { ClientExperienceBar } from './ClientExperienceBar';
+import { CanvasChrome } from './CanvasChrome';
 import dynamic from 'next/dynamic';
 import { CanvasUiProvider } from './CanvasUiContext';
 import type { HvacSpec } from '../lib/catalog';
@@ -77,9 +72,7 @@ const Twin3DView = dynamic(() => import('./Twin3DView').then((m) => m.Twin3DView
   ),
 });
 
-function roomAreaM2(w: number, h: number): number {
-  return (w / 50) * (h / 50);
-}
+import { roomDimensions, formatSpaceDimensions, dimensionsFromPlanSize } from '../lib/engine/room-dimensions';
 
 function nodeCenterInRoom(n: DesignNode, r: DesignRoom): boolean {
   if (n.params.roomId === r.id) return true;
@@ -148,6 +141,7 @@ function CanvasInner() {
   const moveNode = useStudio((s) => s.moveNode);
   const moveRoom = useStudio((s) => s.moveRoom);
   const resizeRoom = useStudio((s) => s.resizeRoom);
+  const moveWall = useStudio((s) => s.moveWall);
   const moveMap = useStudio((s) => s.moveMap);
   const connect = useStudio((s) => s.connect);
   const removeNode = useStudio((s) => s.removeNode);
@@ -168,6 +162,7 @@ function CanvasInner() {
   const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
   const editingCableRouteId = useStudio((s) => s.editingCableRouteId);
   const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
+  const showSpaceDimensions = useStudio((s) => s.showSpaceDimensions);
   const canvasBooting = useStudio((s) => s.canvasBooting);
 
   const byNode = useIssueByNode();
@@ -202,6 +197,7 @@ function CanvasInner() {
   );
 
   const effectiveWalls = useMemo(() => mergeEffectiveWalls(bim, rooms, activeFloorId), [bim, rooms, activeFloorId]);
+  const cadWallIds = useMemo(() => new Set((bim?.walls ?? []).map((w) => w.id)), [bim?.walls]);
 
   const roomDeviceStats = useMemo(
     () => buildRoomDeviceStats(nodes, rooms, activeFloorId),
@@ -234,7 +230,7 @@ function CanvasInner() {
           position: { x: w.x1, y: w.y1 },
           style: { width: len, height: Math.max(w.thickness * 2, 8) },
           data: { wall: w, selected: w.id === selectedWallId } satisfies WallNodeData,
-          draggable: false,
+          draggable: !drawing && cadWallIds.has(w.id),
           selectable: !drawing,
           zIndex: 0,
         });
@@ -265,7 +261,7 @@ function CanvasInner() {
           type: 'garden',
           position: { x: g.x, y: g.y },
           style: { width: g.width, height: g.height },
-          data: { garden: g } satisfies GardenNodeData,
+          data: { garden: g, showDimensions: showSpaceDimensions } satisfies GardenNodeData,
           draggable: false,
           selectable: false,
           zIndex: -1,
@@ -288,7 +284,9 @@ function CanvasInner() {
         data: {
           room: r,
           selected: r.id === selectedRoomId,
-          areaM2: roomAreaM2(r.width, r.height),
+          areaM2: roomDimensions(r).areaM2,
+          dimensions: roomDimensions(r),
+          showDimensions: showSpaceDimensions,
           luxHeatmap: luxByRoom.get(r.id) ?? null,
           loadHeatmap: loadByRoom.get(r.id) ?? null,
           outletCount: showOutletsOnMap ? outletCount : 0,
@@ -410,7 +408,7 @@ function CanvasInner() {
       }
     }
     return list;
-  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, controls, rtl, showDeclarations, simulating, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, roomDeviceStats, canvasBooting]);
+  }, [nodes, rooms, bim, map, byNode, selectedId, selectedRoomId, selectedOpeningId, selectedWallId, effectiveWalls, cadWallIds, controls, rtl, showDeclarations, simulating, sim, drawing, visualizationMode, luxHeatmaps, loadHeatmaps, activeFloorId, mapOverlayMode, editingCableRouteId, showOutletsOnMap, showSpaceDimensions, roomDeviceStats, canvasBooting]);
 
   const [rfNodes, setRfNodes, onRfNodesChange] = useNodesState(storeRfNodes);
 
@@ -497,6 +495,7 @@ function CanvasInner() {
             draggingIds.current.delete(c.id);
             if (c.id === MAP_ID) moveMap(c.position.x, c.position.y);
             else if (c.id.startsWith('room_')) moveRoom(c.id.slice(5), c.position.x, c.position.y);
+            else if (c.id.startsWith('wall_')) moveWall(c.id.slice(5), c.position.x, c.position.y);
             else if (c.id.startsWith('open_')) {
               const opening = bim?.openings.find((o) => o.id === c.id.slice(5));
               if (opening && c.position) {
@@ -512,7 +511,7 @@ function CanvasInner() {
         }
       }
     },
-    [onRfNodesChange, moveNode, moveRoom, moveOpening, resizeRoom, moveMap, removeNode, bim?.openings],
+    [onRfNodesChange, moveNode, moveRoom, moveWall, moveOpening, resizeRoom, moveMap, removeNode, bim?.openings],
   );
 
   const onConnect = useCallback(
@@ -600,16 +599,7 @@ function CanvasInner() {
       onMouseUp={onPaneMouseUp}
       onMouseLeave={onPaneMouseUp}
     >
-      <div className="pointer-events-none absolute inset-0 z-50">
-        <FloorPlanToolbar />
-        <div className="pointer-events-auto absolute top-14 ltr:right-3 rtl:left-3">
-          <FloorSwitcher />
-        </div>
-        <MapOverlayToolbar />
-        <VisualizationToolbar />
-        <DesignAssistantPanel />
-        <ClientExperienceBar />
-      </div>
+      <CanvasChrome variant="2d" />
       <div className="absolute inset-0 z-[1]">
         <CanvasUiProvider value={canvasUi}>
         <ReactFlow
@@ -676,7 +666,13 @@ function CanvasInner() {
           <div
             className="pointer-events-none absolute border-2 border-dashed border-cyan-400 bg-cyan-400/10"
             style={{ left, top, width: br.x - tl.x, height: br.y - tl.y }}
-          />
+          >
+            {showSpaceDimensions && drawPreview.w >= 40 && drawPreview.h >= 30 && (
+              <div className="absolute inset-x-0 bottom-1 text-center text-[9px] font-semibold tabular-nums text-cyan-200">
+                {formatSpaceDimensions(dimensionsFromPlanSize(drawPreview.w, drawPreview.h), true)}
+              </div>
+            )}
+          </div>
         );
       })()}
 
@@ -708,15 +704,7 @@ export function Canvas() {
         <div className="absolute inset-0 z-[1]">
           <Twin3DView />
         </div>
-        <div className="pointer-events-none absolute inset-0 z-50">
-          <VisualizationToolbar />
-          <div className="pointer-events-auto absolute top-14 ltr:right-3 rtl:left-3">
-            <FloorSwitcher />
-          </div>
-          <MapOverlayToolbar />
-          <ClientExperienceBar />
-          <DesignAssistantPanel />
-        </div>
+        <CanvasChrome variant="3d" />
       </div>
     );
   }

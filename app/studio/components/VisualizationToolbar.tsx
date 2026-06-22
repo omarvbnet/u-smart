@@ -11,7 +11,7 @@ const MODES: { id: VisualizationMode; icon: typeof Ruler; labelKey: string }[] =
   { id: '3d', icon: Cuboid, labelKey: 'viz3d' },
 ];
 
-export function VisualizationToolbar() {
+export function VisualizationToolbar({ docked = false }: { docked?: boolean }) {
   const t = useT();
   const mode = useStudio((s) => s.visualizationMode);
   const experienceMode = useStudio((s) => s.experienceMode);
@@ -21,6 +21,8 @@ export function VisualizationToolbar() {
   const toggleLux = useStudio((s) => s.toggleLuxHeatmap);
   const showLoad = useStudio((s) => s.showLoadHeatmap);
   const toggleLoad = useStudio((s) => s.toggleLoadHeatmap);
+  const showDims = useStudio((s) => s.showSpaceDimensions);
+  const toggleDims = useStudio((s) => s.toggleSpaceDimensions);
 
   const btn = (active: boolean) =>
     `flex items-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition ${
@@ -28,7 +30,13 @@ export function VisualizationToolbar() {
     }`;
 
   return (
-    <div className="pointer-events-none absolute top-3 z-50 flex max-w-[min(100%,42rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 px-2 ltr:left-1/2 rtl:left-1/2">
+    <div
+      className={
+        docked
+          ? 'flex flex-wrap items-center justify-center gap-1.5'
+          : 'pointer-events-none absolute top-3 z-50 flex max-w-[min(100%,42rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 px-2 ltr:left-1/2 rtl:left-1/2'
+      }
+    >
       <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1 backdrop-blur">
         {MODES.map((m) => (
           <button
@@ -43,6 +51,10 @@ export function VisualizationToolbar() {
           </button>
         ))}
       </div>
+      <button type="button" className={`pointer-events-auto ${btn(showDims)}`} onClick={toggleDims} title={t('showSpaceDimensions')}>
+        <Ruler className="h-3.5 w-3.5" />
+        <span className="hidden md:inline">{t('showSpaceDimensions')}</span>
+      </button>
       <button type="button" className={`pointer-events-auto ${btn(showLux)}`} onClick={toggleLux} title={t('luxHeatmap')}>
         <SunMedium className="h-3.5 w-3.5" />
         <span className="hidden md:inline">{t('luxHeatmap')}</span>

@@ -45,6 +45,13 @@ export type SmartChannelCounts = {
 /** How the floor plan was created: draw on blank canvas, import file, or none yet. */
 export type FloorPlanSource = 'none' | 'zero' | 'import';
 
+/** Manual = user places walls, doors, devices; no auto MEP or material suggestions. */
+export type DesignMode = 'manual' | 'assisted';
+
+export function isManualDesign(project: Pick<ProjectInfo, 'designMode'>): boolean {
+  return project.designMode === 'manual';
+}
+
 export type ProjectInfo = {
   client: string;
   consultant: string;
@@ -75,6 +82,8 @@ export type ProjectInfo = {
   smartAlignChannels: boolean;
   energySources: EnergySourceType[];
   floorPlanSource: FloorPlanSource;
+  /** Manual projects: empty canvas, user-driven layout and devices only. */
+  designMode: DesignMode;
   /** Bedroom count for residential layout templates (apartment / house / villa). */
   bedrooms: number;
   /** Number of building floors — each gets its own plan view and MEP distribution. */
@@ -190,6 +199,7 @@ export function defaultProject(): ProjectInfo {
     smartAlignChannels: true,
     energySources: ['grid'],
     floorPlanSource: 'none',
+    designMode: 'assisted',
     bedrooms: 4,
     floorCount: 2,
     solarCapacityKw: 30,
@@ -224,6 +234,7 @@ export function normalizeProject(p: Partial<ProjectInfo> | undefined): ProjectIn
     energySources: p.energySources ?? d.energySources,
     setupComplete: p.setupComplete ?? (p.client ? true : false),
     floorPlanSource: p.floorPlanSource ?? d.floorPlanSource,
+    designMode: p.designMode ?? (p.floorPlanSource === 'zero' ? 'manual' : d.designMode),
     bedrooms,
     floorCount,
     solarCapacityKw: p.solarCapacityKw ?? d.solarCapacityKw,

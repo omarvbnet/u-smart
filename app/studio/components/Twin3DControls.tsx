@@ -6,7 +6,7 @@ import { useT } from './hooks';
 import { listTwin3dSpaces, collectSpaceMaterials } from '../lib/engine/twin3d-spaces';
 import { Box, Layers, Eye, Home } from 'lucide-react';
 
-export function Twin3DControls() {
+export function Twin3DControls({ docked = false }: { docked?: boolean }) {
   const t = useT();
   const locale = useStudio((s) => s.locale);
   const rooms = useStudio((s) => s.rooms);
@@ -36,7 +36,13 @@ export function Twin3DControls() {
     }`;
 
   return (
-    <div className="pointer-events-none absolute bottom-14 z-50 flex w-full flex-col items-end gap-2 px-3 ltr:right-0 rtl:left-0">
+    <div
+      className={
+        docked
+          ? 'flex w-full flex-col items-end gap-2'
+          : 'pointer-events-none absolute bottom-14 z-50 flex w-full flex-col items-end gap-2 px-3 ltr:right-0 rtl:left-0'
+      }
+    >
       <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)]/95 p-1.5 backdrop-blur">
         <span className="hidden px-1 text-[9px] font-bold uppercase tracking-wide text-[var(--studio-muted)] sm:inline">
           {t('twin3dView')}

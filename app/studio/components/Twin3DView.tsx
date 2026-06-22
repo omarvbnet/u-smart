@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { useStudio } from '../lib/store';
 import { getCatalogEntry, type LoadSpec } from '../lib/catalog';
 import { physicalSpecFor, PX_PER_M } from '../lib/catalog/dimensions';
+import { roomDimensions, formatSpaceDimensions } from '../lib/engine/room-dimensions';
 import { useSimulation, useDigitalTwinSync } from './hooks';
 import { aggregateSimulation } from '../lib/engine/sim-metrics';
 import { resolveNodes } from '../lib/model';
@@ -21,7 +22,6 @@ import {
   wallsForRoom,
   sceneCenterForSpace,
 } from '../lib/engine/twin3d-spaces';
-import { Twin3DControls } from './Twin3DControls';
 import {
   parseRoutePoints,
   computeCableRoute,
@@ -54,6 +54,7 @@ function RoomMesh({
   ceiling,
   zone,
   focusView,
+  showDimensions,
 }: {
   x: number;
   y: number;
@@ -64,11 +65,14 @@ function RoomMesh({
   ceiling?: CeilingMeta;
   zone?: string;
   focusView?: boolean;
+  showDimensions?: boolean;
 }) {
   const cx = pxToM(x + w / 2);
   const cz = pxToM(y + h / 2);
   const mw = pxToM(w);
   const mh = pxToM(h);
+  const dims = roomDimensions({ width: w, height: h });
+  const dimLine = formatSpaceDimensions(dims, true);
   const ceilMat = ceiling3dMaterial(ceiling, focusView ? { focusView: true } : { interiorView: true });
   const floorTint =
     zone === 'kitchen'
@@ -98,13 +102,41 @@ function RoomMesh({
       <Text position={[0, 2.9, 0]} fontSize={0.25} color="#475569" anchorX="center">
         {label}
       </Text>
+      {showDimensions && (
+        <>
+          <Text position={[0, 0.12, mh / 2 + 0.22]} fontSize={0.11} color="#0e7490" anchorX="center">
+            {dims.widthM.toFixed(2)} m
+          </Text>
+          <Text
+            position={[-mw / 2 - 0.22, 0.12, 0]}
+            fontSize={0.11}
+            color="#0e7490"
+            anchorX="center"
+            rotation={[0, Math.PI / 2, 0]}
+          >
+            {dims.depthM.toFixed(2)} m
+          </Text>
+          <Text position={[0, 0.22, 0]} fontSize={0.1} color="#64748b" anchorX="center">
+            {dimLine}
+          </Text>
+        </>
+      )}
     </group>
   );
 }
 
-function GardenMesh({ garden, elevation }: { garden: DesignGarden; elevation: number }) {
+function GardenMesh({
+  garden,
+  elevation,
+  showDimensions,
+}: {
+  garden: DesignGarden;
+  elevation: number;
+  showDimensions?: boolean;
+}) {
   const cx = pxToM(garden.x + garden.width / 2);
   const cz = pxToM(garden.y + garden.height / 2);
+  const dims = roomDimensions({ width: garden.width, height: garden.height });
   return (
     <group position={[cx, elevation, cz]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -114,6 +146,11 @@ function GardenMesh({ garden, elevation }: { garden: DesignGarden; elevation: nu
       <Text position={[0, 0.5, 0]} fontSize={0.2} color="#166534" anchorX="center">
         {garden.label}
       </Text>
+      {showDimensions && (
+        <Text position={[0, 0.12, 0]} fontSize={0.1} color="#15803d" anchorX="center">
+          {formatSpaceDimensions(dims, true)}
+        </Text>
+      )}
     </group>
   );
 }
@@ -500,6 +537,7 @@ function SceneContent() {
   const showOutletsOnMap = useStudio((s) => s.showOutletsOnMap);
   const mapOverlayMode = useStudio((s) => s.mapOverlayMode);
   const focusSpaceId = useStudio((s) => s.twin3dFocusSpaceId);
+  const showSpaceDimensions = useStudio((s) => s.showSpaceDimensions);
   const sim = useSimulation();
   const simulating = useStudio((s) => s.simulating);
   const { twinConnected } = useDigitalTwinSync();
@@ -642,7 +680,7 @@ function SceneContent() {
         <meshStandardMaterial color="#cbd5e1" />
       </mesh>
       {gardens.map((g) => (
-        <GardenMesh key={g.id} garden={g} elevation={elevation} />
+        <GardenMesh key={g.id} garden={g} elevation={elevation} showDimensions={showSpaceDimensions} />
       ))}
       {visibleRooms.map((r) => (
         <RoomMesh
@@ -656,6 +694,7 @@ function SceneContent() {
           ceiling={bim?.ceilingMeta?.[r.id]}
           zone={r.zone}
           focusView={isSpaceFocus}
+          showDimensions={showSpaceDimensions}
         />
       ))}
       {walls.map((w) => (
@@ -762,7 +801,6 @@ export function Twin3DView() {
           <SceneContent />
         </Canvas>
       </Suspense>
-      <Twin3DControls />
     </div>
   );
 }
