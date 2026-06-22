@@ -112,7 +112,13 @@ export function computeDesignAnalysis(
   const placeIssues = validatePlacement(floorNodes, activeRooms, getCatalogEntry);
   const lightingIssues = validateLightingDesign(activeResolved, activeRooms);
   const smartIssues = suggestSmartFixes(project, nodes, edges, activeRooms);
-  const issues = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
+  const merged = [...engIssues, ...placeIssues, ...lightingIssues, ...smartIssues];
+  const seen = new Set<string>();
+  const issues = merged.filter((i) => {
+    if (seen.has(i.id)) return false;
+    seen.add(i.id);
+    return true;
+  });
 
   const byNode = new Map<string, Issue[]>();
   for (const i of issues) {

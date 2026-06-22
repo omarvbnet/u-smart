@@ -77,18 +77,6 @@ type Circuit = {
   source: ResolvedNode | null;
 };
 
-function buildAdjacency(edges: DesignEdge[]): Map<string, Set<string>> {
-  const adj = new Map<string, Set<string>>();
-  const link = (a: string, b: string) => {
-    if (!adj.has(a)) adj.set(a, new Set());
-    adj.get(a)!.add(b);
-  };
-  for (const e of edges) {
-    link(e.source, e.target);
-    link(e.target, e.source);
-  }
-  return adj;
-}
 
 /** Demand current/voltage/phases for a consuming node (respects instance overrides). */
 function loadElectricals(node: ResolvedNode): { p: number; v: number; ph: 1 | 3; pf: number } | null {
@@ -105,10 +93,27 @@ function loadElectricals(node: ResolvedNode): { p: number; v: number; ph: 1 | 3;
 }
 
 /** BFS from a load node, collecting cables/breakers and the nearest source. */
+function pickUpstreamEdge(
+  nodeId: string,
+  edges: DesignEdge[],
+  byId: Map<string, ResolvedNode>,
+): DesignEdge | null {
+  for (const e of edges) {
+    if (e.target !== nodeId) continue;
+    const parent = byId.get(e.source);
+    if (!parent) continue;
+    const dom = parent.spec.domain;
+    if (dom === 'cable' || dom === 'protection' || dom === 'source') return e;
+    if (dom === 'load' && (parent.spec as LoadSpec).category === 'PANEL') return e;
+  }
+  return null;
+}
+
+/** Walk upstream from load toward source — one branch only (no cross-panel fan-out). */
 function traceCircuit(
   load: ResolvedNode,
   byId: Map<string, ResolvedNode>,
-  adj: Map<string, Set<string>>,
+  edges: DesignEdge[],
 ): Circuit | null {
   const el = loadElectricals(load);
   if (!el) return null;
@@ -117,20 +122,25 @@ function traceCircuit(
   const breakers: ResolvedNode[] = [];
   let source: ResolvedNode | null = null;
 
-  const seen = new Set<string>([load.id]);
-  const queue = [load.id];
-  while (queue.length) {
-    const cur = queue.shift()!;
-    for (const next of adj.get(cur) ?? []) {
-      if (seen.has(next)) continue;
-      seen.add(next);
-      const node = byId.get(next);
-      if (!node) continue;
-      if (node.spec.domain === 'cable') cables.push(node);
-      else if (node.spec.domain === 'protection') breakers.push(node);
-      else if (node.spec.domain === 'source' && !source) source = node;
-      queue.push(next);
+  let current: string | null = load.id;
+  const visited = new Set<string>();
+
+  while (current) {
+    const edge = pickUpstreamEdge(current, edges, byId);
+    if (!edge || visited.has(edge.source)) break;
+    visited.add(edge.source);
+
+    const parent = byId.get(edge.source);
+    if (!parent) break;
+
+    if (parent.spec.domain === 'cable') cables.push(parent);
+    else if (parent.spec.domain === 'protection') breakers.push(parent);
+    else if (parent.spec.domain === 'source') {
+      source = parent;
+      break;
     }
+
+    current = parent.id;
   }
 
   return {
@@ -145,6 +155,20 @@ function traceCircuit(
   };
 }
 
+/** Branch MCB fed from a DB — Ik at POC does not apply to IEC 60898 branch devices. */
+function isBranchFeederBreaker(
+  brNode: ResolvedNode,
+  edges: DesignEdge[],
+  byId: Map<string, ResolvedNode>,
+): boolean {
+  for (const e of edges) {
+    if (e.target !== brNode.id) continue;
+    const parent = byId.get(e.source);
+    if (parent?.spec.domain === 'load' && (parent.spec as LoadSpec).category === 'PANEL') return true;
+  }
+  return false;
+}
+
 export type ValidationResult = {
   issues: Issue[];
   circuits: Circuit[];
@@ -156,7 +180,6 @@ export function validateDesign(
   cableCatalog: CableSpec[],
 ): ValidationResult {
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const adj = buildAdjacency(edges);
   const issues: Issue[] = [];
 
   const sources = nodes.filter((n) => n.spec.domain === 'source');
@@ -166,7 +189,7 @@ export function validateDesign(
   // ---- Per-circuit checks ----
   for (const load of loads) {
     if (load.spec.domain === 'load' && (load.spec as LoadSpec).category === 'PANEL') continue;
-    const circuit = traceCircuit(load, byId, adj);
+    const circuit = traceCircuit(load, byId, edges);
     if (!circuit) continue;
     circuits.push(circuit);
     const Ib = circuit.current;
@@ -362,7 +385,8 @@ export function validateDesign(
         }
       }
 
-      // Breaking capacity vs prospective short circuit.
+      // Breaking capacity vs prospective short circuit (incomer / main devices only).
+      if (isBranchFeederBreaker(brNode, edges, byId)) continue;
       const scKa = prospectiveScKa(sources.map((s) => s.spec as SourceSpec));
       if (br.breakingCapacityKA > 0 && scKa > br.breakingCapacityKA) {
         issues.push({
@@ -383,7 +407,7 @@ export function validateDesign(
           ],
           standards: ['IEC 60947'],
           recommendation: t('اختر قاطعاً بقدرة قطع أعلى.', 'Select a breaker with higher Icu.', 'برەیکەرێک بە Icu بەرزتر هەڵبژێرە.', 'Daha yüksek Icu’lu kesici seçin.'),
-          fix: suggestShortCircuitFix(brNode.id),
+          fix: suggestShortCircuitFix(brNode.id, scKa, br.ratedCurrentA),
         });
       }
 

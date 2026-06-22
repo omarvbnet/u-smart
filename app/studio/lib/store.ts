@@ -43,7 +43,7 @@ import {
   villaGardenBounds,
 } from './engine/residential-layouts';
 import { buildFloorsFromCount, seedRoomsForProject } from './engine/floor-layout';
-import { analyzeImportedMap } from './map-import-analyze';
+import { analyzeImportedMap, fallbackRoomsForMap } from './map-import-analyze';
 import { getTwinConnection } from './twin-stream';
 import { suggestSmartFixes, psuCatalogIdsForProject, findMainPanel } from './engine/autofix';
 import { aggregateSimulation } from './engine/sim-metrics';
@@ -123,6 +123,15 @@ export type MapBackground = {
   mode?: 'blank' | 'image';
 };
 
+export type MapImportPhase =
+  | 'idle'
+  | 'reading'
+  | 'detecting-rooms'
+  | 'detecting-walls'
+  | 'generating'
+  | 'done'
+  | 'error';
+
 type StudioState = {
   locale: StudioLocale;
   theme: Theme;
@@ -144,6 +153,10 @@ type StudioState = {
   cloudProjectId: string | null;
   simEnergyKwh: number;
   pendingMapImport: boolean;
+  /** Wizard chose generate after the plan file is analyzed. */
+  pendingGenerateAfterImport: boolean;
+  mapImportPhase: MapImportPhase;
+  mapImportDetail: string | null;
   canvasViewMode: CanvasViewMode;
   canvasFitSeq: number;
   suppressCanvasFit: boolean;
@@ -202,7 +215,7 @@ type StudioState = {
   toggleSimulation: () => void;
 
   setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
-  importMapAndAnalyze: (file: File) => Promise<{ rooms: number; walls: number }>;
+  importMapAndAnalyze: (file: File, opts?: { generateAfter?: boolean }) => Promise<{ rooms: number; walls: number }>;
   moveMap: (x: number, y: number) => void;
   setMapOpacity: (opacity: number) => void;
   clearMap: () => void;
@@ -219,6 +232,7 @@ type StudioState = {
       floorPlan: FloorPlanSource | 'skip';
       roomDistribution?: 'perFloor' | 'groundOnly';
       manualMode?: boolean;
+      importFile?: File;
     },
   ) => void;
   reopenWizard: () => void;
@@ -496,7 +510,7 @@ function scheduleDeferredCableReroute(
 }
 
 let fixJobSeq = 0;
-const FIX_ALL_CAP = 120;
+const FIX_ALL_CAP = 2000;
 
 /** Re-validate and apply fixes in batches — keeps the canvas responsive. */
 function scheduleDeferredApplyAllFixes(
@@ -821,6 +835,9 @@ export const useStudio = create<StudioState>((set, get) => ({
   cloudProjectId: null,
   simEnergyKwh: 0,
   pendingMapImport: false,
+  pendingGenerateAfterImport: false,
+  mapImportPhase: 'idle' as MapImportPhase,
+  mapImportDetail: null,
   canvasViewMode: initialCanvasViewMode(),
   canvasFitSeq: 0,
   suppressCanvasFit: false,
@@ -1047,6 +1064,9 @@ export const useStudio = create<StudioState>((set, get) => ({
       floorPlanTool: 'select',
       cloudProjectId: null,
       pendingMapImport: false,
+      pendingGenerateAfterImport: false,
+      mapImportPhase: 'idle',
+      mapImportDetail: null,
       generatingProject: false,
       historyPast: [],
       historyFuture: [],
@@ -1097,63 +1117,121 @@ export const useStudio = create<StudioState>((set, get) => ({
       bim: bim ?? get().bim,
     }),
 
-  importMapAndAnalyze: async (file) => {
+  importMapAndAnalyze: async (file, opts) => {
     const { importMapFile } = await import('./import-map');
-    const { src, width, height, bim: cadBim } = await importMapFile(file);
-    await yieldToMain();
     const s0 = get();
-    const mapX = -width / 2;
-    const mapY = -height / 2;
+    const generateAfter = opts?.generateAfter ?? s0.pendingGenerateAfterImport;
+    const locale = s0.locale;
     const activeFloorId = s0.activeFloorId;
+    const project = { ...s0.project, floorPlanSource: 'import' as FloorPlanSource };
 
     set({
-      map: { src, width, height, x: mapX, y: mapY, opacity: 0.85, mode: 'image' },
-      project: { ...s0.project, floorPlanSource: 'import' },
+      mapImportPhase: 'reading',
+      mapImportDetail: file.name,
       generatingProject: true,
       suppressCanvasFit: true,
+      pendingGenerateAfterImport: false,
       selectedRoomId: null,
       selectedNodeId: null,
     });
     invalidateDesignAnalysisCache();
 
     try {
-      const { rooms, bim } = await analyzeImportedMap({
-        src,
-        width,
-        height,
-        mapX,
-        mapY,
-        activeFloorId,
-        cadBim,
-      });
-      const pre = get();
-      const project = { ...pre.project, floorPlanSource: 'import' as FloorPlanSource };
+      const { src, width, height, bim: cadBim } = await importMapFile(file);
+      await yieldToMain();
 
-      const mapPatch: Partial<StudioState> = {
+      const mapX = -width / 2;
+      const mapY = -height / 2;
+
+      set({
+        map: { src, width, height, x: mapX, y: mapY, opacity: 0.85, mode: 'image' },
         project,
-        rooms,
-        bim,
-        nodes: [],
-        edges: [],
-        controls: {},
-        selectedNodeId: null,
-        selectedRoomId: null,
-        selectedOpeningId: null,
-        selectedWallId: null,
-        canvasFitSeq: pre.canvasFitSeq + 1,
-      };
+      });
 
-      if (rooms.length > 0 || bim.walls.length > 0) {
-        await finalizeProjectGeneration(get, set, pre, mapPatch);
+      const { rooms: detectedRooms, bim } = await analyzeImportedMap(
+        { src, width, height, mapX, mapY, activeFloorId, cadBim },
+        (phase) => set({ mapImportPhase: phase }),
+      );
+
+      let rooms =
+        detectedRooms.length > 0
+          ? detectedRooms
+          : fallbackRoomsForMap(mapX, mapY, width, height, activeFloorId, bim);
+
+      const pre = get();
+
+      if (generateAfter) {
+        set({ mapImportPhase: 'generating' });
+        const result = await generateProjectDesignAsync(project, rooms, locale, activeFloorId);
+        invalidateDesignAnalysisCache();
+        const mergedBim: BimModel = {
+          walls: bim.walls,
+          openings: [...bim.openings, ...(result.bim?.openings ?? [])],
+          gardens: bim.gardens,
+        };
+        await finalizeProjectGeneration(
+          get,
+          set,
+          pre,
+          {
+            project,
+            rooms,
+            nodes: result.nodes,
+            edges: result.edges,
+            controls: result.controls,
+            designName: result.designName,
+            bim: mergedBim,
+            selectedNodeId: null,
+            selectedRoomId: null,
+            selectedOpeningId: null,
+            selectedWallId: null,
+            canvasFitSeq: pre.canvasFitSeq + 1,
+          },
+          deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
+        );
       } else {
-        set({ ...mapPatch, generatingProject: false, suppressCanvasFit: false });
+        let nodes: DesignNode[] = [];
+        let edges: DesignEdge[] = [];
+        let controls: Record<string, ControlState> = {};
+        let mergedBim = bim;
+        if (rooms.length > 0 && project.smartBuilding) {
+          const pack = buildBimOpenings(rooms, project, locale, activeFloorId);
+          mergedBim = { walls: bim.walls, openings: [...bim.openings, ...pack.bim.openings], gardens: bim.gardens };
+          nodes = mergeOpeningActuators(nodes, pack.actuatorNodes);
+          controls = { ...controls, ...pack.controls };
+        } else if (rooms.length > 0) {
+          const pack = buildBimOpenings(rooms, project, locale, activeFloorId);
+          mergedBim = { walls: bim.walls, openings: [...bim.openings, ...pack.bim.openings], gardens: bim.gardens };
+        }
+        await finalizeProjectGeneration(get, set, pre, {
+          project,
+          rooms,
+          bim: mergedBim,
+          nodes,
+          edges,
+          controls,
+          selectedNodeId: null,
+          selectedRoomId: null,
+          selectedOpeningId: null,
+          selectedWallId: null,
+          canvasFitSeq: pre.canvasFitSeq + 1,
+        });
       }
 
+      set({ mapImportPhase: 'done' });
       invalidateDesignAnalysisCache();
+      runWhenIdle(() => set({ mapImportPhase: 'idle', mapImportDetail: null }));
       return { rooms: rooms.length, walls: get().bim?.walls.length ?? 0 };
     } catch (err) {
       console.error('[U Smart Studio] map analysis failed', err);
-      set({ generatingProject: false, canvasBooting: false, suppressCanvasFit: false });
+      set({
+        generatingProject: false,
+        canvasBooting: false,
+        suppressCanvasFit: false,
+        mapImportPhase: 'error',
+        mapImportDetail: err instanceof Error ? err.message : 'import failed',
+      });
+      runWhenIdle(() => set({ mapImportPhase: 'idle', mapImportDetail: null }));
       return { rooms: 0, walls: 0 };
     }
   },
@@ -1222,6 +1300,15 @@ export const useStudio = create<StudioState>((set, get) => ({
     const designMode: DesignMode = manualMode ? 'manual' : 'assisted';
     const mergedProject = { ...project, floorPlanSource, designMode, setupComplete: true };
     const floors = buildFloorsFromCount(mergedProject.floorCount, mergedProject.buildingType);
+    const importFile = options.importFile;
+
+    const startMapImport = (generateAfter: boolean) => {
+      if (importFile) {
+        void get().importMapAndAnalyze(importFile, { generateAfter });
+      } else {
+        set({ pendingMapImport: true, pendingGenerateAfterImport: generateAfter });
+      }
+    };
 
     if (manualMode) {
       let map = s.map;
@@ -1239,7 +1326,6 @@ export const useStudio = create<StudioState>((set, get) => ({
           mode: 'blank',
         };
       } else if (options.floorPlan === 'import') {
-        pendingMapImport = true;
         floorPlanTool = 'select';
       } else {
         floorPlanTool = 'select';
@@ -1256,6 +1342,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         map,
         floorPlanTool,
         pendingMapImport,
+        pendingGenerateAfterImport: false,
         selectedNodeId: null,
         selectedRoomId: null,
         selectedOpeningId: null,
@@ -1265,6 +1352,38 @@ export const useStudio = create<StudioState>((set, get) => ({
         historyPast: [],
         historyFuture: [],
       });
+      if (options.floorPlan === 'import') startMapImport(false);
+      return;
+    }
+
+    const baseShell = {
+      project: mergedProject,
+      floors,
+      activeFloorId: floors[0]!.id,
+      selectedNodeId: null,
+      selectedRoomId: null,
+      selectedOpeningId: null,
+      selectedWallId: null,
+      historyPast: [] as StudioState['historyPast'],
+      historyFuture: [] as StudioState['historyFuture'],
+    };
+
+    if (options.floorPlan === 'import') {
+      set({
+        ...baseShell,
+        rooms: [],
+        nodes: [],
+        edges: [],
+        controls: {},
+        bim: { walls: [], openings: [], gardens: [] },
+        map: s.map,
+        floorPlanTool: 'select',
+        pendingMapImport: false,
+        pendingGenerateAfterImport: options.generateDesign,
+        generatingProject: false,
+        canvasBooting: false,
+      });
+      startMapImport(options.generateDesign);
       return;
     }
 
@@ -1279,7 +1398,6 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
     let map = s.map;
     let floorPlanTool = s.floorPlanTool;
-    let pendingMapImport = false;
 
     if (options.floorPlan === 'zero') {
       const { width, height } = floorPlanSizeForBuilding(mergedProject.buildingType);
@@ -1293,24 +1411,15 @@ export const useStudio = create<StudioState>((set, get) => ({
         mode: 'blank',
       };
       floorPlanTool = 'draw-room';
-    } else if (options.floorPlan === 'import') {
-      pendingMapImport = true;
     }
 
     const basePatch = {
-      project: mergedProject,
-      floors,
-      activeFloorId: floors[0]!.id,
+      ...baseShell,
       rooms,
       map,
       floorPlanTool,
-      pendingMapImport,
-      selectedNodeId: null,
-      selectedRoomId: null,
-      selectedOpeningId: null,
-      selectedWallId: null,
-      historyPast: [] as StudioState['historyPast'],
-      historyFuture: [] as StudioState['historyFuture'],
+      pendingMapImport: false,
+      pendingGenerateAfterImport: false,
     };
 
     if (!options.generateDesign) {

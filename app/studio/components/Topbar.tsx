@@ -62,8 +62,10 @@ export function Topbar() {
   const handleMapFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      const importMapAndAnalyze = useStudio.getState().importMapAndAnalyze;
-      await importMapAndAnalyze(file);
+      const st = useStudio.getState();
+      const generateAfter = st.pendingGenerateAfterImport;
+      st.clearPendingMapImport();
+      await st.importMapAndAnalyze(file, { generateAfter });
     } catch (e) {
       console.error(e);
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import {
@@ -44,6 +44,9 @@ export function SetupWizard({ onComplete }: Props) {
   const generatingProject = useStudio((s) => s.generatingProject);
   const [step, setStep] = useState(0);
   const [floorPlan, setFloorPlan] = useState<FloorPlanChoice>('zero');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importFileError, setImportFileError] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [roomDistribution, setRoomDistribution] = useState<RoomDistribution>('perFloor');
   const [projectBrief, setProjectBrief] = useState('');
   const [finishing, setFinishing] = useState(false);
@@ -113,6 +116,11 @@ export function SetupWizard({ onComplete }: Props) {
 
   const finish = (mode: 'blank' | 'generate' | 'manual') => {
     if (busy) return;
+    if (floorPlan === 'import' && !importFile) {
+      setImportFileError(t('mapImportFileRequired'));
+      setStep(4);
+      return;
+    }
     setFinishing(true);
     const fp: FloorPlanSource | 'skip' = floorPlan;
     const manualMode = mode === 'manual' || (mode === 'blank' && floorPlan === 'zero');
@@ -125,7 +133,13 @@ export function SetupWizard({ onComplete }: Props) {
     };
     onComplete();
     if (projectBrief.trim() && mode === 'generate') {
-      completeWizard(finalized, { generateDesign: false, floorPlan: fp, roomDistribution, manualMode: false });
+      completeWizard(finalized, {
+        generateDesign: false,
+        floorPlan: fp,
+        roomDistribution,
+        manualMode: false,
+        importFile: fp === 'import' ? importFile ?? undefined : undefined,
+      });
       generateFromBrief(projectBrief.trim());
       return;
     }
@@ -134,6 +148,7 @@ export function SetupWizard({ onComplete }: Props) {
       floorPlan: fp,
       roomDistribution,
       manualMode,
+      importFile: fp === 'import' ? importFile ?? undefined : undefined,
     });
   };
 
@@ -448,7 +463,11 @@ export function SetupWizard({ onComplete }: Props) {
               <div className="grid gap-3 sm:grid-cols-3">
                 <FloorPlanCard
                   active={floorPlan === 'zero'}
-                  onClick={() => setFloorPlan('zero')}
+                  onClick={() => {
+                    setFloorPlan('zero');
+                    setImportFile(null);
+                    setImportFileError(null);
+                  }}
                   icon={Grid3x3}
                   title={t('floorPlanFromZero')}
                   hint={t('floorPlanFromZeroHint')}
@@ -462,12 +481,43 @@ export function SetupWizard({ onComplete }: Props) {
                 />
                 <FloorPlanCard
                   active={floorPlan === 'skip'}
-                  onClick={() => setFloorPlan('skip')}
+                  onClick={() => {
+                    setFloorPlan('skip');
+                    setImportFile(null);
+                    setImportFileError(null);
+                  }}
                   icon={PenLine}
                   title={t('floorPlanSkip')}
                   hint={t('floorPlanSkipHint')}
                 />
               </div>
+              {floorPlan === 'import' && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-cyan-200">{t('mapImportSelectFile')}</p>
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept="image/*,application/pdf,.dxf,.DXF"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setImportFile(f);
+                      setImportFileError(f ? null : t('mapImportFileRequired'));
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => importFileRef.current?.click()}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-cyan-400/50 bg-[var(--studio-bg)] px-4 py-6 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/10"
+                  >
+                    <Upload className="h-5 w-5" />
+                    {importFile ? importFile.name : t('mapImportSelectFile')}
+                  </button>
+                  {importFileError && <p className="text-[11px] text-red-400">{importFileError}</p>}
+                  <p className="text-[10px] text-[var(--studio-muted)]">{t('floorPlanImportHint')}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -579,8 +629,14 @@ export function SetupWizard({ onComplete }: Props) {
           </button>
           {step < steps.length - 1 ? (
             <button
-              disabled={busy}
-              onClick={() => setStep((s) => s + 1)}
+              disabled={busy || (step === 4 && floorPlan === 'import' && !importFile)}
+              onClick={() => {
+                if (step === 4 && floorPlan === 'import' && !importFile) {
+                  setImportFileError(t('mapImportFileRequired'));
+                  return;
+                }
+                setStep((s) => s + 1);
+              }}
               className="flex items-center gap-1 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
               {t('next')} <ChevronRight className="h-4 w-4" />

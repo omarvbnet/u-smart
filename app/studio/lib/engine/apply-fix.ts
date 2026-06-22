@@ -283,7 +283,7 @@ export function applyFixesUntilStable(
   return { state, applied: totalApplied };
 }
 
-export const FIX_APPLY_BATCH = 4;
+export const FIX_APPLY_BATCH = 12;
 export const FIX_MAX_ROUNDS = 3;
 
 /** Apply one chunk of fixes — used by the async fix-all scheduler. */
@@ -615,7 +615,7 @@ const FIX_ORDER: Record<Fix['kind'], number> = {
   addCircuit: 7,
 };
 
-export function prioritizeFixes(fixes: Fix[], maxCircuits = 200): Fix[] {
+export function prioritizeFixes(fixes: Fix[], maxCircuits = 2000): Fix[] {
   const sorted = dedupeFixes(fixes).sort((a, b) => (FIX_ORDER[a.kind] ?? 9) - (FIX_ORDER[b.kind] ?? 9));
   let circuits = 0;
   return sorted.filter((f) => {

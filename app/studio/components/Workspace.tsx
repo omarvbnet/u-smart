@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Topbar } from './Topbar';
 import { WorkspaceEditor } from './WorkspaceEditor';
 import { SetupWizard } from './SetupWizard';
+import { MapImportOverlay } from './MapImportOverlay';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
@@ -22,11 +23,13 @@ export function Workspace() {
   const applyingFixes = useStudio((s) => s.applyingFixes);
   const generatingProject = useStudio((s) => s.generatingProject);
   const canvasBooting = useStudio((s) => s.canvasBooting);
+  const mapImportPhase = useStudio((s) => s.mapImportPhase);
   const project = useStudio((s) => s.project);
   const [wizardOpen, setWizardOpen] = useState(false);
   const rtl = RTL_LOCALES.has(locale);
 
-  const showEditor = project.setupComplete && !wizardOpen && !generatingProject && !canvasBooting;
+  const importingMap = mapImportPhase !== 'idle';
+  const showEditor = project.setupComplete && !wizardOpen && !canvasBooting && (!generatingProject || importingMap);
 
   useEffect(() => {
     if (!project.setupComplete) setWizardOpen(true);
@@ -79,7 +82,10 @@ export function Workspace() {
 
       <div className="relative flex min-h-0 flex-1">
         {showEditor ? (
-          <WorkspaceEditor />
+          <div className="relative min-h-0 flex-1">
+            <WorkspaceEditor />
+            <MapImportOverlay />
+          </div>
         ) : (
           <div className="relative min-h-0 flex-1 bg-[var(--studio-bg)]">
             {(generatingProject || canvasBooting) && (

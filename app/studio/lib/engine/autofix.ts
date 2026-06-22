@@ -297,17 +297,24 @@ export function suggestCoordinationFix(breakerNodeId: string, nodes: DesignNode[
   return undefined;
 }
 
-export function suggestShortCircuitFix(nodeId: string): Fix | undefined {
-  const candidates = CATALOG.filter(
-    (e) => e.domain === 'protection' && (e as import('../catalog').ProtectionSpec).breakingCapacityKA >= 10,
-  ).sort(
-    (a, b) =>
-      (a as import('../catalog').ProtectionSpec).breakingCapacityKA -
-      (b as import('../catalog').ProtectionSpec).breakingCapacityKA,
-  );
-  const pick =
-    candidates.find((e) => (e as import('../catalog').ProtectionSpec).breakingCapacityKA >= 15) ??
-    candidates[candidates.length - 1];
+export function suggestShortCircuitFix(
+  nodeId: string,
+  requiredScKa: number,
+  ratedCurrentA: number,
+): Fix | undefined {
+  const candidates = CATALOG.filter((e) => {
+    if (e.domain !== 'protection') return false;
+    const p = e as import('../catalog').ProtectionSpec;
+    if (p.protectionType === 'SPD' || p.protectionType === 'RCCB' || p.breakingCapacityKA <= 0) return false;
+    return p.breakingCapacityKA >= requiredScKa && p.ratedCurrentA >= ratedCurrentA;
+  }).sort((a, b) => {
+    const pa = a as import('../catalog').ProtectionSpec;
+    const pb = b as import('../catalog').ProtectionSpec;
+    const icu = pa.breakingCapacityKA - pb.breakingCapacityKA;
+    if (icu !== 0) return icu;
+    return pa.ratedCurrentA - pb.ratedCurrentA;
+  });
+  const pick = candidates[0];
   if (!pick) return undefined;
   return { kind: 'upgradeBreaker', nodeId, toCatalogId: pick.id };
 }
