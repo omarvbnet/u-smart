@@ -12,6 +12,7 @@ import {
   cableIdsLinkedToNode,
   computeCableRoute,
   applyRouteToCable,
+  conduitTypeForCable,
 } from './cable-map';
 import { resolveNodes } from '../model';
 import { CABLES } from '../catalog/cables';
@@ -221,17 +222,20 @@ export function applyFixChunk(
   let applied = 0;
   const affectedCables = new Set<string>();
   for (const fix of fixes) {
-    const patch = applyFixPatch(next, fix);
+    const patch = applyFixPatch(next, fix, { deferCableRoute: true });
     if (!patch) continue;
     next = mergeFixableState(next, patch);
     for (const id of affectedCableIdsForFix(fix, patch, next)) affectedCables.add(id);
     applied++;
   }
-  if (affectedCables.size > 0) next = finalizeFixableState(next, affectedCables);
   return { state: next, applied, affectedCables };
 }
 
-export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
+export function applyFixPatch(
+  s: FixableState,
+  fix: Fix,
+  opts?: { deferCableRoute?: boolean },
+): FixPatch | null {
   if (fix.kind === 'addRoomLighting') {
     const room = s.rooms.find((r) => r.id === fix.roomId);
     const entry = getCatalogEntry(fix.catalogId);
@@ -251,6 +255,9 @@ export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
       catalogId: fix.toCatalogId,
       label: defaultLabel(entry, s.locale),
     };
+    if (opts?.deferCableRoute) {
+      return { nodes: s.nodes.map((n) => (n.id === fix.nodeId ? updated : n)) };
+    }
     const points = computeCableRoute(updated, s.nodes, s.edges, s.rooms);
     const params = applyRouteToCable(updated, points, entry as CableSpec);
     return {
@@ -381,6 +388,17 @@ export function applyFixPatch(s: FixableState, fix: Fix): FixPatch | null {
       { id: uid('e'), source: mcbId, sourceHandle: 'load', target: cableId, targetHandle: 'a' },
       { id: uid('e'), source: cableId, sourceHandle: 'b', target: load.id, targetHandle: 'in' },
     ];
+    if (opts?.deferCableRoute) {
+      const routedCable: DesignNode = {
+        ...cable,
+        params: { showOnMap: true, lengthM: 0, conduitType: conduitTypeForCable(cableEntry) },
+      };
+      return {
+        nodes: [...s.nodes, mcb, routedCable],
+        edges: draftEdges,
+        controls: { ...s.controls, [mcbId]: defaultControlState(mcbPick.entry) },
+      };
+    }
     const points = computeCableRoute(cable, draftNodes, draftEdges, s.rooms);
     const cableParams = applyRouteToCable(cable, points, cableEntry);
     const routedCable: DesignNode = {

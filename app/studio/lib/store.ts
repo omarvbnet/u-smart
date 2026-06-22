@@ -9,14 +9,11 @@ import { validateDesign } from './engine/validation';
 import { validatePlacement } from './engine/placement-validation';
 import {
   applyFixPatch,
-  applyFixesUntilStable,
-  applyFixChunk,
-  collectFixableFixes,
-  finalizeFixableState,
   mergeFixableState,
+  collectFixableFixes,
   prioritizeFixes,
-  FIX_APPLY_BATCH,
-  FIX_MAX_ROUNDS,
+  affectedCableIdsForFix,
+  finalizeFixableState,
   type FixableState,
 } from './engine/apply-fix';
 import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
@@ -297,19 +294,24 @@ const CABLE_REROUTE_BATCH = 30;
 function scheduleDeferredCableReroute(
   getState: () => StudioState,
   setState: (patch: Partial<StudioState>) => void,
-  opts?: { clearApplyingFixes?: boolean },
+  opts?: { clearApplyingFixes?: boolean; onComplete?: () => void },
 ): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    opts?.onComplete?.();
+    return;
+  }
   const run = () => {
     const s = getState();
     if (!s.project.setupComplete || s.generatingProject) {
-      if (opts?.clearApplyingFixes) setState({ applyingFixes: false });
+      if (opts?.clearApplyingFixes) setState({ applyingFixes: false, suppressCanvasFit: false });
+      opts?.onComplete?.();
       return;
     }
     const cableIds = s.nodes.filter((n) => getCatalogEntry(n.catalogId)?.domain === 'cable').map((n) => n.id);
     if (!cableIds.length) {
-      if (opts?.clearApplyingFixes) setState({ applyingFixes: false });
+      if (opts?.clearApplyingFixes) setState({ applyingFixes: false, suppressCanvasFit: false });
       invalidateDesignAnalysisCache();
+      opts?.onComplete?.();
       return;
     }
 
@@ -321,9 +323,10 @@ function scheduleDeferredCableReroute(
       if (!batch.length) {
         setState({
           nodes: working,
-          ...(opts?.clearApplyingFixes ? { applyingFixes: false } : {}),
+          ...(opts?.clearApplyingFixes ? { applyingFixes: false, suppressCanvasFit: false } : {}),
         });
         invalidateDesignAnalysisCache();
+        opts?.onComplete?.();
         return;
       }
       const batchSet = new Set(batch);
@@ -344,9 +347,10 @@ function scheduleDeferredCableReroute(
       } else {
         setState({
           nodes: working,
-          ...(opts?.clearApplyingFixes ? { applyingFixes: false } : {}),
+          ...(opts?.clearApplyingFixes ? { applyingFixes: false, suppressCanvasFit: false } : {}),
         });
         invalidateDesignAnalysisCache();
+        opts?.onComplete?.();
       }
     };
 
@@ -357,95 +361,109 @@ function scheduleDeferredCableReroute(
 }
 
 let fixJobSeq = 0;
+const FIX_ALL_CAP = 64;
+const FIX_FRAME_BUDGET_MS = 10;
+const FIX_CABLE_REROUTE_BATCH = 6;
 
 /** Apply validation fixes in small idle chunks so Fix all stays responsive. */
 function scheduleDeferredApplyAllFixes(
   getState: () => StudioState,
-  setState: (patch: Partial<StudioState> | ((s: StudioState) => Partial<StudioState>)) => void,
+  setState: (patch: Partial<StudioState>) => void,
   seedFixes?: Fix[],
 ): void {
-  const runSync = () => {
-    const s = getState();
-    const { state: next, applied } = applyFixesUntilStable(fixableFrom(s), seedFixes, FIX_MAX_ROUNDS);
-    if (!applied) {
-      setState({ applyingFixes: false, fixBatchResult: null });
-      return;
-    }
-    const remaining = collectFixableFixes({ ...next, activeFloorId: s.activeFloorId }).length;
-    setState({
-      ...withHistory(s, {
-        nodes: next.nodes,
-        edges: next.edges,
-        controls: next.controls,
-      }),
-      applyingFixes: false,
-      fixBatchResult: { applied, remaining },
-    });
-    invalidateDesignAnalysisCache();
-  };
-
-  if (typeof window === 'undefined') {
-    runSync();
-    return;
-  }
-
   const jobId = ++fixJobSeq;
-  setState({ applyingFixes: true, fixBatchResult: null });
+  setState({ applyingFixes: true, fixBatchResult: null, suppressCanvasFit: true });
   invalidateDesignAnalysisCache();
 
-  let state = fixableFrom(getState());
-  let totalApplied = 0;
-  let round = 0;
-  let queue = seedFixes?.length ? prioritizeFixes(seedFixes) : collectFixableFixes(state);
-  let needsCableReroute = false;
+  if (typeof window === 'undefined') return;
 
-  const finish = () => {
-    if (jobId !== fixJobSeq) return;
-    runWhenIdle(() => {
+  // Double rAF so the spinner paints before any heavy work starts.
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       if (jobId !== fixJobSeq) return;
-      const s = getState();
-      const remaining = collectFixableFixes({ ...state, activeFloorId: s.activeFloorId }).length;
-      setState({
-        ...withHistory(s, {
-          nodes: state.nodes,
-          edges: state.edges,
-          controls: state.controls,
-        }),
-        applyingFixes: false,
-        fixBatchResult: { applied: totalApplied, remaining },
-      });
-      invalidateDesignAnalysisCache();
-      if (needsCableReroute) scheduleDeferredCableReroute(getState, setState);
-    });
-  };
 
-  const processChunk = () => {
-    if (jobId !== fixJobSeq) return;
-    if (!queue.length) {
-      round++;
-      if (round >= FIX_MAX_ROUNDS) {
-        finish();
+      let state = fixableFrom(getState());
+      let totalApplied = 0;
+      const affectedCableIds = new Set<string>();
+      const queue = prioritizeFixes(seedFixes?.length ? seedFixes : collectFixableFixes(state)).slice(0, FIX_ALL_CAP);
+
+      if (!queue.length) {
+        setState({ applyingFixes: false, fixBatchResult: null, suppressCanvasFit: false });
         return;
       }
-      runWhenIdle(() => {
+
+      let index = 0;
+
+      const commitResult = () => {
         if (jobId !== fixJobSeq) return;
-        queue = collectFixableFixes({ ...state, activeFloorId: getState().activeFloorId });
-        if (!queue.length) finish();
-        else window.requestAnimationFrame(processChunk);
-      });
-      return;
-    }
+        const preFix = getState();
+        window.requestAnimationFrame(() => {
+          if (jobId !== fixJobSeq) return;
+          setState({
+            nodes: state.nodes,
+            edges: state.edges,
+            controls: state.controls,
+            applyingFixes: false,
+            suppressCanvasFit: false,
+            fixBatchResult: { applied: totalApplied, remaining: -1 },
+          });
+          invalidateDesignAnalysisCache();
+          runWhenIdle(() => {
+            if (jobId !== fixJobSeq) return;
+            const cur = getState();
+            setState({
+              historyPast: [...cur.historyPast.slice(-(HISTORY_LIMIT - 1)), cloneDesignSnapshot(preFix)],
+              historyFuture: [],
+            });
+          });
+        });
+      };
 
-    const batch = queue.splice(0, FIX_APPLY_BATCH);
-    const result = applyFixChunk(state, batch);
-    state = result.state;
-    totalApplied += result.applied;
-    if (result.affectedCables.size > 0) needsCableReroute = true;
+      const rerouteAffectedCables = (offset: number) => {
+        if (jobId !== fixJobSeq) return;
+        const ids = [...affectedCableIds];
+        const batch = ids.slice(offset, offset + FIX_CABLE_REROUTE_BATCH);
+        if (!batch.length) {
+          commitResult();
+          return;
+        }
+        const batchSet = new Set(batch);
+        state = {
+          ...state,
+          nodes: state.nodes.map((n) => {
+            if (!batchSet.has(n.id)) return n;
+            if (getCatalogEntry(n.catalogId)?.domain !== 'cable') return n;
+            return rerouteCableNode(n, state.nodes, state.edges, state.rooms);
+          }),
+        };
+        window.requestAnimationFrame(() => rerouteAffectedCables(offset + batch.length));
+      };
 
-    window.requestAnimationFrame(processChunk);
-  };
+      const processFixes = () => {
+        if (jobId !== fixJobSeq) return;
+        const start = performance.now();
+        while (index < queue.length && performance.now() - start < FIX_FRAME_BUDGET_MS) {
+          const fix = queue[index]!;
+          index++;
+          const patch = applyFixPatch(state, fix, { deferCableRoute: true });
+          if (patch) {
+            state = mergeFixableState(state, patch);
+            totalApplied++;
+            for (const id of affectedCableIdsForFix(fix, patch, state)) affectedCableIds.add(id);
+          }
+        }
+        if (index < queue.length) {
+          window.requestAnimationFrame(processFixes);
+        } else if (affectedCableIds.size > 0) {
+          window.requestAnimationFrame(() => rerouteAffectedCables(0));
+        } else {
+          commitResult();
+        }
+      };
 
-  runWhenIdle(() => window.requestAnimationFrame(processChunk));
+      window.requestAnimationFrame(processFixes);
+    });
+  });
 }
 
 function persist(key: string, value: string) {

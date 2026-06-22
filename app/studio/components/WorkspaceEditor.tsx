@@ -23,6 +23,7 @@ export function WorkspaceEditor() {
   const nodeCount = useStudio((s) => s.nodes.length);
   const edgeCount = useStudio((s) => s.edges.length);
   const experienceMode = useStudio((s) => s.experienceMode);
+  const applyingFixes = useStudio((s) => s.applyingFixes);
   const { issues } = useAnalysis();
   const [tab, setTab] = useState<Tab>('validation');
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -80,10 +81,18 @@ export function WorkspaceEditor() {
           )}
         </div>
         <div className="relative min-h-0 flex-1">
-          <SimulationProvider>
-            <Canvas />
-            <SimulationHud />
-          </SimulationProvider>
+          {applyingFixes ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--studio-bg)] text-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+              <p className="text-sm font-semibold text-[var(--studio-text)]">{t('fixing')}</p>
+              <p className="max-w-xs text-xs text-[var(--studio-muted)]">{t('fixingHint')}</p>
+            </div>
+          ) : (
+            <SimulationProvider>
+              <Canvas />
+              <SimulationHud />
+            </SimulationProvider>
+          )}
           <TwinChainPanel />
           {!clientMode && <BusMonitor />}
           <div className="pointer-events-none absolute bottom-3 z-10 flex gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)]/90 px-3 py-1.5 text-[11px] text-[var(--studio-muted)] backdrop-blur ltr:right-3 rtl:left-3">
