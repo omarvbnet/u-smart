@@ -6,6 +6,7 @@ import type { DesignEdge, DesignNode } from '@/app/studio/lib/model';
 import type { ControlState } from '@/app/studio/lib/controls';
 import type { NodeSimState } from '@/app/studio/lib/engine/simulate';
 import type { Telegram } from '@/app/studio/lib/engine/bus';
+import { loadTwinSessionSnapshot, type PersistedTwinSession } from '@/lib/studio-db-sync';
 
 export type TwinChainStep = {
   kind: 'panel' | 'actuator' | 'load' | 'circuit' | 'metric';
@@ -107,6 +108,44 @@ export function createTwinSession(
 
 export function getTwinSession(id: string): Session | undefined {
   return hub().get(id);
+}
+
+export function toPersistedTwinSession(session: Session): PersistedTwinSession {
+  return {
+    nodes: session.nodes,
+    edges: session.edges,
+    controls: session.controls,
+    states: session.states,
+    metrics: session.metrics,
+    active: session.active,
+  };
+}
+
+export function rehydrateTwinSession(id: string, data: PersistedTwinSession): Session {
+  const session: Session = {
+    id,
+    active: true,
+    nodes: structuredClone(data.nodes),
+    edges: structuredClone(data.edges),
+    controls: structuredClone(data.controls),
+    states: structuredClone(data.states ?? {}),
+    metrics: { ...data.metrics },
+    telegrams: [],
+    subscribers: new Set(),
+    tickTimer: null,
+    lastEventAt: Date.now(),
+  };
+  hub().set(id, session);
+  return session;
+}
+
+/** Load from memory or restore from DB — required for Vercel serverless SSE. */
+export async function getOrRestoreTwinSession(id: string): Promise<Session | undefined> {
+  const existing = hub().get(id);
+  if (existing?.active) return existing;
+  const persisted = await loadTwinSessionSnapshot(id);
+  if (!persisted?.active) return undefined;
+  return rehydrateTwinSession(id, persisted);
 }
 
 export function snapshot(session: Session): TwinSessionSnapshot {

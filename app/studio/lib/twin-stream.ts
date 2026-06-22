@@ -28,6 +28,8 @@ let singleton: DigitalTwinConnection | null = null;
 export class DigitalTwinConnection {
   private sessionId: string | null = null;
   private source: EventSource | null = null;
+  private sseRetries = 0;
+  private design: { nodes: DesignNode[]; edges: DesignEdge[]; controls: Record<string, ControlState> } | null = null;
   private state: TwinLiveState = {
     connection: 'idle',
     sessionId: null,
@@ -60,6 +62,8 @@ export class DigitalTwinConnection {
 
   async start(nodes: DesignNode[], edges: DesignEdge[], controls: Record<string, ControlState>): Promise<boolean> {
     await this.stop();
+    this.design = { nodes, edges, controls };
+    this.sseRetries = 0;
     this.patch({ connection: 'connecting' });
     try {
       const res = await fetch('/api/studio/simulation', {
@@ -70,22 +74,42 @@ export class DigitalTwinConnection {
       if (!res.ok) throw new Error('session create failed');
       const { sessionId } = (await res.json()) as { sessionId: string };
       this.sessionId = sessionId;
-      this.source = new EventSource(`/api/studio/simulation/${sessionId}`);
-      this.source.onopen = () => this.patch({ connection: 'connected', sessionId });
-      this.source.onerror = () => this.patch({ connection: 'error' });
-      this.source.onmessage = (msg) => {
-        try {
-          const event = JSON.parse(msg.data) as TwinEvent;
-          this.handleEvent(event);
-        } catch {
-          /* ignore */
-        }
-      };
+      this.openEventSource(sessionId);
       return true;
     } catch {
       this.patch({ connection: 'error', sessionId: null });
       return false;
     }
+  }
+
+  private openEventSource(sessionId: string) {
+    if (this.source) {
+      this.source.close();
+      this.source = null;
+    }
+    this.source = new EventSource(`/api/studio/simulation/${sessionId}`);
+    this.source.onopen = () => {
+      this.sseRetries = 0;
+      this.patch({ connection: 'connected', sessionId });
+    };
+    this.source.onerror = () => {
+      if (this.sseRetries < 4 && this.sessionId === sessionId) {
+        this.sseRetries += 1;
+        window.setTimeout(() => {
+          if (this.sessionId === sessionId) this.openEventSource(sessionId);
+        }, 600 * this.sseRetries);
+        return;
+      }
+      this.patch({ connection: 'error' });
+    };
+    this.source.onmessage = (msg) => {
+      try {
+        const event = JSON.parse(msg.data) as TwinEvent;
+        this.handleEvent(event);
+      } catch {
+        /* ignore */
+      }
+    };
   }
 
   private handleEvent(event: TwinEvent) {
@@ -143,6 +167,8 @@ export class DigitalTwinConnection {
       await fetch(`/api/studio/simulation?sessionId=${this.sessionId}`, { method: 'DELETE' }).catch(() => {});
     }
     this.sessionId = null;
+    this.design = null;
+    this.sseRetries = 0;
     this.patch({
       connection: 'idle',
       sessionId: null,

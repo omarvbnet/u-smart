@@ -4,9 +4,28 @@
 import { prisma } from '@/lib/prisma';
 import type { DesignFile } from '@/app/studio/lib/store';
 import type { Issue } from '@/app/studio/lib/engine/validation';
+import type { DesignEdge, DesignNode } from '@/app/studio/lib/model';
+import type { ControlState } from '@/app/studio/lib/controls';
+import type { NodeSimState } from '@/app/studio/lib/engine/simulate';
+import type { TwinMetrics } from '@/lib/studio-simulation-hub';
+
+/** Host project for browser-only twin sessions (no cloud project linked). */
+export const LOCAL_TWIN_PROJECT_ID = 'studio_local_twin_host';
+
+export type PersistedTwinSession = {
+  nodes: DesignNode[];
+  edges: DesignEdge[];
+  controls: Record<string, ControlState>;
+  states: Record<string, NodeSimState>;
+  metrics: TwinMetrics;
+  active: boolean;
+};
 
 type StudioDb = {
-  studioProject?: { findFirst: (args: unknown) => Promise<{ id: string } | null> };
+  studioProject?: {
+    findFirst: (args: unknown) => Promise<{ id: string } | null>;
+    create: (args: unknown) => Promise<unknown>;
+  };
   studioBuilding?: { upsert: (args: unknown) => Promise<{ id: string }> };
   studioFloor?: { upsert: (args: unknown) => Promise<{ id: string }> };
   studioRoom?: { deleteMany: (args: unknown) => Promise<unknown>; createMany: (args: unknown) => Promise<unknown> };
@@ -15,7 +34,11 @@ type StudioDb = {
     deleteMany: (args: unknown) => Promise<unknown>;
     createMany: (args: unknown) => Promise<unknown>;
   };
-  studioSimulationSession?: { create: (args: unknown) => Promise<unknown>; updateMany: (args: unknown) => Promise<unknown> };
+  studioSimulationSession?: {
+    findUnique: (args: unknown) => Promise<{ id: string; active: boolean; stateJson: unknown } | null>;
+    upsert: (args: unknown) => Promise<unknown>;
+    updateMany: (args: unknown) => Promise<unknown>;
+  };
   studioReport?: { create: (args: unknown) => Promise<unknown> };
 };
 
@@ -110,23 +133,75 @@ export async function persistSimulationSession(
   state: unknown,
   active: boolean,
 ): Promise<void> {
+  await persistTwinSessionSnapshot(sessionId, projectId, state as PersistedTwinSession, active);
+}
+
+async function ensureLocalTwinHostProject(): Promise<void> {
+  const d = db();
+  if (!d.studioProject) return;
+  const existing = await d.studioProject.findFirst({ where: { id: LOCAL_TWIN_PROJECT_ID } });
+  if (existing) return;
+  await d.studioProject.create({
+    data: {
+      id: LOCAL_TWIN_PROJECT_ID,
+      name: 'Local twin sessions',
+      buildingType: 'VILLA',
+      status: 'DRAFT',
+    },
+  });
+}
+
+/** Persist twin session so any serverless instance can restore the SSE stream. */
+export async function persistTwinSessionSnapshot(
+  sessionId: string,
+  projectId: string | null | undefined,
+  state: PersistedTwinSession,
+  active: boolean,
+): Promise<void> {
   const d = db();
   if (!d.studioSimulationSession) return;
+  const hostProjectId = projectId ?? LOCAL_TWIN_PROJECT_ID;
+  if (!projectId) await ensureLocalTwinHostProject();
+
   if (!active) {
     await d.studioSimulationSession.updateMany({
-      where: { projectId, active: true },
+      where: { id: sessionId },
       data: { active: false, endedAt: new Date() },
     });
     return;
   }
-  await d.studioSimulationSession.create({
-    data: {
+
+  await d.studioSimulationSession.upsert({
+    where: { id: sessionId },
+    create: {
       id: sessionId,
-      projectId,
+      projectId: hostProjectId,
       active: true,
       stateJson: state as object,
     },
+    update: {
+      active: true,
+      stateJson: state as object,
+      endedAt: null,
+    },
   });
+}
+
+export async function loadTwinSessionSnapshot(sessionId: string): Promise<PersistedTwinSession | null> {
+  const d = db();
+  if (!d.studioSimulationSession) return null;
+  const row = await d.studioSimulationSession.findUnique({ where: { id: sessionId } });
+  if (!row?.active || !row.stateJson || typeof row.stateJson !== 'object') return null;
+  const data = row.stateJson as Partial<PersistedTwinSession>;
+  if (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.controls) return null;
+  return {
+    nodes: data.nodes,
+    edges: data.edges,
+    controls: data.controls,
+    states: data.states ?? {},
+    metrics: data.metrics ?? { totalKw: 0, totalA: 0, activeDevices: 0, energisedDevices: 0 },
+    active: true,
+  };
 }
 
 export async function recordStudioReport(

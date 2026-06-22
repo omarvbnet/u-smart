@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   applyTwinSimState,
   createTwinSession,
+  getOrRestoreTwinSession,
   getTwinSession,
   stopTwinSession,
+  toPersistedTwinSession,
   updateTwinDesign,
 } from '@/lib/studio-simulation-hub';
 import type { DesignEdge, DesignNode } from '@/app/studio/lib/model';
 import type { ControlState } from '@/app/studio/lib/controls';
 import { runTwinTick } from '@/app/studio/lib/engine/twin-events';
-import { persistSimulationSession } from '@/lib/studio-db-sync';
+import { persistTwinSessionSnapshot } from '@/lib/studio-db-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,8 +32,9 @@ export async function POST(req: NextRequest) {
     const session = createTwinSession(body.nodes, body.edges, body.controls ?? {});
     const tick = runTwinTick(session.nodes, session.edges, session.controls);
     applyTwinSimState(session.id, tick.states, tick.metrics);
-    if (body.projectId) {
-      await persistSimulationSession(body.projectId, session.id, { metrics: tick.metrics }, true);
+    const live = getTwinSession(session.id);
+    if (live) {
+      await persistTwinSessionSnapshot(session.id, body.projectId, toPersistedTwinSession(live), true);
     }
     return NextResponse.json({ sessionId: session.id });
   } catch (e) {
@@ -44,6 +47,19 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('sessionId');
   if (!id) return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
   stopTwinSession(id);
+  await persistTwinSessionSnapshot(
+    id,
+    null,
+    {
+      nodes: [],
+      edges: [],
+      controls: {},
+      states: {},
+      metrics: { totalKw: 0, totalA: 0, activeDevices: 0, energisedDevices: 0 },
+      active: false,
+    },
+    false,
+  );
   return NextResponse.json({ ok: true });
 }
 
@@ -52,6 +68,8 @@ export async function PUT(req: NextRequest) {
   try {
     const body = (await req.json()) as CreateBody & { sessionId: string };
     if (!body.sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
+    const existing = await getOrRestoreTwinSession(body.sessionId);
+    if (!existing) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     const snap = updateTwinDesign(body.sessionId, {
       nodes: body.nodes,
       edges: body.edges,
@@ -60,6 +78,10 @@ export async function PUT(req: NextRequest) {
     if (!snap) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     const tick = runTwinTick(snap.nodes, snap.edges, snap.controls);
     applyTwinSimState(body.sessionId, tick.states, tick.metrics);
+    const live = await getOrRestoreTwinSession(body.sessionId);
+    if (live) {
+      await persistTwinSessionSnapshot(body.sessionId, body.projectId, toPersistedTwinSession(live), true);
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('[studio/simulation PUT]', e);
@@ -70,7 +92,7 @@ export async function PUT(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('sessionId');
   if (!id) return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
-  const session = getTwinSession(id);
+  const session = await getOrRestoreTwinSession(id);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   return NextResponse.json({
     id: session.id,
