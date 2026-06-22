@@ -7,12 +7,56 @@ import { createContext, createElement, useContext, useEffect, useMemo, useDeferr
 import { useStudio } from '../lib/store';
 import { createTranslator } from '../lib/i18n';
 import { getCatalogEntry } from '../lib/catalog';
-import { resolveNodes } from '../lib/model';
-import { calculateHvacLoads } from '../lib/engine/hvac-loads';
-import { calculateLightingDesign } from '../lib/engine/lighting-design';
-import { buildSmartTopology, isBusPowerAdequate } from '../lib/engine/smarthome-topology';
+import { resolveNodes, type DesignNode } from '../lib/model';
+import type { ProjectInfo } from '../lib/project';
+import { calculateHvacLoads, type HvacLoadReport } from '../lib/engine/hvac-loads';
+import { calculateLightingDesign, type LightingDesignReport } from '../lib/engine/lighting-design';
+import {
+  buildSmartTopology,
+  busPowerStatus,
+  isBusPowerAdequate,
+  type SmartTopologyReport,
+} from '../lib/engine/smarthome-topology';
 import { simulate } from '../lib/engine/simulate';
+import { busHealth } from '../lib/engine/bus';
 import { computeDesignAnalysis } from '../lib/design-analysis';
+
+const EMPTY_HVAC: HvacLoadReport = {
+  rooms: [],
+  totalCoolingKw: 0,
+  totalHeatingKw: 0,
+  totalBtu: 0,
+  recommendedSystems: [],
+  eer: 0,
+  annualKwhEstimate: 0,
+  assumptions: [],
+};
+
+const EMPTY_LIGHTING: LightingDesignReport = {
+  rooms: [],
+  totalPowerW: 0,
+  totalFixtures: 0,
+  assumptions: [],
+};
+
+function emptySmartReport(project: ProjectInfo, nodes: DesignNode[]): SmartTopologyReport {
+  return {
+    protocol: 'None',
+    devices: [],
+    totalBusMa: 0,
+    psuRequired: 0,
+    installedPsuMa: 0,
+    psuDeficitMa: 0,
+    busPowerOk: true,
+    busPower: busPowerStatus(project, nodes),
+    gateways: 0,
+    actuators: 0,
+    sensors: 0,
+    panels: 0,
+    health: busHealth(project, nodes),
+    assumptions: [],
+  };
+}
 
 /** Translator bound to the current locale. */
 export function useT() {
@@ -105,9 +149,9 @@ export function useAutonomousReports() {
   return useMemo(() => {
     if (canvasBooting || generatingProject || !project.setupComplete) {
       return {
-        hvac: { rooms: [], totalCoolingKw: 0, totalHeatingKw: 0, recommendedSystems: [] as const },
-        lighting: { rooms: [], totalPowerW: 0, totalFixtures: 0, assumptions: [] },
-        smart: { modules: [], busSegments: [], issues: [] },
+        hvac: EMPTY_HVAC,
+        lighting: EMPTY_LIGHTING,
+        smart: emptySmartReport(project, nodes),
         assumptions,
       };
     }
