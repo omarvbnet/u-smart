@@ -32,9 +32,10 @@ export async function detectRoomsFromMap(
     area: b.area,
   }));
 
-  const classified = classifyDetectedSpaces(scaled, mapX, mapY, mapWidth, mapHeight);
+  const roomsOnly = filterFurnitureNoise(scaled);
+  const classified = classifyDetectedSpaces(roomsOnly, mapX, mapY, mapWidth, mapHeight);
 
-  return scaled.map((r, i) => {
+  return roomsOnly.map((r, i) => {
     const c = classified[i]!;
     return {
       label: c.label,
@@ -58,6 +59,37 @@ export async function detectBimFromMap(
 ): Promise<BimModel> {
   const { data, w, h } = await rasterize(src, Math.min(900, mapWidth));
   return extractBimFromRaster(data, w, h, mapX, mapY, mapWidth, mapHeight);
+}
+
+type ScaledRegion = { x: number; y: number; width: number; height: number; area: number };
+
+/** Drop furniture / fixture symbols — too small vs real rooms on the plan. */
+function filterFurnitureNoise(regions: ScaledRegion[]): ScaledRegion[] {
+  if (regions.length <= 1) return regions;
+
+  const withMetrics = regions.map((r) => {
+    const areaM2 = (r.width / 50) * (r.height / 50);
+    const aspect = r.width / Math.max(1, r.height);
+    return { ...r, areaM2, aspect };
+  });
+
+  const maxArea = Math.max(...withMetrics.map((r) => r.area));
+  const maxM2 = Math.max(...withMetrics.map((r) => r.areaM2));
+  const minRoomM2 = Math.max(2.8, maxM2 * 0.045);
+
+  return withMetrics
+    .filter((r) => {
+      if (r.areaM2 >= minRoomM2) return true;
+      // Plausible WC only — roughly square, not a furniture sliver
+      if (r.areaM2 >= 0.95 && r.areaM2 <= 2.7 && r.aspect >= 0.55 && r.aspect <= 1.65) {
+        return r.area >= maxArea * 0.035;
+      }
+      // Drop blobs much smaller than the largest detected space (sofas, beds, tables, chairs)
+      if (r.area < maxArea * 0.07) return false;
+      if (r.areaM2 < 2.2) return false;
+      return true;
+    })
+    .map(({ x, y, width, height, area }) => ({ x, y, width, height, area }));
 }
 
 function estimateLightThreshold(data: Uint8ClampedArray): number {
@@ -108,7 +140,7 @@ async function findRoomRegions(
 ): Promise<BBox[]> {
   const visited = new Uint8Array(width * height);
   const boxes: BBox[] = [];
-  const minArea = (width * height) / 280;
+  const minArea = (width * height) / 220;
   let frameStart = typeof performance !== 'undefined' ? performance.now() : 0;
 
   const isFree = (x: number, y: number) => {

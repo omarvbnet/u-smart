@@ -79,6 +79,15 @@ function areaM2FromPx(width: number, height: number): number {
   return (width / 50) * (height / 50);
 }
 
+/** WC-sized toilet room — not furniture symbols (chairs, beds, small tables). */
+function looksLikeWc(m: DetectedRegionMetrics): boolean {
+  return m.areaM2 >= 0.95 && m.areaM2 <= 2.65 && m.aspect >= 0.55 && m.aspect <= 1.65;
+}
+
+function maxWcCount(roomCount: number): number {
+  return Math.min(4, Math.max(1, Math.ceil(roomCount * 0.12)));
+}
+
 /** Classify all detected regions — garages, WC, halls, dining, living, etc. */
 export function classifyDetectedSpaces(
   regions: { x: number; y: number; width: number; height: number; area: number }[],
@@ -108,6 +117,7 @@ export function classifyDetectedSpaces(
   let bedroomN = 0;
   let wcN = 0;
   let bathN = 0;
+  const wcCap = maxWcCount(metrics.length);
 
   const claim = (i: number, kind: RoomSpaceKind, unique = false) => {
     if (unique && used.has(kind)) return false;
@@ -127,19 +137,14 @@ export function classifyDetectedSpaces(
       claim(i, 'hall');
       continue;
     }
-    if (m.areaM2 < 2.8 && m.aspect < 2) {
+    if (looksLikeWc(m) && wcN < wcCap) {
       wcN++;
       claim(i, 'wc');
       continue;
     }
     if (m.areaM2 >= 2.8 && m.areaM2 < 6.5 && m.aspect < 1.75) {
-      if (wcN < bathN) {
-        wcN++;
-        claim(i, 'wc');
-      } else {
-        bathN++;
-        claim(i, 'bathroom');
-      }
+      bathN++;
+      claim(i, 'bathroom');
       continue;
     }
     if (m.areaM2 >= 6.5 && m.areaM2 < 11 && m.aspect < 1.55) {
@@ -206,7 +211,7 @@ export function classifyDetectedSpaces(
       continue;
     }
     if (m.areaM2 < 3) {
-      kinds[i] = 'wc';
+      kinds[i] = 'other';
       continue;
     }
     kinds[i] = m.rank % 4 === 3 ? 'office' : 'other';
