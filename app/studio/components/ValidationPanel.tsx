@@ -138,7 +138,7 @@ export function ValidationPanel() {
   const handleFixAll = () => {
     if (fixable.length === 0 || applyingFixes) return;
     setStatus(t('fixing'));
-    const started = applyAllFixes(fixable.map((i) => i.fix!));
+    const started = applyAllFixes();
     if (!started) setStatus(t('fixFailed'));
   };
 

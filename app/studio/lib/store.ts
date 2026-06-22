@@ -12,8 +12,8 @@ import {
   mergeFixableState,
   collectFixableFixes,
   prioritizeFixes,
-  affectedCableIdsForFix,
-  finalizeFixableState,
+  applyFixStep,
+  fixKey,
   type FixableState,
 } from './engine/apply-fix';
 import { translateNodesForRoomMove, nodeBelongsToRoom } from './engine/room-move';
@@ -27,6 +27,7 @@ import { assignAddresses, makeTelegram, type Telegram } from './engine/bus';
 import { defaultProject, normalizeProject, type ProjectInfo, type FloorPlanSource } from './project';
 import { blankFloorPlanDataUrl, floorPlanSizeForBuilding } from './blank-floor-plan';
 import { buildStarterDesign, enhanceDesignPlacement, generateProjectDesign } from './engine/starter-design';
+import { inferFinishMetaFromPlan } from './engine/plan-layout';
 import { invalidateDesignAnalysisCache } from './design-analysis';
 import {
   seedRoomsForBuilding,
@@ -183,6 +184,7 @@ type StudioState = {
   toggleSimulation: () => void;
 
   setMap: (src: string, width: number, height: number, bim?: BimModel | null) => void;
+  importMapAndAnalyze: (file: File) => Promise<{ rooms: number; walls: number }>;
   moveMap: (x: number, y: number) => void;
   setMapOpacity: (opacity: number) => void;
   clearMap: () => void;
@@ -361,15 +363,12 @@ function scheduleDeferredCableReroute(
 }
 
 let fixJobSeq = 0;
-const FIX_ALL_CAP = 64;
-const FIX_FRAME_BUDGET_MS = 10;
-const FIX_CABLE_REROUTE_BATCH = 6;
+const FIX_ALL_CAP = 48;
 
-/** Apply validation fixes in small idle chunks so Fix all stays responsive. */
+/** Re-validate and apply one fix per frame so each issue is resolved against current state. */
 function scheduleDeferredApplyAllFixes(
   getState: () => StudioState,
   setState: (patch: Partial<StudioState>) => void,
-  seedFixes?: Fix[],
 ): void {
   const jobId = ++fixJobSeq;
   setState({ applyingFixes: true, fixBatchResult: null, suppressCanvasFit: true });
@@ -377,24 +376,15 @@ function scheduleDeferredApplyAllFixes(
 
   if (typeof window === 'undefined') return;
 
-  // Double rAF so the spinner paints before any heavy work starts.
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
       if (jobId !== fixJobSeq) return;
 
       let state = fixableFrom(getState());
       let totalApplied = 0;
-      const affectedCableIds = new Set<string>();
-      const queue = prioritizeFixes(seedFixes?.length ? seedFixes : collectFixableFixes(state)).slice(0, FIX_ALL_CAP);
+      const skipped = new Set<string>();
 
-      if (!queue.length) {
-        setState({ applyingFixes: false, fixBatchResult: null, suppressCanvasFit: false });
-        return;
-      }
-
-      let index = 0;
-
-      const commitResult = () => {
+      const commitResult = (remaining: number) => {
         if (jobId !== fixJobSeq) return;
         const preFix = getState();
         window.requestAnimationFrame(() => {
@@ -405,7 +395,7 @@ function scheduleDeferredApplyAllFixes(
             controls: state.controls,
             applyingFixes: false,
             suppressCanvasFit: false,
-            fixBatchResult: { applied: totalApplied, remaining: -1 },
+            fixBatchResult: { applied: totalApplied, remaining },
           });
           invalidateDesignAnalysisCache();
           runWhenIdle(() => {
@@ -419,49 +409,38 @@ function scheduleDeferredApplyAllFixes(
         });
       };
 
-      const rerouteAffectedCables = (offset: number) => {
+      const processOne = () => {
         if (jobId !== fixJobSeq) return;
-        const ids = [...affectedCableIds];
-        const batch = ids.slice(offset, offset + FIX_CABLE_REROUTE_BATCH);
-        if (!batch.length) {
-          commitResult();
+        if (totalApplied >= FIX_ALL_CAP) {
+          runWhenIdle(() => {
+            if (jobId !== fixJobSeq) return;
+            const st = getState();
+            const remaining = collectFixableFixes({ ...state, activeFloorId: st.activeFloorId }).length;
+            commitResult(remaining);
+          });
           return;
         }
-        const batchSet = new Set(batch);
-        state = {
-          ...state,
-          nodes: state.nodes.map((n) => {
-            if (!batchSet.has(n.id)) return n;
-            if (getCatalogEntry(n.catalogId)?.domain !== 'cable') return n;
-            return rerouteCableNode(n, state.nodes, state.edges, state.rooms);
-          }),
-        };
-        window.requestAnimationFrame(() => rerouteAffectedCables(offset + batch.length));
-      };
 
-      const processFixes = () => {
-        if (jobId !== fixJobSeq) return;
-        const start = performance.now();
-        while (index < queue.length && performance.now() - start < FIX_FRAME_BUDGET_MS) {
-          const fix = queue[index]!;
-          index++;
-          const patch = applyFixPatch(state, fix, { deferCableRoute: true });
-          if (patch) {
-            state = mergeFixableState(state, patch);
-            totalApplied++;
-            for (const id of affectedCableIdsForFix(fix, patch, state)) affectedCableIds.add(id);
-          }
+        const fixes = prioritizeFixes(collectFixableFixes(state)).filter((f) => !skipped.has(fixKey(f)));
+        if (!fixes.length) {
+          const st = getState();
+          const remaining = collectFixableFixes({ ...state, activeFloorId: st.activeFloorId }).length;
+          commitResult(remaining);
+          return;
         }
-        if (index < queue.length) {
-          window.requestAnimationFrame(processFixes);
-        } else if (affectedCableIds.size > 0) {
-          window.requestAnimationFrame(() => rerouteAffectedCables(0));
+
+        const fix = fixes[0]!;
+        const result = applyFixStep(state, fix);
+        if (result.applied) {
+          state = result.state;
+          totalApplied++;
         } else {
-          commitResult();
+          skipped.add(fixKey(fix));
         }
+        window.requestAnimationFrame(processOne);
       };
 
-      window.requestAnimationFrame(processFixes);
+      window.requestAnimationFrame(processOne);
     });
   });
 }
@@ -887,7 +866,8 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   applyAllFixes: (fixes) => {
     if (get().applyingFixes) return false;
-    scheduleDeferredApplyAllFixes(get, set, fixes);
+    void fixes;
+    scheduleDeferredApplyAllFixes(get, set);
     return true;
   },
 
@@ -910,6 +890,94 @@ export const useStudio = create<StudioState>((set, get) => ({
       project: { ...get().project, floorPlanSource: 'import' },
       bim: bim ?? get().bim,
     }),
+
+  importMapAndAnalyze: async (file) => {
+    const { importMapFile } = await import('./import-map');
+    const { src, width, height, bim: cadBim } = await importMapFile(file);
+    const s0 = get();
+    const mapX = -width / 2;
+    const mapY = -height / 2;
+    const activeFloorId = s0.activeFloorId;
+
+    set({
+      map: { src, width, height, x: mapX, y: mapY, opacity: 0.85, mode: 'image' },
+      project: { ...s0.project, floorPlanSource: 'import' },
+      generatingProject: true,
+      suppressCanvasFit: true,
+      selectedRoomId: null,
+      selectedNodeId: null,
+    });
+    invalidateDesignAnalysisCache();
+
+    try {
+      const detected = await detectRooms(src, mapX, mapY, width, height);
+      let rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: activeFloorId }));
+
+      let bim: BimModel = cadBim ?? s0.bim ?? { walls: [], openings: [] };
+      if (!bim.walls.length) {
+        try {
+          bim = await detectBimFromMap(src, mapX, mapY, width, height);
+        } catch {
+          /* raster BIM optional */
+        }
+      }
+
+      const finishes = inferFinishMetaFromPlan(rooms, bim, activeFloorId);
+      bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
+
+      const pre = get();
+      if (rooms.length > 0 && pre.project.setupComplete) {
+        const result = generateProjectDesign(pre.project, rooms, pre.locale, activeFloorId);
+        const mergedBim: BimModel = {
+          walls: bim.walls.length ? bim.walls : result.bim.walls,
+          openings: [...(bim.openings ?? []), ...result.bim.openings],
+          gardens: bim.gardens ?? result.bim.gardens,
+          wallMeta: finishes.wallMeta,
+          ceilingMeta: finishes.ceilingMeta,
+        };
+        set(
+          withHistory(pre, {
+            rooms,
+            bim: mergedBim,
+            nodes: result.nodes,
+            edges: result.edges,
+            controls: result.controls,
+            designName: result.designName,
+            generatingProject: false,
+            suppressCanvasFit: false,
+            canvasFitSeq: pre.canvasFitSeq + 1,
+          }),
+        );
+        scheduleDeferredCableReroute(get, set);
+      } else if (rooms.length > 0) {
+        const pack = buildBimOpenings(rooms, pre.project, pre.locale, activeFloorId);
+        const nodes = mergeOpeningActuators(pre.nodes, pack.actuatorNodes);
+        set(
+          withHistory(pre, {
+            rooms,
+            bim: {
+              ...bim,
+              openings: [...(bim.openings ?? []), ...pack.bim.openings],
+            },
+            nodes,
+            controls: { ...pre.controls, ...pack.controls },
+            generatingProject: false,
+            suppressCanvasFit: false,
+            canvasFitSeq: pre.canvasFitSeq + 1,
+          }),
+        );
+      } else {
+        set({ bim, generatingProject: false, suppressCanvasFit: false });
+      }
+
+      invalidateDesignAnalysisCache();
+      return { rooms: rooms.length, walls: get().bim?.walls.length ?? 0 };
+    } catch (err) {
+      console.error('[U Smart Studio] map analysis failed', err);
+      set({ generatingProject: false, suppressCanvasFit: false });
+      return { rooms: 0, walls: 0 };
+    }
+  },
   moveMap: (x, y) => set((s) => (s.map ? { map: { ...s.map, x, y } } : s)),
   setMapOpacity: (opacity) => set((s) => (s.map ? { map: { ...s.map, opacity } } : s)),
   clearMap: () =>
@@ -1559,7 +1627,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const s = get();
     if (!s.map?.src || s.map.mode === 'blank') return 0;
     const detected = await detectRooms(s.map.src, s.map.x, s.map.y, s.map.width, s.map.height);
-    const rooms = detected.map((r) => ({ ...r, id: uid('room') }));
+    const rooms = detected.map((r) => ({ ...r, id: uid('room'), floorId: s.activeFloorId }));
     let bim = s.bim;
     if (!bim || bim.walls.length === 0) {
       try {
@@ -1568,6 +1636,8 @@ export const useStudio = create<StudioState>((set, get) => ({
         /* optional */
       }
     }
+    const finishes = inferFinishMetaFromPlan(rooms, bim, s.activeFloorId);
+    if (bim) bim = { ...bim, wallMeta: finishes.wallMeta, ceilingMeta: finishes.ceilingMeta };
     set({ rooms, bim, selectedRoomId: null });
     return rooms.length;
   },

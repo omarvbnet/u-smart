@@ -44,6 +44,7 @@ function RoomMesh({
   label,
   elevation,
   ceiling,
+  zone,
 }: {
   x: number;
   y: number;
@@ -52,26 +53,38 @@ function RoomMesh({
   label: string;
   elevation: number;
   ceiling?: CeilingMeta;
+  zone?: string;
 }) {
   const cx = pxToM(x + w / 2);
   const cz = pxToM(y + h / 2);
   const mw = pxToM(w);
   const mh = pxToM(h);
-  const ceilMat = ceiling3dMaterial(ceiling);
+  const ceilMat = ceiling3dMaterial(ceiling, { interiorView: true });
+  const floorTint =
+    zone === 'kitchen'
+      ? '#e7e5e4'
+      : zone === 'bathroom'
+        ? '#e0f2fe'
+        : zone === 'bedroom'
+          ? '#f1f5f9'
+          : '#e2e8f0';
   return (
     <group position={[cx, elevation, cz]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0.02, 0]}>
         <planeGeometry args={[mw, mh]} />
-        <meshStandardMaterial color="#e2e8f0" transparent opacity={0.85} />
+        <meshStandardMaterial color={floorTint} roughness={0.9} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 2.78, 0]}>
         <planeGeometry args={[mw * 0.98, mh * 0.98]} />
-        <meshStandardMaterial color={ceilMat.color} roughness={ceilMat.roughness} />
+        <meshStandardMaterial
+          color={ceilMat.color}
+          roughness={ceilMat.roughness}
+          transparent={ceilMat.transparent}
+          opacity={ceilMat.opacity}
+          depthWrite={ceilMat.depthWrite}
+          side={THREE.DoubleSide}
+        />
       </mesh>
-      <lineSegments position={[0, 1.4, 0]}>
-        <edgesGeometry args={[new THREE.BoxGeometry(mw, 2.8, mh)]} />
-        <lineBasicMaterial color="#64748b" />
-      </lineSegments>
       <Text position={[0, 2.9, 0]} fontSize={0.25} color="#475569" anchorX="center">
         {label}
       </Text>
@@ -199,7 +212,7 @@ function WallMesh({ wall, elevation }: { wall: DesignWall; elevation: number }) 
   const cz = pxToM((wall.y1 + wall.y2) / 2);
   const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);
   const heightM = wall.heightM ?? 2.8;
-  const mat = wall3dMaterial(wall);
+  const mat = wall3dMaterial(wall, { interiorView: true });
   return (
     <mesh position={[cx, elevation + heightM / 2, cz]} rotation={[0, -angle, 0]} castShadow receiveShadow>
       <boxGeometry args={[pxToM(len), heightM, pxToM(Math.max(4, wall.thickness * 4))]} />
@@ -209,6 +222,8 @@ function WallMesh({ wall, elevation }: { wall: DesignWall; elevation: number }) 
         metalness={mat.metalness}
         transparent={mat.transparent}
         opacity={mat.opacity}
+        depthWrite={mat.depthWrite}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );
@@ -559,6 +574,7 @@ function SceneContent() {
           label={r.label}
           elevation={elevation}
           ceiling={bim?.ceilingMeta?.[r.id]}
+          zone={r.zone}
         />
       ))}
       {walls.map((w) => (

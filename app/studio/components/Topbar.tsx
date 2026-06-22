@@ -5,7 +5,6 @@ import StudioLogo from './StudioLogo';
 import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { STUDIO_LOCALES, LOCALE_LABELS, type StudioLocale } from '../lib/i18n';
-import { importMapFile } from '../lib/import-map';
 import { exportDesignPdf, type FloorMapCapture } from '../lib/export-pdf';
 import { ReportsModal } from './ReportsModal';
 import { ShareModal } from './ShareModal';
@@ -32,7 +31,6 @@ export function Topbar() {
   const showDeclarations = useStudio((s) => s.showDeclarations);
   const toggleDeclarations = useStudio((s) => s.toggleDeclarations);
   const map = useStudio((s) => s.map);
-  const setMap = useStudio((s) => s.setMap);
   const clearMap = useStudio((s) => s.clearMap);
   const createMapFromZero = useStudio((s) => s.createMapFromZero);
   const pendingMapImport = useStudio((s) => s.pendingMapImport);
@@ -64,8 +62,8 @@ export function Topbar() {
   const handleMapFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      const { src, width, height, bim } = await importMapFile(file);
-      setMap(src, width, height, bim ?? null);
+      const importMapAndAnalyze = useStudio.getState().importMapAndAnalyze;
+      await importMapAndAnalyze(file);
     } catch (e) {
       console.error(e);
     }

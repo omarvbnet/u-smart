@@ -453,7 +453,17 @@ export function mergeFixableState(s: FixableState, patch: FixPatch): FixableStat
   };
 }
 
-function fixKey(f: Fix): string {
+/** Apply one fix with cable finalize — re-validate after each call in fix-all loops. */
+export function applyFixStep(state: FixableState, fix: Fix): { state: FixableState; applied: boolean } {
+  const patch = applyFixPatch(state, fix);
+  if (!patch) return { state, applied: false };
+  let merged = mergeFixableState(state, patch);
+  const affected = affectedCableIdsForFix(fix, patch, merged);
+  if (affected.size > 0) merged = finalizeFixableState(merged, affected);
+  return { state: merged, applied: true };
+}
+
+export function fixKey(f: Fix): string {
   switch (f.kind) {
     case 'setParam':
       return `setParam:${f.nodeId}:${f.key}`;

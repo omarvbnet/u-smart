@@ -9,17 +9,22 @@ import { extractBimFromRaster } from './bim-extract';
 
 export type DetectedRoom = Omit<DesignRoom, 'id'>;
 
-const ROOM_LABELS = ['Living', 'Kitchen', 'Bedroom', 'Bathroom', 'Office', 'Corridor', 'Storage', 'MEP'];
-const ZONE_BY_LABEL: Record<string, DesignRoom['zone']> = {
-  Living: 'general',
-  Kitchen: 'kitchen',
-  Bedroom: 'bedroom',
-  Bathroom: 'bathroom',
-  Office: 'office',
-  Corridor: 'corridor',
-  Storage: 'general',
-  MEP: 'mechanical',
-};
+function labelRoomFromShape(
+  rank: number,
+  area: number,
+  totalArea: number,
+  aspect: number,
+): { label: string; zone: DesignRoom['zone'] } {
+  if (aspect > 3.2 || aspect < 0.32) return { label: 'Corridor', zone: 'corridor' };
+  const share = area / Math.max(1, totalArea);
+  if (rank === 0) return { label: 'Living', zone: 'general' };
+  if (share < 0.06) return { label: 'Bathroom', zone: 'bathroom' };
+  if (share < 0.09 && aspect < 1.4) return { label: 'Storage', zone: 'general' };
+  if (rank === 1 && share > 0.12) return { label: 'Kitchen', zone: 'kitchen' };
+  if (rank % 3 === 2) return { label: 'Office', zone: 'office' };
+  if (rank % 2 === 1) return { label: `Bedroom ${Math.ceil(rank / 2)}`, zone: 'bedroom' };
+  return { label: `Room ${rank + 1}`, zone: 'general' };
+}
 
 type BBox = { x: number; y: number; w: number; h: number; area: number };
 
@@ -31,31 +36,22 @@ export async function detectRoomsFromMap(
   mapWidth: number,
   mapHeight: number,
 ): Promise<DetectedRoom[]> {
-  const { data, w, h } = await rasterize(src, Math.min(900, mapWidth));
-  const boxes = findRoomRegions(data, w, h);
-  const scaled = boxes
-    .sort((a, b) => b.area - a.area)
-    .slice(0, 12)
-    .map((b) => ({
-      x: mapX + (b.x / w) * mapWidth,
-      y: mapY + (b.y / h) * mapHeight,
-      width: Math.max(60, (b.w / w) * mapWidth),
-      height: Math.max(50, (b.h / h) * mapHeight),
-    }));
+  const { data, w, h, threshold } = await rasterize(src, Math.min(1200, mapWidth));
+  const boxes = findRoomRegions(data, w, h, threshold);
+  const ranked = boxes.sort((a, b) => b.area - a.area).slice(0, 20);
+  const totalArea = ranked.reduce((sum, b) => sum + b.area, 0);
+  const scaled = ranked.map((b) => ({
+    x: mapX + (b.x / w) * mapWidth,
+    y: mapY + (b.y / h) * mapHeight,
+    width: Math.max(60, (b.w / w) * mapWidth),
+    height: Math.max(50, (b.h / h) * mapHeight),
+    area: b.area,
+  }));
 
   return scaled.map((r, i) => {
     const aspect = r.width / Math.max(1, r.height);
-    const label = ROOM_LABELS[i] ?? `Room ${i + 1}`;
-    let zone = ZONE_BY_LABEL[label] ?? 'general';
-    if (aspect > 3.2 || aspect < 0.32) zone = 'corridor';
-    return {
-      label: zone === 'corridor' && !label.toLowerCase().includes('corridor') ? 'Corridor' : label,
-      zone,
-      x: r.x,
-      y: r.y,
-      width: r.width,
-      height: r.height,
-    };
+    const { label, zone } = labelRoomFromShape(i, r.area, totalArea, aspect);
+    return { label, zone, x: r.x, y: r.y, width: r.width, height: r.height };
   });
 }
 
@@ -71,7 +67,20 @@ export async function detectBimFromMap(
   return extractBimFromRaster(data, w, h, mapX, mapY, mapWidth, mapHeight);
 }
 
-async function rasterize(src: string, maxW: number): Promise<{ data: Uint8ClampedArray; w: number; h: number }> {
+function estimateLightThreshold(data: Uint8ClampedArray): number {
+  const samples: number[] = [];
+  for (let i = 0; i < data.length; i += 16) {
+    samples.push((data[i]! + data[i + 1]! + data[i + 2]!) / 3);
+  }
+  samples.sort((a, b) => a - b);
+  const median = samples[Math.floor(samples.length / 2)] ?? 180;
+  return Math.min(210, Math.max(150, median + 18));
+}
+
+async function rasterize(
+  src: string,
+  maxW: number,
+): Promise<{ data: Uint8ClampedArray; w: number; h: number; threshold: number }> {
   const img = await loadImage(src);
   const scale = Math.min(1, maxW / img.naturalWidth);
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -84,7 +93,8 @@ async function rasterize(src: string, maxW: number): Promise<{ data: Uint8Clampe
   ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0, w, h);
   const imageData = ctx.getImageData(0, 0, w, h);
-  return { data: imageData.data, w, h };
+  const threshold = estimateLightThreshold(imageData.data);
+  return { data: imageData.data, w, h, threshold };
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -97,16 +107,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /** Flood-fill light pixels to find room-like regions. */
-function findRoomRegions(data: Uint8ClampedArray, width: number, height: number): BBox[] {
+function findRoomRegions(data: Uint8ClampedArray, width: number, height: number, threshold: number): BBox[] {
   const visited = new Uint8Array(width * height);
   const boxes: BBox[] = [];
-  const minArea = (width * height) / 200;
+  const minArea = (width * height) / 250;
 
   const isFree = (x: number, y: number) => {
     if (x < 1 || y < 1 || x >= width - 1 || y >= height - 1) return false;
     const i = (y * width + x) * 4;
     const lum = (data[i]! + data[i + 1]! + data[i + 2]!) / 3;
-    return lum > 175;
+    return lum > threshold;
   };
 
   for (let y = 2; y < height - 2; y += 4) {

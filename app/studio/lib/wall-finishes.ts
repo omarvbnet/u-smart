@@ -117,29 +117,57 @@ export function wallPlanStyle(w: {
   };
 }
 
-export function wall3dMaterial(w: {
-  color?: string;
-  wallType?: WallType;
-  decoration?: WallDecoration;
-  outdoor?: boolean;
-}): { color: string; roughness: number; metalness: number; transparent: boolean; opacity: number } {
+export function wall3dMaterial(
+  w: {
+    color?: string;
+    wallType?: WallType;
+    decoration?: WallDecoration;
+    outdoor?: boolean;
+  },
+  opts?: { interiorView?: boolean },
+): {
+  color: string;
+  roughness: number;
+  metalness: number;
+  transparent: boolean;
+  opacity: number;
+  depthWrite: boolean;
+} {
   const color = resolveWallColor(w);
   const glass = w.wallType === 'glass';
   const stone = w.wallType === 'stone' || w.wallType === 'brick';
+  if (opts?.interiorView) {
+    return {
+      color,
+      roughness: glass ? 0.04 : stone ? 0.85 : 0.65,
+      metalness: glass ? 0.35 : 0,
+      transparent: true,
+      opacity: glass ? 0.18 : w.wallType === 'partition' ? 0.28 : 0.38,
+      depthWrite: false,
+    };
+  }
   return {
     color,
     roughness: glass ? 0.05 : stone ? 0.95 : 0.75,
     metalness: glass ? 0.2 : 0,
     transparent: glass,
     opacity: glass ? 0.35 : 1,
+    depthWrite: !glass,
   };
 }
 
-export function ceiling3dMaterial(meta: CeilingMeta | undefined): { color: string; roughness: number } {
+export function ceiling3dMaterial(
+  meta: CeilingMeta | undefined,
+  opts?: { interiorView?: boolean },
+): { color: string; roughness: number; transparent: boolean; opacity: number; depthWrite: boolean } {
   const type = meta?.ceilingType ?? 'flat';
   const preset = CEILING_TYPES.find((c) => c.id === type);
-  return {
+  const base = {
     color: meta?.color ?? preset?.defaultColor ?? '#ffffff',
     roughness: type === 'acoustic' ? 0.95 : type === 'coffered' ? 0.6 : 0.85,
   };
+  if (opts?.interiorView) {
+    return { ...base, transparent: true, opacity: 0.22, depthWrite: false };
+  }
+  return { ...base, transparent: false, opacity: 1, depthWrite: true };
 }
