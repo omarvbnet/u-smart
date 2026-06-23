@@ -33,11 +33,7 @@ import { floorCountRange } from '../lib/engine/floor-layout';
 type FloorPlanChoice = 'zero' | 'import' | 'skip';
 type RoomDistribution = 'perFloor' | 'groundOnly';
 
-type Props = {
-  onComplete: () => void;
-};
-
-export function SetupWizard({ onComplete }: Props) {
+export function SetupWizard() {
   const t = useT();
   const locale = useStudio((s) => s.locale);
   const completeWizard = useStudio((s) => s.completeWizard);
@@ -131,7 +127,6 @@ export function SetupWizard({ onComplete }: Props) {
       floorPlanSource: fp === 'zero' ? 'zero' : fp === 'import' ? 'import' : 'none',
       designMode: manualMode ? 'manual' : 'assisted',
     };
-    onComplete();
     if (projectBrief.trim() && mode === 'generate') {
       completeWizard(finalized, {
         generateDesign: false,

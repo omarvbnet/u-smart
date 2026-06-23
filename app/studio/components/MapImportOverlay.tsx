@@ -30,10 +30,10 @@ export function MapImportOverlay() {
   const busy = generatingProject || canvasBooting || importActive;
   if (!busy) return null;
 
-  if (!importActive) {
-    return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-8 py-6 shadow-2xl">
+  const panel = (
+    <div className="w-full max-w-sm rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-6 py-5 shadow-2xl">
+      {!importActive ? (
+        <div className="flex flex-col items-center gap-3 py-2">
           <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
           <p className="text-sm font-semibold text-[var(--studio-text)]">
             {generatingProject ? t('generatingProject') : t('openingPlan')}
@@ -42,59 +42,59 @@ export function MapImportOverlay() {
             {generatingProject ? t('generatingProjectHint') : t('openingPlanHint')}
           </p>
         </div>
-      </div>
-    );
-  }
+      ) : (
+        <>
+          <div className="mb-4 flex items-center gap-2">
+            {phase === 'error' ? (
+              <span className="text-sm font-bold text-red-400">{t('mapImportError')}</span>
+            ) : phase === 'done' ? (
+              <>
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                <span className="text-sm font-bold text-emerald-300">{t('mapImportDone')}</span>
+              </>
+            ) : (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
+                <span className="text-sm font-bold text-[var(--studio-text)]">{t('openingPlan')}</span>
+              </>
+            )}
+          </div>
 
-  const activeIdx = stepIndex(phase);
-  const isError = phase === 'error';
+          {detail && <p className="mb-3 truncate text-[11px] text-[var(--studio-muted)]">{detail}</p>}
+
+          <ol className="space-y-2">
+            {STEPS.map((step, i) => {
+              const activeIdx = stepIndex(phase);
+              const done = activeIdx > i || phase === 'done';
+              const active = ORDER[i] === phase;
+              return (
+                <li key={step.phase} className="flex items-center gap-2.5 text-xs">
+                  {done ? (
+                    <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-400" />
+                  ) : active ? (
+                    <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-cyan-400" />
+                  ) : (
+                    <Circle className="h-4 w-4 flex-shrink-0 text-[var(--studio-border)]" />
+                  )}
+                  <span
+                    className={
+                      done ? 'text-emerald-300' : active ? 'font-semibold text-cyan-200' : 'text-[var(--studio-muted)]'
+                    }
+                  >
+                    {t(step.key)}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+    </div>
+  );
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
-      <div className="w-full max-w-sm rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-6 py-5 shadow-2xl">
-        <div className="mb-4 flex items-center gap-2">
-          {isError ? (
-            <span className="text-sm font-bold text-red-400">{t('mapImportError')}</span>
-          ) : phase === 'done' ? (
-            <>
-              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-              <span className="text-sm font-bold text-emerald-300">{t('mapImportDone')}</span>
-            </>
-          ) : (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
-              <span className="text-sm font-bold text-[var(--studio-text)]">{t('openingPlan')}</span>
-            </>
-          )}
-        </div>
-
-        {detail && <p className="mb-3 truncate text-[11px] text-[var(--studio-muted)]">{detail}</p>}
-
-        <ol className="space-y-2">
-          {STEPS.map((step, i) => {
-            const done = activeIdx > i || phase === 'done';
-            const active = ORDER[i] === phase;
-            return (
-              <li key={step.phase} className="flex items-center gap-2.5 text-xs">
-                {done ? (
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-400" />
-                ) : active ? (
-                  <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-cyan-400" />
-                ) : (
-                  <Circle className="h-4 w-4 flex-shrink-0 text-[var(--studio-border)]" />
-                )}
-                <span
-                  className={
-                    done ? 'text-emerald-300' : active ? 'font-semibold text-cyan-200' : 'text-[var(--studio-muted)]'
-                  }
-                >
-                  {t(step.key)}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
+    <div className="pointer-events-none absolute inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+      <div className="pointer-events-auto w-full max-w-sm">{panel}</div>
     </div>
   );
 }

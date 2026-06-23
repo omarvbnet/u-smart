@@ -61,6 +61,7 @@ export function WorkspaceEditor() {
 
   return (
     <>
+      <div className="flex min-h-0 min-w-0 flex-1">
       {!clientMode && (
         <aside className="hidden w-[260px] flex-shrink-0 border-e border-[var(--studio-border)] bg-[var(--studio-panel)] md:block">
           <Palette />
@@ -152,6 +153,7 @@ export function WorkspaceEditor() {
           {!clientMode && tab === 'project' && <ProjectPanel />}
         </div>
       </aside>
+      </div>
     </>
   );
 }

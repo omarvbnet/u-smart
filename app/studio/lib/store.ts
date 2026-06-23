@@ -1046,7 +1046,14 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   removeEdge: (id) => set((s) => withHistory(s, { edges: s.edges.filter((e) => e.id !== id) })),
 
-  clear: () =>
+  clear: () => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem('studio.design');
+      } catch {
+        /* ignore */
+      }
+    }
     set({
       nodes: [],
       edges: [],
@@ -1070,7 +1077,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       generatingProject: false,
       historyPast: [],
       historyFuture: [],
-    }),
+    });
+  },
 
   loadSample: () => {
     const { nodes, edges, name } = buildSampleDesign(get().locale);
@@ -2057,6 +2065,10 @@ export const useStudio = create<StudioState>((set, get) => ({
           const restored = normalizeProject(file.project);
           if (restored.setupComplete) {
             get().loadDesign(file);
+            const st = get();
+            if (isDesignContentEmpty(st)) {
+              set({ project: { ...st.project, setupComplete: false } });
+            }
           } else {
             set({ project: restored });
           }
@@ -2608,6 +2620,7 @@ if (typeof window !== 'undefined') {
       runWhenIdle(() => {
         const st = useStudio.getState();
         if (st.generatingProject || st.applyingFixes || st.canvasBooting) return;
+        if (isDesignContentEmpty(st)) return;
         const file: DesignFile = {
           version: 1,
           designName: st.designName,
@@ -2629,6 +2642,10 @@ if (typeof window !== 'undefined') {
       });
     }, 900);
   });
+}
+
+function isDesignContentEmpty(st: Pick<StudioState, 'map' | 'rooms' | 'nodes'>): boolean {
+  return !st.map && st.rooms.length === 0 && st.nodes.length === 0;
 }
 
 function collectIssues(st: Pick<StudioState, 'nodes' | 'edges' | 'rooms' | 'project' | 'activeFloorId'>): Issue[] {

@@ -1,17 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Topbar } from './Topbar';
 import { WorkspaceEditor } from './WorkspaceEditor';
 import { SetupWizard } from './SetupWizard';
 import { MapImportOverlay } from './MapImportOverlay';
 import { useStudio } from '../lib/store';
-import { useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
 import { readShareFromHash } from '../lib/share';
 
 export function Workspace() {
-  const t = useT();
   const theme = useStudio((s) => s.theme);
   const locale = useStudio((s) => s.locale);
   const hydrate = useStudio((s) => s.hydrate);
@@ -21,14 +19,10 @@ export function Workspace() {
   const redo = useStudio((s) => s.redo);
   const applyingFixes = useStudio((s) => s.applyingFixes);
   const project = useStudio((s) => s.project);
-  const [wizardOpen, setWizardOpen] = useState(false);
   const rtl = RTL_LOCALES.has(locale);
 
-  const showEditor = project.setupComplete && !wizardOpen;
-
-  useEffect(() => {
-    if (!project.setupComplete) setWizardOpen(true);
-  }, [project.setupComplete]);
+  const showWizard = !project.setupComplete;
+  const showEditor = project.setupComplete;
 
   useEffect(() => {
     const shared = readShareFromHash();
@@ -38,8 +32,6 @@ export function Workspace() {
     } else {
       hydrate();
     }
-    const p = useStudio.getState().project;
-    if (!p.setupComplete) setWizardOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -77,16 +69,16 @@ export function Workspace() {
 
       <div className="relative flex min-h-0 flex-1">
         {showEditor ? (
-          <div className="relative min-h-0 flex-1">
+          <div className="relative flex min-h-0 min-w-0 flex-1">
             <WorkspaceEditor />
             <MapImportOverlay />
           </div>
         ) : (
-          <div className="relative min-h-0 flex-1 bg-[var(--studio-bg)]" />
+          <div className="min-h-0 flex-1 bg-[var(--studio-bg)]" />
         )}
       </div>
 
-      {wizardOpen && <SetupWizard onComplete={() => setWizardOpen(false)} />}
+      {showWizard && <SetupWizard />}
     </div>
   );
 }
