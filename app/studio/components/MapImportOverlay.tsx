@@ -24,14 +24,23 @@ export function MapImportOverlay() {
   const phase = useStudio((s) => s.mapImportPhase);
   const detail = useStudio((s) => s.mapImportDetail);
   const generatingProject = useStudio((s) => s.generatingProject);
+  const canvasBooting = useStudio((s) => s.canvasBooting);
 
-  if (phase === 'idle' && !generatingProject) return null;
-  if (phase === 'idle' && generatingProject) {
+  const importActive = phase !== 'idle';
+  const busy = generatingProject || canvasBooting || importActive;
+  if (!busy) return null;
+
+  if (!importActive) {
     return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-8 py-6 shadow-2xl">
           <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
-          <p className="text-sm font-semibold text-[var(--studio-text)]">{t('generatingProject')}</p>
+          <p className="text-sm font-semibold text-[var(--studio-text)]">
+            {generatingProject ? t('generatingProject') : t('openingPlan')}
+          </p>
+          <p className="max-w-xs text-center text-xs text-[var(--studio-muted)]">
+            {generatingProject ? t('generatingProjectHint') : t('openingPlanHint')}
+          </p>
         </div>
       </div>
     );
@@ -41,7 +50,7 @@ export function MapImportOverlay() {
   const isError = phase === 'error';
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
       <div className="w-full max-w-sm rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-6 py-5 shadow-2xl">
         <div className="mb-4 flex items-center gap-2">
           {isError ? (

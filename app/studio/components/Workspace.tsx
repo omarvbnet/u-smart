@@ -9,7 +9,6 @@ import { useStudio } from '../lib/store';
 import { useT } from './hooks';
 import { RTL_LOCALES } from '../lib/i18n';
 import { readShareFromHash } from '../lib/share';
-import { Loader2 } from 'lucide-react';
 
 export function Workspace() {
   const t = useT();
@@ -21,15 +20,11 @@ export function Workspace() {
   const undo = useStudio((s) => s.undo);
   const redo = useStudio((s) => s.redo);
   const applyingFixes = useStudio((s) => s.applyingFixes);
-  const generatingProject = useStudio((s) => s.generatingProject);
-  const canvasBooting = useStudio((s) => s.canvasBooting);
-  const mapImportPhase = useStudio((s) => s.mapImportPhase);
   const project = useStudio((s) => s.project);
   const [wizardOpen, setWizardOpen] = useState(false);
   const rtl = RTL_LOCALES.has(locale);
 
-  const importingMap = mapImportPhase !== 'idle';
-  const showEditor = project.setupComplete && !wizardOpen && !canvasBooting && (!generatingProject || importingMap);
+  const showEditor = project.setupComplete && !wizardOpen;
 
   useEffect(() => {
     if (!project.setupComplete) setWizardOpen(true);
@@ -87,21 +82,7 @@ export function Workspace() {
             <MapImportOverlay />
           </div>
         ) : (
-          <div className="relative min-h-0 flex-1 bg-[var(--studio-bg)]">
-            {(generatingProject || canvasBooting) && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] px-8 py-6 shadow-2xl">
-                  <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
-                  <p className="text-sm font-semibold text-[var(--studio-text)]">
-                    {generatingProject ? t('generatingProject') : t('openingPlan')}
-                  </p>
-                  <p className="max-w-xs text-center text-xs text-[var(--studio-muted)]">
-                    {generatingProject ? t('generatingProjectHint') : t('openingPlanHint')}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+          <div className="relative min-h-0 flex-1 bg-[var(--studio-bg)]" />
         )}
       </div>
 

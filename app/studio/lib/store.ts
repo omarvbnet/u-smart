@@ -1136,15 +1136,26 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
     invalidateDesignAnalysisCache();
 
+    let mapX = 0;
+    let mapY = 0;
+    let mapWidth = 0;
+    let mapHeight = 0;
+    let mapSrc = '';
+
     try {
       const { src, width, height, bim: cadBim } = await importMapFile(file);
       await yieldToMain();
 
-      const mapX = -width / 2;
-      const mapY = -height / 2;
+      mapX = -width / 2;
+      mapY = -height / 2;
+      mapWidth = width;
+      mapHeight = height;
+      mapSrc = src;
+
+      const mapBg = { src, width, height, x: mapX, y: mapY, opacity: 0.85, mode: 'image' as const };
 
       set({
-        map: { src, width, height, x: mapX, y: mapY, opacity: 0.85, mode: 'image' },
+        map: mapBg,
         project,
       });
 
@@ -1153,7 +1164,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         (phase) => set({ mapImportPhase: phase }),
       );
 
-      let rooms =
+      const rooms =
         detectedRooms.length > 0
           ? detectedRooms
           : fallbackRoomsForMap(mapX, mapY, width, height, activeFloorId, bim);
@@ -1175,6 +1186,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           pre,
           {
             project,
+            map: mapBg,
             rooms,
             nodes: result.nodes,
             edges: result.edges,
@@ -1205,6 +1217,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         }
         await finalizeProjectGeneration(get, set, pre, {
           project,
+          map: mapBg,
           rooms,
           bim: mergedBim,
           nodes,
@@ -1220,19 +1233,26 @@ export const useStudio = create<StudioState>((set, get) => ({
 
       set({ mapImportPhase: 'done' });
       invalidateDesignAnalysisCache();
-      runWhenIdle(() => set({ mapImportPhase: 'idle', mapImportDetail: null }));
       return { rooms: rooms.length, walls: get().bim?.walls.length ?? 0 };
     } catch (err) {
       console.error('[U Smart Studio] map analysis failed', err);
       set({
-        generatingProject: false,
-        canvasBooting: false,
-        suppressCanvasFit: false,
         mapImportPhase: 'error',
         mapImportDetail: err instanceof Error ? err.message : 'import failed',
       });
-      runWhenIdle(() => set({ mapImportPhase: 'idle', mapImportDetail: null }));
+      if (mapSrc) {
+        set({
+          map: { src: mapSrc, width: mapWidth, height: mapHeight, x: mapX, y: mapY, opacity: 0.85, mode: 'image' },
+        });
+      }
       return { rooms: 0, walls: 0 };
+    } finally {
+      set({
+        generatingProject: false,
+        canvasBooting: false,
+        suppressCanvasFit: false,
+      });
+      runWhenIdle(() => set({ mapImportPhase: 'idle', mapImportDetail: null }));
     }
   },
   moveMap: (x, y) => set((s) => (s.map ? { map: { ...s.map, x, y } } : s)),
@@ -1349,6 +1369,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         selectedWallId: null,
         generatingProject: false,
         canvasBooting: false,
+        canvasFitSeq: s.canvasFitSeq + 1,
         historyPast: [],
         historyFuture: [],
       });
@@ -1380,8 +1401,9 @@ export const useStudio = create<StudioState>((set, get) => ({
         floorPlanTool: 'select',
         pendingMapImport: false,
         pendingGenerateAfterImport: options.generateDesign,
-        generatingProject: false,
+        generatingProject: !!importFile,
         canvasBooting: false,
+        canvasFitSeq: s.canvasFitSeq + 1,
       });
       startMapImport(options.generateDesign);
       return;
@@ -1437,12 +1459,12 @@ export const useStudio = create<StudioState>((set, get) => ({
           const pack = buildBimOpenings(rooms, mergedProject, s.locale, floors[0]!.id);
           bim = { walls: bim?.walls ?? [], openings: pack.bim.openings, gardens: bim?.gardens ?? [] };
         }
-        set({ ...basePatch, nodes, edges, controls, bim, generatingProject: false });
+        set({ ...basePatch, nodes, edges, controls, bim, generatingProject: false, canvasFitSeq: s.canvasFitSeq + 1 });
       };
 
       const needsIdle = rooms.length > 4 || mergedProject.smartBuilding;
       if (needsIdle) {
-        set({ ...basePatch, generatingProject: true, nodes: [], edges: [], controls: {}, bim: null });
+        set({ ...basePatch, generatingProject: true, nodes: [], edges: [], controls: {}, bim: null, canvasFitSeq: s.canvasFitSeq + 1 });
         runWhenIdle(applyBlankProject);
       } else {
         applyBlankProject();
@@ -1459,6 +1481,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       controls: {},
       bim: null,
       designName: s.designName,
+      canvasFitSeq: s.canvasFitSeq + 1,
     });
 
     const locale = s.locale;
@@ -1468,16 +1491,19 @@ export const useStudio = create<StudioState>((set, get) => ({
         try {
           const result = await generateProjectDesignAsync(mergedProject, rooms, locale, activeFloorId);
           invalidateDesignAnalysisCache();
+          const cur = get();
           await finalizeProjectGeneration(
             get,
             set,
-            get(),
+            cur,
             {
               nodes: result.nodes,
               edges: result.edges,
               controls: result.controls,
               designName: result.designName,
               bim: result.bim,
+              map: cur.map,
+              rooms,
             },
             deferredWorkFromResult(result as Parameters<typeof deferredWorkFromResult>[0]),
           );
