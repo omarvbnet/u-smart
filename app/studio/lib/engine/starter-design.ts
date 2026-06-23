@@ -330,15 +330,13 @@ export async function generateProjectDesignAsync(
   });
   await yieldToMain();
 
-  let nextNodes = placed.nodes;
-  let nextEdges = placed.edges;
-  if (!initialBoot) {
-    const wired = await attachRoomElectricalDistributionAsync(proj, rooms, placed.nodes, placed.edges, {
-      deferCableRouting: true,
-    });
-    nextNodes = wired.nodes;
-    nextEdges = wired.edges;
-  }
+  // Wire placed rooms immediately — deferring all circuits caused thousands of NO_CIRCUIT
+  // issues before idle deferred work ran (validation raced ahead of background wiring).
+  const wired = await attachRoomElectricalDistributionAsync(proj, placementRooms, placed.nodes, placed.edges, {
+    deferCableRouting: true,
+  });
+  let nextNodes = wired.nodes;
+  let nextEdges = wired.edges;
 
   await yieldToMain();
   const pack = buildBimOpenings(rooms, proj, locale, activeFloorId);
@@ -350,7 +348,7 @@ export async function generateProjectDesignAsync(
     controls,
     designName: starter.name,
     bim: { walls: [], openings: pack.bim.openings, gardens: [] },
-    deferredElectrical: initialBoot,
+    deferredElectrical: deferredFloorPlacement,
     deferredSmart: initialBoot && !!(proj.smartBuilding && proj.smartProtocol),
     deferredRoomControls: initialBoot,
     deferredFloorPlacement,

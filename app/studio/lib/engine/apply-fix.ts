@@ -18,6 +18,7 @@ import { resolveNodes } from '../model';
 import { CABLES } from '../catalog/cables';
 import type { CableSpec, LoadSpec, HvacSpec } from '../catalog';
 import { loadCurrent, selectBreakerRating } from './electrical';
+import { cableCatalogIdForCurrent, mcbCatalogIdForCurrent } from './iraq-electrical';
 import type { Fix, Issue } from './validation';
 import { validateDesign } from './validation';
 import { validatePlacement } from './placement-validation';
@@ -112,11 +113,16 @@ function loadDesignCurrentA(node: DesignNode): number {
   return 16;
 }
 
-function mcbCatalogForCurrent(designA: number): { id: string; entry: CatalogEntry } | null {
-  const rating = selectBreakerRating(designA, 999) ?? Math.min(63, Math.max(6, Math.ceil(designA)));
-  const entry = pickBreaker(rating);
-  if (!entry) return null;
-  return { id: entry.id, entry };
+function mcbCatalogForCurrent(designA: number, cableAmpacity = 999): { id: string; entry: CatalogEntry } | null {
+  const catalogId = mcbCatalogIdForCurrent(designA, cableAmpacity);
+  const entry = getCatalogEntry(catalogId);
+  if (!entry) {
+    const rating = selectBreakerRating(designA, cableAmpacity) ?? Math.min(250, Math.max(6, Math.ceil(designA)));
+    const fallback = pickBreaker(rating);
+    if (!fallback) return null;
+    return { id: fallback.id, entry: fallback };
+  }
+  return { id: catalogId, entry };
 }
 
 function backboneAnchor(s: FixableState): { x: number; y: number } {
@@ -436,8 +442,9 @@ export function applyFixPatch(
     }
 
     const designA = loadDesignCurrentA(load);
-    const mcbPick = mcbCatalogForCurrent(designA);
-    const cableEntry = getCatalogEntry('cable-lv-cu-2.5') as CableSpec | undefined;
+    const cableCatalogId = cableCatalogIdForCurrent(designA);
+    const cableEntry = getCatalogEntry(cableCatalogId) as CableSpec | undefined;
+    const mcbPick = mcbCatalogForCurrent(designA, cableEntry?.ampacityA ?? 999);
     if (!mcbPick || !cableEntry) return infra.nodes?.length || infra.edges?.length ? infra : null;
 
     const mcbId = uid('n');
@@ -451,7 +458,7 @@ export function applyFixPatch(
       x: mcbX,
       y: mcbY,
       floorId: load.floorId ?? panel.floorId ?? working.activeFloorId,
-      params: { showOnMap: true },
+      params: { designA: Math.round(designA * 10) / 10, showOnMap: true },
     };
     const cable: DesignNode = {
       id: cableId,

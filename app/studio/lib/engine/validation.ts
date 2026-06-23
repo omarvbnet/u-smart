@@ -21,6 +21,7 @@ import {
   voltageDropPercent,
   prospectiveScKa,
   apparentKva,
+  SQRT3,
 } from './electrical';
 import {
   suggestHvacFix,
@@ -76,6 +77,37 @@ type Circuit = {
   breakers: ResolvedNode[];
   source: ResolvedNode | null;
 };
+
+/** Branch demand (kVA) — count each MCB once using its design current, not every downstream leaf load. */
+function systemDemandKva(circuits: Circuit[]): number {
+  const counted = new Set<string>();
+  let total = 0;
+  for (const c of circuits) {
+    const branch = c.breakers[0];
+    const key = branch?.id ?? `load:${c.load.id}`;
+    if (counted.has(key)) continue;
+    counted.add(key);
+
+    const designA = branch ? Number(branch.params.designA) : 0;
+    const el = loadElectricals(c.load);
+    if (!el) continue;
+
+    if (branch && designA > 0) {
+      const lineV = el.ph === 3 ? el.v * SQRT3 : el.v;
+      total += (designA * lineV) / 1000;
+    } else {
+      const df = c.load.spec.domain === 'load' ? (c.load.spec as LoadSpec).demandFactor ?? 1 : 1;
+      total += apparentKva(el.p * df, el.pf);
+    }
+  }
+  return total;
+}
+
+function sourceRatedKva(node: ResolvedNode): number {
+  const spec = node.spec as SourceSpec;
+  const fromParams = Number(node.params.ratedKva) || Number(node.params.capacityKw);
+  return fromParams > 0 ? fromParams : spec.ratedKva;
+}
 
 
 /** Demand current/voltage/phases for a consuming node (respects instance overrides). */
@@ -451,16 +483,10 @@ export function validateDesign(
     });
   }
 
-  // Source capacity vs total connected demand.
+  // Source capacity vs diversified branch demand (one entry per MCB, not per socket/light).
   if (sources.length > 0) {
-    const totalKva = sources.reduce((s, n) => s + (n.spec as SourceSpec).ratedKva, 0);
-    let demandKva = 0;
-    for (const c of circuits) {
-      const el = loadElectricals(c.load);
-      if (!el) continue;
-      const df = c.load.spec.domain === 'load' ? (c.load.spec as LoadSpec).demandFactor : 1;
-      demandKva += apparentKva(el.p * df, el.pf);
-    }
+    const totalKva = sources.reduce((s, n) => s + sourceRatedKva(n), 0);
+    const demandKva = systemDemandKva(circuits);
     if (demandKva > totalKva && totalKva > 0) {
       issues.push({
         id: 'system-overload',

@@ -63,24 +63,65 @@ function designCurrentW(loads: DesignNode[]): number {
 
 type CircuitGroup = { suffix: string; label: string; loads: DesignNode[] };
 
+function isConsumerNode(n: DesignNode): boolean {
+  const entry = getCatalogEntry(n.catalogId);
+  if (!entry) return false;
+  if (entry.domain === 'hvac') return true;
+  if (entry.domain === 'load' && (entry as LoadSpec).category !== 'PANEL') return true;
+  return false;
+}
+
+function loadFedByCable(loadId: string, nodes: DesignNode[], edges: DesignEdge[]): boolean {
+  for (const e of edges) {
+    if (e.target !== loadId) continue;
+    const parent = nodes.find((n) => n.id === e.source);
+    if (parent && getCatalogEntry(parent.catalogId)?.domain === 'cable') return true;
+  }
+  return false;
+}
+
 function circuitGroupsForRoom(room: DesignRoom, nodes: DesignNode[]): CircuitGroup[] {
-  const inRoom = nodes.filter((n) => {
-    if (isHvacNode(n)) return false;
-    if (getCatalogEntry(n.catalogId)?.domain === 'cable') return false;
-    if (getCatalogEntry(n.catalogId)?.domain === 'protection') return false;
-    if (getCatalogEntry(n.catalogId)?.domain === 'source') return false;
-    return nodeInRoom(n, room);
-  });
+  const inRoom = nodes.filter((n) => isConsumerNode(n) && nodeInRoom(n, room));
 
   const lights = inRoom.filter(isLightNode);
   const sockets = inRoom.filter(isSocketNode);
   const appliances = inRoom.filter(isApplianceNode);
+  const hvac = inRoom.filter(isHvacNode);
+  const grouped = new Set([...lights, ...sockets, ...appliances, ...hvac].map((n) => n.id));
+  const misc = inRoom.filter((n) => !grouped.has(n.id));
 
   const groups: CircuitGroup[] = [];
   if (lights.length) groups.push({ suffix: 'lt', label: 'Lighting', loads: lights });
   if (sockets.length) groups.push({ suffix: 'sk', label: 'Sockets', loads: sockets });
   if (appliances.length) groups.push({ suffix: 'ap', label: 'Appliances', loads: appliances });
+  if (hvac.length) groups.push({ suffix: 'hv', label: 'HVAC', loads: hvac });
+  if (misc.length) groups.push({ suffix: 'mx', label: 'Misc', loads: misc });
   return groups;
+}
+
+function wireStrayConsumers(
+  panelId: string,
+  rooms: DesignRoom[],
+  nodes: DesignNode[],
+  edges: DesignEdge[],
+  deferCableRouting?: boolean,
+): void {
+  const inAnyRoom = (n: DesignNode) => rooms.some((r) => nodeInRoom(n, r));
+  const stray = nodes.filter(
+    (n) => isConsumerNode(n) && !inAnyRoom(n) && !loadFedByCable(n.id, nodes, edges),
+  );
+  if (!stray.length) return;
+  const anchor = rooms[0];
+  if (!anchor) return;
+  wireCircuitGroup(
+    panelId,
+    anchor,
+    { suffix: 'st', label: 'External', loads: stray },
+    rooms,
+    nodes,
+    edges,
+    deferCableRouting,
+  );
 }
 
 function stripRoomCircuits(nodes: DesignNode[], edges: DesignEdge[], roomIds: Set<string>): { nodes: DesignNode[]; edges: DesignEdge[] } {
@@ -119,7 +160,8 @@ function wireCircuitGroup(
 
   const mcbId = `mcb_${room.id}_${group.suffix}`;
   const mcbX = room.x + 8;
-  const mcbY = room.y + 8 + (group.suffix === 'sk' ? 28 : group.suffix === 'ap' ? 56 : 0);
+  const mcbY =
+    room.y + 8 + (group.suffix === 'sk' ? 28 : group.suffix === 'ap' ? 56 : group.suffix === 'hv' ? 84 : 0);
 
   nodes.push({
     id: mcbId,
@@ -191,6 +233,7 @@ export function attachRoomElectricalDistribution(
       wireCircuitGroup(panel.id, room, group, rooms, nextNodes, nextEdges, options?.deferCableRouting);
     }
   }
+  wireStrayConsumers(panel.id, rooms, nextNodes, nextEdges, options?.deferCableRouting);
 
   return { nodes: nextNodes, edges: nextEdges };
 }
@@ -223,6 +266,7 @@ export async function attachRoomElectricalDistributionAsync(
       wireCircuitGroup(panel.id, room, group, rooms, nextNodes, nextEdges, options?.deferCableRouting);
     }
   }
+  wireStrayConsumers(panel.id, rooms, nextNodes, nextEdges, options?.deferCableRouting);
 
   return { nodes: nextNodes, edges: nextEdges };
 }

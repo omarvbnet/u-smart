@@ -162,6 +162,8 @@ type StudioState = {
   suppressCanvasFit: boolean;
   applyingFixes: boolean;
   fixBatchResult: { applied: number; remaining: number } | null;
+  /** Background placement / wiring still running after first paint. */
+  projectWorkPending: boolean;
   generatingProject: boolean;
   /** Delays mounting the heavy canvas until after the first paint following bulk generation. */
   canvasBooting: boolean;
@@ -378,8 +380,12 @@ async function runDeferredProjectWork(
 ): Promise<void> {
   await waitForCanvasBoot(get);
   let s = get();
-  if (!s.project.setupComplete || s.generatingProject) return;
+  if (!s.project.setupComplete || s.generatingProject) {
+    set({ projectWorkPending: false });
+    return;
+  }
 
+  try {
   if (deferred?.deferredFloorPlacement) {
     const otherRooms = s.rooms.filter((r) => (r.floorId ?? 'floor_0') !== s.activeFloorId);
     if (otherRooms.length) {
@@ -426,6 +432,10 @@ async function runDeferredProjectWork(
   }
 
   scheduleDeferredCableReroute(get, set);
+  } finally {
+    set({ projectWorkPending: false });
+    invalidateDesignAnalysisCache();
+  }
 }
 
 function scheduleDeferredProjectWork(
@@ -434,6 +444,12 @@ function scheduleDeferredProjectWork(
   deferred?: DeferredDesignWork,
 ): void {
   if (typeof window === 'undefined') return;
+  const pending =
+    !!deferred?.deferredElectrical ||
+    !!deferred?.deferredSmart ||
+    !!deferred?.deferredRoomControls ||
+    !!deferred?.deferredFloorPlacement;
+  if (pending) set({ projectWorkPending: true });
   runWhenIdle(() => {
     void runDeferredProjectWork(get, set, deferred);
   });
@@ -844,6 +860,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   applyingFixes: false,
   fixBatchResult: null,
   generatingProject: false,
+  projectWorkPending: false,
   canvasBooting: false,
   visualizationMode: initialVisualizationMode(),
   experienceMode: initialExperienceMode(),
