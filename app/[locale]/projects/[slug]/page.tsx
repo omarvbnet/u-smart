@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ArrowLeft } from 'lucide-react';
+import { ProjectAppLinks } from '@/components/projects/ProjectAppLinks';
+import { ProjectGallery, ProjectImagePlaceholder } from '@/components/projects/ProjectGallery';
 
 type Project = {
   id: string;
@@ -21,6 +23,7 @@ type Project = {
   budget?: string | null;
   liveUrl?: string | null;
   githubUrl?: string | null;
+  appLinks?: unknown;
   client?: string | null;
 };
 
@@ -62,52 +65,73 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const allImages = [project.imageUrl, ...(project.gallery ?? [])].filter(Boolean) as string[];
+  const galleryOnly = (project.gallery ?? []).filter(Boolean);
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
-        <Link
-          href="/projects"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          {t('projects')}
-        </Link>
+      {/* Hero */}
+      <div className="relative overflow-hidden border-b border-white/5">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-purple-600/10 pointer-events-none" />
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8 md:pt-14 md:pb-12">
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t('projects')}
+          </Link>
 
-        {project.imageUrl && (
-          <div className="aspect-video rounded-2xl overflow-hidden mb-8 bg-white/5">
-            <img src={project.imageUrl} alt="" className="w-full h-full object-cover" />
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 mb-6">
-          <span className="px-3 py-1 text-sm font-medium bg-blue-500/10 text-blue-400 rounded-full">
-            {project.category}
-          </span>
-          {project.year && (
-            <span className="px-3 py-1 text-sm text-gray-400 rounded-full bg-white/5">
-              {project.year}
+          <div className="flex flex-wrap gap-2 mb-5">
+            <span className="px-3 py-1 text-sm font-medium bg-blue-500/15 text-blue-300 rounded-full border border-blue-500/20">
+              {project.category}
             </span>
-          )}
-        </div>
+            {project.year && (
+              <span className="px-3 py-1 text-sm text-gray-400 rounded-full bg-white/5 border border-white/10">
+                {project.year}
+              </span>
+            )}
+            {project.client && (
+              <span className="px-3 py-1 text-sm text-gray-400 rounded-full bg-white/5 border border-white/10">
+                {project.client}
+              </span>
+            )}
+          </div>
 
-        <h1 className="text-3xl md:text-4xl font-bold mb-6">{project.title}</h1>
-        <p className="text-gray-400 text-lg leading-relaxed mb-8">{project.description}</p>
+          <h1 className="text-3xl md:text-5xl font-bold mb-4 tracking-tight">{project.title}</h1>
+          <p className="text-gray-400 text-lg md:text-xl leading-relaxed max-w-3xl">{project.description}</p>
+
+          <div className="mt-8">
+            <ProjectAppLinks project={project} />
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-14 space-y-12">
+        {/* Cover */}
+        {project.imageUrl ? (
+          <div className="aspect-video rounded-2xl overflow-hidden bg-white/5 border border-white/10 shadow-2xl shadow-black/40">
+            <img src={project.imageUrl} alt={project.title} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <ProjectImagePlaceholder title={project.title} />
+        )}
 
         {project.content && (
           <div
-            className="prose prose-invert prose-lg max-w-none mb-8"
+            className="prose prose-invert prose-lg max-w-none"
             dangerouslySetInnerHTML={{ __html: project.content }}
           />
         )}
 
         {project.technologies && project.technologies.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Technologies</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Technologies</h2>
             <div className="flex flex-wrap gap-2">
               {project.technologies.map((tech) => (
                 <span
                   key={tech}
-                  className="px-3 py-1 text-sm bg-white/5 rounded-lg border border-white/10"
+                  className="px-3 py-1.5 text-sm bg-white/5 rounded-xl border border-white/10 text-gray-300"
                 >
                   {tech}
                 </span>
@@ -116,27 +140,16 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-4">
-          {project.liveUrl && (
-            <a
-              href={project.liveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-sm transition-colors"
-            >
-              View Live
-            </a>
-          )}
-          {project.githubUrl && (
-            <a
-              href={project.githubUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 border border-white/20 hover:bg-white/5 rounded-lg font-medium text-sm transition-colors"
-            >
-              GitHub
-            </a>
-          )}
+        {galleryOnly.length > 0 && (
+          <ProjectGallery images={galleryOnly} title="Screenshots & Gallery" />
+        )}
+
+        {allImages.length > 1 && galleryOnly.length === 0 && (
+          <ProjectGallery images={allImages.slice(1)} title="More Images" />
+        )}
+
+        <div className="pt-6 border-t border-white/10">
+          <ProjectAppLinks project={project} />
         </div>
       </div>
     </div>

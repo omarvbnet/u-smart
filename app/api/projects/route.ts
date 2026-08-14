@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getLocalizedProject, isValidLocaleProject } from '@/lib/project-i18n';
 import { notifySubscribers } from '@/lib/notify-subscribers';
+import { legacyUrlsFromAppLinks, sanitizeAppLinksForSave, type ProjectAppLink } from '@/lib/project-links';
 
 function slugify(text: string) {
   return text
@@ -50,6 +51,10 @@ export async function POST(req: NextRequest) {
       body.translations && typeof body.translations === 'object' && Object.keys(body.translations).length > 0
         ? body.translations
         : undefined;
+    const appLinks = Array.isArray(body.appLinks)
+      ? sanitizeAppLinksForSave(body.appLinks as ProjectAppLink[])
+      : [];
+    const legacy = legacyUrlsFromAppLinks(appLinks);
     const project = await prisma.project.create({
       data: {
         title: body.title || 'Untitled',
@@ -68,8 +73,9 @@ export async function POST(req: NextRequest) {
         status: body.status || 'COMPLETED',
         imageUrl: body.imageUrl ?? null,
         gallery: Array.isArray(body.gallery) ? body.gallery : [],
-        liveUrl: body.liveUrl ?? null,
-        githubUrl: body.githubUrl ?? null,
+        liveUrl: body.liveUrl ?? legacy.liveUrl,
+        githubUrl: body.githubUrl ?? legacy.githubUrl,
+        appLinks: appLinks.length > 0 ? appLinks : undefined,
         userId: admin.id,
       },
     });

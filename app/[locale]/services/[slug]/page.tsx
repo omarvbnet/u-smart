@@ -8,6 +8,8 @@ import { ArrowLeft, Boxes, FolderOpen, Cpu, CheckCircle2, XCircle, Send, X, Code
 import { uploadWithProgress } from '@/lib/upload-with-progress';
 import { computeCleanEnergySnapshot, CLEAN_ENERGY_CALC_VOLTAGE, CLEAN_ENERGY_IP_KEYS } from '@/lib/clean-energy-request';
 import { isValidEmailFormat, normalizeEmailInput } from '@/lib/email-input';
+import { ProjectLinkBadges } from '@/components/projects/ProjectAppLinks';
+import { ProjectImagePlaceholder } from '@/components/projects/ProjectGallery';
 
 const LOCALES = ['ar', 'en', 'ku', 'tr'];
 const SMART_HOME_SLUG = 'smart-home-automation';
@@ -200,9 +202,13 @@ type Project = {
   description: string;
   category: string;
   imageUrl: string | null;
+  gallery?: string[];
   status: string;
   year: number;
   client?: string | null;
+  liveUrl?: string | null;
+  githubUrl?: string | null;
+  appLinks?: unknown;
   user?: { name: string | null } | null;
 };
 
@@ -1991,29 +1997,35 @@ export default function ServiceDetailPage() {
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {projects.map((p) => (
-                <div
+                <Link
                   key={p.id}
-                  className="rounded-xl border border-white/10 bg-white/5 p-6 hover:border-white/20 transition-colors"
+                  href={p.slug ? `/projects/${p.slug}` : '#'}
+                  className="group rounded-xl border border-white/10 bg-white/5 overflow-hidden hover:border-blue-500/30 hover:bg-white/[0.07] transition-all"
                 >
-                  {p.imageUrl && (
-                    <div className="aspect-video rounded-lg overflow-hidden mb-4 bg-white/5">
-                      <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+                  {p.imageUrl ? (
+                    <div className="aspect-video overflow-hidden bg-white/5">
+                      <img src={p.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     </div>
+                  ) : (
+                    <ProjectImagePlaceholder title={p.title} className="rounded-none border-0 aspect-video" />
                   )}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded">
-                      {['PLANNING', 'IN_PROGRESS', 'COMPLETED', 'ON_HOLD'].includes(p.status)
-                        ? t(`serviceDetail.projectStatus.${p.status}` as 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD')
-                        : p.status}
-                    </span>
-                    {p.year && <span className="text-xs text-gray-500">{p.year}</span>}
+                  <div className="p-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded">
+                        {['PLANNING', 'IN_PROGRESS', 'COMPLETED', 'ON_HOLD'].includes(p.status)
+                          ? t(`serviceDetail.projectStatus.${p.status}` as 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD')
+                          : p.status}
+                      </span>
+                      {p.year && <span className="text-xs text-gray-500">{p.year}</span>}
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2 group-hover:text-blue-400 transition-colors">{p.title}</h3>
+                    <p className="text-sm text-gray-400 line-clamp-2">{p.description}</p>
+                    <ProjectLinkBadges project={p} />
+                    {(p.client || p.user?.name) && (
+                      <p className="text-xs text-gray-500 mt-2">{t('serviceDetail.clientLabel')}: {p.client || p.user?.name}</p>
+                    )}
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">{p.title}</h3>
-                  <p className="text-sm text-gray-400 line-clamp-2">{p.description}</p>
-                  {(p.client || p.user?.name) && (
-                    <p className="text-xs text-gray-500 mt-2">{t('serviceDetail.clientLabel')}: {p.client || p.user?.name}</p>
-                  )}
-                </div>
+                </Link>
               ))}
             </div>
           )}

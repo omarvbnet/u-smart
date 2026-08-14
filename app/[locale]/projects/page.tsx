@@ -5,6 +5,8 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { motion } from 'framer-motion';
 import { ArrowLeft, FolderKanban } from 'lucide-react';
+import { ProjectLinkBadges } from '@/components/projects/ProjectAppLinks';
+import { ProjectImagePlaceholder } from '@/components/projects/ProjectGallery';
 
 type Project = {
   id: string;
@@ -13,8 +15,12 @@ type Project = {
   description: string;
   category: string;
   imageUrl: string | null;
+  gallery?: string[];
   year?: number;
   client?: string | null;
+  liveUrl?: string | null;
+  githubUrl?: string | null;
+  appLinks?: unknown;
   user?: { name: string | null } | null;
 };
 
@@ -72,16 +78,19 @@ export default function ProjectsPage() {
               >
                 <Link
                   href={project.slug ? `/projects/${project.slug}` : '#'}
-                  className="block rounded-2xl border border-white/10 bg-white/5 overflow-hidden hover:border-blue-500/30 hover:bg-white/10 transition-all group"
+                  className="block rounded-2xl border border-white/10 bg-white/5 overflow-hidden hover:border-blue-500/30 hover:bg-white/[0.07] transition-all group h-full"
                 >
-                  {project.imageUrl && (
-                    <div className="aspect-video overflow-hidden bg-white/5">
+                  {project.imageUrl ? (
+                    <div className="aspect-video overflow-hidden bg-white/5 relative">
                       <img
                         src={project.imageUrl}
                         alt=""
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0F]/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
+                  ) : (
+                    <ProjectImagePlaceholder title={project.title} className="rounded-none border-0 aspect-video" />
                   )}
                   <div className="p-6">
                     <div className="flex items-center gap-2 mb-2">
@@ -96,6 +105,7 @@ export default function ProjectsPage() {
                       {project.title}
                     </h2>
                     <p className="text-gray-400 text-sm line-clamp-2">{project.description}</p>
+                    <ProjectLinkBadges project={project} />
                     {(project.client || project.user?.name) && (
                       <p className="text-xs text-gray-500 mt-2">{project.client || project.user?.name}</p>
                     )}

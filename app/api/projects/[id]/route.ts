@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { legacyUrlsFromAppLinks, sanitizeAppLinksForSave, type ProjectAppLink } from '@/lib/project-links';
 
 export async function GET(
   _req: NextRequest,
@@ -44,6 +45,13 @@ export async function PATCH(
     if (body.status !== undefined) update.status = body.status;
     if (body.imageUrl !== undefined) update.imageUrl = body.imageUrl;
     if (body.gallery !== undefined) update.gallery = Array.isArray(body.gallery) ? body.gallery : [];
+    if (body.appLinks !== undefined) {
+      const appLinks = sanitizeAppLinksForSave(body.appLinks as ProjectAppLink[]);
+      update.appLinks = appLinks;
+      const legacy = legacyUrlsFromAppLinks(appLinks);
+      update.liveUrl = legacy.liveUrl;
+      update.githubUrl = legacy.githubUrl;
+    }
     if (body.liveUrl !== undefined) update.liveUrl = body.liveUrl;
     if (body.githubUrl !== undefined) update.githubUrl = body.githubUrl;
     if (body.translations !== undefined) update.translations = body.translations;
