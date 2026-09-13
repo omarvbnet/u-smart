@@ -184,6 +184,7 @@ export async function runAgentMessage(args: {
       /kpi|تقرير|مبيعات|analytics|شوفلي|اليوم|اليومه|شنو صار/.test(lower) ||
       /report|summary|اليوم/.test(args.text);
     const wantsTickets = /ticket|تذكر|تذاكر|طلب|مهمة|task/.test(lower) || wantsKpi;
+    const wantsSites = /site|موقع|مواقع|location|فرع/.test(lower);
     const wantsWarehouse = /warehouse|مخزن|مواد|material/.test(lower);
     const toolIds: string[] = [];
     if (wantsKpi && allowedToolIds.includes('get_workspace_kpis')) toolIds.push('get_workspace_kpis');
