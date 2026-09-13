@@ -9,6 +9,7 @@ import {
   Building2,
   ClipboardList,
   History,
+  LayoutDashboard,
   LogOut,
   Map,
   MapPin,
