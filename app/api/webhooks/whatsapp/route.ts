@@ -88,10 +88,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const payload = rawBody ? JSON.parse(rawBody) : {};
-    // Hook for future handling (store in DB, queue, etc.)
     if (process.env.NODE_ENV !== 'production') {
       console.log('WhatsApp webhook POST:', JSON.stringify(payload).slice(0, 2000));
     }
+    const { handleWhatsAppIngress } = await import('@/lib/agent/channels/whatsapp-ingress');
+    handleWhatsAppIngress(payload);
   } catch {
     // Still 200 so Meta does not disable the webhook on parse errors
   }

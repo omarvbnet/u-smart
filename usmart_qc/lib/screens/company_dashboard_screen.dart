@@ -38,6 +38,7 @@ import '../widgets/available_tickets_pool_tab.dart';
 import '../widgets/site_list_card.dart';
 import '../widgets/workspace_site_detail_sheet.dart';
 import '../utils/site_qfield_map.dart';
+import '../features/u_agent/u_agent_screen.dart';
 import '../widgets/dashboard_sites_tab.dart';
 import '../widgets/personal_company_upgrade_card.dart';
 import '../widgets/profile_email_tile.dart';
@@ -129,6 +130,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
             const _SitesTab(allowCreateOwnSites: false),
             const _StatsTab(),
             const _ConflictsTab(),
+            const UAgentScreen(embedded: true),
             const _ProfileTab(),
           ]
         : readOnlyRole && !technicianWithSites
@@ -136,6 +138,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                 _TicketsTab(),
                 _StatsTab(),
                 _ConflictsTab(),
+                UAgentScreen(embedded: true),
                 _ProfileTab()
               ]
             : readOnlyRole && technicianWithSites
@@ -144,6 +147,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                     _SitesTab(allowCreateOwnSites: false),
                     _StatsTab(),
                     _ConflictsTab(),
+                    UAgentScreen(embedded: true),
                     _ProfileTab()
                   ]
                 : showCompanyTab
@@ -153,6 +157,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                         _StatsTab(),
                         _CompanyTab(),
                         _ConflictsTab(),
+                        UAgentScreen(embedded: true),
                         _ProfileTab()
                       ]
                     : const [
@@ -160,6 +165,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                         _SitesTab(),
                         _StatsTab(),
                         _ConflictsTab(),
+                        UAgentScreen(embedded: true),
                         _ProfileTab()
                       ];
     final tabCount = tabChildren.length;
@@ -221,6 +227,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                       _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
                       _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                       _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                      _navItem(Icons.auto_awesome, l10n.t('nav_u_agent')),
                       _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                     ]
                   : readOnlyRole && !technicianWithSites
@@ -228,6 +235,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                       _navItem(Icons.assignment_rounded, l10n.t('nav_tickets')),
                       _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                       _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                      _navItem(Icons.auto_awesome, l10n.t('nav_u_agent')),
                       _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                     ]
                   : readOnlyRole && technicianWithSites
@@ -236,6 +244,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                           _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
                           _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                           _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                          _navItem(Icons.auto_awesome, l10n.t('nav_u_agent')),
                           _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                         ]
                       : showCompanyTab
@@ -245,6 +254,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                               _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                               _navItem(Icons.business_center_rounded, l10n.t('nav_company')),
                               _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                              _navItem(Icons.auto_awesome, l10n.t('nav_u_agent')),
                               _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                             ]
                           : [
@@ -252,6 +262,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                               _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
                               _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                               _navItem(Icons.gavel_rounded, l10n.t('conflicts')),
+                              _navItem(Icons.auto_awesome, l10n.t('nav_u_agent')),
                               _navItem(Icons.person_rounded, l10n.t('nav_profile')),
                             ],
             ),

@@ -420,6 +420,14 @@ model TicketRequester {
   issueReportsSubmitted      IssueReport[]               @relation("IssueReportRequester")
   issueReportsHandled        IssueReport[]               @relation("IssueReportHandledBy")
 
+  uAgentConversations        UAgentConversation[]        @relation("UAgentConversationUser")
+  uAgentMessages             UAgentMessage[]             @relation("UAgentMessageUser")
+  uAgentExecutions           UAgentExecution[]           @relation("UAgentExecutionUser")
+  uAgentApprovalsRequested   UAgentApproval[]            @relation("UAgentApprovalRequester")
+  uAgentApprovalsResolved    UAgentApproval[]            @relation("UAgentApprovalResolver")
+  uAgentUsageRecords         UAgentUsageRecord[]         @relation("UAgentUsageUser")
+  uAgentAuditLogs            UAgentAuditLog[]            @relation("UAgentAuditActor")
+
   @@map("ticket_requesters")
 }
 
@@ -1606,6 +1614,12 @@ model PrivateCompany {
   unlimitedUntil   DateTime?
   planRequests     PrivateCompanyPlanRequest[]    @relation("PrivateCompanyPlanRequests")
   activationCodes  PrivateCompanyActivationCode[] @relation("PrivateCompanyActivationCodes")
+  uAgentPolicy     UAgentPolicy?
+  uAgentConversations UAgentConversation[]
+  uAgentExecutions UAgentExecution[]
+  uAgentApprovals  UAgentApproval[]
+  uAgentUsageRecords UAgentUsageRecord[]
+  uAgentAuditLogs  UAgentAuditLog[]
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
@@ -2444,4 +2458,235 @@ model StudioStandardReference {
   updatedAt   DateTime @updatedAt
 
   @@map("studio_standard_references")
+}
+
+// ── U AGENT (AI operating layer inside Proviser) ─────────────────────────────
+
+enum UAgentExecutionStatus {
+  ONLINE
+  THINKING
+  PLANNING
+  WAITING_APPROVAL
+  EXECUTING
+  WAITING_EXTERNAL
+  COMPLETED
+  FAILED
+  OFFLINE
+}
+
+enum UAgentMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum UAgentApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum UAgentRiskLevel {
+  READ
+  LOW
+  EXTERNAL
+  HIGH_IMPACT
+  FINANCIAL
+  CRITICAL
+}
+
+enum UAgentAiProviderKind {
+  OPENAI
+  DEEPSEEK
+  CLAUDE
+  CUSTOM
+}
+
+/// Platform-admin managed AI providers for U Agent (OpenAI, DeepSeek, Claude, custom OpenAI-compatible).
+model UAgentAiProvider {
+  id              String               @id @default(cuid())
+  slug            String               @unique
+  name            String
+  kind            UAgentAiProviderKind
+  /// OpenAI-compatible base URL (required for CUSTOM/DEEPSEEK; optional override for OPENAI)
+  baseUrl         String?
+  /// AES-GCM encrypted API key (never return raw key to clients)
+  apiKeyEncrypted String?
+  enabled         Boolean              @default(true)
+  isDefault       Boolean              @default(false)
+  priority        Int                  @default(100)
+  modelFast       String?
+  modelReason     String?
+  modelVision     String?
+  modelEmbed      String?
+  modelTranscribe String?
+  /// Optional notes for admins
+  notes           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([enabled, priority])
+  @@index([isDefault])
+  @@map("u_agent_ai_providers")
+}
+
+/// Per-workspace owner policy for U Agent autonomy and quotas.
+model UAgentPolicy {
+  id                   String         @id @default(cuid())
+  privateCompanyId     String         @unique
+  privateCompany       PrivateCompany @relation(fields: [privateCompanyId], references: [id], onDelete: Cascade)
+  enabled              Boolean        @default(true)
+  /// 0 assistant-only … 5 advanced autonomy (v1 defaults to 1 = suggestions)
+  autonomyLevel        Int            @default(1)
+  /// null = all registered tools that pass risk/autonomy; otherwise string[] of tool ids
+  allowedTools         Json?
+  maxTransactionIqd    Float          @default(0)
+  dailySpendLimitIqd   Float          @default(0)
+  dailyAiRequestLimit  Int            @default(100)
+  /// When true, inbound WhatsApp messages from workspace members can invoke U Agent.
+  whatsappIngressEnabled Boolean      @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@map("u_agent_policies")
+}
+
+model UAgentConversation {
+  id               String                @id @default(cuid())
+  privateCompanyId String?
+  privateCompany   PrivateCompany?       @relation(fields: [privateCompanyId], references: [id], onDelete: Cascade)
+  userId           String
+  user             TicketRequester       @relation("UAgentConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  title            String?
+  status           UAgentExecutionStatus @default(ONLINE)
+  lastMessageAt    DateTime              @default(now())
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  messages         UAgentMessage[]
+  executions       UAgentExecution[]
+  approvals        UAgentApproval[]
+
+  @@index([privateCompanyId, lastMessageAt])
+  @@index([userId, lastMessageAt])
+  @@map("u_agent_conversations")
+}
+
+model UAgentMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   UAgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           TicketRequester?  @relation("UAgentMessageUser", fields: [userId], references: [id], onDelete: SetNull)
+  role           UAgentMessageRole
+  content        String
+  /// Attachment URLs / metadata (images, docs, audio)
+  attachments    Json?
+  toolName       String?
+  toolCallId     String?
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("u_agent_messages")
+}
+
+model UAgentExecution {
+  id               String                @id @default(cuid())
+  conversationId   String?
+  conversation     UAgentConversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  privateCompanyId String?
+  privateCompany   PrivateCompany?       @relation(fields: [privateCompanyId], references: [id], onDelete: Cascade)
+  userId           String
+  user             TicketRequester       @relation("UAgentExecutionUser", fields: [userId], references: [id], onDelete: Cascade)
+  status           UAgentExecutionStatus @default(THINKING)
+  /// Timeline steps: [{ at, label, status, tool?, detail? }]
+  timeline         Json?
+  plan             Json?
+  currentTool      String?
+  resultSummary    String?
+  errorMessage     String?
+  startedAt        DateTime              @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  approvals        UAgentApproval[]
+
+  @@index([privateCompanyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("u_agent_executions")
+}
+
+model UAgentApproval {
+  id               String               @id @default(cuid())
+  privateCompanyId String?
+  privateCompany   PrivateCompany?      @relation(fields: [privateCompanyId], references: [id], onDelete: Cascade)
+  conversationId   String?
+  conversation     UAgentConversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  executionId      String?
+  execution        UAgentExecution?     @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  requestedById    String
+  requestedBy      TicketRequester      @relation("UAgentApprovalRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  resolvedById     String?
+  resolvedBy       TicketRequester?     @relation("UAgentApprovalResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  toolId           String
+  action           String
+  reason           String?
+  riskLevel        UAgentRiskLevel      @default(HIGH_IMPACT)
+  amountIqd        Float?
+  currency         String?              @default("IQD")
+  payload          Json?
+  expectedResult   String?
+  status           UAgentApprovalStatus @default(PENDING)
+  expiresAt        DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([privateCompanyId, status, createdAt])
+  @@index([requestedById, status])
+  @@map("u_agent_approvals")
+}
+
+model UAgentUsageRecord {
+  id               String          @id @default(cuid())
+  privateCompanyId String?
+  privateCompany   PrivateCompany? @relation(fields: [privateCompanyId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             TicketRequester? @relation("UAgentUsageUser", fields: [userId], references: [id], onDelete: SetNull)
+  resourceType     String
+  quantity         Float           @default(1)
+  provider         String?
+  model            String?
+  estimatedCost    Float?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+
+  @@index([privateCompanyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([resourceType, createdAt])
+  @@map("u_agent_usage_records")
+}
+
+model UAgentAuditLog {
+  id               String          @id @default(cuid())
+  privateCompanyId String?
+  privateCompany   PrivateCompany? @relation(fields: [privateCompanyId], references: [id], onDelete: Cascade)
+  actorUserId      String?
+  actor            TicketRequester? @relation("UAgentAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  action           String
+  toolId           String?
+  permissions      Json?
+  approvalId       String?
+  input            Json?
+  result           Json?
+  error            String?
+  createdAt        DateTime        @default(now())
+
+  @@index([privateCompanyId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("u_agent_audit_logs")
 }

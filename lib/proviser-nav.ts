@@ -53,6 +53,7 @@ export function buildProviserNav(
   }
 
   items.push(
+    { href: '/proviser/u-agent', label: 'U Agent', icon: 'uagent' },
     { href: '/proviser/notifications', label: 'Alerts', icon: 'alerts' },
     { href: '/proviser/profile', label: 'Profile', icon: 'profile' }
   );

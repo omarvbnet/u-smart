@@ -216,4 +216,17 @@ class ApiConfig {
       '/api/provisor-private-company/warehouse/requests/$id';
 
   static String publicTicketPage(String id) => '/en/ticket/$id';
+
+  // ── U Agent ──────────────────────────────────────────────────────────────
+  static const String agentMessage = '/api/agent/message';
+  static const String agentFiles = '/api/agent/files';
+  static const String agentStatus = '/api/agent/status';
+  static const String agentActivity = '/api/agent/activity';
+  static const String agentApprovals = '/api/agent/approvals';
+  static String agentApprovalApprove(String id) =>
+      '/api/agent/approvals/$id/approve';
+  static String agentApprovalReject(String id) =>
+      '/api/agent/approvals/$id/reject';
+  static const String agentPolicy = '/api/agent/policy';
+  static const String agentDailyReport = '/api/agent/reports/daily';
 }

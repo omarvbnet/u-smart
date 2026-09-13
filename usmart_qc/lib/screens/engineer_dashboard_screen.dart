@@ -40,6 +40,7 @@ import '../utils/site_qfield_map.dart';
 import '../widgets/dashboard_sites_tab.dart';
 import '../utils/ticket_list_sections.dart';
 import '../utils/ticket_status_filter.dart';
+import '../features/u_agent/u_agent_screen.dart';
 
 class EngineerDashboardScreen extends StatefulWidget {
   const EngineerDashboardScreen({super.key});
@@ -110,6 +111,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
                 _MyTicketsTab(),
                 _EngineerAnalyticsTab(),
                 _EngineerSitesTab(),
+                UAgentScreen(embedded: true),
                 _EngineerProfileTab(),
               ],
             ),
@@ -142,6 +144,7 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
                 _navItem(Icons.assignment_turned_in_rounded, l10n.t('nav_my_tickets')),
                 _navItem(Icons.insights_rounded, l10n.t('nav_analytics')),
                 _navItem(Icons.explore_rounded, l10n.t('nav_sites')),
+                _navItem(Icons.auto_awesome, l10n.t('nav_u_agent')),
                 _navItem(Icons.person_rounded, l10n.t('nav_profile')),
               ],
             ),

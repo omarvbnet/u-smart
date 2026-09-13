@@ -29,11 +29,13 @@ import {
   ListChecks,
   Tags,
   ArrowUpCircle,
+  Sparkles,
 } from 'lucide-react';
 
 const links = [
   { href: '/admin', label: 'Hero / Home', icon: Home },
   { href: '/admin/analytics', label: 'Analytics dashboard', icon: ClipboardCheck },
+  { href: '/admin/ai-providers', label: 'U Agent AI Providers', icon: Sparkles },
   { href: '/admin/provisor-requests', label: 'Provisor requests', icon: TicketCheck, badgeType: 'pending_qc' as const },
   { href: '/admin/projects', label: 'Projects', icon: FolderKanban },
   { href: '/admin/services', label: 'Services', icon: Boxes },
