@@ -81,6 +81,46 @@ async function notifyOwnersOfApproval(args: {
   }
 }
 
+async function notifyRequesterOfDecision(args: {
+  requestedById: string;
+  approvalId: string;
+  toolId: string;
+  decision: 'APPROVED' | 'REJECTED';
+  action: string;
+  resultMessage?: string;
+}): Promise<void> {
+  try {
+    const title =
+      args.decision === 'APPROVED' ? 'U Agent request approved' : 'U Agent request rejected';
+    const body =
+      (args.resultMessage || args.action).slice(0, 400) ||
+      `${args.toolId} was ${args.decision.toLowerCase()}`;
+    if (prisma.notification?.create) {
+      await prisma.notification.create({
+        data: {
+          type: 'U_AGENT_APPROVAL_RESULT',
+          title,
+          message: body,
+          requesterId: args.requestedById,
+          forAdmin: false,
+        },
+      });
+    }
+    await sendPushToRequesters(prisma, [args.requestedById], {
+      title,
+      body: body.slice(0, 140),
+      data: {
+        type: 'U_AGENT_APPROVAL_RESULT',
+        approvalId: args.approvalId,
+        toolId: args.toolId,
+        decision: args.decision,
+      },
+    });
+  } catch (e) {
+    console.error('notifyRequesterOfDecision:', e);
+  }
+}
+
 export async function createApprovalRequest(input: {
   privateCompanyId: string | null;
   conversationId?: string | null;
@@ -224,6 +264,20 @@ export async function resolveApproval(args: {
       execResult = await executeApprovedWhatsAppStartCall(payload);
     }
   }
+
+  const resultMessage =
+    execResult && typeof execResult === 'object' && 'message' in execResult
+      ? String((execResult as { message?: unknown }).message || '')
+      : undefined;
+
+  void notifyRequesterOfDecision({
+    requestedById: row.requestedById,
+    approvalId: row.id,
+    toolId: row.toolId,
+    decision: args.decision,
+    action: row.action,
+    resultMessage,
+  });
 
   return {
     success: true,

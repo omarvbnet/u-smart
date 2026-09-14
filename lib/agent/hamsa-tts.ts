@@ -16,6 +16,38 @@ export type HamsaTtsConfig = {
   isDefault: boolean;
 };
 
+/** Strip trailing slash and accidental `/v1` so we never call `/v1/v1/realtime/tts`. */
+export function normalizeHamsaBaseUrl(raw: string | null | undefined): string {
+  let u = (raw || 'https://api.tryhamsa.com').trim().replace(/\/+$/, '');
+  if (u.toLowerCase().endsWith('/v1')) {
+    u = u.slice(0, -3).replace(/\/+$/, '');
+  }
+  return u || 'https://api.tryhamsa.com';
+}
+
+function looksLikeWavOrAudio(buf: Buffer, contentType: string): boolean {
+  if (!buf.length) return false;
+  const ct = contentType.toLowerCase();
+  if (ct.includes('application/json') || ct.includes('text/')) return false;
+  // JSON error body masquerading as 200
+  const head = buf.subarray(0, Math.min(32, buf.length)).toString('utf8').trimStart();
+  if (head.startsWith('{') || head.startsWith('<')) return false;
+  // RIFF....WAVE
+  if (
+    buf.length >= 12 &&
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46
+  ) {
+    return true;
+  }
+  if (ct.includes('audio') || ct.includes('octet-stream') || ct.includes('wav')) {
+    return buf.length > 44;
+  }
+  return false;
+}
+
 /**
  * Resolve Hamsa TTS from Admin → AI Providers (kind=HAMSA).
  * modelFast = speaker (e.g. Lyali), modelReason = dialect (e.g. irq).
@@ -38,14 +70,20 @@ export async function resolveHamsaTtsConfig(
     if (!row) return null;
 
     const apiKey = decryptSecret(row.apiKeyEncrypted as string | null);
-    if (!apiKey) return null;
+    if (!apiKey) {
+      console.warn(
+        '[hamsa-tts] API key decrypt failed for slug=%s — re-save the Hamsa key in Admin → AI Providers (U_AGENT_SECRETS_KEY may have rotated).',
+        row.slug
+      );
+      return null;
+    }
 
     return {
       id: row.id,
       slug: row.slug,
       name: row.name,
       apiKey,
-      baseUrl: (row.baseUrl as string | null)?.replace(/\/$/, '') || 'https://api.tryhamsa.com',
+      baseUrl: normalizeHamsaBaseUrl(row.baseUrl as string | null),
       speaker: (row.modelFast as string | null)?.trim() || 'Lyali',
       dialect: (row.modelReason as string | null)?.trim() || 'irq',
       isDefault: row.isDefault === true,
@@ -57,7 +95,15 @@ export async function resolveHamsaTtsConfig(
 }
 
 export async function listHamsaTtsVoices(): Promise<
-  Array<{ id: string; slug: string; name: string; speaker: string; dialect: string; isDefault: boolean }>
+  Array<{
+    id: string;
+    slug: string;
+    name: string;
+    speaker: string;
+    dialect: string;
+    isDefault: boolean;
+    keyDecryptable: boolean;
+  }>
 > {
   if (!prisma.uAgentAiProvider?.findMany) return [];
   try {
@@ -71,6 +117,7 @@ export async function listHamsaTtsVoices(): Promise<
         modelFast: true,
         modelReason: true,
         isDefault: true,
+        apiKeyEncrypted: true,
       },
     });
     return (rows || []).map(
@@ -81,6 +128,7 @@ export async function listHamsaTtsVoices(): Promise<
         modelFast: string | null;
         modelReason: string | null;
         isDefault: boolean;
+        apiKeyEncrypted: string | null;
       }) => ({
         id: r.id,
         slug: r.slug,
@@ -88,6 +136,7 @@ export async function listHamsaTtsVoices(): Promise<
         speaker: r.modelFast || 'Lyali',
         dialect: r.modelReason || 'irq',
         isDefault: r.isDefault,
+        keyDecryptable: !!decryptSecret(r.apiKeyEncrypted),
       })
     );
   } catch {
@@ -114,7 +163,8 @@ export async function synthesizeHamsaSpeech(opts: {
   if (!cfg) {
     return {
       ok: false,
-      message: 'Hamsa TTS not configured. Add a HAMSA voice in Admin → AI Providers.',
+      message:
+        'Hamsa TTS not configured or API key unreadable. Re-add the HAMSA voice API key in Admin → AI Providers.',
     };
   }
 
@@ -137,7 +187,8 @@ export async function synthesizeHamsaSpeech(opts: {
   };
 
   const endpoint = `${cfg.baseUrl}/v1/realtime/tts`;
-  const authHeaders = [`Token ${cfg.apiKey}`, `Bearer ${cfg.apiKey}`];
+  // Docs use Bearer; keep Token as a fallback for older keys.
+  const authHeaders = [`Bearer ${cfg.apiKey}`, `Token ${cfg.apiKey}`];
 
   let lastErr = 'Hamsa TTS failed';
   for (const auth of authHeaders) {
@@ -159,8 +210,10 @@ export async function synthesizeHamsaSpeech(opts: {
         return { ok: false, message: lastErr };
       }
       const buf = Buffer.from(await res.arrayBuffer());
-      if (!buf.length) {
-        lastErr = 'Hamsa TTS returned empty audio';
+      if (!looksLikeWavOrAudio(buf, ct)) {
+        const snippet = buf.subarray(0, 120).toString('utf8');
+        lastErr = `Hamsa TTS returned non-audio body (${ct || 'no CT'}): ${snippet.slice(0, 160)}`;
+        console.warn('[hamsa-tts]', lastErr);
         continue;
       }
       return {

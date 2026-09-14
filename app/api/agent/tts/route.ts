@@ -83,11 +83,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, message: auth.message }, { status: auth.status });
   }
   const voices = await listHamsaTtsVoices();
+  const configured = await isHamsaTtsConfigured();
+  const usable = voices.filter((v) => v.keyDecryptable);
   return NextResponse.json({
     success: true,
-    configured: voices.length > 0,
+    configured,
     voices,
-    speaker: voices[0]?.speaker ?? null,
-    dialect: voices[0]?.dialect ?? null,
+    speaker: usable[0]?.speaker ?? voices[0]?.speaker ?? null,
+    dialect: usable[0]?.dialect ?? voices[0]?.dialect ?? null,
+    hint: configured
+      ? null
+      : voices.length
+        ? 'Hamsa row exists but API key cannot be decrypted — re-save the key in Admin → AI Providers.'
+        : 'Add a HAMSA voice under Admin → AI Providers.',
   });
 }

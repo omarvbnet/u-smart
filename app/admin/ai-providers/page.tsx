@@ -20,6 +20,7 @@ type Provider = {
   modelTranscribe: string | null;
   apiKeyMasked: string | null;
   hasApiKey: boolean;
+  keyDecryptable?: boolean;
   notes: string | null;
 };
 
@@ -206,6 +207,9 @@ export default function AdminAiProvidersPage() {
           Chat models: OpenAI, DeepSeek, Claude, or custom. <strong>TTS voices</strong>: add{' '}
           <strong>HAMSA</strong> rows with API key + speaker + dialect (no env vars). Mark one Hamsa
           voice as default for U Agent speech. Chat “default” only applies to non-Hamsa providers.
+          Base URL should be <code className="text-teal-200/90">https://api.tryhamsa.com</code> (no{' '}
+          <code>/v1</code>). If a voice shows “key unreadable”, re-save the API key after secret
+          rotation.
         </p>
       </div>
 
@@ -418,6 +422,9 @@ function ProviderList(props: {
               </p>
               <p className="text-xs text-gray-400 mt-1">
                 {p.kind} · {p.slug} · key {p.apiKeyMasked || '—'} · {p.baseUrl || 'default base URL'}
+                {p.hasApiKey && p.keyDecryptable === false && (
+                  <span className="text-amber-300"> · key unreadable — re-save API key</span>
+                )}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {props.hamsa

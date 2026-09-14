@@ -30,8 +30,17 @@ export function decryptSecret(stored: string | null | undefined): string | null 
     ]);
     return out.toString('utf8');
   } catch {
+    // Common after rotating U_AGENT_SECRETS_KEY / JWT_SECRET — admin must re-save the key.
+    console.warn(
+      '[secrets] decryptSecret failed — re-save the API key in Admin (encryption key may have rotated)'
+    );
     return null;
   }
+}
+
+/** True when an encrypted blob can be decrypted with the current secrets key. */
+export function isSecretDecryptable(stored: string | null | undefined): boolean {
+  return !!decryptSecret(stored);
 }
 
 export function maskApiKey(plainOrEncrypted: string | null | undefined): string | null {

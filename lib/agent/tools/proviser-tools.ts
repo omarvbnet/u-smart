@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma as _prisma } from '@/lib/prisma';
 import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
+import { phonesMatch } from '@/lib/phone-match';
 import {
   registerTool,
   zodToJsonSchemaRough,
@@ -11,9 +12,23 @@ import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
+const OPEN_STATUSES = new Set([
+  'PENDING',
+  'ASSIGNED',
+  'IN_PROGRESS',
+  'ACCEPTED',
+  'OPEN',
+  'WAITING',
+  'ON_HOLD',
+]);
+
 const searchTicketsInput = z.object({
   query: z.string().optional(),
   status: z.string().optional(),
+  /** Match tickets assigned to / requested by this phone (Iraqi 07… OK). */
+  phone: z.string().max(32).optional(),
+  /** If true, only open/pending/in-progress tickets (remaining work). */
+  remainingOnly: z.boolean().optional(),
   limit: z.number().int().min(1).max(50).optional(),
 });
 
@@ -65,13 +80,14 @@ export function registerProviserTools(): void {
   registerTool({
     id: 'search_tickets',
     name: 'Search tickets',
-    description: 'Search Proviser tickets visible to the current user (status, site, technique).',
+    description:
+      'Search Proviser tickets visible to the current user. Use remainingOnly=true for unfinished work. Use phone= to find remaining tickets for a person (assignee/requester). Call this BEFORE whatsapp_start_call / whatsapp_send_message when the user asks to call/tell someone about remaining tasks.',
     category: 'tickets',
     riskLevel: 'READ',
     requiresApproval: false,
     requiredPermissions: ['agent.read_tickets'],
     enabled: true,
-    version: '1',
+    version: '2',
     timeoutMs: 15000,
     inputSchema: searchTicketsInput,
     jsonSchema: zodToJsonSchemaRough(searchTicketsInput),
@@ -89,10 +105,25 @@ export function registerProviserTools(): void {
       }
       if (parsed.status) where.status = parsed.status.toUpperCase();
 
+      let assigneeId: string | null = null;
+      const phoneQ = parsed.phone?.trim();
+      if (phoneQ && ctx.privateCompanyId) {
+        const people = await prisma.ticketRequester.findMany({
+          where: {
+            privateCompanyId: ctx.privateCompanyId,
+            status: { not: 'BLOCKED' },
+          },
+          select: { id: true, phone: true, name: true, username: true },
+          take: 200,
+        });
+        const hit = people.find((p: { phone: string }) => phonesMatch(p.phone || '', phoneQ));
+        if (hit) assigneeId = hit.id;
+      }
+
       const rows = await prisma.visitorRequest.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        take: limit,
+        take: Math.min(80, limit * 3),
         select: {
           id: true,
           status: true,
@@ -100,36 +131,93 @@ export function registerProviserTools(): void {
           createdAt: true,
           company: true,
           requesterId: true,
+          phone: true,
+          siteName: true,
         },
       });
 
       const q = (parsed.query || '').trim().toLowerCase();
       const mapped = rows
-        .map((r: { id: string; status: string; technique: string; createdAt: Date; company: string | null }) => {
-          const c = parseCompany(r.company);
-          return {
-            id: r.id,
-            status: r.status,
-            technique: r.technique,
-            siteName: c.siteName ?? null,
-            assignedEngineerName: c.assignedEngineerName ?? null,
-            createdAt: r.createdAt,
-          };
-        })
-        .filter((r: { id: string; siteName: unknown; technique: string; status: string }) => {
-          if (!q) return true;
-          return (
-            r.id.toLowerCase().includes(q) ||
-            String(r.siteName || '').toLowerCase().includes(q) ||
-            r.technique.toLowerCase().includes(q) ||
-            r.status.toLowerCase().includes(q)
-          );
-        });
+        .map(
+          (r: {
+            id: string;
+            status: string;
+            technique: string;
+            createdAt: Date;
+            company: string | null;
+            requesterId: string | null;
+            phone: string | null;
+            siteName: string | null;
+          }) => {
+            const c = parseCompany(r.company);
+            return {
+              id: r.id,
+              status: r.status,
+              technique: r.technique,
+              siteName: r.siteName ?? c.siteName ?? null,
+              assignedEngineerId: (c.assignedEngineerId as string) ?? null,
+              assignedEngineerName: (c.assignedEngineerName as string) ?? null,
+              requesterId: r.requesterId,
+              phone: r.phone,
+              createdAt: r.createdAt,
+            };
+          }
+        )
+        .filter(
+          (r: {
+            id: string;
+            siteName: unknown;
+            technique: string;
+            status: string;
+            assignedEngineerId: string | null;
+            assignedEngineerName: string | null;
+            requesterId: string | null;
+            phone: string | null;
+          }) => {
+            if (parsed.remainingOnly && !OPEN_STATUSES.has(String(r.status || '').toUpperCase())) {
+              return false;
+            }
+            if (assigneeId) {
+              const matchAssignee =
+                r.assignedEngineerId === assigneeId || r.requesterId === assigneeId;
+              if (!matchAssignee) return false;
+            } else if (phoneQ) {
+              if (!phonesMatch(r.phone || '', phoneQ)) return false;
+            }
+            if (!q) return true;
+            return (
+              r.id.toLowerCase().includes(q) ||
+              String(r.siteName || '').toLowerCase().includes(q) ||
+              r.technique.toLowerCase().includes(q) ||
+              r.status.toLowerCase().includes(q) ||
+              String(r.assignedEngineerName || '').toLowerCase().includes(q)
+            );
+          }
+        )
+        .slice(0, limit);
+
+      const briefingLines = mapped.map(
+        (t: { id: string; status: string; technique: string; siteName: unknown }, i: number) =>
+          `${i + 1}) ${t.technique} — ${t.status}${t.siteName ? ` @ ${t.siteName}` : ''} (${t.id.slice(0, 8)})`
+      );
 
       return {
         ok: true,
-        message: `Found ${mapped.length} ticket(s).`,
-        data: { tickets: mapped },
+        message: mapped.length
+          ? `Found ${mapped.length} ticket(s)${parsed.remainingOnly ? ' remaining' : ''}${phoneQ ? ` for phone ${phoneQ}` : ''}. Use this list in WhatsApp note/message — do not invent tasks.`
+          : phoneQ
+            ? `No tickets matched phone ${phoneQ}. Still proceed with whatsapp_start_call using a short note that no open tickets were found in Proviser for this number, unless the user gave other details.`
+            : 'No tickets found.',
+        data: {
+          tickets: mapped,
+          count: mapped.length,
+          briefingTextAr: mapped.length
+            ? `التاسكات المتبقية:\n${briefingLines.join('\n')}`
+            : 'لا توجد تاسكات مفتوحة مسجّلة في Proviser لهذا الرقم حالياً.',
+          briefingTextEn: mapped.length
+            ? `Remaining tasks:\n${briefingLines.join('\n')}`
+            : 'No open tickets found in Proviser for this number right now.',
+        },
       };
     },
   });

@@ -27,7 +27,8 @@ const sendFileInput = z.object({
 
 const startCallInput = z.object({
   toPhone: z.string().min(8).max(32),
-  note: z.string().max(500).optional(),
+  /** Briefing text prefilled in WhatsApp chat (remaining tasks, reason, etc.). */
+  note: z.string().max(1000).optional(),
 });
 
 export async function executeApprovedWhatsAppSendMessage(
@@ -113,7 +114,7 @@ export function registerWhatsAppTools(): void {
     id: 'whatsapp_send_message',
     name: 'Send WhatsApp message',
     description:
-      'Send a WhatsApp text message to a phone number immediately after the user granted WhatsApp messaging permission in the app. Use list_contacts to find numbers. No workspace admin approval.',
+      'Send a WhatsApp text to a phone (Iraqi 07… OK). Contact need not be saved. Use after search_tickets when briefing remaining tasks. No workspace admin approval.',
     category: 'whatsapp',
     riskLevel: 'EXTERNAL',
     requiresApproval: false,
@@ -138,6 +139,20 @@ export function registerWhatsAppTools(): void {
         ...parsed,
         userId: ctx.userId,
         requestedById: ctx.userId,
+      }).then((r) => {
+        if (r.ok) {
+          const link =
+            r.data && typeof r.data === 'object' && 'deepLink' in r.data
+              ? String((r.data as { deepLink?: string }).deepLink || '')
+              : '';
+          return {
+            ...r,
+            message: link
+              ? `${r.message} Give the requester clear feedback that WhatsApp conversation started and include this open link: ${link}`
+              : `${r.message} Give the requester clear feedback that WhatsApp conversation started.`,
+          };
+        }
+        return r;
       });
     },
   });
@@ -179,14 +194,14 @@ export function registerWhatsAppTools(): void {
     id: 'whatsapp_start_call',
     name: 'Start WhatsApp call',
     description:
-      'Prepare a WhatsApp voice/video call deep link for a contact phone. Requires user call permission. Executes immediately (opens on the user’s device).',
+      'Open WhatsApp on the requester’s phone to call/chat a number (Iraqi 07… OK). Put the full briefing (remaining tickets + why) in `note` so it is prefilled. Do NOT refuse because the contact is unsaved — a phone number is enough. Requires WhatsApp call permission. After success, tell the requester clearly that WhatsApp is opening and summarize what was briefed.',
     category: 'whatsapp',
     riskLevel: 'EXTERNAL',
     requiresApproval: false,
     executeImmediately: true,
     requiredPermissions: ['agent.whatsapp'],
     enabled: true,
-    version: '2',
+    version: '3',
     timeoutMs: 15000,
     inputSchema: startCallInput,
     jsonSchema: zodToJsonSchemaRough(startCallInput),
@@ -197,13 +212,31 @@ export function registerWhatsAppTools(): void {
         return {
           ok: false,
           message:
-            'User has not granted WhatsApp call permission. Ask them to enable it in U Agent → WhatsApp permissions.',
+            'User has not granted WhatsApp call permission. Ask them to enable Calls in U Agent → WhatsApp, then retry immediately with the same phone + note.',
         };
       }
       return executeApprovedWhatsAppStartCall({
         ...parsed,
         userId: ctx.userId,
         requestedById: ctx.userId,
+      }).then((r) => {
+        if (r.ok) {
+          const link =
+            r.data && typeof r.data === 'object'
+              ? String(
+                  (r.data as { deepLink?: string; callLink?: string }).deepLink ||
+                    (r.data as { callLink?: string }).callLink ||
+                    ''
+                )
+              : '';
+          return {
+            ...r,
+            message: link
+              ? `${r.message} Give the requester short feedback in their language: call ready for ${parsed.toPhone}, briefing included, tap Open WhatsApp / Call. Link: ${link}`
+              : `${r.message} Give the requester short feedback: WhatsApp call is ready.`,
+          };
+        }
+        return r;
       });
     },
   });

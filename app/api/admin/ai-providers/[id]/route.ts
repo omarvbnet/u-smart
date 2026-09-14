@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-require';
 import { prisma as _prisma } from '@/lib/prisma';
-import { encryptSecret, maskApiKey } from '@/lib/agent/providers/secrets';
+import { encryptSecret, isSecretDecryptable, maskApiKey } from '@/lib/agent/providers/secrets';
 import { invalidateAiProviderCache } from '@/lib/agent/providers/registry';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +41,7 @@ function publicRow(row: Record<string, unknown>) {
     notes: row.notes,
     apiKeyMasked: maskApiKey(row.apiKeyEncrypted as string | null),
     hasApiKey: !!row.apiKeyEncrypted,
+    keyDecryptable: isSecretDecryptable(row.apiKeyEncrypted as string | null),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -16,7 +16,17 @@ function normalizeEnvValue(raw: string | undefined): string {
 }
 
 export function toWhatsAppDigits(raw: string): string {
-  return raw.replace(/\D/g, '');
+  let digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  // Iraqi mobile: 07XXXXXXXXX → 9647XXXXXXXXX for wa.me
+  if (digits.startsWith('07') && digits.length === 11) {
+    digits = `964${digits.slice(1)}`;
+  } else if (digits.startsWith('7') && digits.length === 10) {
+    digits = `964${digits}`;
+  } else if (digits.startsWith('00964')) {
+    digits = digits.slice(2);
+  }
+  return digits;
 }
 
 export function isWhatsAppCloudConfigured(): boolean {
@@ -113,21 +123,28 @@ export async function sendWhatsAppText(args: {
   const text = args.body.trim().slice(0, 4000);
   if (!text) return { ok: false, message: 'Message body required' };
 
+  const links = buildWhatsAppDeepLinks({ phone: to, text });
+
   if (!isWhatsAppCloudConfigured()) {
-    const links = buildWhatsAppDeepLinks({ phone: to, text });
     return {
       ok: true,
-      message:
-        'Cloud API not configured — open the deep link on the user’s phone to send from their WhatsApp.',
+      message: `WhatsApp chat ready for the requester. Open this link on their phone to start the conversation: ${links.waMe}`,
       deepLink: links.waMe,
     };
   }
 
-  return postMessages({
+  const sent = await postMessages({
     to,
     type: 'text',
     text: { preview_url: false, body: text },
   });
+  return {
+    ...sent,
+    deepLink: links.waMe,
+    message: sent.ok
+      ? `WhatsApp message sent to ${to}. Confirm to the requester that the conversation started. Open link if needed: ${links.waMe}`
+      : sent.message,
+  };
 }
 
 export async function sendWhatsAppMedia(args: {
@@ -143,14 +160,15 @@ export async function sendWhatsAppMedia(args: {
     return { ok: false, message: 'mediaUrl must be a public https URL' };
   }
 
+  const links = buildWhatsAppDeepLinks({
+    phone: to,
+    text: args.caption || args.mediaUrl,
+  });
+
   if (!isWhatsAppCloudConfigured()) {
-    const links = buildWhatsAppDeepLinks({
-      phone: to,
-      text: args.caption || args.mediaUrl,
-    });
     return {
       ok: true,
-      message: 'Cloud API not configured — use deep link to share from personal WhatsApp.',
+      message: `WhatsApp file share ready. Open on the requester’s phone: ${links.waMe}`,
       deepLink: links.waMe,
     };
   }
@@ -159,25 +177,35 @@ export async function sendWhatsAppMedia(args: {
   if (args.caption) media.caption = args.caption.slice(0, 1000);
   if (args.kind === 'document' && args.filename) media.filename = args.filename;
 
-  return postMessages({
+  const sent = await postMessages({
     to,
     type: args.kind,
     [args.kind]: media,
   });
+  return {
+    ...sent,
+    deepLink: links.waMe,
+    message: sent.ok
+      ? `WhatsApp file sent to ${to}. Tell the requester it was shared. Link: ${links.waMe}`
+      : sent.message,
+  };
 }
 
 export function prepareWhatsAppCall(args: { to: string; note?: string }): WhatsAppSendResult {
   const to = toWhatsAppDigits(args.to);
   if (!to || to.length < 8) return { ok: false, message: 'Invalid recipient phone' };
+  const briefing =
+    (args.note || '').trim() ||
+    'مرحباً — اتصال من U Agent / Proviser. يرجى الرد أو قراءة الرسالة.';
   const links = buildWhatsAppDeepLinks({
     phone: to,
-    text: args.note || 'U Agent: please answer this WhatsApp call / chat.',
+    text: briefing.slice(0, 1000),
   });
   return {
     ok: true,
-    message:
-      'WhatsApp call ready. Open the link on the user’s device to start a WhatsApp voice/video call from their account.',
-    deepLink: links.waMe,
-    callLink: links.callHint,
+    message: `WhatsApp call/chat ready for +${to}. Briefing is prefilled. Tell the requester: WhatsApp will open — tap Call, or send the prefilled message. Feedback: opened for ${to}.`,
+    // Prefer native scheme so the phone opens WhatsApp app directly
+    deepLink: links.chatLink,
+    callLink: links.waMe,
   };
 }

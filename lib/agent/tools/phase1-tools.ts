@@ -201,6 +201,7 @@ export function registerPhase1Tools(): void {
     category: 'tickets',
     riskLevel: 'HIGH_IMPACT',
     requiresApproval: true,
+    executeImmediately: true,
     requiredPermissions: ['agent.create_ticket_type'],
     enabled: true,
     version: '1',
@@ -249,7 +250,7 @@ export function registerPhase1Tools(): void {
         ok: true,
         needsApproval: true,
         approvalId: approval.id,
-        message: `New ticket type "${parsed.labelAr}" (${slug}) is PENDING APPROVAL (${approval.id}). Tell the user: not active until an owner/manager approves.`,
+        message: `New ticket type "${parsed.labelAr}" (${slug}) is PENDING APPROVAL (${approval.id}). Tell the requester clearly: status is pending — not active until an owner/manager approves. They will get a notification when it is approved or rejected.`,
         data: {
           approvalId: approval.id,
           status: 'PENDING_APPROVAL',
@@ -269,6 +270,7 @@ export function registerPhase1Tools(): void {
     category: 'tickets',
     riskLevel: 'HIGH_IMPACT',
     requiresApproval: true,
+    executeImmediately: true,
     requiredPermissions: ['agent.create_ticket'],
     enabled: true,
     version: '2',
@@ -396,8 +398,8 @@ export function registerPhase1Tools(): void {
       });
 
       const pendingMsg = match.known
-        ? `Ticket creation PENDING APPROVAL (${approval.id}). Tell the user to wait for owner/manager approval.`
-        : `Service/type "${parsed.technique}" was NOT found. Queued: (1) new ticket type approval ${typeApprovalId}, (2) ticket create approval ${approval.id}. Tell the user clearly both are pending until approved.`;
+        ? `Ticket creation PENDING APPROVAL (${approval.id}). Tell the requester clearly to wait for owner/manager approval; they will be notified when approved or rejected.`
+        : `Service/type "${parsed.technique}" was NOT found. Queued for the requester: (1) new ticket type approval ${typeApprovalId}, (2) ticket create approval ${approval.id}. Tell them clearly both are pending until approved — they will get notified on resolve.`;
 
       return {
         ok: true,
@@ -422,6 +424,7 @@ export function registerPhase1Tools(): void {
     category: 'tickets',
     riskLevel: 'HIGH_IMPACT',
     requiresApproval: true,
+    executeImmediately: true,
     requiredPermissions: ['agent.assign_ticket'],
     enabled: true,
     version: '1',
@@ -457,6 +460,7 @@ export function registerPhase1Tools(): void {
     category: 'conflicts',
     riskLevel: 'HIGH_IMPACT',
     requiresApproval: true,
+    executeImmediately: true,
     requiredPermissions: ['agent.report_conflict'],
     enabled: true,
     version: '1',

@@ -59,15 +59,32 @@ function pushArtifact(artifacts: AgentArtifact[], result: { data?: unknown }) {
   const data = result.data;
   if (!data || typeof data !== 'object') return;
   const d = data as Record<string, unknown>;
-  if (typeof d.url !== 'string' || !d.url) return;
-  if (d.kind !== 'document' && !String(d.name || '').match(/\.(md|csv|txt|json|pdf)$/i)) return;
+  const link =
+    (typeof d.url === 'string' && d.url) ||
+    (typeof d.deepLink === 'string' && d.deepLink) ||
+    (typeof d.callLink === 'string' && d.callLink) ||
+    '';
+  if (!link) return;
+  const kind = typeof d.kind === 'string' ? d.kind : 'document';
+  const isWhatsApp = kind.startsWith('whatsapp_') || kind.startsWith('telegram_');
+  const isDoc =
+    kind === 'document' ||
+    String(d.name || '').match(/\.(md|csv|txt|json|pdf)$/i);
+  if (!isWhatsApp && !isDoc) return;
   artifacts.push({
-    url: d.url,
-    name: String(d.name || 'document'),
-    title: typeof d.title === 'string' ? d.title : undefined,
+    url: link,
+    name: String(d.name || (isWhatsApp ? 'Open WhatsApp' : 'document')),
+    title:
+      typeof d.title === 'string'
+        ? d.title
+        : isWhatsApp
+          ? kind === 'whatsapp_call'
+            ? 'Open WhatsApp call'
+            : 'Open WhatsApp'
+          : undefined,
     contentType: typeof d.contentType === 'string' ? d.contentType : undefined,
     format: typeof d.format === 'string' ? d.format : undefined,
-    kind: typeof d.kind === 'string' ? d.kind : 'document',
+    kind,
     size: typeof d.size === 'number' ? d.size : undefined,
   });
 }
@@ -346,6 +363,14 @@ export async function runAgentMessage(args: {
 
       if (gate.needsApproval) {
         pushTimeline(timeline, `Approval required: ${tool.id}`, 'WAITING_APPROVAL', tool.id);
+        const enrichedPayload: Record<string, unknown> = {
+          ...toolPayload,
+          requesterId: ctx.userId,
+          userId: ctx.userId,
+          requestedById: ctx.userId,
+          privateCompanyId: ctx.privateCompanyId,
+          companyId: ctx.privateCompanyId,
+        };
         const approval = await createApprovalRequest({
           privateCompanyId: ctx.privateCompanyId,
           conversationId: conversation.id,
@@ -355,13 +380,19 @@ export async function runAgentMessage(args: {
           action: `Execute ${tool.id}`,
           reason: `User asked: ${args.text.slice(0, 200)}`,
           riskLevel: tool.riskLevel,
-          payload: toolPayload,
+          payload: enrichedPayload,
         });
         approvalIds.push(approval.id);
-        const msg = `Waiting for approval (${approval.id}) before running ${tool.id}.`;
+        const msg = `Waiting for approval (${approval.id}) before running ${tool.id}. Tell the user clearly this is PENDING.`;
         messages.push({
           role: 'tool',
-          content: JSON.stringify({ ok: true, needsApproval: true, approvalId: approval.id, message: msg }),
+          content: JSON.stringify({
+            ok: true,
+            needsApproval: true,
+            approvalId: approval.id,
+            message: msg,
+            status: 'PENDING_APPROVAL',
+          }),
           tool_call_id: call.id,
           name: call.name,
         });
