@@ -62,4 +62,6 @@ export type AgentCapability =
   | 'agent.manage_policy'
   | 'agent.create_document'
   | 'agent.whatsapp'
+  | 'agent.telegram'
+  | 'agent.read_contacts'
   | 'agent.create_ticket_type';

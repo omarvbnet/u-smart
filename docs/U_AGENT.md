@@ -93,9 +93,13 @@ Per-user WhatsApp opt-in. U Agent **cannot** send messages, files, or open calls
 
 **PATCH body:** `{ granted?, canSendMessages?, canSendFiles?, canStartCalls? }`
 
-Tools (always approval-gated): `whatsapp_send_message`, `whatsapp_send_file`, `whatsapp_start_call`.
+Tools (user consent only — **no workspace admin approval**): `whatsapp_send_message`, `whatsapp_send_file`, `whatsapp_start_call`.
+
+Also: `list_contacts` (workspace directory), `telegram_send_message` (immediate; needs `TELEGRAM_BOT_TOKEN` for Bot API, otherwise returns `t.me` deep links).
 
 Uses Meta Cloud API when `WHATSAPP_CLOUD_ACCESS_TOKEN` + `WHATSAPP_CLOUD_PHONE_NUMBER_ID` are set; otherwise returns secure `wa.me` deep links for the user’s personal WhatsApp.
+
+Document downloads use **`https://proviser.usmart-iot.com/api/public/u-agent-file/...`** (not raw Vercel Blob URLs).
 
 ---
 

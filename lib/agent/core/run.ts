@@ -12,6 +12,8 @@ import { registerProviserTools } from '@/lib/agent/tools/proviser-tools';
 import { registerPhase1Tools } from '@/lib/agent/tools/phase1-tools';
 import { registerDocumentTools } from '@/lib/agent/tools/document-tools';
 import { registerWhatsAppTools } from '@/lib/agent/tools/whatsapp-tools';
+import { registerContactsTools } from '@/lib/agent/tools/contacts-tools';
+import { registerTelegramTools } from '@/lib/agent/tools/telegram-tools';
 import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
 import {
   appendMessage,
@@ -47,6 +49,8 @@ function ensureTools(): void {
     registerPhase1Tools();
     registerDocumentTools();
     registerWhatsAppTools();
+    registerContactsTools();
+    registerTelegramTools();
     toolsRegistered = true;
   }
 }
@@ -326,11 +330,13 @@ export async function runAgentMessage(args: {
         continue;
       }
 
-      const gate = autonomyAllowsRisk(
-        args.policy.autonomyLevel,
-        tool.riskLevel,
-        tool.requiresApproval
-      );
+      const gate = tool.executeImmediately
+        ? { ok: true, needsApproval: false }
+        : autonomyAllowsRisk(
+            args.policy.autonomyLevel,
+            tool.riskLevel,
+            tool.requiresApproval
+          );
 
       if (gate.needsApproval) {
         pushTimeline(timeline, `Approval required: ${tool.id}`, 'WAITING_APPROVAL', tool.id);

@@ -108,7 +108,7 @@ const Map<String, String> _en = {
   'u_agent_whatsapp': 'WhatsApp',
   'u_agent_whatsapp_title': 'WhatsApp permissions',
   'u_agent_whatsapp_hint':
-      'U Agent can message, send files, or open a WhatsApp call only after you enable these. Every action still needs approval.',
+      'U Agent can message, send files, or open a WhatsApp call only after you enable these. Messages send immediately — no workspace admin approval.',
   'u_agent_whatsapp_grant': 'Allow WhatsApp access',
   'u_agent_whatsapp_messages': 'Send messages',
   'u_agent_whatsapp_files': 'Send files / media',
@@ -1436,7 +1436,7 @@ const Map<String, String> _ar = {
   'u_agent_whatsapp': 'واتساب',
   'u_agent_whatsapp_title': 'صلاحيات واتساب',
   'u_agent_whatsapp_hint':
-      'U Agent يرسل رسائل أو ملفات أو يفتح مكالمة واتساب فقط بعد تفعيل هذه الصلاحيات. كل إجراء يحتاج موافقة أيضاً.',
+      'U Agent يرسل رسائل أو ملفات أو يفتح مكالمة واتساب فقط بعد تفعيل هذه الصلاحيات. الإرسال فوري بدون موافقة مدير مساحة العمل.',
   'u_agent_whatsapp_grant': 'السماح بالوصول لواتساب',
   'u_agent_whatsapp_messages': 'إرسال الرسائل',
   'u_agent_whatsapp_files': 'إرسال الملفات / الوسائط',

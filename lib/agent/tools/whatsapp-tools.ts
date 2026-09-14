@@ -4,7 +4,6 @@ import {
   zodToJsonSchemaRough,
   type ToolResult,
 } from '@/lib/agent/tools/registry';
-import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
 import { getWhatsAppConsent } from '@/lib/agent/whatsapp/consent';
 import {
   prepareWhatsAppCall,
@@ -114,13 +113,14 @@ export function registerWhatsAppTools(): void {
     id: 'whatsapp_send_message',
     name: 'Send WhatsApp message',
     description:
-      'Send a WhatsApp text message to a phone number. ONLY after the user granted WhatsApp permission. Always requires approval.',
+      'Send a WhatsApp text message to a phone number immediately after the user granted WhatsApp messaging permission in the app. Use list_contacts to find numbers. No workspace admin approval.',
     category: 'whatsapp',
     riskLevel: 'EXTERNAL',
-    requiresApproval: true,
+    requiresApproval: false,
+    executeImmediately: true,
     requiredPermissions: ['agent.whatsapp'],
     enabled: true,
-    version: '1',
+    version: '2',
     timeoutMs: 25000,
     inputSchema: sendMessageInput,
     jsonSchema: zodToJsonSchemaRough(sendMessageInput),
@@ -134,21 +134,11 @@ export function registerWhatsAppTools(): void {
             'User has not granted WhatsApp messaging permission. Ask them to enable it in U Agent → WhatsApp permissions.',
         };
       }
-      const approval = await createApprovalRequest({
-        privateCompanyId: ctx.privateCompanyId,
+      return executeApprovedWhatsAppSendMessage({
+        ...parsed,
+        userId: ctx.userId,
         requestedById: ctx.userId,
-        toolId: 'whatsapp_send_message',
-        action: `Send WhatsApp to ${parsed.toPhone}: ${parsed.body.slice(0, 80)}`,
-        reason: 'Outbound WhatsApp message requires explicit approval',
-        riskLevel: 'EXTERNAL',
-        payload: { ...parsed, userId: ctx.userId, requestedById: ctx.userId },
       });
-      return {
-        ok: true,
-        needsApproval: true,
-        approvalId: approval.id,
-        message: `Waiting for approval to send WhatsApp message (${approval.id}).`,
-      };
     },
   });
 
@@ -156,13 +146,14 @@ export function registerWhatsAppTools(): void {
     id: 'whatsapp_send_file',
     name: 'Send WhatsApp file',
     description:
-      'Send an image/document/audio/video via WhatsApp using a public URL. Requires user WhatsApp file permission + approval.',
+      'Send an image/document/audio/video via WhatsApp using a public Proviser URL. Requires user WhatsApp file permission. No admin approval.',
     category: 'whatsapp',
     riskLevel: 'EXTERNAL',
-    requiresApproval: true,
+    requiresApproval: false,
+    executeImmediately: true,
     requiredPermissions: ['agent.whatsapp'],
     enabled: true,
-    version: '1',
+    version: '2',
     timeoutMs: 30000,
     inputSchema: sendFileInput,
     jsonSchema: zodToJsonSchemaRough(sendFileInput),
@@ -176,21 +167,11 @@ export function registerWhatsAppTools(): void {
             'User has not granted WhatsApp file permission. Ask them to enable it in U Agent → WhatsApp permissions.',
         };
       }
-      const approval = await createApprovalRequest({
-        privateCompanyId: ctx.privateCompanyId,
+      return executeApprovedWhatsAppSendFile({
+        ...parsed,
+        userId: ctx.userId,
         requestedById: ctx.userId,
-        toolId: 'whatsapp_send_file',
-        action: `Send WhatsApp ${parsed.kind} to ${parsed.toPhone}`,
-        reason: 'Outbound WhatsApp media requires explicit approval',
-        riskLevel: 'EXTERNAL',
-        payload: { ...parsed, userId: ctx.userId, requestedById: ctx.userId },
       });
-      return {
-        ok: true,
-        needsApproval: true,
-        approvalId: approval.id,
-        message: `Waiting for approval to send WhatsApp file (${approval.id}).`,
-      };
     },
   });
 
@@ -198,13 +179,14 @@ export function registerWhatsAppTools(): void {
     id: 'whatsapp_start_call',
     name: 'Start WhatsApp call',
     description:
-      'Prepare a WhatsApp voice/video call deep link for a phone number. Requires user call permission + approval. Opens on the user’s device.',
+      'Prepare a WhatsApp voice/video call deep link for a contact phone. Requires user call permission. Executes immediately (opens on the user’s device).',
     category: 'whatsapp',
     riskLevel: 'EXTERNAL',
-    requiresApproval: true,
+    requiresApproval: false,
+    executeImmediately: true,
     requiredPermissions: ['agent.whatsapp'],
     enabled: true,
-    version: '1',
+    version: '2',
     timeoutMs: 15000,
     inputSchema: startCallInput,
     jsonSchema: zodToJsonSchemaRough(startCallInput),
@@ -218,21 +200,11 @@ export function registerWhatsAppTools(): void {
             'User has not granted WhatsApp call permission. Ask them to enable it in U Agent → WhatsApp permissions.',
         };
       }
-      const approval = await createApprovalRequest({
-        privateCompanyId: ctx.privateCompanyId,
+      return executeApprovedWhatsAppStartCall({
+        ...parsed,
+        userId: ctx.userId,
         requestedById: ctx.userId,
-        toolId: 'whatsapp_start_call',
-        action: `Start WhatsApp call with ${parsed.toPhone}`,
-        reason: 'WhatsApp call requires explicit approval',
-        riskLevel: 'EXTERNAL',
-        payload: { ...parsed, userId: ctx.userId, requestedById: ctx.userId },
       });
-      return {
-        ok: true,
-        needsApproval: true,
-        approvalId: approval.id,
-        message: `Waiting for approval to start WhatsApp call (${approval.id}).`,
-      };
     },
   });
 }

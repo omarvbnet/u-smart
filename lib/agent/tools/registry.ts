@@ -16,6 +16,8 @@ export type RegisteredTool = {
   category: string;
   riskLevel: AgentRiskLevel;
   requiresApproval: boolean;
+  /** When true, skip autonomy approval queue (tool enforces its own gates, e.g. user consent). */
+  executeImmediately?: boolean;
   requiredPermissions: AgentCapability[];
   enabled: boolean;
   version: string;

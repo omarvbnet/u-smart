@@ -23,6 +23,8 @@ export function resolveAgentCapabilities(ctx: AgentContext): Set<AgentCapability
   caps.add('agent.read_sites');
   caps.add('agent.create_document');
   caps.add('agent.whatsapp');
+  caps.add('agent.telegram');
+  caps.add('agent.read_contacts');
   // Every authenticated Proviser role can request tickets / ticket types via U Agent.
   caps.add('agent.create_ticket');
   caps.add('agent.create_ticket_type');
