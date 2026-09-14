@@ -219,6 +219,17 @@ class UAgentService {
     );
   }
 
+  Future<Map<String, dynamic>?> fetchTtsStatus() {
+    return _api.getSafe(ApiConfig.agentTts);
+  }
+
+  Future<List<int>?> fetchHamsaTtsBytes(String text) {
+    return _api.postForBytes(
+      ApiConfig.agentTts,
+      body: {'text': text},
+    );
+  }
+
   Future<Map<String, dynamic>?> fetchWhatsAppConsent() {
     return _api.getSafe(ApiConfig.agentWhatsAppConsent);
   }

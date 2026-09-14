@@ -8,6 +8,9 @@ class UAgentProvider extends ChangeNotifier {
   final UAgentService _service;
   final String? userId;
 
+  /// Exposed for Hamsa / speech helpers that share the same API client.
+  UAgentService get serviceForSpeech => _service;
+
   String status = 'ONLINE';
   String greeting = 'شلون أگدر أساعدك اليوم؟';
   bool aiConfigured = true;

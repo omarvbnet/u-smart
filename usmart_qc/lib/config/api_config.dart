@@ -220,6 +220,7 @@ class ApiConfig {
   // ── U Agent ──────────────────────────────────────────────────────────────
   static const String agentMessage = '/api/agent/message';
   static const String agentFiles = '/api/agent/files';
+  static const String agentTts = '/api/agent/tts';
   static const String agentStatus = '/api/agent/status';
   static const String agentActivity = '/api/agent/activity';
   static const String agentConversations = '/api/agent/conversations';

@@ -4,10 +4,7 @@ import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -20,6 +17,7 @@ import '../../services/api_service.dart';
 import 'u_agent_provider.dart';
 import 'u_agent_service.dart';
 import 'u_agent_service_cards.dart';
+import 'u_agent_speech.dart';
 
 /// Floating U Agent host for dashboards (not a bottom-nav tab).
 class UAgentHost extends StatefulWidget {
@@ -221,7 +219,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
   final _scroll = ScrollController();
   final _inputFocus = FocusNode();
   final _speech = stt.SpeechToText();
-  final _tts = FlutterTts();
+  UAgentSpeech? _voice;
   late final AnimationController _sheetCtrl;
   late final AnimationController _waveCtrl;
   bool _speechReady = false;
@@ -241,8 +239,9 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
     _initVoice();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<ProvisorTechniquesProvider>().ensureLoaded();
-      _maybeLoadDeviceContacts();
+      try {
+        context.read<ProvisorTechniquesProvider>().ensureLoaded();
+      } catch (_) {}
     });
   }
 
@@ -252,55 +251,12 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
     final delta = pixels - _lastScrollPixels;
     if (delta.abs() < 6) return;
     if (delta > 0) {
-      // Scrolling down → hide keyboard smoothly
-      if (_inputFocus.hasFocus) {
-        _inputFocus.unfocus();
-      }
-    } else {
-      // Scrolling up → show keyboard
-      if (!_inputFocus.hasFocus && mounted) {
-        _inputFocus.requestFocus();
-      }
+      if (_inputFocus.hasFocus) _inputFocus.unfocus();
+    } else if (!_inputFocus.hasFocus && mounted) {
+      // Only request focus when composer is visible and user scrolls up intentionally.
+      _inputFocus.requestFocus();
     }
     _lastScrollPixels = pixels;
-  }
-
-  Future<void> _maybeLoadDeviceContacts() async {
-    if (!mounted) return;
-    final auth = context.read<AuthProvider>();
-    final role = (auth.user?.role ?? '').toUpperCase();
-    final hasCompany = (auth.user?.privateCompanyId ?? '').isNotEmpty;
-    final isPersonal = !hasCompany ||
-        role == 'PERSONAL' ||
-        role == 'INDIVIDUAL' ||
-        role == 'USER';
-    if (!isPersonal) return;
-
-    final granted = await FlutterContacts.requestPermission(readonly: true);
-    if (!granted) {
-      final status = await Permission.contacts.request();
-      if (!status.isGranted) return;
-    }
-    try {
-      final contacts = await FlutterContacts.getContacts(withProperties: true);
-      final mapped = <Map<String, String>>[];
-      for (final c in contacts) {
-        for (final p in c.phones) {
-          final digits = p.number.replaceAll(RegExp(r'\D'), '');
-          if (digits.length < 8) continue;
-          mapped.add({
-            'name': c.displayName.isNotEmpty ? c.displayName : p.number,
-            'phone': p.number,
-          });
-          if (mapped.length >= 200) break;
-        }
-        if (mapped.length >= 200) break;
-      }
-      if (!mounted) return;
-      context.read<UAgentProvider>().setDeviceContacts(mapped);
-    } catch (e) {
-      debugPrint('U Agent contacts: $e');
-    }
   }
 
   Future<void> _initVoice() async {
@@ -315,27 +271,27 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
           }
         },
       );
-      await _tts.setSpeechRate(0.48);
-      await _tts.setVolume(1.0);
-      await _tts.setPitch(1.0);
       if (!mounted) return;
       final locale = Localizations.localeOf(context).languageCode;
-      await _tts.setLanguage(locale.startsWith('ar') ? 'ar-SA' : 'en-US');
-      _tts.setStartHandler(() {
+      final agent = context.read<UAgentProvider>();
+      final voice = UAgentSpeech(agent.serviceForSpeech);
+      voice.onStart = () {
         if (mounted) context.read<UAgentProvider>().setSpeaking(true);
-      });
-      _tts.setCompletionHandler(() async {
+      };
+      voice.onComplete = () async {
         if (!mounted) return;
-        final agent = context.read<UAgentProvider>();
-        agent.setSpeaking(false);
-        if (agent.voiceMode && _voiceLoop && !agent.busy) {
+        final a = context.read<UAgentProvider>();
+        a.setSpeaking(false);
+        if (a.voiceMode && _voiceLoop && !a.busy) {
           await Future<void>.delayed(const Duration(milliseconds: 350));
-          if (mounted && agent.voiceMode) await _startVoiceListen();
+          if (mounted && a.voiceMode) await _startVoiceListen();
         }
-      });
-      _tts.setCancelHandler(() {
+      };
+      voice.onCancel = () {
         if (mounted) context.read<UAgentProvider>().setSpeaking(false);
-      });
+      };
+      await voice.init(languageCode: locale);
+      _voice = voice;
       _ttsReady = true;
       if (mounted) setState(() {});
     } catch (e) {
@@ -353,14 +309,14 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
     _scroll.dispose();
     _inputFocus.dispose();
     _speech.stop();
-    _tts.stop();
+    _voice?.dispose();
     super.dispose();
   }
 
   Future<void> _close() async {
     _voiceLoop = false;
     await _speech.stop();
-    await _tts.stop();
+    await _voice?.stop();
     await _sheetCtrl.reverse();
     if (mounted) {
       final agent = context.read<UAgentProvider>();
@@ -377,7 +333,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
       );
       return;
     }
-    await _tts.stop();
+    await _voice?.stop();
     _voiceLoop = true;
     agent.setVoiceMode(true);
     await _startVoiceListen();
@@ -386,7 +342,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
   Future<void> _exitVoiceMode() async {
     _voiceLoop = false;
     await _speech.stop();
-    await _tts.stop();
+    await _voice?.stop();
     if (!mounted) return;
     final agent = context.read<UAgentProvider>();
     agent.setVoiceMode(false);
@@ -397,7 +353,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
   Future<void> _startVoiceListen() async {
     final agent = context.read<UAgentProvider>();
     if (!_speechReady || agent.busy || agent.speaking) return;
-    await _tts.stop();
+    await _voice?.stop();
     agent.setListening(true);
     agent.setLiveTranscript('');
     await _speech.listen(
@@ -412,7 +368,8 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
           await _scrollToEnd();
           if (_ttsReady && reply != null && reply.trim().isNotEmpty && agent.voiceMode) {
             final speakText = reply.length > 1400 ? '${reply.substring(0, 1400)}…' : reply;
-            await _tts.speak(speakText);
+            final locale = Localizations.localeOf(context).languageCode;
+            await _voice?.speak(speakText, languageCode: locale);
           } else if (agent.voiceMode && _voiceLoop) {
             await Future<void>.delayed(const Duration(milliseconds: 400));
             if (mounted && agent.voiceMode) await _startVoiceListen();
@@ -430,7 +387,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
 
   Future<void> _interruptVoice() async {
     await _speech.stop();
-    await _tts.stop();
+    await _voice?.stop();
     if (!mounted) return;
     final agent = context.read<UAgentProvider>();
     agent.setSpeaking(false);
@@ -481,7 +438,8 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
     await _scrollToEnd();
     if (_autoSpeak && _ttsReady && reply != null && reply.trim().isNotEmpty && !agent.voiceMode) {
       final speakText = reply.length > 1200 ? '${reply.substring(0, 1200)}…' : reply;
-      await _tts.speak(speakText);
+      final locale = Localizations.localeOf(context).languageCode;
+            await _voice?.speak(speakText, languageCode: locale);
     }
   }
 
@@ -616,6 +574,59 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
     );
   }
 
+  Future<bool> _promptAddDeviceContact(UAgentProvider agent, AppLocalizations l10n) async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2F2F2F),
+        title: Text(l10n.t('u_agent_add_wa_contact'), style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: l10n.t('u_agent_contact_name'),
+                labelStyle: const TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: l10n.t('u_agent_contact_phone'),
+                labelStyle: const TextStyle(color: Colors.white54),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('u_agent_cancel'), style: const TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('u_agent_save_contact'), style: const TextStyle(color: Color(0xFF25D366))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    final phone = phoneCtrl.text.trim();
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 8) return false;
+    final name = nameCtrl.text.trim().isEmpty ? phone : nameCtrl.text.trim();
+    final next = List<Map<String, String>>.from(agent.deviceContacts)
+      ..add({'name': name, 'phone': phone});
+    agent.setDeviceContacts(next);
+    return true;
+  }
+
   Future<void> _maybeOpenWhatsAppResult(Map<String, dynamic>? data) async {
     if (data == null) return;
     final result = data['result'];
@@ -722,6 +733,23 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
                               setModal(() {});
                             }
                           : null,
+                    ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.person_add_alt_1, color: Color(0xFF25D366)),
+                      title: Text(l10n.t('u_agent_add_wa_contact'),
+                          style: const TextStyle(color: Colors.white)),
+                      subtitle: Text(
+                        agent.deviceContacts.isEmpty
+                            ? l10n.t('u_agent_add_wa_contact_hint')
+                            : '${agent.deviceContacts.length} saved',
+                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      onTap: () async {
+                        final added = await _promptAddDeviceContact(agent, l10n);
+                        if (added) setModal(() {});
+                      },
                     ),
                   ],
                 ),

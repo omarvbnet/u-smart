@@ -102,7 +102,7 @@ export function registerContactsTools(): void {
           ok: true,
           message: device.length
             ? `Found ${device.length} phone contact(s) from the user’s device (plus self). Use phone with WhatsApp tools.`
-            : 'No device contacts shared yet. Ask the user to allow Contacts permission in U Agent, or provide a phone number.',
+            : 'No saved phone contacts yet. Ask the user for a name/phone number, or to add one in U Agent WhatsApp settings.',
           data: {
             contacts,
             count: contacts.length,

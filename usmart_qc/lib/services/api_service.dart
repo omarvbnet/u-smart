@@ -66,6 +66,26 @@ class ApiService {
     }
   }
 
+  Future<List<int>?> postForBytes(String path, {Map<String, dynamic>? body}) async {
+    try {
+      final response = await http.post(
+        _uri(path),
+        headers: {
+          ..._headers,
+          'Accept': 'audio/wav, application/octet-stream, */*',
+        },
+        body: body != null ? jsonEncode(body) : null,
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      final ct = response.headers['content-type'] ?? '';
+      if (ct.contains('application/json')) return null;
+      return response.bodyBytes;
+    } catch (e) {
+      debugPrint('postForBytes: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>> post(String path,
       {Map<String, dynamic>? body}) async {
     final response = await http.post(
