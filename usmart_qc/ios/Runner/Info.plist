@@ -35,7 +35,9 @@
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>Provisor uses your location in the background to detect when you arrive at or leave work sites, so ticket status and quality-control workflows can update automatically. This works only for site-related features you use in the app.</string>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>Provisor may use the microphone when recording video for evidence.</string>
+		<string>Provisor needs microphone access so you can talk to U Agent by voice.</string>
+		<key>NSSpeechRecognitionUsageDescription</key>
+		<string>Provisor uses speech recognition to convert your voice into messages for U Agent.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Provisor needs permission to save photos to your library.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

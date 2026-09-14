@@ -59,4 +59,5 @@ export type AgentCapability =
   | 'agent.send_notification'
   | 'agent.request_approval'
   | 'agent.manage_approvals'
-  | 'agent.manage_policy';
+  | 'agent.manage_policy'
+  | 'agent.create_document';

@@ -11,11 +11,56 @@ class UAgentProvider extends ChangeNotifier {
   String greeting = 'شلون أگدر أساعدك اليوم؟';
   bool aiConfigured = true;
   bool busy = false;
+  bool open = false;
+  bool listening = false;
+  bool speaking = false;
   String? conversationId;
   String? error;
+  String? activeProvider;
   final List<UAgentChatMessage> messages = [];
+  final List<UAgentPendingFile> pendingFiles = [];
   List<Map<String, dynamic>> approvals = [];
   bool canManageApprovals = false;
+
+  void setOpen(bool value) {
+    if (open == value) return;
+    open = value;
+    notifyListeners();
+    if (value) {
+      refreshStatus();
+      refreshApprovals();
+    }
+  }
+
+  void toggleOpen() => setOpen(!open);
+
+  void setListening(bool value) {
+    if (listening == value) return;
+    listening = value;
+    notifyListeners();
+  }
+
+  void setSpeaking(bool value) {
+    if (speaking == value) return;
+    speaking = value;
+    notifyListeners();
+  }
+
+  void addPendingFile(UAgentPendingFile file) {
+    pendingFiles.add(file);
+    notifyListeners();
+  }
+
+  void removePendingFile(int index) {
+    if (index < 0 || index >= pendingFiles.length) return;
+    pendingFiles.removeAt(index);
+    notifyListeners();
+  }
+
+  void clearPendingFiles() {
+    pendingFiles.clear();
+    notifyListeners();
+  }
 
   Future<void> refreshStatus() async {
     final data = await _service.fetchStatus();
@@ -28,6 +73,12 @@ class UAgentProvider extends ChangeNotifier {
     status = data['status']?.toString() ?? 'ONLINE';
     if (data['greeting'] is String) greeting = data['greeting'] as String;
     aiConfigured = data['aiConfigured'] != false;
+    final provider = data['activeProvider'];
+    if (provider is Map) {
+      activeProvider = provider['name']?.toString() ?? provider['kind']?.toString();
+    } else {
+      activeProvider = null;
+    }
     error = null;
     notifyListeners();
   }
@@ -46,23 +97,52 @@ class UAgentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> send(String text) async {
+  Future<String?> send(String text, {bool fromVoice = false}) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || busy) return;
+    if ((trimmed.isEmpty && pendingFiles.isEmpty) || busy) return null;
     busy = true;
     error = null;
     status = 'THINKING';
+    final filesSnapshot = List<UAgentPendingFile>.from(pendingFiles);
+    final prompt = trimmed.isEmpty
+        ? (fromVoice
+            ? 'Please analyze the attached files and summarize findings.'
+            : 'Analyze the attached files and help me with them.')
+        : trimmed;
     messages.add(UAgentChatMessage(
       id: 'u-${DateTime.now().millisecondsSinceEpoch}',
       role: 'user',
-      content: trimmed,
+      content: prompt,
+      attachmentNames: filesSnapshot.map((f) => f.name).toList(),
     ));
+    pendingFiles.clear();
     notifyListeners();
 
+    String? replyText;
     try {
+      final attachments = <Map<String, dynamic>>[];
+      for (final file in filesSnapshot) {
+        final up = await _service.uploadAgentFile(file);
+        if (up['success'] != true || up['url'] == null) {
+          error = up['message']?.toString() ?? 'Upload failed';
+          status = 'FAILED';
+          busy = false;
+          notifyListeners();
+          return null;
+        }
+        attachments.add({
+          'url': up['url'],
+          'name': up['name'] ?? file.name,
+          'contentType': up['contentType'] ?? file.contentType,
+          'size': up['size'],
+        });
+      }
+
       final data = await _service.sendMessage(
-        text: trimmed,
+        text: prompt,
         conversationId: conversationId,
+        attachments: attachments.isEmpty ? null : attachments,
+        attachmentUrls: attachments.map((a) => a['url'] as String).toList(),
       );
       if (data['success'] != true) {
         error = data['message']?.toString() ?? 'Request failed';
@@ -81,11 +161,23 @@ class UAgentProvider extends ChangeNotifier {
             }
           }
         }
+        final artifacts = <UAgentArtifact>[];
+        final artRaw = data['artifacts'];
+        if (artRaw is List) {
+          for (final item in artRaw) {
+            if (item is Map) {
+              final a = UAgentArtifact.fromJson(Map<String, dynamic>.from(item));
+              if (a.url.isNotEmpty) artifacts.add(a);
+            }
+          }
+        }
+        replyText = data['reply']?.toString() ?? data['message']?.toString() ?? '';
         messages.add(UAgentChatMessage(
           id: 'a-${DateTime.now().millisecondsSinceEpoch}',
           role: 'assistant',
-          content: data['reply']?.toString() ?? data['message']?.toString() ?? '',
+          content: replyText,
           timeline: timeline,
+          artifacts: artifacts,
         ));
         await refreshApprovals();
       }
@@ -98,6 +190,7 @@ class UAgentProvider extends ChangeNotifier {
       notifyListeners();
       await refreshStatus();
     }
+    return replyText;
   }
 
   Future<void> resolveApproval(String id, {required bool approve}) async {

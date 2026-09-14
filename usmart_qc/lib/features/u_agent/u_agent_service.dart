@@ -27,18 +27,65 @@ class UAgentTimelineStep {
   }
 }
 
+class UAgentArtifact {
+  UAgentArtifact({
+    required this.url,
+    required this.name,
+    this.title,
+    this.contentType,
+    this.format,
+    this.kind,
+  });
+
+  final String url;
+  final String name;
+  final String? title;
+  final String? contentType;
+  final String? format;
+  final String? kind;
+
+  factory UAgentArtifact.fromJson(Map<String, dynamic> json) {
+    return UAgentArtifact(
+      url: json['url']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'file',
+      title: json['title']?.toString(),
+      contentType: json['contentType']?.toString(),
+      format: json['format']?.toString(),
+      kind: json['kind']?.toString(),
+    );
+  }
+}
+
+class UAgentPendingFile {
+  UAgentPendingFile({
+    required this.name,
+    this.path,
+    this.bytes,
+    this.contentType,
+  });
+
+  final String name;
+  final String? path;
+  final List<int>? bytes;
+  final String? contentType;
+}
+
 class UAgentChatMessage {
   UAgentChatMessage({
     required this.id,
     required this.role,
     required this.content,
     this.timeline = const [],
+    this.artifacts = const [],
+    this.attachmentNames = const [],
   });
 
   final String id;
   final String role; // user | assistant
   final String content;
   final List<UAgentTimelineStep> timeline;
+  final List<UAgentArtifact> artifacts;
+  final List<String> attachmentNames;
 }
 
 class UAgentService {
@@ -50,10 +97,25 @@ class UAgentService {
     return _api.getSafe(ApiConfig.agentStatus);
   }
 
+  Future<Map<String, dynamic>> uploadAgentFile(UAgentPendingFile file) async {
+    if (file.path != null && file.path!.isNotEmpty) {
+      return _api.postMultipartFile(ApiConfig.agentFiles, filePath: file.path!);
+    }
+    if (file.bytes != null) {
+      return _api.postMultipartBytes(
+        ApiConfig.agentFiles,
+        bytes: file.bytes!,
+        filename: file.name,
+      );
+    }
+    return {'success': false, 'message': 'Empty file'};
+  }
+
   Future<Map<String, dynamic>> sendMessage({
     required String text,
     String? conversationId,
     List<String>? attachmentUrls,
+    List<Map<String, dynamic>>? attachments,
   }) {
     return _api.post(
       ApiConfig.agentMessage,
@@ -62,8 +124,8 @@ class UAgentService {
         if (conversationId != null) 'conversationId': conversationId,
         if (attachmentUrls != null && attachmentUrls.isNotEmpty)
           'attachmentUrls': attachmentUrls,
-        'idempotencyKey':
-            'flutter-${DateTime.now().millisecondsSinceEpoch}',
+        if (attachments != null && attachments.isNotEmpty) 'attachments': attachments,
+        'idempotencyKey': 'flutter-${DateTime.now().millisecondsSinceEpoch}',
       },
     );
   }

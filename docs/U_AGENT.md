@@ -50,7 +50,9 @@ Run one agent turn (plan → tools → reply).
 | `attachments` | `{ url, name?, contentType?, size? }[]` | no | Richer multimodal metadata |
 | `idempotencyKey` | string | no | Deduplicate retries |
 
-**Response:** `reply`, `conversationId`, `executionId`, `status`, `timeline[]`, `approvalIds[]`
+**Response:** `reply`, `conversationId`, `executionId`, `status`, `timeline[]`, `approvalIds[]`, `artifacts[]?`
+
+`artifacts` items: `{ url, name, title?, contentType?, format?, kind }` when the agent created a downloadable document via `create_document`.
 
 ---
 
@@ -62,6 +64,22 @@ Run one agent turn (plan → tools → reply).
 | `process` | string | `"true"` (default) runs OCR/transcribe when AI configured |
 
 **Response:** `url`, `name`, `contentType`, `size`, `processed`
+
+---
+
+### Tool: `create_document`
+
+Used by the model when the user asks for a professional file (report, letter, CSV table, PDF, markdown). Formats: `md` | `csv` | `txt` | `json` | `pdf`. Uploads to Blob under `u-agent/docs` and returns a public URL in `artifacts`.
+
+---
+
+## Flutter (WhatsApp-style overlay)
+
+U Agent is **not** a bottom-nav tab. Company and engineer dashboards show a pulsing green/violet bubble (`UAgentHost`) that opens an animated chat sheet with:
+
+- Voice input (speech-to-text) + spoken replies (TTS)
+- Attach photo / camera / files for analysis
+- Open/share generated documents from `artifacts`
 
 ---
 
@@ -170,3 +188,11 @@ Relevant migrations:
 - `20260914010000_u_agent_foundation`
 - `20260914020000_u_agent_whatsapp_ingress`
 - `20260914030000_u_agent_ai_providers`
+
+---
+
+## Phase roadmap (next)
+
+**Shipped (Phase 0–2 + voice/docs UX):** tools, approvals, multimodal files, WhatsApp ingress, multi-provider admin, Flutter WhatsApp-style overlay with STT/TTS + `create_document`.
+
+**Phase 3 (next):** CRM/calendar tools, Telegram channel, richer PDF/Arabic fonts, voice-note upload transcription endpoint, usage metering UI, R2 storage option.

@@ -4,6 +4,7 @@ export { runAgentMessage } from '@/lib/agent/core/run';
 export { resolveAgentAuth } from '@/lib/agent/auth-context';
 export { registerProviserTools } from '@/lib/agent/tools/proviser-tools';
 export { registerPhase1Tools } from '@/lib/agent/tools/phase1-tools';
+export { registerDocumentTools } from '@/lib/agent/tools/document-tools';
 export { modelRouter } from '@/lib/agent/models/router';
 export { isUAgentGloballyEnabled } from '@/lib/agent/config';
 export { handleWhatsAppIngress } from '@/lib/agent/channels/whatsapp-ingress';

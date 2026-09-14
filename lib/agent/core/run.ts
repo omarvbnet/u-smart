@@ -10,6 +10,7 @@ import {
 } from '@/lib/agent/tools/registry';
 import { registerProviserTools } from '@/lib/agent/tools/proviser-tools';
 import { registerPhase1Tools } from '@/lib/agent/tools/phase1-tools';
+import { registerDocumentTools } from '@/lib/agent/tools/document-tools';
 import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
 import {
   appendMessage,
@@ -28,13 +29,41 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
+export type AgentArtifact = {
+  url: string;
+  name: string;
+  title?: string;
+  contentType?: string;
+  format?: string;
+  kind?: string;
+  size?: number;
+};
+
 let toolsRegistered = false;
 function ensureTools(): void {
   if (!toolsRegistered) {
     registerProviserTools();
     registerPhase1Tools();
+    registerDocumentTools();
     toolsRegistered = true;
   }
+}
+
+function pushArtifact(artifacts: AgentArtifact[], result: { data?: unknown }) {
+  const data = result.data;
+  if (!data || typeof data !== 'object') return;
+  const d = data as Record<string, unknown>;
+  if (typeof d.url !== 'string' || !d.url) return;
+  if (d.kind !== 'document' && !String(d.name || '').match(/\.(md|csv|txt|json|pdf)$/i)) return;
+  artifacts.push({
+    url: d.url,
+    name: String(d.name || 'document'),
+    title: typeof d.title === 'string' ? d.title : undefined,
+    contentType: typeof d.contentType === 'string' ? d.contentType : undefined,
+    format: typeof d.format === 'string' ? d.format : undefined,
+    kind: typeof d.kind === 'string' ? d.kind : 'document',
+    size: typeof d.size === 'number' ? d.size : undefined,
+  });
 }
 
 function pushTimeline(steps: AgentTimelineStep[], label: string, status: AgentTimelineStep['status'], tool?: string, detail?: string) {
@@ -56,6 +85,7 @@ export type RunAgentMessageResult = {
   status?: string;
   timeline?: AgentTimelineStep[];
   approvalIds?: string[];
+  artifacts?: AgentArtifact[];
 };
 
 /**
@@ -79,6 +109,7 @@ export async function runAgentMessage(args: {
   ensureTools();
   const timeline: AgentTimelineStep[] = [];
   const approvalIds: string[] = [];
+  const artifacts: AgentArtifact[] = [];
 
   pushTimeline(timeline, 'Received user message', 'THINKING');
 
@@ -365,6 +396,8 @@ export async function runAgentMessage(args: {
         approvalId: result.approvalId ?? null,
       });
 
+      if (result.ok) pushArtifact(artifacts, result);
+
       await recordAgentUsage({
         privateCompanyId: args.ctx.privateCompanyId,
         userId: args.ctx.userId,
@@ -445,5 +478,6 @@ export async function runAgentMessage(args: {
     status: finalStatus,
     timeline,
     approvalIds,
+    artifacts: artifacts.length ? artifacts : undefined,
   };
 }
