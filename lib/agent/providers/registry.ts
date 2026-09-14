@@ -13,7 +13,7 @@ export type ProviderRow = {
   id: string;
   slug: string;
   name: string;
-  kind: 'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM';
+  kind: 'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM' | 'HAMSA';
   baseUrl: string | null;
   apiKeyEncrypted: string | null;
   enabled: boolean;
@@ -83,6 +83,8 @@ function modelsFor(row: ProviderRow): Record<ModelKind, string> {
 }
 
 function buildProvider(row: ProviderRow): AIProvider | null {
+  // Hamsa is TTS-only — never used for chat/tool loops.
+  if (row.kind === 'HAMSA') return null;
   const apiKey = decryptSecret(row.apiKeyEncrypted);
   if (!apiKey) return null;
   const baseURL = row.baseUrl || defaultBaseUrl(row.kind);
@@ -164,8 +166,9 @@ export async function loadResolvedProviders(): Promise<ResolvedProvider[]> {
 
 export async function pickDefaultProvider(): Promise<ResolvedProvider | null> {
   const all = await loadResolvedProviders();
+  // Exclude accidental defaults; Hamsa rows never enter this list.
   if (!all.length) return null;
-  return all.find((p) => p.row.isDefault) || all[0];
+  return all.find((p) => p.row.isDefault && p.row.kind !== 'HAMSA') || all[0];
 }
 
 export async function listProviderHealth(): Promise<

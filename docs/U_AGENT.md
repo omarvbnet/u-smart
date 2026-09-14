@@ -262,9 +262,8 @@ U Agent always uses the **default enabled** provider (then priority order). No p
 | `U_AGENT_SECRETS_KEY` | Prefer for encrypting stored API keys |
 | `SUPPORT_WHATSAPP_PHONE` | Support inbox for new-ticket WhatsApp alerts (default `+9647760777659`) |
 | `TELEGRAM_BOT_TOKEN` | Optional Telegram Bot API for `telegram_send_message` |
-| `HAMSA_API_KEY` | Hamsa realtime TTS for U Agent voice replies |
-| `HAMSA_TTS_SPEAKER` | Default speaker (default `Lyali` Iraqi) |
-| `HAMSA_TTS_DIALECT` | Default dialect (default `irq`) |
+
+**Hamsa TTS:** configure in **Admin → AI Providers** as kind `HAMSA` (API key + speaker + dialect). Do **not** use `HAMSA_*` env vars.
 
 ---
 

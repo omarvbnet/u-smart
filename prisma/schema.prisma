@@ -2504,6 +2504,8 @@ enum UAgentAiProviderKind {
   DEEPSEEK
   CLAUDE
   CUSTOM
+  /// Hamsa realtime TTS voices (not used for chat completions)
+  HAMSA
 }
 
 /// Platform-admin managed AI providers for U Agent (OpenAI, DeepSeek, Claude, custom OpenAI-compatible).

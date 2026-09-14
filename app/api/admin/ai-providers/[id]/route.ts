@@ -7,7 +7,21 @@ import { invalidateAiProviderCache } from '@/lib/agent/providers/registry';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-const KINDS = new Set(['OPENAI', 'DEEPSEEK', 'CLAUDE', 'CUSTOM']);
+const KINDS = new Set(['OPENAI', 'DEEPSEEK', 'CLAUDE', 'CUSTOM', 'HAMSA']);
+
+async function clearDefaultPeers(kind: string) {
+  if (kind === 'HAMSA') {
+    await prisma.uAgentAiProvider.updateMany({
+      where: { kind: 'HAMSA' },
+      data: { isDefault: false },
+    });
+  } else {
+    await prisma.uAgentAiProvider.updateMany({
+      where: { kind: { not: 'HAMSA' } },
+      data: { isDefault: false },
+    });
+  }
+}
 
 function publicRow(row: Record<string, unknown>) {
   return {
@@ -77,7 +91,15 @@ export async function PATCH(
     data.apiKeyEncrypted = encryptSecret(body.apiKey.trim());
   }
   if (body.isDefault === true) {
-    await prisma.uAgentAiProvider.updateMany({ data: { isDefault: false } });
+    const existing = await prisma.uAgentAiProvider.findUnique({
+      where: { id },
+      select: { kind: true },
+    });
+    const kindForDefault =
+      (typeof body.kind === 'string' && KINDS.has(body.kind.toUpperCase())
+        ? body.kind.toUpperCase()
+        : existing?.kind) || 'OPENAI';
+    await clearDefaultPeers(String(kindForDefault));
     data.isDefault = true;
   } else if (body.isDefault === false) {
     data.isDefault = false;

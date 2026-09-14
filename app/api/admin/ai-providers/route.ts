@@ -7,7 +7,21 @@ import { invalidateAiProviderCache } from '@/lib/agent/providers/registry';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-const KINDS = new Set(['OPENAI', 'DEEPSEEK', 'CLAUDE', 'CUSTOM']);
+const KINDS = new Set(['OPENAI', 'DEEPSEEK', 'CLAUDE', 'CUSTOM', 'HAMSA']);
+
+async function clearDefaultPeers(kind: string) {
+  if (kind === 'HAMSA') {
+    await prisma.uAgentAiProvider.updateMany({
+      where: { kind: 'HAMSA' },
+      data: { isDefault: false },
+    });
+  } else {
+    await prisma.uAgentAiProvider.updateMany({
+      where: { kind: { not: 'HAMSA' } },
+      data: { isDefault: false },
+    });
+  }
+}
 
 function publicRow(row: Record<string, unknown>) {
   return {
@@ -79,6 +93,13 @@ export async function GET(req: NextRequest) {
         modelVision: '',
         modelTranscribe: '',
       },
+      HAMSA: {
+        baseUrl: 'https://api.tryhamsa.com',
+        modelFast: 'Lyali',
+        modelReason: 'irq',
+        modelVision: '',
+        modelTranscribe: '',
+      },
     },
   });
 }
@@ -101,7 +122,10 @@ export async function POST(req: NextRequest) {
 
   const kind = String(body.kind || '').toUpperCase();
   if (!KINDS.has(kind)) {
-    return NextResponse.json({ success: false, message: 'kind must be OPENAI|DEEPSEEK|CLAUDE|CUSTOM' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, message: 'kind must be OPENAI|DEEPSEEK|CLAUDE|CUSTOM|HAMSA' },
+      { status: 400 }
+    );
   }
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const slugRaw = typeof body.slug === 'string' ? body.slug.trim() : name;
@@ -120,7 +144,7 @@ export async function POST(req: NextRequest) {
 
   const isDefault = body.isDefault === true;
   if (isDefault) {
-    await prisma.uAgentAiProvider.updateMany({ data: { isDefault: false } });
+    await clearDefaultPeers(kind);
   }
 
   try {

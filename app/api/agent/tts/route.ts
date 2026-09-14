@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveAgentAuth } from '@/lib/agent/auth-context';
 import { checkAgentRateLimit } from '@/lib/agent/rate-limit';
 import {
-  defaultHamsaDialect,
-  defaultHamsaSpeaker,
   isHamsaTtsConfigured,
+  listHamsaTtsVoices,
   synthesizeHamsaSpeech,
 } from '@/lib/agent/hamsa-tts';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-/** POST /api/agent/tts — Hamsa realtime TTS for U Agent (WAV). */
+/** POST /api/agent/tts — Hamsa realtime TTS from Admin-configured voices. */
 export async function POST(req: NextRequest) {
   const auth = await resolveAgentAuth(req);
   if (!auth.ok) {
@@ -26,18 +25,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!isHamsaTtsConfigured()) {
+  if (!(await isHamsaTtsConfigured())) {
     return NextResponse.json(
       {
         success: false,
-        message: 'Hamsa TTS not configured (set HAMSA_API_KEY)',
+        message: 'Hamsa TTS not configured. Admin must add a HAMSA voice under AI Providers.',
         configured: false,
       },
       { status: 503 }
     );
   }
 
-  let body: { text?: string; speaker?: string; dialect?: string; expressiveness?: number };
+  let body: {
+    text?: string;
+    speaker?: string;
+    dialect?: string;
+    voiceSlug?: string;
+    expressiveness?: number;
+  };
   try {
     body = await req.json();
   } catch {
@@ -53,6 +58,7 @@ export async function POST(req: NextRequest) {
     text,
     speaker: typeof body.speaker === 'string' ? body.speaker : undefined,
     dialect: typeof body.dialect === 'string' ? body.dialect : undefined,
+    voiceSlug: typeof body.voiceSlug === 'string' ? body.voiceSlug : undefined,
     expressiveness: typeof body.expressiveness === 'number' ? body.expressiveness : undefined,
   });
 
@@ -65,8 +71,8 @@ export async function POST(req: NextRequest) {
     headers: {
       'Content-Type': result.contentType || 'audio/wav',
       'Cache-Control': 'no-store',
-      'X-Hamsa-Speaker': defaultHamsaSpeaker(),
-      'X-Hamsa-Dialect': defaultHamsaDialect(),
+      'X-Hamsa-Speaker': result.speaker,
+      'X-Hamsa-Dialect': result.dialect,
     },
   });
 }
@@ -76,10 +82,12 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ success: false, message: auth.message }, { status: auth.status });
   }
+  const voices = await listHamsaTtsVoices();
   return NextResponse.json({
     success: true,
-    configured: isHamsaTtsConfigured(),
-    speaker: defaultHamsaSpeaker(),
-    dialect: defaultHamsaDialect(),
+    configured: voices.length > 0,
+    voices,
+    speaker: voices[0]?.speaker ?? null,
+    dialect: voices[0]?.dialect ?? null,
   });
 }

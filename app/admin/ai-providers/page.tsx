@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, Trash2, Star } from 'lucide-react';
 
+type ProviderKind = 'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM' | 'HAMSA';
+
 type Provider = {
   id: string;
   slug: string;
   name: string;
-  kind: 'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM';
+  kind: ProviderKind;
   baseUrl: string | null;
   enabled: boolean;
   isDefault: boolean;
@@ -29,7 +31,7 @@ type Presets = Record<
 const emptyForm = {
   name: '',
   slug: '',
-  kind: 'OPENAI' as Provider['kind'],
+  kind: 'OPENAI' as ProviderKind,
   baseUrl: '',
   apiKey: '',
   modelFast: '',
@@ -42,6 +44,13 @@ const emptyForm = {
   notes: '',
 };
 
+const HAMSA_VOICE_QUICK: Array<{ name: string; speaker: string; dialect: string; slug: string }> = [
+  { name: 'Hamsa Iraqi · Lyali', speaker: 'Lyali', dialect: 'irq', slug: 'hamsa-lyali-irq' },
+  { name: 'Hamsa Iraqi · Fatma', speaker: 'Fatma', dialect: 'irq', slug: 'hamsa-fatma-irq' },
+  { name: 'Hamsa MSA · Salem', speaker: 'Salem', dialect: 'msa', slug: 'hamsa-salem-msa' },
+  { name: 'Hamsa English · Emma', speaker: 'Emma', dialect: 'en', slug: 'hamsa-emma-en' },
+];
+
 export default function AdminAiProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [presets, setPresets] = useState<Presets>({});
@@ -50,6 +59,10 @@ export default function AdminAiProvidersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const isHamsa = form.kind === 'HAMSA';
+  const chatProviders = providers.filter((p) => p.kind !== 'HAMSA');
+  const ttsVoices = providers.filter((p) => p.kind === 'HAMSA');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,7 +86,7 @@ export default function AdminAiProvidersPage() {
     load();
   }, [load]);
 
-  const applyPreset = (kind: Provider['kind']) => {
+  const applyPreset = (kind: ProviderKind) => {
     const p = presets[kind];
     setForm((f) => ({
       ...f,
@@ -81,10 +94,27 @@ export default function AdminAiProvidersPage() {
       baseUrl: p?.baseUrl || f.baseUrl,
       modelFast: p?.modelFast || f.modelFast,
       modelReason: p?.modelReason || f.modelReason,
-      modelVision: p?.modelVision || f.modelVision,
-      modelTranscribe: p?.modelTranscribe || f.modelTranscribe,
-      name: f.name || kind,
-      slug: f.slug || kind.toLowerCase(),
+      modelVision: p?.modelVision || (kind === 'HAMSA' ? '' : f.modelVision),
+      modelTranscribe: p?.modelTranscribe || (kind === 'HAMSA' ? '' : f.modelTranscribe),
+      name: f.name || (kind === 'HAMSA' ? 'Hamsa TTS · Lyali' : kind),
+      slug: f.slug || (kind === 'HAMSA' ? 'hamsa-lyali-irq' : kind.toLowerCase()),
+      isDefault: kind === 'HAMSA' ? true : f.isDefault,
+    }));
+  };
+
+  const applyHamsaVoice = (v: (typeof HAMSA_VOICE_QUICK)[0]) => {
+    setForm((f) => ({
+      ...f,
+      kind: 'HAMSA',
+      name: v.name,
+      slug: v.slug,
+      baseUrl: presets.HAMSA?.baseUrl || 'https://api.tryhamsa.com',
+      modelFast: v.speaker,
+      modelReason: v.dialect,
+      modelVision: '',
+      modelTranscribe: '',
+      isDefault: true,
+      notes: `Hamsa realtime TTS · ${v.dialect}`,
     }));
   };
 
@@ -100,8 +130,8 @@ export default function AdminAiProvidersPage() {
         apiKey: form.apiKey || undefined,
         modelFast: form.modelFast || null,
         modelReason: form.modelReason || null,
-        modelVision: form.modelVision || null,
-        modelTranscribe: form.modelTranscribe || null,
+        modelVision: isHamsa ? null : form.modelVision || null,
+        modelTranscribe: isHamsa ? null : form.modelTranscribe || null,
         isDefault: form.isDefault,
         enabled: form.enabled,
         priority: form.priority,
@@ -120,7 +150,7 @@ export default function AdminAiProvidersPage() {
       if (!data.success) {
         setMessage(data.message || 'Save failed');
       } else {
-        setMessage(editingId ? 'Provider updated.' : 'Provider added.');
+        setMessage(editingId ? 'Saved.' : isHamsa ? 'TTS voice added.' : 'Provider added.');
         setForm(emptyForm);
         setEditingId(null);
         await load();
@@ -142,7 +172,7 @@ export default function AdminAiProvidersPage() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm('Delete this AI provider?')) return;
+    if (!confirm('Delete this provider / voice?')) return;
     await fetch(`/api/admin/ai-providers/${id}`, { method: 'DELETE' });
     await load();
   };
@@ -171,16 +201,11 @@ export default function AdminAiProvidersPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white">U Agent — AI Providers</h1>
+        <h1 className="text-2xl font-bold text-white">U Agent — AI Providers & TTS Voices</h1>
         <p className="text-gray-400 text-sm mt-1">
-          Add OpenAI, DeepSeek, Claude (Anthropic), or any OpenAI-compatible custom gateway.
-          Keys are encrypted at rest. The <strong>default</strong> provider is used by U Agent
-          for chat/tools. <strong>Voice chat</strong> works on-device with any provider (including
-          DeepSeek). For uploaded voice notes, keep an OpenAI provider (or{' '}
-          <code className="text-gray-300">OPENAI_API_KEY</code>) with Transcribe{' '}
-          <code className="text-gray-300">whisper-1</code> — DeepSeek has no Whisper API.
-          Env <code className="text-gray-300">OPENAI_API_KEY</code> remains a fallback when no DB
-          provider is configured.
+          Chat models: OpenAI, DeepSeek, Claude, or custom. <strong>TTS voices</strong>: add{' '}
+          <strong>HAMSA</strong> rows with API key + speaker + dialect (no env vars). Mark one Hamsa
+          voice as default for U Agent speech. Chat “default” only applies to non-Hamsa providers.
         </p>
       </div>
 
@@ -192,17 +217,31 @@ export default function AdminAiProvidersPage() {
 
       <section className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
         <h2 className="text-white font-semibold flex items-center gap-2">
-          <Plus className="w-4 h-4" /> {editingId ? 'Edit provider' : 'Add provider'}
+          <Plus className="w-4 h-4" /> {editingId ? 'Edit' : 'Add provider / TTS voice'}
         </h2>
         <div className="flex flex-wrap gap-2">
-          {(['OPENAI', 'DEEPSEEK', 'CLAUDE', 'CUSTOM'] as const).map((k) => (
+          {(['OPENAI', 'DEEPSEEK', 'CLAUDE', 'CUSTOM', 'HAMSA'] as const).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => applyPreset(k)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-white/15 text-gray-200 hover:bg-white/5"
+              className={`text-xs px-3 py-1.5 rounded-lg border text-gray-200 hover:bg-white/5 ${
+                k === 'HAMSA' ? 'border-teal-500/50 text-teal-200' : 'border-white/15'
+              }`}
             >
               Preset: {k}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {HAMSA_VOICE_QUICK.map((v) => (
+            <button
+              key={v.slug}
+              type="button"
+              onClick={() => applyHamsaVoice(v)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-teal-500/30 text-teal-100/90 hover:bg-teal-500/10"
+            >
+              Voice: {v.speaker} ({v.dialect})
             </button>
           ))}
         </div>
@@ -223,16 +262,17 @@ export default function AdminAiProvidersPage() {
           <select
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
             value={form.kind}
-            onChange={(e) => setForm({ ...form, kind: e.target.value as Provider['kind'] })}
+            onChange={(e) => setForm({ ...form, kind: e.target.value as ProviderKind })}
           >
-            <option value="OPENAI">OPENAI</option>
-            <option value="DEEPSEEK">DEEPSEEK</option>
-            <option value="CLAUDE">CLAUDE</option>
-            <option value="CUSTOM">CUSTOM (OpenAI-compatible)</option>
+            <option value="OPENAI">OPENAI (chat)</option>
+            <option value="DEEPSEEK">DEEPSEEK (chat)</option>
+            <option value="CLAUDE">CLAUDE (chat)</option>
+            <option value="CUSTOM">CUSTOM (chat)</option>
+            <option value="HAMSA">HAMSA (TTS voice)</option>
           </select>
           <input
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
-            placeholder="Base URL"
+            placeholder={isHamsa ? 'Base URL (https://api.tryhamsa.com)' : 'Base URL'}
             value={form.baseUrl}
             onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
           />
@@ -245,28 +285,32 @@ export default function AdminAiProvidersPage() {
           />
           <input
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
-            placeholder="Fast model"
+            placeholder={isHamsa ? 'Speaker / voice (e.g. Lyali, Fatma)' : 'Fast model'}
             value={form.modelFast}
             onChange={(e) => setForm({ ...form, modelFast: e.target.value })}
           />
           <input
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
-            placeholder="Reason model"
+            placeholder={isHamsa ? 'Dialect (irq, msa, en, …)' : 'Reason model'}
             value={form.modelReason}
             onChange={(e) => setForm({ ...form, modelReason: e.target.value })}
           />
-          <input
-            className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
-            placeholder="Vision model (e.g. gpt-4o)"
-            value={form.modelVision}
-            onChange={(e) => setForm({ ...form, modelVision: e.target.value })}
-          />
-          <input
-            className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
-            placeholder="Transcribe / sound model (e.g. whisper-1)"
-            value={form.modelTranscribe}
-            onChange={(e) => setForm({ ...form, modelTranscribe: e.target.value })}
-          />
+          {!isHamsa && (
+            <>
+              <input
+                className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
+                placeholder="Vision model (e.g. gpt-4o)"
+                value={form.modelVision}
+                onChange={(e) => setForm({ ...form, modelVision: e.target.value })}
+              />
+              <input
+                className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
+                placeholder="Transcribe / sound model (e.g. whisper-1)"
+                value={form.modelTranscribe}
+                onChange={(e) => setForm({ ...form, modelTranscribe: e.target.value })}
+              />
+            </>
+          )}
           <input
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
             type="number"
@@ -290,7 +334,7 @@ export default function AdminAiProvidersPage() {
               checked={form.isDefault}
               onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
             />
-            Default for U Agent
+            {isHamsa ? 'Default TTS voice' : 'Default chat provider'}
           </label>
         </div>
         <div className="flex gap-2">
@@ -317,63 +361,98 @@ export default function AdminAiProvidersPage() {
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-white font-semibold">Configured providers</h2>
-        {!providers.length ? (
-          <p className="text-gray-500 text-sm">No providers yet. Add one above or rely on OPENAI_API_KEY.</p>
-        ) : (
-          providers.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-xl border border-white/10 bg-black/20 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
-            >
-              <div>
-                <p className="text-white font-medium flex items-center gap-2">
-                  {p.name}
-                  {p.isDefault && (
-                    <span className="text-amber-300 text-xs inline-flex items-center gap-1">
-                      <Star className="w-3 h-3" /> default
-                    </span>
-                  )}
-                  {!p.enabled && <span className="text-xs text-red-300">disabled</span>}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {p.kind} · {p.slug} · key {p.apiKeyMasked || '—'} ·{' '}
-                  {p.baseUrl || 'default base URL'}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  fast={p.modelFast || '—'} · reason={p.modelReason || '—'}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {!p.isDefault && (
-                  <button
-                    type="button"
-                    onClick={() => setDefault(p.id)}
-                    className="text-xs rounded-lg border border-amber-500/40 text-amber-200 px-3 py-1.5"
-                  >
-                    Make default
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => startEdit(p)}
-                  className="text-xs rounded-lg border border-white/15 text-gray-200 px-3 py-1.5"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(p.id)}
-                  className="text-xs rounded-lg border border-red-500/40 text-red-300 px-3 py-1.5 inline-flex items-center gap-1"
-                >
-                  <Trash2 className="w-3 h-3" /> Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </section>
+      <ProviderList
+        title="Chat / tool providers"
+        empty="No chat providers yet."
+        items={chatProviders}
+        defaultLabel="default chat"
+        onDefault={setDefault}
+        onEdit={startEdit}
+        onRemove={remove}
+      />
+
+      <ProviderList
+        title="Hamsa TTS voices"
+        empty="No Hamsa TTS voices yet. Use Preset: HAMSA or a Voice shortcut above."
+        items={ttsVoices}
+        defaultLabel="default voice"
+        hamsa
+        onDefault={setDefault}
+        onEdit={startEdit}
+        onRemove={remove}
+      />
     </div>
+  );
+}
+
+function ProviderList(props: {
+  title: string;
+  empty: string;
+  items: Provider[];
+  defaultLabel: string;
+  hamsa?: boolean;
+  onDefault: (id: string) => void;
+  onEdit: (p: Provider) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-white font-semibold">{props.title}</h2>
+      {!props.items.length ? (
+        <p className="text-gray-500 text-sm">{props.empty}</p>
+      ) : (
+        props.items.map((p) => (
+          <div
+            key={p.id}
+            className="rounded-xl border border-white/10 bg-black/20 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+          >
+            <div>
+              <p className="text-white font-medium flex items-center gap-2">
+                {p.name}
+                {p.isDefault && (
+                  <span className="text-amber-300 text-xs inline-flex items-center gap-1">
+                    <Star className="w-3 h-3" /> {props.defaultLabel}
+                  </span>
+                )}
+                {!p.enabled && <span className="text-xs text-red-300">disabled</span>}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {p.kind} · {p.slug} · key {p.apiKeyMasked || '—'} · {p.baseUrl || 'default base URL'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {props.hamsa
+                  ? `speaker=${p.modelFast || '—'} · dialect=${p.modelReason || '—'}`
+                  : `fast=${p.modelFast || '—'} · reason=${p.modelReason || '—'}`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {!p.isDefault && (
+                <button
+                  type="button"
+                  onClick={() => props.onDefault(p.id)}
+                  className="text-xs rounded-lg border border-amber-500/40 text-amber-200 px-3 py-1.5"
+                >
+                  Make default
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => props.onEdit(p)}
+                className="text-xs rounded-lg border border-white/15 text-gray-200 px-3 py-1.5"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onRemove(p.id)}
+                className="text-xs rounded-lg border border-red-500/40 text-red-300 px-3 py-1.5 inline-flex items-center gap-1"
+              >
+                <Trash2 className="w-3 h-3" /> Delete
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+    </section>
   );
 }

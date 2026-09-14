@@ -1,0 +1,1 @@
+ALTER TYPE "UAgentAiProviderKind" ADD VALUE 'HAMSA';
