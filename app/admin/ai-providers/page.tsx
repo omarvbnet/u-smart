@@ -15,6 +15,7 @@ type Provider = {
   modelFast: string | null;
   modelReason: string | null;
   modelVision: string | null;
+  modelTranscribe: string | null;
   apiKeyMasked: string | null;
   hasApiKey: boolean;
   notes: string | null;
@@ -22,7 +23,7 @@ type Provider = {
 
 type Presets = Record<
   string,
-  { baseUrl: string; modelFast: string; modelReason: string }
+  { baseUrl: string; modelFast: string; modelReason: string; modelVision?: string; modelTranscribe?: string }
 >;
 
 const emptyForm = {
@@ -34,6 +35,7 @@ const emptyForm = {
   modelFast: '',
   modelReason: '',
   modelVision: '',
+  modelTranscribe: '',
   isDefault: false,
   enabled: true,
   priority: 100,
@@ -79,6 +81,8 @@ export default function AdminAiProvidersPage() {
       baseUrl: p?.baseUrl || f.baseUrl,
       modelFast: p?.modelFast || f.modelFast,
       modelReason: p?.modelReason || f.modelReason,
+      modelVision: p?.modelVision || f.modelVision,
+      modelTranscribe: p?.modelTranscribe || f.modelTranscribe,
       name: f.name || kind,
       slug: f.slug || kind.toLowerCase(),
     }));
@@ -97,6 +101,7 @@ export default function AdminAiProvidersPage() {
         modelFast: form.modelFast || null,
         modelReason: form.modelReason || null,
         modelVision: form.modelVision || null,
+        modelTranscribe: form.modelTranscribe || null,
         isDefault: form.isDefault,
         enabled: form.enabled,
         priority: form.priority,
@@ -153,6 +158,7 @@ export default function AdminAiProvidersPage() {
       modelFast: p.modelFast || '',
       modelReason: p.modelReason || '',
       modelVision: p.modelVision || '',
+      modelTranscribe: p.modelTranscribe || '',
       isDefault: p.isDefault,
       enabled: p.enabled,
       priority: p.priority,
@@ -169,8 +175,11 @@ export default function AdminAiProvidersPage() {
         <p className="text-gray-400 text-sm mt-1">
           Add OpenAI, DeepSeek, Claude (Anthropic), or any OpenAI-compatible custom gateway.
           Keys are encrypted at rest. The <strong>default</strong> provider is used by U Agent
-          for chat/tools. Env <code className="text-gray-300">OPENAI_API_KEY</code> remains a
-          fallback when no DB provider is configured.
+          for chat/tools. For <strong>voice</strong>: set Transcribe model (e.g. OpenAI{' '}
+          <code className="text-gray-300">whisper-1</code>) for server audio; the Flutter app
+          also uses on-device speech + TTS. Env{' '}
+          <code className="text-gray-300">OPENAI_API_KEY</code> remains a fallback when no DB
+          provider is configured.
         </p>
       </div>
 
@@ -247,9 +256,15 @@ export default function AdminAiProvidersPage() {
           />
           <input
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
-            placeholder="Vision model"
+            placeholder="Vision model (e.g. gpt-4o)"
             value={form.modelVision}
             onChange={(e) => setForm({ ...form, modelVision: e.target.value })}
+          />
+          <input
+            className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
+            placeholder="Transcribe / sound model (e.g. whisper-1)"
+            value={form.modelTranscribe}
+            onChange={(e) => setForm({ ...form, modelTranscribe: e.target.value })}
           />
           <input
             className="rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"

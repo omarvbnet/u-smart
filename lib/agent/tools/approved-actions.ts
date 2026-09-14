@@ -167,3 +167,59 @@ export async function executeApprovedConflictReport(
 
   return { ok: true, message: `Conflict reported on ${ticketId}`, data: { ticketId, result } };
 }
+
+export async function executeApprovedCreateTicketType(
+  payload: Record<string, unknown>
+): Promise<ToolResult> {
+  const companyId = String(payload.companyId || payload.privateCompanyId || '').trim();
+  const category = String(payload.category || '').trim();
+  const slug = String(payload.slug || '').trim().toLowerCase();
+  const labelAr = String(payload.labelAr || slug).trim();
+  const labelEn =
+    typeof payload.labelEn === 'string' && payload.labelEn.trim()
+      ? payload.labelEn.trim()
+      : null;
+  if (!companyId || !slug || (category !== 'INSPECTION_QC' && category !== 'MAINTENANCE')) {
+    return { ok: false, message: 'Invalid create_ticket_type payload' };
+  }
+  if (!prisma.privateCompanyTechnique?.upsert) {
+    return { ok: false, message: 'Ticket types table unavailable' };
+  }
+
+  const row = await prisma.privateCompanyTechnique.upsert({
+    where: {
+      companyId_category_slug: { companyId, category, slug },
+    },
+    create: {
+      companyId,
+      category,
+      slug,
+      labelAr,
+      labelEn,
+      active: true,
+      sortOrder: 0,
+    },
+    update: {
+      labelAr,
+      labelEn,
+      active: true,
+    },
+    select: { id: true, slug: true, category: true, labelAr: true, labelEn: true },
+  });
+
+  logPrivateCompanyWorkspaceActivity({
+    companyId,
+    actorRequesterId: typeof payload.requestedById === 'string' ? payload.requestedById : null,
+    action: 'TECHNIQUE_CREATED',
+    resourceType: 'technique',
+    resourceId: row.id,
+    summary: `U Agent created ticket type ${row.slug} (${row.category})`,
+    metadata: { source: 'u_agent' },
+  });
+
+  return {
+    ok: true,
+    message: `Ticket type APPROVED and active: ${row.slug} (${row.labelEn || row.labelAr}). Users can now create tickets with this type.`,
+    data: { ...row, status: 'APPROVED' },
+  };
+}

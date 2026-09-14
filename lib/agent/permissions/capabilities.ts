@@ -11,16 +11,6 @@ const FIELD_ROLES = new Set([
 
 const MANAGEMENT_ROLES = new Set(['COMPANY', 'MANAGER', 'COORDINATOR', 'COMPANY_OWNER', 'ADMIN']);
 
-const TICKET_CREATE_ROLES = new Set([
-  'COMPANY',
-  'MANAGER',
-  'COORDINATOR',
-  'ENGINEER',
-  'TECHNICIAN',
-  'PERSONAL',
-  'COMPANY_OWNER',
-]);
-
 /**
  * Server-side capability map. Never trust the client for these checks.
  * Actions always run as the signed-in user — never elevated to platform admin.
@@ -33,10 +23,9 @@ export function resolveAgentCapabilities(ctx: AgentContext): Set<AgentCapability
   caps.add('agent.read_sites');
   caps.add('agent.create_document');
   caps.add('agent.whatsapp');
-
-  if (TICKET_CREATE_ROLES.has(role) || ctx.isWorkspaceOwner) {
-    caps.add('agent.create_ticket');
-  }
+  // Every authenticated Proviser role can request tickets / ticket types via U Agent.
+  caps.add('agent.create_ticket');
+  caps.add('agent.create_ticket_type');
 
   if (MANAGEMENT_ROLES.has(role) || ctx.isWorkspaceOwner) {
     caps.add('agent.read_kpis');

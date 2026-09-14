@@ -51,10 +51,34 @@ export async function GET(req: NextRequest) {
     success: true,
     providers: rows.map((r: Record<string, unknown>) => publicRow(r)),
     presets: {
-      OPENAI: { baseUrl: 'https://api.openai.com/v1', modelFast: 'gpt-4o-mini', modelReason: 'gpt-4o' },
-      DEEPSEEK: { baseUrl: 'https://api.deepseek.com', modelFast: 'deepseek-chat', modelReason: 'deepseek-reasoner' },
-      CLAUDE: { baseUrl: 'https://api.anthropic.com', modelFast: 'claude-3-5-haiku-latest', modelReason: 'claude-sonnet-4-20250514' },
-      CUSTOM: { baseUrl: 'https://your-gateway.example/v1', modelFast: 'your-model', modelReason: 'your-model' },
+      OPENAI: {
+        baseUrl: 'https://api.openai.com/v1',
+        modelFast: 'gpt-4o-mini',
+        modelReason: 'gpt-4o',
+        modelVision: 'gpt-4o',
+        modelTranscribe: 'whisper-1',
+      },
+      DEEPSEEK: {
+        baseUrl: 'https://api.deepseek.com',
+        modelFast: 'deepseek-chat',
+        modelReason: 'deepseek-reasoner',
+        modelVision: '',
+        modelTranscribe: '',
+      },
+      CLAUDE: {
+        baseUrl: 'https://api.anthropic.com',
+        modelFast: 'claude-3-5-haiku-latest',
+        modelReason: 'claude-sonnet-4-20250514',
+        modelVision: 'claude-sonnet-4-20250514',
+        modelTranscribe: '',
+      },
+      CUSTOM: {
+        baseUrl: 'https://your-gateway.example/v1',
+        modelFast: 'your-model',
+        modelReason: 'your-model',
+        modelVision: '',
+        modelTranscribe: '',
+      },
     },
   });
 }

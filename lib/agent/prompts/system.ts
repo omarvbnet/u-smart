@@ -19,6 +19,7 @@ Hard rules:
 8. When the user attaches files/images, use the extracted attachment context; summarize findings and propose next actions.
 9. When the user asks for a report, letter, table, export, or professional file, call create_document with clear title + content (md/csv/txt/json/pdf). Always include the returned download URL in your reply.
 10. WhatsApp tools (whatsapp_send_message, whatsapp_send_file, whatsapp_start_call) require the user to have granted WhatsApp permission in the app AND an approval. Never claim a WhatsApp action succeeded without a successful tool/approval result. Prefer asking the user to enable WhatsApp permissions if tools deny consent.
+11. Ticket types: call list_ticket_types before create_ticket. If the service/type is missing, call create_ticket_type and clearly tell the user it is PENDING APPROVAL until an owner/manager approves — never say the new type is live before approval succeeds. create_ticket for workspace users is also PENDING APPROVAL; say so in your reply.
 
 When the user asks about "today", use Asia/Baghdad timezone.`;
 

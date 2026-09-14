@@ -141,26 +141,94 @@ Env: `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_CLOUD_APP_SECRET`
 
 ---
 
+## Tickets via U Agent (all roles)
+
+Every authenticated Proviser role can use U Agent to:
+
+| Tool | Who | What happens |
+|------|-----|----------------|
+| `list_ticket_types` | all | Lists workspace + platform techniques/services |
+| `create_ticket` | all | Creates a ticket request |
+| `create_ticket_type` | all (workspace) | Requests a **new** service/type when missing |
+
+**Approval rules (tell the user clearly):**
+
+1. **Workspace users** — `create_ticket` is always **PENDING APPROVAL** until an owner/manager approves. Agent must say pending, never “created live”.
+2. **Missing service/type** — agent calls `list_ticket_types`, then `create_ticket_type` (and still queues the ticket). Both stay **PENDING** until approved. After approval, the new `PrivateCompanyTechnique` becomes active.
+3. **Personal (no workspace)** — ticket can be created immediately; custom types are not stored as company techniques.
+
+Owner/manager reviews via `/api/agent/approvals` (or Proviser U Agent UI).
+
+---
+
 ## Managing AI providers (Admin)
 
 1. Open **Admin → U Agent AI Providers** (`/admin/ai-providers`)
 2. Click a preset: **OPENAI**, **DEEPSEEK**, **CLAUDE**, or **CUSTOM**
-3. Paste API key, adjust models / base URL, mark **Default for U Agent**
+3. Paste API key, set models (fast / reason / vision / **transcribe**), mark **Default for U Agent**
 4. Save — keys are **AES-GCM encrypted** (secret from `U_AGENT_SECRETS_KEY` or `JWT_SECRET`)
 
 | Kind | Base URL (typical) | Notes |
 |------|--------------------|--------|
 | OPENAI | `https://api.openai.com/v1` | Also env fallback `OPENAI_API_KEY` |
-| DEEPSEEK | `https://api.deepseek.com` | OpenAI-compatible |
-| CLAUDE | `https://api.anthropic.com` | Anthropic Messages API |
+| DEEPSEEK | `https://api.deepseek.com` | OpenAI-compatible chat; no native Whisper |
+| CLAUDE | `https://api.anthropic.com` | Anthropic Messages API; vision via Claude; no Whisper |
 | CUSTOM | Your gateway `/v1` | Any OpenAI-compatible chat completions API |
+
+### Model slots (what to put where)
+
+| Field | Purpose | OpenAI example | DeepSeek | Claude |
+|-------|---------|----------------|----------|--------|
+| `modelFast` | Tool loops, quick replies | `gpt-4o-mini` | `deepseek-chat` | `claude-3-5-haiku-latest` |
+| `modelReason` | Harder planning | `gpt-4o` or `o4-mini` | `deepseek-reasoner` | `claude-sonnet-4-20250514` |
+| `modelVision` | Images / OCR path | `gpt-4o` | leave empty or use a vision-capable gateway | same as reason Sonnet |
+| `modelTranscribe` | Server audio → text (`POST /api/agent/files`) | `whisper-1` | leave empty (use Flutter STT or OpenAI secondary) | leave empty |
+
+**Activate sound / voice:**
+
+| Layer | How it works | What you configure |
+|-------|----------------|--------------------|
+| Flutter Advanced Voice | On-device STT (`speech_to_text`) → agent text → on-device TTS | Mic permission on device; no server model required for chat voice |
+| Server file transcription | Upload audio via `/api/agent/files` with `process=true` | Set `modelTranscribe` on the **default** provider (OpenAI `whisper-1` recommended) |
+| Chat model for spoken replies | Same as text chat | Default provider `modelFast` / `modelReason` |
+
+**Recommended OpenAI setup (chat + vision + sound):**
+
+1. Preset **OPENAI** → paste `sk-...`
+2. Models: fast `gpt-4o-mini`, reason `gpt-4o`, vision `gpt-4o`, transcribe `whisper-1`
+3. Enable + **Default for U Agent** → Save
+4. On iPhone: open U Agent → tap voice orb (mic must be allowed)
+
+**Other providers:**
+
+- **DeepSeek / Claude as default:** great for text/tools; for uploaded voice notes, either leave `modelTranscribe` empty (Flutter voice still works on-device) or add a second OpenAI provider (not default) and later route transcribe to it — today transcription uses the **default** provider’s `modelTranscribe` when set.
+- **CUSTOM gateway:** point `baseUrl` at your OpenAI-compatible `/v1`; set model names your gateway expects. For Whisper-compatible audio, gateway must expose `audio/transcriptions`.
 
 **Admin API:**
 
 - `GET/POST /api/admin/ai-providers`
 - `PATCH/DELETE /api/admin/ai-providers/:id`
 
-POST body example:
+POST body example (OpenAI with sound):
+
+```json
+{
+  "name": "OpenAI Prod",
+  "slug": "openai",
+  "kind": "OPENAI",
+  "baseUrl": "https://api.openai.com/v1",
+  "apiKey": "sk-...",
+  "modelFast": "gpt-4o-mini",
+  "modelReason": "gpt-4o",
+  "modelVision": "gpt-4o",
+  "modelTranscribe": "whisper-1",
+  "isDefault": true,
+  "enabled": true,
+  "priority": 10
+}
+```
+
+DeepSeek example:
 
 ```json
 {
@@ -204,11 +272,12 @@ Relevant migrations:
 - `20260914010000_u_agent_foundation`
 - `20260914020000_u_agent_whatsapp_ingress`
 - `20260914030000_u_agent_ai_providers`
+- `20260914040000_u_agent_whatsapp_consent`
 
 ---
 
 ## Phase roadmap (next)
 
-**Shipped (Phase 0–2 + voice/docs UX):** tools, approvals, multimodal files, WhatsApp ingress, multi-provider admin, Flutter WhatsApp-style overlay with STT/TTS + `create_document`.
+**Shipped:** tools + approvals; tickets for **all roles**; `create_ticket_type` with pending/approved messaging; multimodal files; WhatsApp consent; multi-provider admin (incl. transcribe); Flutter voice + history + FAB.
 
-**Phase 3 (in progress / next):** conversation list API + ChatGPT voice UX (shipped in app); richer PDF/Arabic fonts; CRM/calendar tools; Telegram channel; voice-note upload transcription; usage metering UI; R2 storage option.
+**Next:** richer PDF/Arabic fonts; CRM/calendar; Telegram; usage metering UI; optional Realtime voice API; R2 storage option.

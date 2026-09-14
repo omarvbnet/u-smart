@@ -61,4 +61,5 @@ export type AgentCapability =
   | 'agent.manage_approvals'
   | 'agent.manage_policy'
   | 'agent.create_document'
-  | 'agent.whatsapp';
+  | 'agent.whatsapp'
+  | 'agent.create_ticket_type';

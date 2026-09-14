@@ -6,6 +6,7 @@ import {
   executeApprovedAssignTicket,
   executeApprovedConflictReport,
   executeApprovedCreateTicket,
+  executeApprovedCreateTicketType,
 } from '@/lib/agent/tools/approved-actions';
 import { executeApprovedNotification } from '@/lib/agent/tools/proviser-tools';
 import {
@@ -209,6 +210,8 @@ export async function resolveApproval(args: {
       }
     } else if (row.toolId === 'create_ticket') {
       execResult = await executeApprovedCreateTicket(payload);
+    } else if (row.toolId === 'create_ticket_type') {
+      execResult = await executeApprovedCreateTicketType(payload);
     } else if (row.toolId === 'assign_ticket') {
       execResult = await executeApprovedAssignTicket(payload);
     } else if (row.toolId === 'report_conflict') {
