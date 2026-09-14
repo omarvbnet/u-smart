@@ -32,7 +32,7 @@ export type ResolvedProvider = {
   models: Record<ModelKind, string>;
 };
 
-const DEFAULT_MODELS: Record<'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM', Record<ModelKind, string>> = {
+const DEFAULT_MODELS: Record<'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM' | 'HAMSA', Record<ModelKind, string>> = {
   OPENAI: {
     fast: 'gpt-4o-mini',
     reason: 'gpt-4o',
@@ -61,6 +61,14 @@ const DEFAULT_MODELS: Record<'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM', Record
     vision: 'gpt-4o',
     embed: 'text-embedding-3-small',
     transcribe: 'whisper-1',
+  },
+  // TTS-only: speaker in modelFast, dialect in modelReason (not used for chat)
+  HAMSA: {
+    fast: 'Lyali',
+    reason: 'irq',
+    vision: '',
+    embed: '',
+    transcribe: '',
   },
 };
 
