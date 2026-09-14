@@ -441,7 +441,9 @@ export async function runAgentMessage(args: {
         approvalId: result.approvalId ?? null,
       });
 
-      if (result.ok) pushArtifact(artifacts, result);
+      if (result.ok || (result.data && typeof result.data === 'object' && ('deepLink' in (result.data as object) || 'callLink' in (result.data as object) || 'url' in (result.data as object)))) {
+        pushArtifact(artifacts, result);
+      }
 
       await recordAgentUsage({
         privateCompanyId: ctx.privateCompanyId,

@@ -208,36 +208,57 @@ export function registerWhatsAppTools(): void {
     async execute({ input, ctx }): Promise<ToolResult> {
       const parsed = startCallInput.parse(input);
       const consent = await getWhatsAppConsent(ctx.userId);
+      const prepared = prepareWhatsAppCall({
+        to: parsed.toPhone,
+        note: parsed.note,
+      });
+      const link = prepared.deepLink || prepared.callLink || '';
+
+      // Always surface a deep link so the requester gets feedback / can open WhatsApp.
       if (!consent.granted || !consent.canStartCalls) {
-        return {
-          ok: false,
-          message:
-            'User has not granted WhatsApp call permission. Ask them to enable Calls in U Agent → WhatsApp, then retry immediately with the same phone + note.',
-        };
-      }
-      return executeApprovedWhatsAppStartCall({
-        ...parsed,
-        userId: ctx.userId,
-        requestedById: ctx.userId,
-      }).then((r) => {
-        if (r.ok) {
-          const link =
-            r.data && typeof r.data === 'object'
-              ? String(
-                  (r.data as { deepLink?: string; callLink?: string }).deepLink ||
-                    (r.data as { callLink?: string }).callLink ||
-                    ''
-                )
-              : '';
+        if (consent.granted && consent.canSendMessages && parsed.note?.trim()) {
+          const sent = await executeApprovedWhatsAppSendMessage({
+            toPhone: parsed.toPhone,
+            body: parsed.note.trim(),
+            userId: ctx.userId,
+            requestedById: ctx.userId,
+          });
           return {
-            ...r,
-            message: link
-              ? `${r.message} Give the requester short feedback in their language: call ready for ${parsed.toPhone}, briefing included, tap Open WhatsApp / Call. Link: ${link}`
-              : `${r.message} Give the requester short feedback: WhatsApp call is ready.`,
+            ok: true,
+            message:
+              'Call permission is off — sent the briefing as a WhatsApp message instead. Tell the requester the message is ready and they can tap Call in WhatsApp. Enable Calls under U Agent → WhatsApp for next time.',
+            data: {
+              ...(typeof sent.data === 'object' && sent.data ? sent.data : {}),
+              deepLink: link || (sent.data as { deepLink?: string } | undefined)?.deepLink,
+              kind: 'whatsapp_message',
+              fallbackFromCall: true,
+            },
           };
         }
-        return r;
-      });
+        return {
+          ok: true,
+          message:
+            'WhatsApp call permission is off. Deep link is still ready — tell the requester to enable Calls in U Agent → WhatsApp, or tap Open WhatsApp now to chat/call manually.',
+          data: {
+            deepLink: link,
+            callLink: prepared.callLink,
+            kind: 'whatsapp_call',
+            needsCallPermission: true,
+          },
+        };
+      }
+
+      return {
+        ok: prepared.ok,
+        message: prepared.ok
+          ? `${prepared.message} Give the requester short feedback: call ready for ${parsed.toPhone}, briefing included, WhatsApp opening. Link: ${link}`
+          : prepared.message,
+        data: {
+          deepLink: prepared.deepLink,
+          callLink: prepared.callLink,
+          kind: 'whatsapp_call',
+        },
+      };
     },
   });
 }

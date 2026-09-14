@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma as _prisma } from '@/lib/prisma';
 import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
-import { phonesMatch } from '@/lib/phone-match';
+import { phoneLookupVariants, phonesMatch } from '@/lib/phone-match';
 import {
   registerTool,
   zodToJsonSchemaRough,
@@ -12,7 +12,7 @@ import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
 
-const OPEN_STATUSES = new Set([
+const OPEN_STATUSES = [
   'PENDING',
   'ASSIGNED',
   'IN_PROGRESS',
@@ -20,7 +20,10 @@ const OPEN_STATUSES = new Set([
   'OPEN',
   'WAITING',
   'ON_HOLD',
-]);
+  'ON_SITE',
+];
+
+const OPEN_STATUS_SET = new Set(OPEN_STATUSES);
 
 const searchTicketsInput = z.object({
   query: z.string().optional(),
@@ -94,18 +97,9 @@ export function registerProviserTools(): void {
     async execute({ input, ctx }): Promise<ToolResult> {
       const parsed = searchTicketsInput.parse(input);
       const limit = parsed.limit ?? 20;
-      const where: Record<string, unknown> = {};
-      if (ctx.privateCompanyId) {
-        where.OR = [
-          { privateCompanyId: ctx.privateCompanyId },
-          { requesterId: ctx.userId },
-        ];
-      } else {
-        where.requesterId = ctx.userId;
-      }
-      if (parsed.status) where.status = parsed.status.toUpperCase();
 
       let assigneeId: string | null = null;
+      let assigneeLabel: string | null = null;
       const phoneQ = parsed.phone?.trim();
       if (phoneQ && ctx.privateCompanyId) {
         const people = await prisma.ticketRequester.findMany({
@@ -114,14 +108,41 @@ export function registerProviserTools(): void {
             status: { not: 'BLOCKED' },
           },
           select: { id: true, phone: true, name: true, username: true },
-          take: 200,
+          take: 300,
         });
         const hit = people.find((p: { phone: string }) => phonesMatch(p.phone || '', phoneQ));
-        if (hit) assigneeId = hit.id;
+        if (hit) {
+          assigneeId = hit.id;
+          assigneeLabel = hit.name || hit.username || phoneQ;
+        }
+      }
+
+      const scopeOr: Record<string, unknown>[] = ctx.privateCompanyId
+        ? [{ privateCompanyId: ctx.privateCompanyId }, { requesterId: ctx.userId }]
+        : [{ requesterId: ctx.userId }];
+
+      const personOr: Record<string, unknown>[] = [];
+      if (assigneeId) {
+        personOr.push({ requesterId: assigneeId });
+        personOr.push({ company: { contains: assigneeId } });
+      }
+      if (phoneQ) {
+        for (const v of phoneLookupVariants(phoneQ)) {
+          personOr.push({ phone: v });
+          personOr.push({ phone: { contains: v.replace(/\D/g, '').slice(-9) } });
+        }
+      }
+
+      const andParts: Record<string, unknown>[] = [{ OR: scopeOr }];
+      if (personOr.length) andParts.push({ OR: personOr });
+      if (parsed.status) {
+        andParts.push({ status: parsed.status.toUpperCase() });
+      } else if (parsed.remainingOnly) {
+        andParts.push({ status: { in: OPEN_STATUSES } });
       }
 
       const rows = await prisma.visitorRequest.findMany({
-        where,
+        where: { AND: andParts },
         orderBy: { createdAt: 'desc' },
         take: Math.min(80, limit * 3),
         select: {
@@ -171,18 +192,9 @@ export function registerProviserTools(): void {
             status: string;
             assignedEngineerId: string | null;
             assignedEngineerName: string | null;
-            requesterId: string | null;
-            phone: string | null;
           }) => {
-            if (parsed.remainingOnly && !OPEN_STATUSES.has(String(r.status || '').toUpperCase())) {
+            if (parsed.remainingOnly && !OPEN_STATUS_SET.has(String(r.status || '').toUpperCase())) {
               return false;
-            }
-            if (assigneeId) {
-              const matchAssignee =
-                r.assignedEngineerId === assigneeId || r.requesterId === assigneeId;
-              if (!matchAssignee) return false;
-            } else if (phoneQ) {
-              if (!phonesMatch(r.phone || '', phoneQ)) return false;
             }
             if (!q) return true;
             return (
@@ -201,22 +213,28 @@ export function registerProviserTools(): void {
           `${i + 1}) ${t.technique} — ${t.status}${t.siteName ? ` @ ${t.siteName}` : ''} (${t.id.slice(0, 8)})`
       );
 
+      const who = assigneeLabel || phoneQ || '';
       return {
         ok: true,
         message: mapped.length
-          ? `Found ${mapped.length} ticket(s)${parsed.remainingOnly ? ' remaining' : ''}${phoneQ ? ` for phone ${phoneQ}` : ''}. Use this list in WhatsApp note/message — do not invent tasks.`
+          ? `Found ${mapped.length} ticket(s)${parsed.remainingOnly ? ' remaining' : ''}${who ? ` for ${who}` : ''}. Use data.briefingTextAr in WhatsApp note/message — do not invent tasks.`
           : phoneQ
-            ? `No tickets matched phone ${phoneQ}. Still proceed with whatsapp_start_call using a short note that no open tickets were found in Proviser for this number, unless the user gave other details.`
+            ? `No tickets matched phone ${phoneQ}${assigneeId ? ` (${assigneeLabel})` : ' — person not in workspace directory'}. Still call whatsapp_start_call with an honest note that no open tickets were found.`
             : 'No tickets found.',
         data: {
           tickets: mapped,
           count: mapped.length,
+          person: assigneeId
+            ? { id: assigneeId, name: assigneeLabel, phone: phoneQ }
+            : phoneQ
+              ? { id: null, name: null, phone: phoneQ }
+              : null,
           briefingTextAr: mapped.length
-            ? `التاسكات المتبقية:\n${briefingLines.join('\n')}`
-            : 'لا توجد تاسكات مفتوحة مسجّلة في Proviser لهذا الرقم حالياً.',
+            ? `التاسكات المتبقية${who ? ` لـ ${who}` : ''}:\n${briefingLines.join('\n')}`
+            : `لا توجد تاسكات مفتوحة مسجّلة في Proviser${who ? ` لـ ${who}` : ''} حالياً.`,
           briefingTextEn: mapped.length
-            ? `Remaining tasks:\n${briefingLines.join('\n')}`
-            : 'No open tickets found in Proviser for this number right now.',
+            ? `Remaining tasks${who ? ` for ${who}` : ''}:\n${briefingLines.join('\n')}`
+            : `No open tickets found in Proviser${who ? ` for ${who}` : ''} right now.`,
         },
       };
     },

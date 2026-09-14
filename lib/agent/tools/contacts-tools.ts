@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { prisma as _prisma } from '@/lib/prisma';
+import { phoneLookupVariants, phonesMatch } from '@/lib/phone-match';
 import {
   registerTool,
   zodToJsonSchemaRough,
@@ -132,11 +133,17 @@ export function registerContactsTools(): void {
       };
       if (roleFilter) where.role = roleFilter;
       if (q && q.length >= 1) {
+        const variants = phoneLookupVariants(q);
         where.OR = [
           { username: { contains: q, mode: 'insensitive' } },
           { name: { contains: q, mode: 'insensitive' } },
-          { phone: { contains: q } },
           { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q } },
+          ...variants.map((v) => ({ phone: { contains: v } })),
+          ...variants
+            .map((v) => v.replace(/\D/g, ''))
+            .filter((d) => d.length >= 8)
+            .map((d) => ({ phone: { contains: d.slice(-9) } })),
         ];
       }
 
@@ -150,7 +157,7 @@ export function registerContactsTools(): void {
         email: string | null;
       }> = await prisma.ticketRequester.findMany({
         where,
-        take: limit,
+        take: Math.min(120, limit * 3),
         orderBy: [{ name: 'asc' }, { username: 'asc' }],
         select: {
           id: true,
@@ -163,7 +170,15 @@ export function registerContactsTools(): void {
         },
       });
 
-      const contacts = rows.map((r) => ({
+      const filtered = q
+        ? rows.filter(
+            (r) =>
+              matchQuery(q, r.name || r.username || '', r.phone || '') ||
+              phonesMatch(r.phone || '', q)
+          )
+        : rows;
+
+      const contacts = filtered.slice(0, limit).map((r) => ({
         id: r.id,
         username: r.username,
         name: r.name,
@@ -182,8 +197,8 @@ export function registerContactsTools(): void {
       return {
         ok: true,
         message: contacts.length
-          ? `Found ${contacts.length} contact(s). Use phone with WhatsApp tools.`
-          : 'No contacts matched. Try a different query.',
+          ? `Found ${contacts.length} contact(s). Use phone with WhatsApp tools — a raw number is enough even if not saved.`
+          : 'No contacts matched. If the user gave a phone number, use it directly with WhatsApp tools.',
         data: { contacts, count: contacts.length, workspaceId: ctx.privateCompanyId },
       };
     },
