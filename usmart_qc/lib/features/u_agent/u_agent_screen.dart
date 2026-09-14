@@ -4,8 +4,10 @@ import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -13,9 +15,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/provisor_techniques_provider.dart';
 import '../../services/api_service.dart';
 import 'u_agent_provider.dart';
 import 'u_agent_service.dart';
+import 'u_agent_service_cards.dart';
 
 /// Floating U Agent host for dashboards (not a bottom-nav tab).
 class UAgentHost extends StatefulWidget {
@@ -215,6 +219,7 @@ class _UAgentChatOverlay extends StatefulWidget {
 class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProviderStateMixin {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
+  final _inputFocus = FocusNode();
   final _speech = stt.SpeechToText();
   final _tts = FlutterTts();
   late final AnimationController _sheetCtrl;
@@ -223,6 +228,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
   bool _ttsReady = false;
   bool _autoSpeak = true;
   bool _voiceLoop = false;
+  double _lastScrollPixels = 0;
 
   @override
   void initState() {
@@ -231,7 +237,70 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
       ..forward();
     _waveCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
       ..repeat();
+    _scroll.addListener(_onScrollKeyboard);
     _initVoice();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<ProvisorTechniquesProvider>().ensureLoaded();
+      _maybeLoadDeviceContacts();
+    });
+  }
+
+  void _onScrollKeyboard() {
+    if (!_scroll.hasClients) return;
+    final pixels = _scroll.position.pixels;
+    final delta = pixels - _lastScrollPixels;
+    if (delta.abs() < 6) return;
+    if (delta > 0) {
+      // Scrolling down → hide keyboard smoothly
+      if (_inputFocus.hasFocus) {
+        _inputFocus.unfocus();
+      }
+    } else {
+      // Scrolling up → show keyboard
+      if (!_inputFocus.hasFocus && mounted) {
+        _inputFocus.requestFocus();
+      }
+    }
+    _lastScrollPixels = pixels;
+  }
+
+  Future<void> _maybeLoadDeviceContacts() async {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    final role = (auth.user?.role ?? '').toUpperCase();
+    final hasCompany = (auth.user?.privateCompanyId ?? '').isNotEmpty;
+    final isPersonal = !hasCompany ||
+        role == 'PERSONAL' ||
+        role == 'INDIVIDUAL' ||
+        role == 'USER';
+    if (!isPersonal) return;
+
+    final granted = await FlutterContacts.requestPermission(readonly: true);
+    if (!granted) {
+      final status = await Permission.contacts.request();
+      if (!status.isGranted) return;
+    }
+    try {
+      final contacts = await FlutterContacts.getContacts(withProperties: true);
+      final mapped = <Map<String, String>>[];
+      for (final c in contacts) {
+        for (final p in c.phones) {
+          final digits = p.number.replaceAll(RegExp(r'\D'), '');
+          if (digits.length < 8) continue;
+          mapped.add({
+            'name': c.displayName.isNotEmpty ? c.displayName : p.number,
+            'phone': p.number,
+          });
+          if (mapped.length >= 200) break;
+        }
+        if (mapped.length >= 200) break;
+      }
+      if (!mounted) return;
+      context.read<UAgentProvider>().setDeviceContacts(mapped);
+    } catch (e) {
+      debugPrint('U Agent contacts: $e');
+    }
   }
 
   Future<void> _initVoice() async {
@@ -277,10 +346,12 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
   @override
   void dispose() {
     _voiceLoop = false;
+    _scroll.removeListener(_onScrollKeyboard);
     _sheetCtrl.dispose();
     _waveCtrl.dispose();
     _controller.dispose();
     _scroll.dispose();
+    _inputFocus.dispose();
     _speech.stop();
     _tts.stop();
     super.dispose();
@@ -450,7 +521,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
                   child: Material(
                     color: Colors.transparent,
                     child: Container(
-                      height: media.size.height,
+                      height: media.size.height - media.viewInsets.bottom,
                       width: double.infinity,
                       color: const Color(0xFF212121),
                       child: agent.voiceMode
@@ -798,40 +869,58 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
 
   Widget _messages(UAgentProvider agent) {
     if (agent.messages.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [Color(0xFF10A37F), Color(0xFF6C63FF)]),
-                ),
-                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 34),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                agent.greeting,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                AppLocalizations.of(context).t('u_agent_overlay_hint'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
+      return Consumer<ProvisorTechniquesProvider>(
+        builder: (context, techniques, _) {
+          return NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              if (n is ScrollUpdateNotification) {
+                final delta = n.scrollDelta ?? 0;
+                if (delta > 2 && _inputFocus.hasFocus) {
+                  _inputFocus.unfocus();
+                } else if (delta < -2 && !_inputFocus.hasFocus) {
+                  _inputFocus.requestFocus();
+                }
+              }
+              return false;
+            },
+            child: UAgentServiceCards(
+              techniques: techniques,
+              greeting: agent.greeting,
+              onSelect: (item, {required maintenance}) {
+                showServiceConfirmSheet(
+                  context: context,
+                  item: item,
+                  maintenance: maintenance,
+                  onConfirm: () {
+                    final lang = Localizations.localeOf(context).languageCode;
+                    final label = item.labelForLocale(lang);
+                    final cat = maintenance ? 'MAINTENANCE' : 'INSPECTION_QC';
+                    agent.send(
+                      'I confirm opening a new ticket for service "$label" (slug: ${item.slug}, category: $cat). '
+                      'Please create the ticket now and include all details for support.',
+                    );
+                  },
+                );
+              },
+            ),
+          );
+        },
       );
     }
 
-    return ListView.builder(
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n is ScrollUpdateNotification) {
+          final delta = n.scrollDelta ?? 0;
+          if (delta > 2 && _inputFocus.hasFocus) {
+            _inputFocus.unfocus();
+          } else if (delta < -2 && !_inputFocus.hasFocus) {
+            _inputFocus.requestFocus();
+          }
+        }
+        return false;
+      },
+      child: ListView.builder(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       itemCount: agent.messages.length + (agent.busy ? 1 : 0),
@@ -920,6 +1009,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
           ),
         );
       },
+    ),
     );
   }
 
@@ -1001,6 +1091,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
             Expanded(
               child: TextField(
                 controller: _controller,
+                focusNode: _inputFocus,
                 style: const TextStyle(color: Colors.white),
                 minLines: 1,
                 maxLines: 5,

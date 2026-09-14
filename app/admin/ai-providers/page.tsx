@@ -175,10 +175,11 @@ export default function AdminAiProvidersPage() {
         <p className="text-gray-400 text-sm mt-1">
           Add OpenAI, DeepSeek, Claude (Anthropic), or any OpenAI-compatible custom gateway.
           Keys are encrypted at rest. The <strong>default</strong> provider is used by U Agent
-          for chat/tools. For <strong>voice</strong>: set Transcribe model (e.g. OpenAI{' '}
-          <code className="text-gray-300">whisper-1</code>) for server audio; the Flutter app
-          also uses on-device speech + TTS. Env{' '}
-          <code className="text-gray-300">OPENAI_API_KEY</code> remains a fallback when no DB
+          for chat/tools. <strong>Voice chat</strong> works on-device with any provider (including
+          DeepSeek). For uploaded voice notes, keep an OpenAI provider (or{' '}
+          <code className="text-gray-300">OPENAI_API_KEY</code>) with Transcribe{' '}
+          <code className="text-gray-300">whisper-1</code> — DeepSeek has no Whisper API.
+          Env <code className="text-gray-300">OPENAI_API_KEY</code> remains a fallback when no DB
           provider is configured.
         </p>
       </div>

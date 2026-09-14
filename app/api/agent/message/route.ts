@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       contentType?: string;
       size?: number;
     }>;
+    deviceContacts?: Array<{ name?: string; phone?: string }>;
     idempotencyKey?: string;
   };
   try {
@@ -46,6 +47,16 @@ export async function POST(req: NextRequest) {
   if (!text) {
     return NextResponse.json({ success: false, message: 'text is required' }, { status: 400 });
   }
+
+  const deviceContacts = Array.isArray(body.deviceContacts)
+    ? body.deviceContacts
+        .map((c) => ({
+          name: typeof c?.name === 'string' ? c.name.trim() : '',
+          phone: typeof c?.phone === 'string' ? c.phone.trim() : '',
+        }))
+        .filter((c) => c.phone.replace(/\D/g, '').length >= 8)
+        .slice(0, 200)
+    : undefined;
 
   try {
     const attachments = Array.isArray(body.attachments)
@@ -61,6 +72,7 @@ export async function POST(req: NextRequest) {
         ? body.attachmentUrls.filter((u): u is string => typeof u === 'string')
         : undefined,
       attachments,
+      deviceContacts,
       idempotencyKey: body.idempotencyKey,
     });
     return NextResponse.json(result, { status: result.success ? 200 : 400 });

@@ -260,7 +260,8 @@ U Agent always uses the **default enabled** provider (then priority order). No p
 | `U_AGENT_ENABLED` | Global on/off (`false` disables agent APIs) |
 | `OPENAI_API_KEY` | Fallback when no admin provider |
 | `U_AGENT_SECRETS_KEY` | Prefer for encrypting stored API keys |
-| `U_AGENT_MODEL_*` | Env model overrides for fallback |
+| `SUPPORT_WHATSAPP_PHONE` | Support inbox for new-ticket WhatsApp alerts (default `+9647760777659`) |
+| `TELEGRAM_BOT_TOKEN` | Optional Telegram Bot API for `telegram_send_message` |
 
 ---
 

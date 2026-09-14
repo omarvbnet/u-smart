@@ -4,6 +4,7 @@ import {
   type WorkspaceBillingInput,
 } from '@/lib/private-company-billing';
 import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
+import { notifySupportWhatsAppTicket } from '@/lib/support-whatsapp-notify';
 import type { ToolResult } from '@/lib/agent/tools/registry';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,6 +93,19 @@ export async function executeApprovedCreateTicket(
     resourceId: ticket.id,
     summary: `U Agent created ticket ${ticket.id} (${technique})`,
     metadata: { source: 'u_agent' },
+  });
+
+  notifySupportWhatsAppTicket({
+    ticketId: ticket.id,
+    technique,
+    siteName: typeof payload.siteName === 'string' ? payload.siteName : null,
+    province: typeof payload.province === 'string' ? payload.province : requester?.province,
+    notes: typeof payload.notes === 'string' ? payload.notes : null,
+    requesterName: requester?.name,
+    requesterPhone: requester?.phone,
+    source: 'u_agent',
+    assignmentScope: 'PRIVATE_COMPANY_STAFF',
+    companyName: privateCompanyId,
   });
 
   return { ok: true, message: `Ticket created: ${ticket.id}`, data: { ticketId: ticket.id } };

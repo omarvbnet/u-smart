@@ -15,19 +15,29 @@ const listContactsInput = z.object({
   limit: z.number().int().min(1).max(80).optional(),
 });
 
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+function matchQuery(q: string | undefined, name: string, phone: string): boolean {
+  if (!q || !q.trim()) return true;
+  const needle = q.trim().toLowerCase();
+  return name.toLowerCase().includes(needle) || phone.includes(needle) || normalizePhone(phone).includes(normalizePhone(needle));
+}
+
 export function registerContactsTools(): void {
   registerTool({
     id: 'list_contacts',
-    name: 'List workspace contacts',
+    name: 'List contacts',
     description:
-      'List people in the user’s Proviser workspace (name, phone, role, username) so U Agent can message or call them on WhatsApp or Telegram. Prefer this before whatsapp_* / telegram_* tools.',
+      'List people the user can message/call on WhatsApp or Telegram. Workspace users: company directory. Personal/individual users: device phone contacts shared from the app (plus self). Prefer before whatsapp_* / telegram_* tools.',
     category: 'contacts',
     riskLevel: 'READ',
     requiresApproval: false,
     executeImmediately: true,
     requiredPermissions: ['agent.read_contacts'],
     enabled: true,
-    version: '1',
+    version: '2',
     timeoutMs: 12000,
     inputSchema: listContactsInput,
     jsonSchema: zodToJsonSchemaRough(listContactsInput),
@@ -36,8 +46,31 @@ export function registerContactsTools(): void {
       const limit = parsed.limit ?? 40;
       const q = parsed.query?.trim();
       const roleFilter = parsed.role?.trim().toUpperCase();
+      const roleUpper = String(ctx.role || '').toUpperCase();
+      const isPersonal =
+        !ctx.privateCompanyId ||
+        roleUpper === 'PERSONAL' ||
+        roleUpper === 'INDIVIDUAL' ||
+        roleUpper === 'USER';
 
-      if (!ctx.privateCompanyId) {
+      if (isPersonal && !ctx.privateCompanyId) {
+        const device = (ctx.deviceContacts || [])
+          .filter((c) => c.phone && normalizePhone(c.phone).length >= 8)
+          .filter((c) => matchQuery(q, c.name || '', c.phone))
+          .slice(0, limit)
+          .map((c, i) => ({
+            id: `device-${i}-${normalizePhone(c.phone).slice(-8)}`,
+            username: null as string | null,
+            name: c.name || c.phone,
+            phone: c.phone,
+            role: 'DEVICE_CONTACT',
+            province: null as string | null,
+            email: null as string | null,
+            isOwner: false,
+            channels: { whatsapp: true, telegram: false },
+            source: 'device',
+          }));
+
         const self = await prisma.ticketRequester.findUnique({
           where: { id: ctx.userId },
           select: {
@@ -50,21 +83,40 @@ export function registerContactsTools(): void {
             email: true,
           },
         });
+
+        const contacts = [
+          ...(self
+            ? [
+                {
+                  ...self,
+                  isOwner: false,
+                  channels: { whatsapp: !!self.phone, telegram: false },
+                  source: 'self',
+                },
+              ]
+            : []),
+          ...device,
+        ];
+
         return {
           ok: true,
-          message: 'Personal account — only your own contact is available.',
+          message: device.length
+            ? `Found ${device.length} phone contact(s) from the user’s device (plus self). Use phone with WhatsApp tools.`
+            : 'No device contacts shared yet. Ask the user to allow Contacts permission in U Agent, or provide a phone number.',
           data: {
-            contacts: self
-              ? [
-                  {
-                    ...self,
-                    isOwner: false,
-                    channels: { whatsapp: !!self.phone, telegram: false },
-                  },
-                ]
-              : [],
-            count: self ? 1 : 0,
+            contacts,
+            count: contacts.length,
+            deviceContactCount: device.length,
+            personal: true,
           },
+        };
+      }
+
+      if (!ctx.privateCompanyId) {
+        return {
+          ok: true,
+          message: 'No workspace and no device contacts available.',
+          data: { contacts: [], count: 0 },
         };
       }
 
@@ -121,15 +173,16 @@ export function registerContactsTools(): void {
         email: r.email,
         isOwner: ownerId === r.id,
         channels: {
-          whatsapp: !!r.phone && r.phone.replace(/\D/g, '').length >= 8,
+          whatsapp: !!r.phone && normalizePhone(r.phone).length >= 8,
           telegram: true,
         },
+        source: 'workspace',
       }));
 
       return {
         ok: true,
         message: contacts.length
-          ? `Found ${contacts.length} contact(s). Use phone with WhatsApp tools, or telegramUsername/chatId with Telegram.`
+          ? `Found ${contacts.length} contact(s). Use phone with WhatsApp tools.`
           : 'No contacts matched. Try a different query.',
         data: { contacts, count: contacts.length, workspaceId: ctx.privateCompanyId },
       };

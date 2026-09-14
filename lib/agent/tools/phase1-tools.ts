@@ -10,6 +10,7 @@ import {
   type ToolResult,
 } from '@/lib/agent/tools/registry';
 import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
+import { notifySupportWhatsAppTicket } from '@/lib/support-whatsapp-notify';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -335,11 +336,22 @@ export function registerPhase1Tools(): void {
           },
           select: { id: true },
         });
+        notifySupportWhatsAppTicket({
+          ticketId: ticket.id,
+          technique: techniqueSlug,
+          siteName: parsed.siteName || null,
+          province: String(parsed.province || requester?.province || 'Baghdad'),
+          notes: parsed.notes || null,
+          requesterName: requester?.name,
+          requesterPhone: requester?.phone,
+          requesterRole: ctx.role,
+          source: 'u_agent_personal',
+        });
         return {
           ok: true,
           message: match.known
-            ? `Ticket created: ${ticket.id} (type ${techniqueSlug}).`
-            : `Ticket created: ${ticket.id} using new technique slug "${techniqueSlug}" (not in platform catalog).`,
+            ? `Ticket created: ${ticket.id} (type ${techniqueSlug}). Support notified on WhatsApp.`
+            : `Ticket created: ${ticket.id} using new technique slug "${techniqueSlug}" (not in platform catalog). Support notified on WhatsApp.`,
           data: {
             ticketId: ticket.id,
             technique: techniqueSlug,

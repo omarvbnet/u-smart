@@ -202,6 +202,7 @@ class UAgentService {
     String? conversationId,
     List<String>? attachmentUrls,
     List<Map<String, dynamic>>? attachments,
+    List<Map<String, String>>? deviceContacts,
   }) {
     return _api.post(
       ApiConfig.agentMessage,
@@ -211,6 +212,8 @@ class UAgentService {
         if (attachmentUrls != null && attachmentUrls.isNotEmpty)
           'attachmentUrls': attachmentUrls,
         if (attachments != null && attachments.isNotEmpty) 'attachments': attachments,
+        if (deviceContacts != null && deviceContacts.isNotEmpty)
+          'deviceContacts': deviceContacts,
         'idempotencyKey': 'flutter-${DateTime.now().millisecondsSinceEpoch}',
       },
     );

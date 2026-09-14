@@ -31,6 +31,8 @@ class UAgentProvider extends ChangeNotifier {
   bool waFiles = false;
   bool waCalls = false;
   bool waCloudConfigured = false;
+  List<Map<String, String>> deviceContacts = [];
+  bool deviceContactsLoaded = false;
 
   final List<VoidCallback> _openListeners = [];
 
@@ -55,6 +57,19 @@ class UAgentProvider extends ChangeNotifier {
       loadHistory();
       refreshWhatsAppConsent();
     }
+  }
+
+  Future<void> loadDeviceContactsIfNeeded({bool force = false}) async {
+    if (deviceContactsLoaded && !force) return;
+    // Lazy-loaded from UI after permission; keep empty until then.
+    deviceContactsLoaded = true;
+    notifyListeners();
+  }
+
+  void setDeviceContacts(List<Map<String, String>> contacts) {
+    deviceContacts = contacts;
+    deviceContactsLoaded = true;
+    notifyListeners();
   }
 
   void toggleOpen() => setOpen(!open);
@@ -276,6 +291,7 @@ class UAgentProvider extends ChangeNotifier {
     error = null;
     status = 'THINKING';
     final filesSnapshot = List<UAgentPendingFile>.from(pendingFiles);
+    final contactsSnapshot = List<Map<String, String>>.from(deviceContacts);
     final prompt = trimmed.isEmpty
         ? (fromVoice
             ? 'Please analyze the attached files and summarize findings.'
@@ -317,6 +333,7 @@ class UAgentProvider extends ChangeNotifier {
         conversationId: conversationId,
         attachments: attachments.isEmpty ? null : attachments,
         attachmentUrls: attachments.map((a) => a['url'] as String).toList(),
+        deviceContacts: contactsSnapshot.isEmpty ? null : contactsSnapshot,
       );
       if (data['success'] != true) {
         error = data['message']?.toString() ?? 'Request failed';

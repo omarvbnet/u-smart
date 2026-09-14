@@ -1,5 +1,6 @@
-import { getOpenAiApiKey } from '@/lib/agent/config';
 import { recordAgentUsage } from '@/lib/agent/usage';
+import { resolveTranscribeCredentials } from '@/lib/agent/multimodal/transcribe-credentials';
+import { getOpenAiApiKey } from '@/lib/agent/config';
 
 export type ProcessedAttachment = {
   url: string;
@@ -70,7 +71,7 @@ export async function processAgentAttachments(
           provider: 'openai',
         });
       } else {
-        base.analysisNote = `${kind} stored; transcription unavailable (set OPENAI_API_KEY or check media URL).`;
+        base.analysisNote = `${kind} stored; transcription unavailable (add OpenAI provider with whisper-1 for voice notes — chat voice still works on-device with DeepSeek).`;
       }
     } else if (kind === 'image' || kind === 'pdf') {
       const ocr = await tryVisionExtract(item.url, kind);
@@ -112,18 +113,19 @@ export function attachmentsToPromptBlock(items: ProcessedAttachment[]): string {
 }
 
 async function tryTranscribe(url: string, kind: string): Promise<string | null> {
-  const apiKey = getOpenAiApiKey();
-  if (!apiKey) return null;
+  const creds = await resolveTranscribeCredentials();
+  if (!creds) return null;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const blob = await res.blob();
     const form = new FormData();
     form.append('file', blob, kind === 'audio' ? 'audio.m4a' : 'video.mp4');
-    form.append('model', process.env.U_AGENT_MODEL_TRANSCRIBE || 'whisper-1');
-    const tr = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    form.append('model', creds.model);
+    const endpoint = `${creds.baseUrl}/audio/transcriptions`;
+    const tr = await fetch(endpoint, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { Authorization: `Bearer ${creds.apiKey}` },
       body: form,
     });
     if (!tr.ok) return null;

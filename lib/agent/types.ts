@@ -34,6 +34,8 @@ export type AgentContext = {
   isWorkspaceOwner: boolean;
   departmentId: string | null;
   locale?: string | null;
+  /** Device phone contacts shared by personal/individual users for WhatsApp. */
+  deviceContacts?: Array<{ name: string; phone: string }>;
 };
 
 export type AgentPolicySnapshot = {

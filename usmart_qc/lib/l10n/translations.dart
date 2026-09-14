@@ -116,6 +116,13 @@ const Map<String, String> _en = {
   'u_agent_whatsapp_cloud_on': 'Business Cloud API configured on server',
   'u_agent_whatsapp_cloud_off':
       'Cloud API not configured — actions open your personal WhatsApp app via secure links',
+  'u_agent_services_hint': 'Choose a Proviser service to learn more and open a ticket.',
+  'u_agent_services_qc': 'QUALITY CONTROL',
+  'u_agent_services_maint': 'MAINTENANCE',
+  'u_agent_service_confirm_hint':
+      'Confirm to ask U Agent to open a new ticket. Workspace tickets still need owner approval when required.',
+  'u_agent_confirm_open_ticket': 'Confirm — open ticket',
+  'u_agent_cancel': 'Cancel',
   'nav_inbox': 'Inbox',
   'nav_available': 'Available',
   'nav_my_tickets': 'My Tickets',
@@ -1444,6 +1451,13 @@ const Map<String, String> _ar = {
   'u_agent_whatsapp_cloud_on': 'واجهة واتساب Cloud مفعّلة على السيرفر',
   'u_agent_whatsapp_cloud_off':
       'Cloud غير مفعّل — الإجراءات تفتح تطبيق واتساب الشخصي عبر روابط آمنة',
+  'u_agent_services_hint': 'اختر خدمة Proviser لمعرفة التفاصيل وتأكيد فتح تذكرة.',
+  'u_agent_services_qc': 'مراقبة الجودة',
+  'u_agent_services_maint': 'الصيانة',
+  'u_agent_service_confirm_hint':
+      'أكّد ليطلب U Agent فتح تذكرة جديدة. تذاكر مساحة العمل قد تحتاج موافقة المالك.',
+  'u_agent_confirm_open_ticket': 'تأكيد — فتح تذكرة',
+  'u_agent_cancel': 'إلغاء',
   'nav_inbox': 'البريد الوارد',
   'nav_available': 'متاح',
   'nav_my_tickets': 'تذاكري',

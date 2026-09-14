@@ -111,16 +111,22 @@ export async function runAgentMessage(args: {
     size?: number | null;
   }>;
   idempotencyKey?: string;
+  deviceContacts?: Array<{ name: string; phone: string }>;
 }): Promise<RunAgentMessageResult> {
   ensureTools();
   const timeline: AgentTimelineStep[] = [];
   const approvalIds: string[] = [];
   const artifacts: AgentArtifact[] = [];
 
+  const ctx = {
+    ...args.ctx,
+    deviceContacts: args.deviceContacts?.length ? args.deviceContacts : args.ctx.deviceContacts,
+  };
+
   pushTimeline(timeline, 'Received user message', 'THINKING');
 
-  if (args.policy.dailyAiRequestLimit > 0 && args.ctx.privateCompanyId) {
-    const used = await countTodayAiRequests(args.ctx.privateCompanyId);
+  if (args.policy.dailyAiRequestLimit > 0 && ctx.privateCompanyId) {
+    const used = await countTodayAiRequests(ctx.privateCompanyId);
     if (used >= args.policy.dailyAiRequestLimit) {
       return {
         success: false,
@@ -130,8 +136,8 @@ export async function runAgentMessage(args: {
   }
 
   const conversation = await getOrCreateConversation({
-    userId: args.ctx.userId,
-    privateCompanyId: args.ctx.privateCompanyId,
+    userId: ctx.userId,
+    privateCompanyId: ctx.privateCompanyId,
     conversationId: args.conversationId,
   });
 
@@ -144,14 +150,14 @@ export async function runAgentMessage(args: {
   if (rawAttachments.length) {
     pushTimeline(timeline, 'Processing attachments', 'PLANNING');
     processed = await processAgentAttachments(rawAttachments, {
-      privateCompanyId: args.ctx.privateCompanyId,
-      userId: args.ctx.userId,
+      privateCompanyId: ctx.privateCompanyId,
+      userId: ctx.userId,
     });
   }
 
   await appendMessage({
     conversationId: conversation.id,
-    userId: args.ctx.userId,
+    userId: ctx.userId,
     role: 'USER',
     content: args.text,
     attachments: processed.length ? processed : args.attachmentUrls?.length ? args.attachmentUrls : undefined,
@@ -162,8 +168,8 @@ export async function runAgentMessage(args: {
     const exec = await prisma.uAgentExecution.create({
       data: {
         conversationId: conversation.id,
-        privateCompanyId: args.ctx.privateCompanyId,
-        userId: args.ctx.userId,
+        privateCompanyId: ctx.privateCompanyId,
+        userId: ctx.userId,
         status: 'THINKING',
         timeline,
       },
@@ -193,7 +199,7 @@ export async function runAgentMessage(args: {
     { role: 'system', content: U_AGENT_SYSTEM_POLICY },
     {
       role: 'system',
-      content: `User context: role=${args.ctx.role}; workspace=${args.ctx.privateCompanyId ?? 'none'}; autonomy=${args.policy.autonomyLevel}; name=${args.ctx.name ?? args.ctx.username}. Timezone=Asia/Baghdad.`,
+      content: `User context: role=${ctx.role}; workspace=${ctx.privateCompanyId ?? 'none'}; autonomy=${args.policy.autonomyLevel}; name=${ctx.name ?? ctx.username}. Timezone=Asia/Baghdad.`,
     },
     ...history.slice(0, -1).map((m) => ({
       role: (m.role === 'USER' ? 'user' : m.role === 'ASSISTANT' ? 'assistant' : 'system') as ChatMessage['role'],
@@ -206,8 +212,8 @@ export async function runAgentMessage(args: {
   const aiReady = await modelRouter.hasProvider();
   const modelId = await modelRouter.resolveModel('fast');
   await recordAgentUsage({
-    privateCompanyId: args.ctx.privateCompanyId,
-    userId: args.ctx.userId,
+    privateCompanyId: ctx.privateCompanyId,
+    userId: ctx.userId,
     resourceType: 'ai_request',
     quantity: 1,
     provider: aiReady ? 'router' : 'none',
@@ -238,12 +244,12 @@ export async function runAgentMessage(args: {
       try {
         const result = await tool.execute({
           input: id === 'get_workspace_kpis' ? { days: 1 } : { limit: 15 },
-          ctx: args.ctx,
+          ctx: ctx,
         });
         summaries.push(`${tool.name}: ${result.message} ${JSON.stringify(result.data ?? {}).slice(0, 800)}`);
         await writeAgentAudit({
-          privateCompanyId: args.ctx.privateCompanyId,
-          actorUserId: args.ctx.userId,
+          privateCompanyId: ctx.privateCompanyId,
+          actorUserId: ctx.userId,
           action: result.ok ? 'TOOL_EXECUTED' : 'TOOL_FAILED',
           toolId: id,
           result,
@@ -314,8 +320,8 @@ export async function runAgentMessage(args: {
       if (!hasAgentCapability(args.capabilities, tool.requiredPermissions)) {
         const msg = `Permission denied for tool ${tool.id}.`;
         await writeAgentAudit({
-          privateCompanyId: args.ctx.privateCompanyId,
-          actorUserId: args.ctx.userId,
+          privateCompanyId: ctx.privateCompanyId,
+          actorUserId: ctx.userId,
           action: 'TOOL_DENIED',
           toolId: tool.id,
           error: msg,
@@ -341,10 +347,10 @@ export async function runAgentMessage(args: {
       if (gate.needsApproval) {
         pushTimeline(timeline, `Approval required: ${tool.id}`, 'WAITING_APPROVAL', tool.id);
         const approval = await createApprovalRequest({
-          privateCompanyId: args.ctx.privateCompanyId,
+          privateCompanyId: ctx.privateCompanyId,
           conversationId: conversation.id,
           executionId: executionId ?? null,
-          requestedById: args.ctx.userId,
+          requestedById: ctx.userId,
           toolId: tool.id,
           action: `Execute ${tool.id}`,
           reason: `User asked: ${args.text.slice(0, 200)}`,
@@ -377,7 +383,7 @@ export async function runAgentMessage(args: {
         } else {
           result = await tool.execute({
             input: validated.data,
-            ctx: args.ctx,
+            ctx: ctx,
             idempotencyKey: args.idempotencyKey,
           });
         }
@@ -394,8 +400,8 @@ export async function runAgentMessage(args: {
       }
 
       await writeAgentAudit({
-        privateCompanyId: args.ctx.privateCompanyId,
-        actorUserId: args.ctx.userId,
+        privateCompanyId: ctx.privateCompanyId,
+        actorUserId: ctx.userId,
         action: result.ok ? 'TOOL_EXECUTED' : 'TOOL_FAILED',
         toolId: tool.id,
         input: toolPayload,
@@ -407,8 +413,8 @@ export async function runAgentMessage(args: {
       if (result.ok) pushArtifact(artifacts, result);
 
       await recordAgentUsage({
-        privateCompanyId: args.ctx.privateCompanyId,
-        userId: args.ctx.userId,
+        privateCompanyId: ctx.privateCompanyId,
+        userId: ctx.userId,
         resourceType: 'tool_execution',
         quantity: 1,
         metadata: { toolId: tool.id, ok: result.ok },

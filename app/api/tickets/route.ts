@@ -13,6 +13,7 @@ import { hasPrivilege } from '@/lib/coordinator-access';
 import { applySharedSiteTicketsToVisitorWhere } from '@/lib/site-share-access';
 import { getPrivateCompanyMembership } from '@/lib/private-company-context';
 import { logPrivateCompanyWorkspaceActivity } from '@/lib/private-company-workspace-log';
+import { notifySupportWhatsAppTicket } from '@/lib/support-whatsapp-notify';
 import {
   assignedStaffIdFromCompanyJson,
   maintenanceCrewIdsFromCompanyJson,
@@ -1396,6 +1397,19 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      notifySupportWhatsAppTicket({
+        ticketId: ticket.id,
+        technique,
+        siteName,
+        province,
+        requesterName: name || null,
+        requesterPhone: phone || null,
+        requesterRole: requesterRole,
+        companyName: company || null,
+        source: 'proviser_app_guest',
+        assignmentScope: requestedAssignmentScopeRaw || null,
+      });
+
       return NextResponse.json({
         success: true,
         ticket: {
@@ -1497,6 +1511,19 @@ export async function POST(req: NextRequest) {
         metadata: { province, status: 'PENDING' },
       });
     }
+
+    notifySupportWhatsAppTicket({
+      ticketId: ticket.id,
+      technique,
+      siteName,
+      province,
+      requesterName: name || requester?.name || null,
+      requesterPhone: phone || requester?.phone || null,
+      requesterRole: requesterRole,
+      companyName: company || null,
+      source: 'proviser_app',
+      assignmentScope: assignmentScope || requestedAssignmentScopeRaw || null,
+    });
 
     return NextResponse.json({
       success: true,

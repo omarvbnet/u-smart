@@ -45,7 +45,8 @@ const DEFAULT_MODELS: Record<'OPENAI' | 'DEEPSEEK' | 'CLAUDE' | 'CUSTOM', Record
     reason: 'deepseek-reasoner',
     vision: 'deepseek-chat',
     embed: 'deepseek-chat',
-    transcribe: 'deepseek-chat',
+    // DeepSeek has no Whisper API — leave empty so resolveTranscribeCredentials falls back to OpenAI.
+    transcribe: '',
   },
   CLAUDE: {
     fast: 'claude-3-5-haiku-latest',
@@ -77,7 +78,7 @@ function modelsFor(row: ProviderRow): Record<ModelKind, string> {
     reason: row.modelReason || process.env.U_AGENT_MODEL_REASON || d.reason,
     vision: row.modelVision || process.env.U_AGENT_MODEL_VISION || d.vision,
     embed: row.modelEmbed || process.env.U_AGENT_MODEL_EMBED || d.embed,
-    transcribe: row.modelTranscribe || process.env.U_AGENT_MODEL_TRANSCRIBE || d.transcribe,
+    transcribe: row.modelTranscribe || process.env.U_AGENT_MODEL_TRANSCRIBE || d.transcribe || '',
   };
 }
 

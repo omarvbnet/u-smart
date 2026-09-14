@@ -38,6 +38,8 @@
 		<string>Provisor needs microphone access so you can talk to U Agent by voice.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>Provisor uses speech recognition to convert your voice into messages for U Agent.</string>
+		<key>NSContactsUsageDescription</key>
+		<string>Provisor needs access to your contacts so U Agent can help you message or call people on WhatsApp when you ask.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Provisor needs permission to save photos to your library.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
