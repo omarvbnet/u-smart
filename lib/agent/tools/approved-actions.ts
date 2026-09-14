@@ -207,15 +207,21 @@ export async function executeApprovedCreateTicketType(
     select: { id: true, slug: true, category: true, labelAr: true, labelEn: true },
   });
 
-  logPrivateCompanyWorkspaceActivity({
-    companyId,
-    actorRequesterId: typeof payload.requestedById === 'string' ? payload.requestedById : null,
-    action: 'TECHNIQUE_CREATED',
-    resourceType: 'technique',
-    resourceId: row.id,
-    summary: `U Agent created ticket type ${row.slug} (${row.category})`,
-    metadata: { source: 'u_agent' },
-  });
+  const actorRequesterId =
+    typeof payload.requestedById === 'string' && payload.requestedById.trim()
+      ? payload.requestedById.trim()
+      : '';
+  if (actorRequesterId) {
+    logPrivateCompanyWorkspaceActivity({
+      companyId,
+      actorRequesterId,
+      action: 'TECHNIQUE_CREATED',
+      resourceType: 'technique',
+      resourceId: row.id,
+      summary: `U Agent created ticket type ${row.slug} (${row.category})`,
+      metadata: { source: 'u_agent' },
+    });
+  }
 
   return {
     ok: true,
