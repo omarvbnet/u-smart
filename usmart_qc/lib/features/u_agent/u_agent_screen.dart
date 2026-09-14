@@ -12,21 +12,48 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import 'u_agent_provider.dart';
 import 'u_agent_service.dart';
 
-/// WhatsApp-style floating U Agent: animated bubble + full chat overlay.
-/// Place inside a [Stack] on dashboards (not in the bottom navigation bar).
-class UAgentHost extends StatelessWidget {
-  const UAgentHost({super.key});
+/// Floating U Agent host for dashboards (not a bottom-nav tab).
+class UAgentHost extends StatefulWidget {
+  const UAgentHost({super.key, this.onOpenChanged});
+
+  /// Called when the overlay opens/closes so dashboards can hide the bottom nav.
+  final ValueChanged<bool>? onOpenChanged;
+
+  @override
+  State<UAgentHost> createState() => _UAgentHostState();
+}
+
+class _UAgentHostState extends State<UAgentHost> {
+  UAgentProvider? _provider;
+
+  void _onOpenChanged() {
+    final p = _provider;
+    if (p == null) return;
+    widget.onOpenChanged?.call(p.open);
+  }
+
+  @override
+  void dispose() {
+    _provider?.removeOpenListener(_onOpenChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final api = context.read<ApiService>();
+    final userId = context.watch<AuthProvider>().user?.id;
     return ChangeNotifierProvider(
+      key: ValueKey(userId ?? 'anon'),
       create: (_) {
-        final p = UAgentProvider(UAgentService(api));
+        final p = UAgentProvider(UAgentService(api), userId: userId);
+        _provider?.removeOpenListener(_onOpenChanged);
+        _provider = p;
+        p.addOpenListener(_onOpenChanged);
         p.refreshStatus();
         return p;
       },
@@ -45,9 +72,10 @@ class _UAgentHostBody extends StatelessWidget {
         return Stack(
           children: [
             if (agent.open) const _UAgentChatOverlay(),
+            // Body sits above bottomNavigationBar → bottom: 5 = 5px above the nav.
             Positioned(
-              right: 16,
-              bottom: 88,
+              right: 12,
+              bottom: 5,
               child: _UAgentFab(visible: !agent.open),
             ),
           ],
@@ -65,18 +93,34 @@ class _UAgentFab extends StatefulWidget {
   State<_UAgentFab> createState() => _UAgentFabState();
 }
 
-class _UAgentFabState extends State<_UAgentFab> with SingleTickerProviderStateMixin {
+class _UAgentFabState extends State<_UAgentFab> with TickerProviderStateMixin {
+  late final AnimationController _slide;
   late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))
+    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
       ..repeat(reverse: true);
+    _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _runSlideLoop();
+  }
+
+  Future<void> _runSlideLoop() async {
+    while (mounted) {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      await _slide.forward();
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      if (!mounted) return;
+      await _slide.reverse();
+      await Future<void>.delayed(const Duration(milliseconds: 2800));
+    }
   }
 
   @override
   void dispose() {
+    _slide.dispose();
     _pulse.dispose();
     super.dispose();
   }
@@ -84,62 +128,75 @@ class _UAgentFabState extends State<_UAgentFab> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final agent = context.watch<UAgentProvider>();
+    final label = AppLocalizations.of(context).t('nav_u_agent');
     return AnimatedScale(
-      scale: widget.visible ? 1 : 0.2,
-      duration: const Duration(milliseconds: 280),
+      scale: widget.visible ? 1 : 0.15,
+      duration: const Duration(milliseconds: 240),
       curve: Curves.easeOutBack,
       child: AnimatedOpacity(
         opacity: widget.visible ? 1 : 0,
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
         child: IgnorePointer(
           ignoring: !widget.visible,
           child: GestureDetector(
             onTap: agent.toggleOpen,
             child: AnimatedBuilder(
-              animation: _pulse,
-              builder: (context, child) {
-                final glow = 12 + (_pulse.value * 14);
-                return Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF25D366), Color(0xFF6C63FF), Color(0xFF00D4AA)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF25D366).withAlpha(90),
-                        blurRadius: glow,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: child,
-                );
-              },
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
-                  if (agent.busy || agent.listening)
-                    Positioned(
-                      right: 10,
-                      top: 10,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: agent.listening ? Colors.redAccent : Colors.amber,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1.5),
+              animation: Listenable.merge([_slide, _pulse]),
+              builder: (context, _) {
+                final t = Curves.easeOutCubic.transform(_slide.value);
+                final glow = 6 + (_pulse.value * 8);
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        widthFactor: t,
+                        child: Opacity(
+                          opacity: t,
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0B141A).withAlpha(230),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Text(
+                              label,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                ],
-              ),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF10A37F), Color(0xFF6C63FF)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF10A37F).withAlpha(100),
+                            blurRadius: glow,
+                            spreadRadius: 0.5,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -155,8 +212,7 @@ class _UAgentChatOverlay extends StatefulWidget {
   State<_UAgentChatOverlay> createState() => _UAgentChatOverlayState();
 }
 
-class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
-    with TickerProviderStateMixin {
+class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProviderStateMixin {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   final _speech = stt.SpeechToText();
@@ -166,18 +222,15 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
   bool _speechReady = false;
   bool _ttsReady = false;
   bool _autoSpeak = true;
+  bool _voiceLoop = false;
 
   @override
   void initState() {
     super.initState();
-    _sheetCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 380),
-    )..forward();
-    _waveCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat();
+    _sheetCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 360))
+      ..forward();
+    _waveCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat();
     _initVoice();
   }
 
@@ -187,26 +240,29 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
         onError: (e) => debugPrint('STT error: $e'),
         onStatus: (s) {
           if (!mounted) return;
+          final agent = context.read<UAgentProvider>();
           if (s == 'notListening' || s == 'done') {
-            context.read<UAgentProvider>().setListening(false);
+            agent.setListening(false);
           }
         },
       );
       await _tts.setSpeechRate(0.48);
       await _tts.setVolume(1.0);
-      await _tts.setPitch(1.02);
+      await _tts.setPitch(1.0);
       if (!mounted) return;
       final locale = Localizations.localeOf(context).languageCode;
-      if (locale.startsWith('ar')) {
-        await _tts.setLanguage('ar-SA');
-      } else {
-        await _tts.setLanguage('en-US');
-      }
+      await _tts.setLanguage(locale.startsWith('ar') ? 'ar-SA' : 'en-US');
       _tts.setStartHandler(() {
         if (mounted) context.read<UAgentProvider>().setSpeaking(true);
       });
-      _tts.setCompletionHandler(() {
-        if (mounted) context.read<UAgentProvider>().setSpeaking(false);
+      _tts.setCompletionHandler(() async {
+        if (!mounted) return;
+        final agent = context.read<UAgentProvider>();
+        agent.setSpeaking(false);
+        if (agent.voiceMode && _voiceLoop && !agent.busy) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          if (mounted && agent.voiceMode) await _startVoiceListen();
+        }
       });
       _tts.setCancelHandler(() {
         if (mounted) context.read<UAgentProvider>().setSpeaking(false);
@@ -220,6 +276,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
 
   @override
   void dispose() {
+    _voiceLoop = false;
     _sheetCtrl.dispose();
     _waveCtrl.dispose();
     _controller.dispose();
@@ -230,13 +287,18 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
   }
 
   Future<void> _close() async {
+    _voiceLoop = false;
     await _speech.stop();
     await _tts.stop();
     await _sheetCtrl.reverse();
-    if (mounted) context.read<UAgentProvider>().setOpen(false);
+    if (mounted) {
+      final agent = context.read<UAgentProvider>();
+      agent.setVoiceMode(false);
+      agent.setOpen(false);
+    }
   }
 
-  Future<void> _toggleListen() async {
+  Future<void> _enterVoiceMode() async {
     final agent = context.read<UAgentProvider>();
     if (!_speechReady) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -244,28 +306,67 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
       );
       return;
     }
-    if (agent.listening) {
-      await _speech.stop();
-      agent.setListening(false);
-      return;
-    }
+    await _tts.stop();
+    _voiceLoop = true;
+    agent.setVoiceMode(true);
+    await _startVoiceListen();
+  }
+
+  Future<void> _exitVoiceMode() async {
+    _voiceLoop = false;
+    await _speech.stop();
+    await _tts.stop();
+    if (!mounted) return;
+    final agent = context.read<UAgentProvider>();
+    agent.setVoiceMode(false);
+    agent.setListening(false);
+    agent.setLiveTranscript('');
+  }
+
+  Future<void> _startVoiceListen() async {
+    final agent = context.read<UAgentProvider>();
+    if (!_speechReady || agent.busy || agent.speaking) return;
     await _tts.stop();
     agent.setListening(true);
+    agent.setLiveTranscript('');
     await _speech.listen(
-      onResult: (result) {
-        _controller.text = result.recognizedWords;
-        _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+      onResult: (result) async {
+        if (!mounted) return;
+        agent.setLiveTranscript(result.recognizedWords);
         if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
           agent.setListening(false);
-          _submit(fromVoice: true);
+          await _speech.stop();
+          final reply = await agent.send(result.recognizedWords.trim(), fromVoice: true);
+          if (!mounted) return;
+          await _scrollToEnd();
+          if (_ttsReady && reply != null && reply.trim().isNotEmpty && agent.voiceMode) {
+            final speakText = reply.length > 1400 ? '${reply.substring(0, 1400)}…' : reply;
+            await _tts.speak(speakText);
+          } else if (agent.voiceMode && _voiceLoop) {
+            await Future<void>.delayed(const Duration(milliseconds: 400));
+            if (mounted && agent.voiceMode) await _startVoiceListen();
+          }
         }
       },
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 3),
+      listenFor: const Duration(seconds: 45),
+      pauseFor: const Duration(seconds: 2),
       localeId: Localizations.localeOf(context).languageCode.startsWith('ar') ? 'ar_SA' : 'en_US',
       cancelOnError: true,
       partialResults: true,
+      listenMode: stt.ListenMode.confirmation,
     );
+  }
+
+  Future<void> _interruptVoice() async {
+    await _speech.stop();
+    await _tts.stop();
+    if (!mounted) return;
+    final agent = context.read<UAgentProvider>();
+    agent.setSpeaking(false);
+    agent.setListening(false);
+    if (agent.voiceMode && _voiceLoop) {
+      await _startVoiceListen();
+    }
   }
 
   Future<void> _pickFiles() async {
@@ -275,57 +376,39 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
       withData: true,
       type: FileType.custom,
       allowedExtensions: const [
-        'pdf',
-        'png',
-        'jpg',
-        'jpeg',
-        'webp',
-        'txt',
-        'csv',
-        'md',
-        'json',
-        'doc',
-        'docx',
-        'xls',
-        'xlsx',
+        'pdf', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'md', 'json', 'doc', 'docx', 'xls', 'xlsx',
       ],
     );
     if (result == null) return;
     for (final f in result.files) {
-      agent.addPendingFile(UAgentPendingFile(
-        name: f.name,
-        path: f.path,
-        bytes: f.bytes,
-      ));
+      agent.addPendingFile(UAgentPendingFile(name: f.name, path: f.path, bytes: f.bytes));
     }
   }
 
   Future<void> _pickImage(ImageSource source) async {
     final agent = context.read<UAgentProvider>();
-    final picker = ImagePicker();
-    final x = await picker.pickImage(source: source, imageQuality: 85);
+    final x = await ImagePicker().pickImage(source: source, imageQuality: 85);
     if (x == null) return;
-    agent.addPendingFile(UAgentPendingFile(
-      name: x.name,
-      path: x.path,
-      contentType: 'image/jpeg',
-    ));
+    agent.addPendingFile(UAgentPendingFile(name: x.name, path: x.path, contentType: 'image/jpeg'));
   }
 
-  Future<void> _submit({bool fromVoice = false}) async {
+  Future<void> _scrollToEnd() async {
+    if (!_scroll.hasClients) return;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _submit() async {
     final agent = context.read<UAgentProvider>();
     final text = _controller.text;
     _controller.clear();
-    final reply = await agent.send(text, fromVoice: fromVoice);
-    if (_scroll.hasClients) {
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOut,
-      );
-    }
-    if (_autoSpeak && _ttsReady && reply != null && reply.trim().isNotEmpty) {
+    final reply = await agent.send(text);
+    await _scrollToEnd();
+    if (_autoSpeak && _ttsReady && reply != null && reply.trim().isNotEmpty && !agent.voiceMode) {
       final speakText = reply.length > 1200 ? '${reply.substring(0, 1200)}…' : reply;
       await _tts.speak(speakText);
     }
@@ -354,51 +437,43 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
             GestureDetector(
               onTap: _close,
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10 * t, sigmaY: 10 * t),
-                child: Container(color: Colors.black.withAlpha((140 * t).round())),
+                filter: ImageFilter.blur(sigmaX: 12 * t, sigmaY: 12 * t),
+                child: Container(color: Colors.black.withAlpha((170 * t).round())),
               ),
             ),
             Align(
               alignment: Alignment.bottomCenter,
               child: Transform.translate(
-                offset: Offset(0, (1 - t) * media.size.height * 0.35),
+                offset: Offset(0, (1 - t) * media.size.height * 0.28),
                 child: Opacity(
                   opacity: t,
                   child: Material(
                     color: Colors.transparent,
                     child: Container(
-                      height: media.size.height * 0.88,
+                      height: media.size.height,
                       width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0B141A),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                        border: Border.all(color: Colors.white.withAlpha(18)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF25D366).withAlpha(40),
-                            blurRadius: 40,
-                            offset: const Offset(0, -8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          _header(l10n, agent),
-                          if (agent.error != null)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                agent.error!,
-                                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                              ),
+                      color: const Color(0xFF212121),
+                      child: agent.voiceMode
+                          ? _ChatGptVoiceMode(
+                              wave: _waveCtrl,
+                              onClose: _exitVoiceMode,
+                              onInterrupt: _interruptVoice,
+                            )
+                          : Column(
+                              children: [
+                                _header(l10n, agent),
+                                if (agent.error != null)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text(agent.error!,
+                                        style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                                  ),
+                                if (agent.approvals.isNotEmpty) _approvalsStrip(l10n, agent),
+                                Expanded(child: _messages(agent)),
+                                if (agent.pendingFiles.isNotEmpty) _pendingFiles(agent),
+                                _composer(l10n, agent),
+                              ],
                             ),
-                          if (agent.approvals.isNotEmpty) _approvalsStrip(l10n, agent),
-                          Expanded(child: _messages(agent)),
-                          if (agent.pendingFiles.isNotEmpty) _pendingFiles(agent),
-                          if (agent.listening) _listeningBar(l10n),
-                          _composer(l10n, agent),
-                        ],
-                      ),
                     ),
                   ),
                 ),
@@ -411,69 +486,49 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
   }
 
   Widget _header(AppLocalizations l10n, UAgentProvider agent) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF075E54).withAlpha(220),
-            const Color(0xFF128C7E).withAlpha(180),
-          ],
-        ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        bottom: false,
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 4, 8, 8),
         child: Row(
           children: [
             IconButton(
               onPressed: _close,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 28),
+              icon: const Icon(Icons.close_rounded, color: Colors.white70),
             ),
-            Container(
-              width: 42,
-              height: 42,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [Color(0xFF25D366), Color(0xFF6C63FF)]),
-              ),
-              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 22),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     l10n.t('nav_u_agent'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
                   ),
                   Text(
-                    agent.listening
-                        ? l10n.t('u_agent_listening')
-                        : agent.speaking
-                            ? l10n.t('u_agent_speaking')
-                            : agent.busy
-                                ? l10n.t('u_agent_thinking')
-                                : '${agent.status}${agent.activeProvider != null ? ' · ${agent.activeProvider}' : ''}',
-                    style: TextStyle(
-                      color: Colors.white.withAlpha(200),
-                      fontSize: 12,
-                    ),
+                    agent.busy
+                        ? l10n.t('u_agent_thinking')
+                        : '${agent.status}${agent.activeProvider != null ? ' · ${agent.activeProvider}' : ''}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: l10n.t('u_agent_new_chat'),
+              onPressed: agent.busy ? null : () => agent.startNewConversation(),
+              icon: const Icon(Icons.edit_square, color: Colors.white70),
+            ),
+            IconButton(
+              tooltip: l10n.t('u_agent_history'),
+              onPressed: () => _showHistory(agent, l10n),
+              icon: const Icon(Icons.history_rounded, color: Colors.white70),
             ),
             IconButton(
               tooltip: l10n.t('u_agent_auto_speak'),
               onPressed: () => setState(() => _autoSpeak = !_autoSpeak),
               icon: Icon(
                 _autoSpeak ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                color: Colors.white,
+                color: Colors.white70,
               ),
             ),
           ],
@@ -482,23 +537,82 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
     );
   }
 
+  Future<void> _showHistory(UAgentProvider agent, AppLocalizations l10n) async {
+    await agent.loadHistory();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF2F2F2F),
+      builder: (ctx) {
+        final items = agent.conversations;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.add_comment_outlined, color: Colors.white),
+                title: Text(l10n.t('u_agent_new_chat'), style: const TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  agent.startNewConversation();
+                },
+              ),
+              const Divider(color: Colors.white12),
+              if (items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(l10n.t('u_agent_no_history'), style: const TextStyle(color: Colors.white54)),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final c = items[i];
+                      return ListTile(
+                        leading: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
+                        title: Text(
+                          c.title?.isNotEmpty == true ? c.title! : 'Chat ${c.id.substring(0, math.min(8, c.id.length))}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          '${c.messageCount} msgs',
+                          style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        selected: c.id == agent.conversationId,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          agent.openConversation(c.id);
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _approvalsStrip(AppLocalizations l10n, UAgentProvider agent) {
     return SizedBox(
-      height: 96,
+      height: 92,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         scrollDirection: Axis.horizontal,
         itemCount: agent.approvals.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final a = agent.approvals[i];
           return Container(
-            width: 210,
+            width: 200,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF1F2C34),
+              color: const Color(0xFF2F2F2F),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.amber.withAlpha(80)),
+              border: Border.all(color: Colors.amber.withAlpha(70)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -541,10 +655,8 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
                     ],
                   )
                 else
-                  Text(
-                    l10n.t('u_agent_waiting_approval'),
-                    style: const TextStyle(color: Colors.amber, fontSize: 11),
-                  ),
+                  Text(l10n.t('u_agent_waiting_approval'),
+                      style: const TextStyle(color: Colors.amber, fontSize: 11)),
               ],
             ),
           );
@@ -561,37 +673,26 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.85, end: 1),
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.easeInOut,
-                builder: (context, v, child) => Transform.scale(scale: v, child: child),
-                child: Container(
-                  width: 84,
-                  height: 84,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(colors: [Color(0xFF25D366), Color(0xFF6C63FF)]),
-                  ),
-                  child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [Color(0xFF10A37F), Color(0xFF6C63FF)]),
                 ),
+                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 34),
               ),
               const SizedBox(height: 16),
               Text(
                 agent.greeting,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  height: 1.35,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
                 AppLocalizations.of(context).t('u_agent_overlay_hint'),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 13),
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
               ),
             ],
           ),
@@ -601,139 +702,90 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
 
     return ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       itemCount: agent.messages.length + (agent.busy ? 1 : 0),
       itemBuilder: (context, i) {
         if (agent.busy && i == agent.messages.length) {
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1F2C34),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(3, (d) {
-                  return AnimatedBuilder(
-                    animation: _waveCtrl,
-                    builder: (context, _) {
-                      final phase = (_waveCtrl.value + d * 0.2) % 1.0;
-                      final y = math.sin(phase * math.pi * 2) * 3;
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        width: 7,
-                        height: 7,
-                        transform: Matrix4.translationValues(0, y, 0),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF25D366),
-                          shape: BoxShape.circle,
-                        ),
-                      );
-                    },
-                  );
-                }),
-              ),
-            ),
+          return const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('…', style: TextStyle(color: Colors.white54, fontSize: 22)),
           );
         }
         final m = agent.messages[i];
         final mine = m.role == 'user';
-        return Align(
-          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
-            decoration: BoxDecoration(
-              color: mine ? const Color(0xFF005C4B) : const Color(0xFF1F2C34),
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: Radius.circular(mine ? 16 : 4),
-                bottomRight: Radius.circular(mine ? 4 : 16),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (m.attachmentNames.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: m.attachmentNames
-                        .map(
-                          (n) => Chip(
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: Colors.black26,
-                            label: Text(n, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                            avatar: const Icon(Icons.attach_file, size: 14, color: Colors.white70),
-                          ),
-                        )
-                        .toList(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!mine)
+                Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.only(right: 10, top: 2),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFF10A37F), Color(0xFF6C63FF)]),
                   ),
-                  const SizedBox(height: 6),
-                ],
-                Text(m.content, style: const TextStyle(color: Colors.white, height: 1.35)),
-                if (m.artifacts.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ...m.artifacts.map(
-                    (a) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: InkWell(
-                        onTap: () => _openArtifact(a),
-                        onLongPress: () => Share.share(a.url, subject: a.title ?? a.name),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.black26,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF25D366).withAlpha(90)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.description_rounded, color: Color(0xFF25D366)),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  a.title ?? a.name,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  child: const Icon(Icons.auto_awesome, size: 14, color: Colors.white),
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    if (m.attachmentNames.isNotEmpty) ...[
+                      Wrap(
+                        spacing: 6,
+                        children: m.attachmentNames
+                            .map((n) => Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  label: Text(n, style: const TextStyle(fontSize: 11)),
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: mine ? const Color(0xFF2F2F2F) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Text(m.content, style: const TextStyle(color: Colors.white, height: 1.4, fontSize: 15)),
+                    ),
+                    if (m.artifacts.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      ...m.artifacts.map(
+                        (a) => InkWell(
+                          onTap: () => _openArtifact(a),
+                          onLongPress: () => Share.share(a.url, subject: a.title ?? a.name),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2F2F2F),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF10A37F).withAlpha(80)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.description_rounded, color: Color(0xFF10A37F)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(a.title ?? a.name,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                                 ),
-                              ),
-                              const Icon(Icons.open_in_new, color: Colors.white54, size: 18),
-                            ],
+                                const Icon(Icons.open_in_new, color: Colors.white54, size: 18),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-                if (m.timeline.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ...m.timeline.take(6).map(
-                        (t) => Text(
-                          '• ${t.label}',
-                          style: const TextStyle(color: Colors.white54, fontSize: 11),
-                        ),
-                      ),
-                ],
-                if (!mine && m.content.trim().isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () async {
-                        if (!_ttsReady) return;
-                        await _tts.stop();
-                        await _tts.speak(m.content.length > 1200 ? m.content.substring(0, 1200) : m.content);
-                      },
-                      icon: const Icon(Icons.record_voice_over_rounded, color: Colors.white54, size: 18),
-                    ),
-                  ),
-              ],
-            ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -753,42 +805,11 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
           return Chip(
             deleteIconColor: Colors.white70,
             onDeleted: () => agent.removePendingFile(i),
-            backgroundColor: const Color(0xFF1F2C34),
+            backgroundColor: const Color(0xFF2F2F2F),
             label: Text(f.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
-            avatar: const Icon(Icons.insert_drive_file, size: 16, color: Color(0xFF25D366)),
+            avatar: const Icon(Icons.insert_drive_file, size: 16, color: Color(0xFF10A37F)),
           );
         },
-      ),
-    );
-  }
-
-  Widget _listeningBar(AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-      child: Row(
-        children: [
-          AnimatedBuilder(
-            animation: _waveCtrl,
-            builder: (context, _) {
-              return Row(
-                children: List.generate(5, (i) {
-                  final h = 8 + (math.sin((_waveCtrl.value * math.pi * 2) + i) * 10).abs();
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    width: 4,
-                    height: h,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  );
-                }),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
-          Text(l10n.t('u_agent_listening'), style: const TextStyle(color: Colors.redAccent)),
-        ],
       ),
     );
   }
@@ -807,7 +828,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
                   : () async {
                       await showModalBottomSheet<void>(
                         context: context,
-                        backgroundColor: const Color(0xFF1F2C34),
+                        backgroundColor: const Color(0xFF2F2F2F),
                         builder: (ctx) => SafeArea(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -844,7 +865,7 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
                         ),
                       );
                     },
-              icon: const Icon(Icons.add_circle_outline, color: Color(0xFF25D366), size: 28),
+              icon: const Icon(Icons.add_circle_outline, color: Colors.white70, size: 28),
             ),
             Expanded(
               child: TextField(
@@ -856,9 +877,9 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
                   hintText: l10n.t('u_agent_hint'),
                   hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
-                  fillColor: const Color(0xFF1F2C34),
+                  fillColor: const Color(0xFF2F2F2F),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -867,26 +888,29 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
               ),
             ),
             const SizedBox(width: 6),
-            _MicButton(
-              listening: agent.listening,
-              enabled: !agent.busy,
-              onTap: _toggleListen,
-              wave: _waveCtrl,
+            // ChatGPT-style voice entry
+            IconButton.filled(
+              onPressed: agent.busy ? null : _enterVoiceMode,
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xFF10A37F),
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.graphic_eq_rounded),
             ),
             const SizedBox(width: 4),
             IconButton.filled(
-              onPressed: agent.busy ? null : () => _submit(),
+              onPressed: agent.busy ? null : _submit,
               style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                foregroundColor: Colors.white,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
               ),
               icon: agent.busy
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                     )
-                  : const Icon(Icons.send_rounded),
+                  : const Icon(Icons.arrow_upward_rounded),
             ),
           ],
         ),
@@ -895,49 +919,177 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay>
   }
 }
 
-class _MicButton extends StatelessWidget {
-  const _MicButton({
-    required this.listening,
-    required this.enabled,
-    required this.onTap,
+/// ChatGPT Advanced Voice–style full-screen orb UI.
+class _ChatGptVoiceMode extends StatelessWidget {
+  const _ChatGptVoiceMode({
     required this.wave,
+    required this.onClose,
+    required this.onInterrupt,
   });
 
-  final bool listening;
-  final bool enabled;
-  final VoidCallback onTap;
   final AnimationController wave;
+  final VoidCallback onClose;
+  final VoidCallback onInterrupt;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: wave,
-      builder: (context, child) {
-        final scale = listening ? 1 + (math.sin(wave.value * math.pi * 2).abs() * 0.12) : 1.0;
-        return Transform.scale(
-          scale: scale,
-          child: IconButton.filled(
-            onPressed: enabled ? onTap : null,
-            style: IconButton.styleFrom(
-              backgroundColor: listening ? Colors.redAccent : const Color(0xFF1F2C34),
-              foregroundColor: Colors.white,
+    final l10n = AppLocalizations.of(context);
+    final agent = context.watch<UAgentProvider>();
+    String label;
+    if (agent.busy) {
+      label = l10n.t('u_agent_thinking');
+    } else if (agent.speaking) {
+      label = l10n.t('u_agent_speaking');
+    } else if (agent.listening) {
+      label = l10n.t('u_agent_listening');
+    } else {
+      label = l10n.t('u_agent_voice_ready');
+    }
+
+    return SafeArea(
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.topLeft,
+            child: IconButton(
+              onPressed: onClose,
+              icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 28),
             ),
-            icon: Icon(listening ? Icons.stop_rounded : Icons.mic_rounded),
           ),
-        );
-      },
+          const Spacer(),
+          GestureDetector(
+            onTap: onInterrupt,
+            child: AnimatedBuilder(
+              animation: wave,
+              builder: (context, _) {
+                return CustomPaint(
+                  size: const Size(220, 220),
+                  painter: _VoiceOrbPainter(
+                    t: wave.value,
+                    listening: agent.listening,
+                    speaking: agent.speaking,
+                    thinking: agent.busy,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              agent.liveTranscript.isEmpty
+                  ? l10n.t('u_agent_voice_tap_interrupt')
+                  : agent.liveTranscript,
+              textAlign: TextAlign.center,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: agent.liveTranscript.isEmpty ? Colors.white38 : Colors.white70,
+                fontSize: 15,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Text(
+              l10n.t('nav_u_agent'),
+              style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Standalone route (optional). Prefer [UAgentHost] on dashboards.
+class _VoiceOrbPainter extends CustomPainter {
+  _VoiceOrbPainter({
+    required this.t,
+    required this.listening,
+    required this.speaking,
+    required this.thinking,
+  });
+
+  final double t;
+  final bool listening;
+  final bool speaking;
+  final bool thinking;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final base = size.width * 0.28;
+    Color a;
+    Color b;
+    if (speaking) {
+      a = const Color(0xFF10A37F);
+      b = const Color(0xFF6C63FF);
+    } else if (listening) {
+      a = const Color(0xFF54E3C0);
+      b = const Color(0xFF10A37F);
+    } else if (thinking) {
+      a = const Color(0xFF6C63FF);
+      b = const Color(0xFFAB68FF);
+    } else {
+      a = const Color(0xFF3F3F3F);
+      b = const Color(0xFF10A37F);
+    }
+
+    for (var i = 3; i >= 0; i--) {
+      final pulse = 1 + math.sin((t * math.pi * 2) + i) * (listening || speaking ? 0.12 : 0.05);
+      final r = base * (1.15 + i * 0.22) * pulse;
+      final paint = Paint()
+        ..shader = RadialGradient(
+          colors: [a.withAlpha(40 - i * 8), b.withAlpha(0)],
+        ).createShader(Rect.fromCircle(center: center, radius: r));
+      canvas.drawCircle(center, r, paint);
+    }
+
+    final path = Path();
+    const n = 64;
+    for (var i = 0; i <= n; i++) {
+      final ang = (i / n) * math.pi * 2;
+      final wobble = math.sin(ang * 3 + t * math.pi * 2) * (speaking ? 10 : listening ? 8 : 4) +
+          math.cos(ang * 5 - t * math.pi * 2) * (thinking ? 6 : 3);
+      final r = base + wobble;
+      final p = Offset(center.dx + math.cos(ang) * r, center.dy + math.sin(ang) * r);
+      if (i == 0) {
+        path.moveTo(p.dx, p.dy);
+      } else {
+        path.lineTo(p.dx, p.dy);
+      }
+    }
+    path.close();
+    final fill = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [a, b],
+      ).createShader(Rect.fromCircle(center: center, radius: base + 16));
+    canvas.drawPath(path, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceOrbPainter oldDelegate) =>
+      oldDelegate.t != t ||
+      oldDelegate.listening != listening ||
+      oldDelegate.speaking != speaking ||
+      oldDelegate.thinking != thinking;
+}
+
+/// Standalone route wrapper.
 class UAgentScreen extends StatelessWidget {
   const UAgentScreen({super.key, this.embedded = false});
-
   final bool embedded;
 
   @override
-  Widget build(BuildContext context) {
-    return const UAgentHost();
-  }
+  Widget build(BuildContext context) => const UAgentHost();
 }

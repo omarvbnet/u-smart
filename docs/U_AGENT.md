@@ -73,13 +73,17 @@ Used by the model when the user asks for a professional file (report, letter, CS
 
 ---
 
-## Flutter (WhatsApp-style overlay)
+## Flutter (ChatGPT-style overlay)
 
-U Agent is **not** a bottom-nav tab. Company and engineer dashboards show a pulsing green/violet bubble (`UAgentHost`) that opens an animated chat sheet with:
+U Agent is **not** a bottom-nav tab. Dashboards show a small FAB **5px above** the bottom nav with a sliding **“U Agent”** label. Opening it **hides the bottom navigation bar**.
 
-- Voice input (speech-to-text) + spoken replies (TTS)
-- Attach photo / camera / files for analysis
-- Open/share generated documents from `artifacts`
+- ChatGPT-like Advanced Voice mode (orb UI, continuous listen → reply → speak)
+- Per-user conversation history: `GET /api/agent/conversations` + message load via activity, plus local cache
+- Attach photo / camera / files; open/share `artifacts`
+
+### `GET /api/agent/conversations`
+
+Returns the signed-in user's conversations (newest first): `id`, `title`, `status`, `messageCount`, timestamps.
 
 ---
 
@@ -195,4 +199,4 @@ Relevant migrations:
 
 **Shipped (Phase 0–2 + voice/docs UX):** tools, approvals, multimodal files, WhatsApp ingress, multi-provider admin, Flutter WhatsApp-style overlay with STT/TTS + `create_document`.
 
-**Phase 3 (next):** CRM/calendar tools, Telegram channel, richer PDF/Arabic fonts, voice-note upload transcription endpoint, usage metering UI, R2 storage option.
+**Phase 3 (in progress / next):** conversation list API + ChatGPT voice UX (shipped in app); richer PDF/Arabic fonts; CRM/calendar tools; Telegram channel; voice-note upload transcription; usage metering UI; R2 storage option.

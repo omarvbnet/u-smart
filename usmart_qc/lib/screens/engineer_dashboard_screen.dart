@@ -52,6 +52,7 @@ class EngineerDashboardScreen extends StatefulWidget {
 
 class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
   int _currentTab = 0;
+  bool _uAgentOpen = false;
 
   @override
   void initState() {
@@ -115,10 +116,15 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
               ],
             ),
           ),
-          const UAgentHost(),
+          UAgentHost(onOpenChanged: (open) {
+            if (_uAgentOpen == open) return;
+            setState(() => _uAgentOpen = open);
+          }),
         ],
       ),
-      bottomNavigationBar: ClipRRect(
+      bottomNavigationBar: _uAgentOpen
+          ? null
+          : ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
@@ -150,7 +156,9 @@ class _EngineerDashboardScreenState extends State<EngineerDashboardScreen> {
           ),
         ),
       ),
-      floatingActionButton: _currentTab == 0
+      floatingActionButton: _uAgentOpen
+          ? null
+          : _currentTab == 0
           ? Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(

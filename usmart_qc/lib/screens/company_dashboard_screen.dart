@@ -58,6 +58,7 @@ class CompanyDashboardScreen extends StatefulWidget {
 
 class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   int _currentTab = 0;
+  bool _uAgentOpen = false;
 
   @override
   void initState() {
@@ -193,10 +194,15 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
               children: tabChildren,
             ),
           ),
-          const UAgentHost(),
+          UAgentHost(onOpenChanged: (open) {
+            if (_uAgentOpen == open) return;
+            setState(() => _uAgentOpen = open);
+          }),
         ],
       ),
-      bottomNavigationBar: ClipRRect(
+      bottomNavigationBar: _uAgentOpen
+          ? null
+          : ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
@@ -260,7 +266,9 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
           ),
         ),
       ),
-      floatingActionButton: _currentTab ==
+      floatingActionButton: _uAgentOpen
+          ? null
+          : _currentTab ==
                   (technicianWorkspacePool ? 1 : 0) &&
               !readOnlyRole
           ? Container(
