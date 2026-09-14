@@ -514,6 +514,14 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
               ),
             ),
             IconButton(
+              tooltip: l10n.t('u_agent_whatsapp'),
+              onPressed: () => _showWhatsAppPermissions(agent, l10n),
+              icon: Icon(
+                Icons.chat_rounded,
+                color: agent.waGranted ? const Color(0xFF25D366) : Colors.white70,
+              ),
+            ),
+            IconButton(
               tooltip: l10n.t('u_agent_new_chat'),
               onPressed: agent.busy ? null : () => agent.startNewConversation(),
               icon: const Icon(Icons.edit_square, color: Colors.white70),
@@ -534,6 +542,123 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _maybeOpenWhatsAppResult(Map<String, dynamic>? data) async {
+    if (data == null) return;
+    final result = data['result'];
+    if (result is! Map) return;
+    final inner = result['data'] is Map ? Map<String, dynamic>.from(result['data'] as Map) : result;
+    final link = (inner['deepLink'] ?? inner['callLink'] ?? inner['url'])?.toString();
+    if (link == null || link.isEmpty) return;
+    final uri = Uri.tryParse(link);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _showWhatsAppPermissions(UAgentProvider agent, AppLocalizations l10n) async {
+    await agent.refreshWhatsAppConsent();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF2F2F2F),
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.t('u_agent_whatsapp_title'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.t('u_agent_whatsapp_hint'),
+                      style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.35),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      agent.waCloudConfigured
+                          ? l10n.t('u_agent_whatsapp_cloud_on')
+                          : l10n.t('u_agent_whatsapp_cloud_off'),
+                      style: TextStyle(
+                        color: agent.waCloudConfigured ? const Color(0xFF25D366) : Colors.amber,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.t('u_agent_whatsapp_grant'),
+                          style: const TextStyle(color: Colors.white)),
+                      value: agent.waGranted,
+                      activeThumbColor: const Color(0xFF25D366),
+                      onChanged: (v) async {
+                        await agent.updateWhatsAppConsent(
+                          granted: v,
+                          canSendMessages: v,
+                          canSendFiles: v,
+                          canStartCalls: v,
+                        );
+                        setModal(() {});
+                      },
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.t('u_agent_whatsapp_messages'),
+                          style: const TextStyle(color: Colors.white)),
+                      value: agent.waGranted && agent.waMessages,
+                      onChanged: agent.waGranted
+                          ? (v) async {
+                              await agent.updateWhatsAppConsent(canSendMessages: v);
+                              setModal(() {});
+                            }
+                          : null,
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.t('u_agent_whatsapp_files'),
+                          style: const TextStyle(color: Colors.white)),
+                      value: agent.waGranted && agent.waFiles,
+                      onChanged: agent.waGranted
+                          ? (v) async {
+                              await agent.updateWhatsAppConsent(canSendFiles: v);
+                              setModal(() {});
+                            }
+                          : null,
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.t('u_agent_whatsapp_calls'),
+                          style: const TextStyle(color: Colors.white)),
+                      value: agent.waGranted && agent.waCalls,
+                      onChanged: agent.waGranted
+                          ? (v) async {
+                              await agent.updateWhatsAppConsent(canStartCalls: v);
+                              setModal(() {});
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -629,7 +754,13 @@ class _UAgentChatOverlayState extends State<_UAgentChatOverlay> with TickerProvi
                     children: [
                       Expanded(
                         child: TextButton(
-                          onPressed: () => agent.resolveApproval(a['id'].toString(), approve: true),
+                          onPressed: () async {
+                            final result = await agent.resolveApproval(
+                              a['id'].toString(),
+                              approve: true,
+                            );
+                            await _maybeOpenWhatsAppResult(result);
+                          },
                           style: TextButton.styleFrom(
                             backgroundColor: Colors.green.shade700,
                             foregroundColor: Colors.white,

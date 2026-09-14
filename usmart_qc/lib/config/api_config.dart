@@ -223,6 +223,7 @@ class ApiConfig {
   static const String agentStatus = '/api/agent/status';
   static const String agentActivity = '/api/agent/activity';
   static const String agentConversations = '/api/agent/conversations';
+  static const String agentWhatsAppConsent = '/api/agent/whatsapp/consent';
   static const String agentApprovals = '/api/agent/approvals';
   static String agentApprovalApprove(String id) =>
       '/api/agent/approvals/$id/approve';

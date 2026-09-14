@@ -8,6 +8,11 @@ import {
   executeApprovedCreateTicket,
 } from '@/lib/agent/tools/approved-actions';
 import { executeApprovedNotification } from '@/lib/agent/tools/proviser-tools';
+import {
+  executeApprovedWhatsAppSendFile,
+  executeApprovedWhatsAppSendMessage,
+  executeApprovedWhatsAppStartCall,
+} from '@/lib/agent/tools/whatsapp-tools';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = _prisma as any;
@@ -208,6 +213,12 @@ export async function resolveApproval(args: {
       execResult = await executeApprovedAssignTicket(payload);
     } else if (row.toolId === 'report_conflict') {
       execResult = await executeApprovedConflictReport(payload);
+    } else if (row.toolId === 'whatsapp_send_message') {
+      execResult = await executeApprovedWhatsAppSendMessage(payload);
+    } else if (row.toolId === 'whatsapp_send_file') {
+      execResult = await executeApprovedWhatsAppSendFile(payload);
+    } else if (row.toolId === 'whatsapp_start_call') {
+      execResult = await executeApprovedWhatsAppStartCall(payload);
     }
   }
 

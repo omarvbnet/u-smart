@@ -427,6 +427,7 @@ model TicketRequester {
   uAgentApprovalsResolved    UAgentApproval[]            @relation("UAgentApprovalResolver")
   uAgentUsageRecords         UAgentUsageRecord[]         @relation("UAgentUsageUser")
   uAgentAuditLogs            UAgentAuditLog[]            @relation("UAgentAuditActor")
+  uAgentWhatsAppConsent      UAgentWhatsAppConsent?      @relation("UAgentWhatsAppConsentUser")
 
   @@map("ticket_requesters")
 }
@@ -2689,4 +2690,21 @@ model UAgentAuditLog {
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@map("u_agent_audit_logs")
+}
+
+/// Per-user opt-in: U Agent may use WhatsApp only after the user grants these flags.
+model UAgentWhatsAppConsent {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  user            TicketRequester @relation("UAgentWhatsAppConsentUser", fields: [userId], references: [id], onDelete: Cascade)
+  granted         Boolean        @default(false)
+  canSendMessages Boolean        @default(false)
+  canSendFiles    Boolean        @default(false)
+  canStartCalls   Boolean        @default(false)
+  grantedAt       DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("u_agent_whatsapp_consents")
 }

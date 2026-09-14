@@ -32,6 +32,7 @@ export function resolveAgentCapabilities(ctx: AgentContext): Set<AgentCapability
   caps.add('agent.read_tickets');
   caps.add('agent.read_sites');
   caps.add('agent.create_document');
+  caps.add('agent.whatsapp');
 
   if (TICKET_CREATE_ROLES.has(role) || ctx.isWorkspaceOwner) {
     caps.add('agent.create_ticket');

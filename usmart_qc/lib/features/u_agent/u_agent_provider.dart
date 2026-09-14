@@ -26,6 +26,11 @@ class UAgentProvider extends ChangeNotifier {
   List<Map<String, dynamic>> approvals = [];
   bool canManageApprovals = false;
   bool historyLoaded = false;
+  bool waGranted = false;
+  bool waMessages = false;
+  bool waFiles = false;
+  bool waCalls = false;
+  bool waCloudConfigured = false;
 
   final List<VoidCallback> _openListeners = [];
 
@@ -48,6 +53,7 @@ class UAgentProvider extends ChangeNotifier {
       refreshStatus();
       refreshApprovals();
       loadHistory();
+      refreshWhatsAppConsent();
     }
   }
 
@@ -116,6 +122,48 @@ class UAgentProvider extends ChangeNotifier {
     }
     error = null;
     notifyListeners();
+  }
+
+  Future<void> refreshWhatsAppConsent() async {
+    final data = await _service.fetchWhatsAppConsent();
+    if (data == null || data['success'] != true) return;
+    final c = data['consent'];
+    if (c is Map) {
+      waGranted = c['granted'] == true;
+      waMessages = c['canSendMessages'] == true;
+      waFiles = c['canSendFiles'] == true;
+      waCalls = c['canStartCalls'] == true;
+    }
+    waCloudConfigured = data['cloudConfigured'] == true;
+    notifyListeners();
+  }
+
+  Future<bool> updateWhatsAppConsent({
+    bool? granted,
+    bool? canSendMessages,
+    bool? canSendFiles,
+    bool? canStartCalls,
+  }) async {
+    final data = await _service.updateWhatsAppConsent({
+      if (granted != null) 'granted': granted,
+      if (canSendMessages != null) 'canSendMessages': canSendMessages,
+      if (canSendFiles != null) 'canSendFiles': canSendFiles,
+      if (canStartCalls != null) 'canStartCalls': canStartCalls,
+    });
+    if (data['success'] != true) {
+      error = data['message']?.toString() ?? 'WhatsApp permission update failed';
+      notifyListeners();
+      return false;
+    }
+    final c = data['consent'];
+    if (c is Map) {
+      waGranted = c['granted'] == true;
+      waMessages = c['canSendMessages'] == true;
+      waFiles = c['canSendFiles'] == true;
+      waCalls = c['canStartCalls'] == true;
+    }
+    notifyListeners();
+    return true;
   }
 
   Future<void> refreshApprovals() async {
@@ -332,12 +380,15 @@ class UAgentProvider extends ChangeNotifier {
     return replyText;
   }
 
-  Future<void> resolveApproval(String id, {required bool approve}) async {
+  Future<Map<String, dynamic>?> resolveApproval(String id, {required bool approve}) async {
     final data = approve ? await _service.approve(id) : await _service.reject(id);
     if (data['success'] != true) {
       error = data['message']?.toString();
       notifyListeners();
+      await refreshApprovals();
+      return null;
     }
     await refreshApprovals();
+    return data;
   }
 }

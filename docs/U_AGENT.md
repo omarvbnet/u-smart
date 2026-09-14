@@ -87,6 +87,18 @@ Returns the signed-in user's conversations (newest first): `id`, `title`, `statu
 
 ---
 
+### `GET/PATCH /api/agent/whatsapp/consent`
+
+Per-user WhatsApp opt-in. U Agent **cannot** send messages, files, or open calls until the user grants permission in the app.
+
+**PATCH body:** `{ granted?, canSendMessages?, canSendFiles?, canStartCalls? }`
+
+Tools (always approval-gated): `whatsapp_send_message`, `whatsapp_send_file`, `whatsapp_start_call`.
+
+Uses Meta Cloud API when `WHATSAPP_CLOUD_ACCESS_TOKEN` + `WHATSAPP_CLOUD_PHONE_NUMBER_ID` are set; otherwise returns secure `wa.me` deep links for the user’s personal WhatsApp.
+
+---
+
 ### `GET /api/agent/activity`
 
 | Query | Notes |

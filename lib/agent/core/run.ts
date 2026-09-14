@@ -11,6 +11,7 @@ import {
 import { registerProviserTools } from '@/lib/agent/tools/proviser-tools';
 import { registerPhase1Tools } from '@/lib/agent/tools/phase1-tools';
 import { registerDocumentTools } from '@/lib/agent/tools/document-tools';
+import { registerWhatsAppTools } from '@/lib/agent/tools/whatsapp-tools';
 import { createApprovalRequest } from '@/lib/agent/approvals/approvals';
 import {
   appendMessage,
@@ -45,6 +46,7 @@ function ensureTools(): void {
     registerProviserTools();
     registerPhase1Tools();
     registerDocumentTools();
+    registerWhatsAppTools();
     toolsRegistered = true;
   }
 }

@@ -216,6 +216,14 @@ class UAgentService {
     );
   }
 
+  Future<Map<String, dynamic>?> fetchWhatsAppConsent() {
+    return _api.getSafe(ApiConfig.agentWhatsAppConsent);
+  }
+
+  Future<Map<String, dynamic>> updateWhatsAppConsent(Map<String, dynamic> body) {
+    return _api.patch(ApiConfig.agentWhatsAppConsent, body: body);
+  }
+
   Future<Map<String, dynamic>?> fetchApprovals() {
     return _api.getSafe(ApiConfig.agentApprovals);
   }
